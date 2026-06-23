@@ -165,7 +165,6 @@ internal class AutoMatchTagsDialog : Form
 
 	private class AutoMatchWorker
 	{
-		[CompilerGenerated]
 		private sealed class AutoMatchFileSearchTask
 		{
 			public AutoMatchWorker worker;
@@ -339,7 +338,6 @@ internal class AutoMatchTagsDialog : Form
 			}
 		}
 
-		[CompilerGenerated]
 		private sealed class LoadedTagContext
 		{
 			public ConfigDescriptorState tagFile;
@@ -358,7 +356,6 @@ internal class AutoMatchTagsDialog : Form
 			}
 		}
 
-		[CompilerGenerated]
 		private sealed class TextTagUpdateFilter
 		{
 			public Dictionary<string, object> candidateTextTags;
@@ -406,7 +403,6 @@ internal class AutoMatchTagsDialog : Form
 			return fieldName == "year";
 		}
 
-		[CompilerGenerated]
 		private sealed class TagSaveContext
 		{
 			public ConfigDescriptorState tagFile;
@@ -423,7 +419,6 @@ internal class AutoMatchTagsDialog : Form
 			}
 		}
 
-		[CompilerGenerated]
 		private sealed class MetadataSearchState
 		{
 			public Dictionary<SearchSource, int> remainingResultsBySource;
@@ -522,7 +517,6 @@ internal class AutoMatchTagsDialog : Form
 			}
 		}
 
-		[CompilerGenerated]
 		private sealed class TrackResultLimiter
 		{
 			public List<TrackSearchResult> limitedResults;
@@ -546,7 +540,6 @@ internal class AutoMatchTagsDialog : Form
 			}
 		}
 
-		[CompilerGenerated]
 		private sealed class LyricSearchState
 		{
 			private List<LyricSearchResult> limitedResults;
@@ -582,7 +575,6 @@ internal class AutoMatchTagsDialog : Form
 			}
 		}
 
-		[CompilerGenerated]
 		private sealed class LyricSourceMatchPredicate
 		{
 			public TrackSearchResult trackResult;
@@ -593,34 +585,24 @@ internal class AutoMatchTagsDialog : Form
 			}
 		}
 
-		[CompilerGenerated]
 		private readonly AutoMatchTagsDialog ownerDialog;
 
-		[CompilerGenerated]
 		private readonly Dictionary<string, (string writeMode, bool overwrite)> matchConditionSettings = new Dictionary<string, (string, bool)>();
 
-		[CompilerGenerated]
 		private readonly ConcurrentDictionary<string, bool> activeFilePathMap;
 
-		[CompilerGenerated]
 		private readonly ActiveWorkerCounter activeWorkerCounter;
 
-		[CompilerGenerated]
 		private readonly bool isParallelWorker;
 
-		[CompilerGenerated]
 		private readonly ConcurrentQueue<AutoMatchWorker> processorQueue;
 
-		[CompilerGenerated]
 		private readonly object processorQueueSignal;
 
-		[CompilerGenerated]
 		private readonly CancellationTokenSource cancellationSource;
 
-		[CompilerGenerated]
 		private readonly CoverTempFileCache coverTempFileCache;
 
-		[CompilerGenerated]
 		private string currentFilePath;
 
 		private string loadErrorMessage;
@@ -1437,9 +1419,9 @@ internal class AutoMatchTagsDialog : Form
 			TagHistoryRepository.ClearUndoState();
 			try
 			{
-				if (owner._Mapping > 1)
+				if (owner.webSearchThreadCount > 1)
 				{
-					for (int workerIndex = 0; workerIndex < owner._Mapping; workerIndex++)
+					for (int workerIndex = 0; workerIndex < owner.webSearchThreadCount; workerIndex++)
 					{
 						new AutoMatchWorker(owner, isParallelWorker: true, cancellationTokenSource, canCancelReadonlyFile);
 					}
@@ -1542,25 +1524,20 @@ internal class AutoMatchTagsDialog : Form
 		}
 	}
 
-	[CompilerGenerated]
 	private readonly Dictionary<string, (string writeMode, bool overwrite)> selectedMatchConditions;
 
-	private int _Mapping;
+	private int webSearchThreadCount;
 
 	private bool skipInstrumentalLyrics;
 
 	private FilePathQueue pendingPathQueue;
 
-	[CompilerGenerated]
 	private readonly ActiveWorkerCounter activeWorkerCounter;
 
-	[CompilerGenerated]
 	private readonly ConcurrentQueue<AutoMatchWorker> parallelProcessorQueue;
 
-	[CompilerGenerated]
 	private readonly ConcurrentDictionary<string, bool> activeFilePaths;
 
-	[CompilerGenerated]
 	private readonly object processorQueueSignal;
 
 	private bool hasStartedParallelWorker;
@@ -1573,13 +1550,10 @@ internal class AutoMatchTagsDialog : Form
 
 	private volatile int processedCount;
 
-	[CompilerGenerated]
 	private readonly CoverTempFileCache coverTempFileCache;
 
-	[CompilerGenerated]
 	private readonly Page autoMatchLog;
 
-	[CompilerGenerated]
 	private readonly Dictionary<string, string> writeModeValueByDisplayText;
 
 	private TagHistoryRepository tagHistoryTransaction;
@@ -1616,7 +1590,6 @@ internal class AutoMatchTagsDialog : Form
 
 	private Dictionary<string, (string writeMode, bool overwrite)> SelectedMatchConditions
 	{
-		[CompilerGenerated]
 		get
 		{
 			return selectedMatchConditions;
@@ -1773,7 +1746,7 @@ internal class AutoMatchTagsDialog : Form
 			DatabaseMapper.ShowErrorMessage(Resources.Msg_PleaseSelectAtLeastOneItem);
 			return;
 		}
-		_Mapping = webSearchThreadCountTrackBar.Value;
+		webSearchThreadCount = webSearchThreadCountTrackBar.Value;
 		skipInstrumentalLyrics = skipInstrumentalLyricsCheckBox.Checked;
 		Settings.Default.AutoMatchTagsWebSearchThreadCount = webSearchThreadCountTrackBar.Value;
 		Settings.Default.DontDownloadLyricWithInstrumentInTitle = skipInstrumentalLyricsCheckBox.Checked;
