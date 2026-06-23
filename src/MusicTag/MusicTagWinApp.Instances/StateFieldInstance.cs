@@ -1717,133 +1717,6 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	[StructLayout(LayoutKind.Auto)]
-	[CompilerGenerated]
-	private struct _003CUndoSaveTags_003Ed__168 : IAsyncStateMachine
-	{
-		public int _003C_003E1__state;
-
-		public AsyncVoidMethodBuilder _003C_003Et__builder;
-
-		public ProgressDialog frmProgress;
-
-		private UndoSaveTagsTaskContext undoSaveTagsContext;
-
-		public StateFieldInstance _003C_003E4__this;
-
-		private Stopwatch _003CstopWatch_003E5__2;
-
-		private TaskAwaiter _003C_003Eu__1;
-
-		private void MoveNext()
-		{
-			int num = _003C_003E1__state;
-			StateFieldInstance stateFieldInstance = _003C_003E4__this;
-			try
-			{
-				TaskAwaiter awaiter;
-				if (num != 0)
-				{
-					undoSaveTagsContext = new UndoSaveTagsTaskContext();
-					undoSaveTagsContext.progressDialog = frmProgress;
-					undoSaveTagsContext.cancellationSource = new CancellationTokenSource();
-					undoSaveTagsContext.progressDialog.AddCancelRequestedHandler(undoSaveTagsContext.Cancel);
-					undoSaveTagsContext.undoTagSnapshots = TagHistoryRepository.UndoTags;
-					undoSaveTagsContext.restoredCount = 0;
-					undoSaveTagsContext.failedCount = 0;
-					undoSaveTagsContext.skippedCount = 0;
-					undoSaveTagsContext.processedCount = 0;
-					undoSaveTagsContext.currentFile = null;
-					undoSaveTagsContext.progressDialog.AddProgressUpdateHandler(undoSaveTagsContext.UpdateProgress);
-					_003CstopWatch_003E5__2 = new Stopwatch();
-					undoSaveTagsContext.messageLog = new Page();
-					_003CstopWatch_003E5__2.Start();
-					awaiter = Task.Run((Action)undoSaveTagsContext.RestoreSavedTags, undoSaveTagsContext.cancellationSource.Token).GetAwaiter();
-					if (!awaiter.IsCompleted)
-					{
-						_003C_003E1__state = 0;
-						_003C_003Eu__1 = awaiter;
-						_003C_003Et__builder.AwaitUnsafeOnCompleted(ref awaiter, ref this);
-						return;
-					}
-				}
-				else
-				{
-					awaiter = _003C_003Eu__1;
-					_003C_003Eu__1 = default(TaskAwaiter);
-					_003C_003E1__state = -1;
-				}
-				awaiter.GetResult();
-				List<SelectedListViewItemInfo> refreshedItems = new List<SelectedListViewItemInfo>();
-				undoSaveTagsContext.processedCount = 0;
-				while (undoSaveTagsContext.processedCount < stateFieldInstance.cachedFileListItems.Count)
-				{
-					UndoSaveTagsListItemMatcher listItemMatcher = new UndoSaveTagsListItemMatcher();
-					listItemMatcher.listViewItem = stateFieldInstance.cachedFileListItems[undoSaveTagsContext.processedCount].listViewItem;
-					if (undoSaveTagsContext.undoTagSnapshots.Find(listItemMatcher.MatchesSnapshotPath) != null)
-					{
-						refreshedItems.Add(new SelectedListViewItemInfo
-						{
-							Index = undoSaveTagsContext.processedCount,
-							FilePath = (listItemMatcher.listViewItem.Tag as string)
-						});
-					}
-					undoSaveTagsContext.processedCount++;
-				}
-				undoSaveTagsContext.progressDialog.CloseAfterCompletion();
-				(string, bool) value = default((string, bool));
-				value.Item2 = false;
-				if (undoSaveTagsContext.undoTagSnapshots.Count > 1)
-				{
-					value.Item1 = string.Format(Resources.Msg_UndoCompleted + "\n" + Resources.Msg_OK_Fail_Skip_Count, undoSaveTagsContext.restoredCount, undoSaveTagsContext.failedCount, undoSaveTagsContext.skippedCount, undoSaveTagsContext.processedCount) + "\n" + undoSaveTagsContext.messageLog.ToString();
-				}
-				else if (undoSaveTagsContext.restoredCount > 0)
-				{
-					value.Item1 = Resources.Msg_UndoCompleted + "\n" + undoSaveTagsContext.messageLog.ToString();
-				}
-				else if (undoSaveTagsContext.skippedCount > 0)
-				{
-					value.Item1 = Resources.Msg_Skipped + "\n" + undoSaveTagsContext.messageLog.ToString();
-				}
-				else
-				{
-					value.Item1 = undoSaveTagsContext.messageLog.ToString();
-					value.Item2 = true;
-				}
-				TagHistoryRepository.ClearUndoState();
-				_003CstopWatch_003E5__2.Stop();
-				stateFieldInstance.RefreshItemsWithOptionalProgressDialog(refreshedItems.ToArray(), showErrorMessageBox: false, showProgressDialog: true, refreshStatusAllInfo: true, previousMessage: value, listForMirror: true);
-			}
-			catch (System.Exception exception)
-			{
-				_003C_003E1__state = -2;
-				_003C_003Et__builder.SetException(exception);
-				return;
-			}
-			_003C_003E1__state = -2;
-			_003C_003Et__builder.SetResult();
-		}
-
-		void IAsyncStateMachine.MoveNext()
-		{
-			//ILSpy generated this explicit interface implementation from .override directive in MoveNext
-			this.MoveNext();
-		}
-
-		[DebuggerHidden]
-		private void SetStateMachine(IAsyncStateMachine stateMachine)
-		{
-			_003C_003Et__builder.SetStateMachine(stateMachine);
-		}
-
-		void IAsyncStateMachine.SetStateMachine(IAsyncStateMachine stateMachine)
-		{
-			//ILSpy generated this explicit interface implementation from .override directive in SetStateMachine
-			this.SetStateMachine(stateMachine);
-		}
-
-	}
-
 	private sealed class UndoRenameTaskContext
 	{
 		public CancellationTokenSource cancellationSource;
@@ -6195,16 +6068,62 @@ internal class StateFieldInstance : Form
 		RefreshSelectedItems(showErrorMessageBox: false, showProgressDialog: true, refreshStatusAllInfo: true, previousMessage: value);
 	}
 
-	[AsyncStateMachine(typeof(_003CUndoSaveTags_003Ed__168))]
-	private void StartUndoSaveTags(ProgressDialog progressDialog)
+	private async void StartUndoSaveTags(ProgressDialog progressDialog)
 	{
-		_003CUndoSaveTags_003Ed__168 stateMachine = default(_003CUndoSaveTags_003Ed__168);
-		stateMachine._003C_003E4__this = this;
-		stateMachine.frmProgress = progressDialog;
-		stateMachine._003C_003Et__builder = AsyncVoidMethodBuilder.Create();
-		stateMachine._003C_003E1__state = -1;
-		AsyncVoidMethodBuilder asyncVoidMethodBuilder = stateMachine._003C_003Et__builder;
-		asyncVoidMethodBuilder.Start(ref stateMachine);
+		UndoSaveTagsTaskContext undoSaveTagsContext = new UndoSaveTagsTaskContext();
+		undoSaveTagsContext.progressDialog = progressDialog;
+		undoSaveTagsContext.cancellationSource = new CancellationTokenSource();
+		undoSaveTagsContext.progressDialog.AddCancelRequestedHandler(undoSaveTagsContext.Cancel);
+		undoSaveTagsContext.undoTagSnapshots = TagHistoryRepository.UndoTags;
+		undoSaveTagsContext.restoredCount = 0;
+		undoSaveTagsContext.failedCount = 0;
+		undoSaveTagsContext.skippedCount = 0;
+		undoSaveTagsContext.processedCount = 0;
+		undoSaveTagsContext.currentFile = null;
+		undoSaveTagsContext.progressDialog.AddProgressUpdateHandler(undoSaveTagsContext.UpdateProgress);
+		Stopwatch stopWatch = new Stopwatch();
+		undoSaveTagsContext.messageLog = new Page();
+		stopWatch.Start();
+		await Task.Run((Action)undoSaveTagsContext.RestoreSavedTags, undoSaveTagsContext.cancellationSource.Token);
+		List<SelectedListViewItemInfo> refreshedItems = new List<SelectedListViewItemInfo>();
+		undoSaveTagsContext.processedCount = 0;
+		while (undoSaveTagsContext.processedCount < cachedFileListItems.Count)
+		{
+			UndoSaveTagsListItemMatcher listItemMatcher = new UndoSaveTagsListItemMatcher();
+			listItemMatcher.listViewItem = cachedFileListItems[undoSaveTagsContext.processedCount].listViewItem;
+			if (undoSaveTagsContext.undoTagSnapshots.Find(listItemMatcher.MatchesSnapshotPath) != null)
+			{
+				refreshedItems.Add(new SelectedListViewItemInfo
+				{
+					Index = undoSaveTagsContext.processedCount,
+					FilePath = (listItemMatcher.listViewItem.Tag as string)
+				});
+			}
+			undoSaveTagsContext.processedCount++;
+		}
+		undoSaveTagsContext.progressDialog.CloseAfterCompletion();
+		(string, bool) value = default((string, bool));
+		value.Item2 = false;
+		if (undoSaveTagsContext.undoTagSnapshots.Count > 1)
+		{
+			value.Item1 = string.Format(Resources.Msg_UndoCompleted + "\n" + Resources.Msg_OK_Fail_Skip_Count, undoSaveTagsContext.restoredCount, undoSaveTagsContext.failedCount, undoSaveTagsContext.skippedCount, undoSaveTagsContext.processedCount) + "\n" + undoSaveTagsContext.messageLog.ToString();
+		}
+		else if (undoSaveTagsContext.restoredCount > 0)
+		{
+			value.Item1 = Resources.Msg_UndoCompleted + "\n" + undoSaveTagsContext.messageLog.ToString();
+		}
+		else if (undoSaveTagsContext.skippedCount > 0)
+		{
+			value.Item1 = Resources.Msg_Skipped + "\n" + undoSaveTagsContext.messageLog.ToString();
+		}
+		else
+		{
+			value.Item1 = undoSaveTagsContext.messageLog.ToString();
+			value.Item2 = true;
+		}
+		TagHistoryRepository.ClearUndoState();
+		stopWatch.Stop();
+		RefreshItemsWithOptionalProgressDialog(refreshedItems.ToArray(), showErrorMessageBox: false, showProgressDialog: true, refreshStatusAllInfo: true, previousMessage: value, listForMirror: true);
 	}
 
 	[AsyncStateMachine(typeof(_003CUndoRename_003Ed__169))]
