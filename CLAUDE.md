@@ -127,8 +127,17 @@ point; all migration work happens on branch `migrate/net481`, one commit per pha
 - Strategy: one commit per phase on `migrate/net481`; validate each phase's acceptance criteria
   before advancing; keep changes minimal and behavior-preserving.
 
+**Phase 1 — build environment (2026-06-23) ✅ no blockers**
+- MSBuild: `C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\MSBuild\Current\Bin\MSBuild.exe`
+  (on PATH and via `vswhere`). `Verify-Build.ps1` resolves it automatically.
+- **.NET Framework 4.8.1 Targeting Pack: installed** — `…\Reference Assemblies\Microsoft\Framework\
+  .NETFramework\v4.8.1` has `RedistList\FrameworkList.xml` (".NET Framework 4.8.1") + 133 ref
+  assemblies (incl. `mscorlib.dll`, `System.Windows.Forms.dll`). So `net481` will compile.
+- .NET Framework 4.8.1 runtime: installed (NDP v4 Full `Release=533320`, `Version=4.8.09032`).
+- NuGet restore: trivial (no package references); `dotnet` SDK `10.0.301` also present.
+- Conclusion: environment fully supports retargeting to `net481` — safe to proceed.
+
 ### Migration TODO
-- Phase 1: confirm MSBuild + .NET Framework 4.8.1 Targeting/Developer Pack are installed.
 - Phase 2: capture the `net461` baseline build (errors/warnings) via `scripts\Verify-Build.ps1`.
 - Phase 3: write the concrete migration plan (file changes, dependency strategy, validation).
 - Phases 4–8: retarget → fix dependencies → clean/compile → verify → finalize docs.
