@@ -265,6 +265,12 @@ internal class OptionsDialog : Form
 
 	private RadioButton translatedLyricFormat4RadioButton;
 
+	private GroupBox networkOptionsGroupBox;
+
+	private TextBox qqCookieTextBox;
+
+	private TextBox customUserAgentTextBox;
+
 	public OptionsDialog()
 	{
 		dialogResources = new ComponentResourceManager(typeof(StateFieldInstance));
@@ -280,6 +286,7 @@ internal class OptionsDialog : Form
 		sourceOrderPanel.WrapContents = false;
 		mainSplitContainer.SplitterDistance = DatabaseMapper.ScaleByDpi(120f);
 		AddSourceTreeNodes();
+		InitializeNetworkOptionControls();
 		ApplyLocalizedText();
 		LoadSavedOptions();
 		UpdateResponsiveLayout();
@@ -294,6 +301,76 @@ internal class OptionsDialog : Form
 			SearchSource.Kugou,
 			SearchSource.Kuwo
 			}.ForEachItem(AddSourceTreeNode);
+	}
+
+	private void InitializeNetworkOptionControls()
+	{
+		FlowLayoutPanel networkOptionsPanel = new FlowLayoutPanel
+		{
+			FlowDirection = FlowDirection.TopDown,
+			AutoSize = true,
+			AutoSizeMode = AutoSizeMode.GrowAndShrink,
+			WrapContents = false,
+			Margin = new Padding(0),
+			Name = "panelNetworkOptions"
+		};
+
+		Label qqCookieLabel = new Label
+		{
+			AutoSize = true,
+			Margin = new Padding(DatabaseMapper.ScaleByDpi(3f), DatabaseMapper.ScaleByDpi(8f), DatabaseMapper.ScaleByDpi(3f), 0),
+			Name = "lblQQMusicCookie",
+			Text = GetDialogText("lblQQMusicCookie", "QQ 音乐 Cookie（可留空；登录后填入有助于降低被限流的概率）:")
+		};
+		qqCookieTextBox = new TextBox
+		{
+			Multiline = true,
+			ScrollBars = ScrollBars.Vertical,
+			WordWrap = true,
+			Width = DatabaseMapper.ScaleByDpi(390f),
+			Height = DatabaseMapper.ScaleByDpi(54f),
+			Margin = new Padding(DatabaseMapper.ScaleByDpi(6f), DatabaseMapper.ScaleByDpi(4f), 0, DatabaseMapper.ScaleByDpi(4f)),
+			Name = "tbQQMusicCookie"
+		};
+
+		Label customUserAgentLabel = new Label
+		{
+			AutoSize = true,
+			Margin = new Padding(DatabaseMapper.ScaleByDpi(3f), DatabaseMapper.ScaleByDpi(10f), DatabaseMapper.ScaleByDpi(3f), 0),
+			Name = "lblCustomUserAgent",
+			Text = GetDialogText("lblCustomUserAgent", "自定义 User-Agent（可留空；留空时使用内置默认 UA）:")
+		};
+		customUserAgentTextBox = new TextBox
+		{
+			Width = DatabaseMapper.ScaleByDpi(390f),
+			Margin = new Padding(DatabaseMapper.ScaleByDpi(6f), DatabaseMapper.ScaleByDpi(4f), 0, 0),
+			Name = "tbCustomUserAgent"
+		};
+
+		networkOptionsPanel.Controls.Add(qqCookieLabel);
+		networkOptionsPanel.Controls.Add(qqCookieTextBox);
+		networkOptionsPanel.Controls.Add(customUserAgentLabel);
+		networkOptionsPanel.Controls.Add(customUserAgentTextBox);
+
+		networkOptionsGroupBox = new GroupBox
+		{
+			AutoSize = true,
+			AutoSizeMode = AutoSizeMode.GrowAndShrink,
+			Margin = new Padding(0, DatabaseMapper.ScaleByDpi(10f), 0, 0),
+			Padding = new Padding(DatabaseMapper.ScaleByDpi(5f)),
+			Name = "gbNetworkOptions",
+			Text = GetDialogText("gbNetworkOptions", "联网请求设置")
+		};
+		networkOptionsGroupBox.Controls.Add(networkOptionsPanel);
+		networkOptionsGroupBox.Hide();
+		sourceOrderPanel.Controls.Add(networkOptionsGroupBox);
+
+		TreeNode networkTreeNode = new TreeNode
+		{
+			Name = "Network",
+			Text = GetDialogText("Network", "联网请求")
+		};
+		optionsTreeView.Nodes.Add(networkTreeNode);
 	}
 
 	private void ApplyLocalizedText()
@@ -513,6 +590,9 @@ internal class OptionsDialog : Form
 			.ToList()
 			.IndexOf(Settings.Default.PictureFormatLimits);
 		pictureFormatLimitComboBox.SelectedIndex = pictureFormatLimitIndex >= 0 ? pictureFormatLimitIndex : 0;
+
+		qqCookieTextBox.Text = Settings.Default.QQMusic_Cookie;
+		customUserAgentTextBox.Text = Settings.Default.WebSearch_CustomUserAgent;
 	}
 
 	protected override void OnShown(EventArgs e)
@@ -538,6 +618,7 @@ internal class OptionsDialog : Form
 		lyricCleanupOptionsPanel.Hide();
 		searchAndTagOptionsPanel.Hide();
 		saveAndNotificationOptionsPanel.Hide();
+		networkOptionsGroupBox.Hide();
 
 		string nodeName = e.Node.Name;
 		switch (nodeName)
@@ -560,6 +641,9 @@ internal class OptionsDialog : Form
 			return;
 		case "Others1":
 			saveAndNotificationOptionsPanel.Show();
+			return;
+		case "Network":
+			networkOptionsGroupBox.Show();
 			return;
 		default:
 			if (!nodeName.StartsWith("TagSrc"))
@@ -712,6 +796,8 @@ internal class OptionsDialog : Form
 		Settings.Default.RestrictFileExts = string.Join(";", StateFieldInstance.EnabledTagTypesByExtension.Keys) + ";";
 		Settings.Default.PictureFormatLimits = GetResourceText(Resources.PictureFormatLimitsKeys, DefaultPictureFormatLimitValues).Split('|')[pictureFormatLimitComboBox.SelectedIndex];
 		Settings.Default.ConnectorsArtists = artistConnectorComboBox.Text;
+		Settings.Default.QQMusic_Cookie = qqCookieTextBox.Text.Trim();
+		Settings.Default.WebSearch_CustomUserAgent = customUserAgentTextBox.Text.Trim();
 		Settings.Default.Save();
 		CoverSearchDialog.ClearCachedCandidates();
 		LyricSearchDialog.ClearCachedLyrics();

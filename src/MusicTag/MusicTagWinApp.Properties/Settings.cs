@@ -899,6 +899,40 @@ internal sealed class Settings : ApplicationSettingsBase
 		}
 	}
 
+	[SettingsProvider(typeof(XmlSettingsProvider))]
+	[UserScopedSetting]
+	[SettingsManageability(SettingsManageability.Roaming)]
+	[DefaultSettingValue("")]
+	[DebuggerNonUserCode]
+	public string QQMusic_Cookie
+	{
+		get
+		{
+			return (string)this["QQMusic_Cookie"];
+		}
+		set
+		{
+			this["QQMusic_Cookie"] = value;
+		}
+	}
+
+	[SettingsProvider(typeof(XmlSettingsProvider))]
+	[UserScopedSetting]
+	[SettingsManageability(SettingsManageability.Roaming)]
+	[DefaultSettingValue("")]
+	[DebuggerNonUserCode]
+	public string WebSearch_CustomUserAgent
+	{
+		get
+		{
+			return (string)this["WebSearch_CustomUserAgent"];
+		}
+		set
+		{
+			this["WebSearch_CustomUserAgent"] = value;
+		}
+	}
+
 	private void SettingChangingEventHandler(object sender, SettingChangingEventArgs e)
 	{
 	}

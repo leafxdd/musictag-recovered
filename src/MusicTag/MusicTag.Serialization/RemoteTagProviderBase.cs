@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Text;
 using System.Threading;
 using MusicTagWinApp.Instances;
+using MusicTagWinApp.Properties;
 using MusicTagWinApp.Web;
 using MusicTagWinApp.Writers;
 
@@ -33,8 +34,19 @@ internal abstract class RemoteTagProviderBase : IDisposable
 		if (httpClient == null)
 		{
 			httpClient = CreateHttpClient();
+			ApplyCustomUserAgent(httpClient);
 		}
 		return httpClient;
+	}
+
+	private static void ApplyCustomUserAgent(HttpClient client)
+	{
+		string customUserAgent = Settings.Default.WebSearch_CustomUserAgent;
+		if (!string.IsNullOrWhiteSpace(customUserAgent))
+		{
+			client.DefaultRequestHeaders.Remove("User-Agent");
+			client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", customUserAgent.Trim());
+		}
 	}
 
 	protected abstract HttpClient CreateHttpClient();
@@ -149,7 +161,8 @@ internal abstract class RemoteTagProviderBase : IDisposable
 				ReadWriteTimeout = readWriteTimeout
 			});
 			downloadClient.Timeout = TimeSpan.FromMilliseconds(requestTimeout);
-			downloadClient.DefaultRequestHeaders.Add("user-agent", "Mozilla/5.0 (Windows NT 6.3; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.106 Safari/537.36");
+			downloadClient.DefaultRequestHeaders.Add("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
+			ApplyCustomUserAgent(downloadClient);
 			if (!(this is QqMusicTagProvider))
 			{
 				downloadClient.DefaultRequestHeaders.Add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3");

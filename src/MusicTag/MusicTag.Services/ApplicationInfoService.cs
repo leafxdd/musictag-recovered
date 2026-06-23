@@ -13,7 +13,7 @@ namespace MusicTag.Services;
 
 internal static class ApplicationInfoService
 {
-	private const string UserAgent = "Mozilla/5.0 (Windows NT 6.3; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.106 Safari/537.36";
+	private const string UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
 	public static readonly string UpdatePageUrl = "https://www.cnblogs.com/vinlxc/p/11347744.html";
 

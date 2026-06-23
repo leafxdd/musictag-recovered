@@ -13,6 +13,7 @@ using MusicTag.Services;
 using MusicTagWinApp.Adapter;
 using MusicTagWinApp.Instances;
 using MusicTagWinApp.Listeners;
+using MusicTagWinApp.Properties;
 using MusicTagWinApp.Roles;
 using MusicTagWinApp.Structs;
 using MusicTagWinApp.Web;
@@ -41,7 +42,7 @@ internal class QqMusicTagProvider : RemoteTagProviderBase
 
 	protected override HttpClient CreateHttpClient()
 	{
-		return new HttpClient(new HttpClientHandler
+		HttpClient client = new HttpClient(new HttpClientHandler
 		{
 			AutomaticDecompression = (DecompressionMethods.GZip | DecompressionMethods.Deflate)
 		})
@@ -51,9 +52,15 @@ internal class QqMusicTagProvider : RemoteTagProviderBase
 			{
 				{ "accept-language", "zh-CN,zh;q=0.9,en;q=0.8" },
 				{ "referer", "https://i.y.qq.com/" },
-				{ "user-agent", "Mozilla/5.0 (Windows NT 6.3; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.106 Safari/537.36" }
+				{ "user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36" }
 			}
 		};
+		string cookie = Settings.Default.QQMusic_Cookie;
+		if (!string.IsNullOrWhiteSpace(cookie))
+		{
+			client.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", cookie.Trim());
+		}
+		return client;
 	}
 
 	public QqMusicTagProvider(CancellationTokenSource cancellationSource)
@@ -68,18 +75,50 @@ internal class QqMusicTagProvider : RemoteTagProviderBase
 
 	private List<QqSongInfo> SearchSongs(string query, int maxResults)
 	{
-		if (cancellationSource.IsCancellationRequested)
+		string requestBody = string.Format(searchRequestTemplate, "req_0", TextEncodingService.JavaScriptStringEncode(query), maxResults);
+		const int maxAttempts = 3;
+		for (int attempt = 0; attempt < maxAttempts; attempt++)
 		{
-			return new List<QqSongInfo>();
+			if (cancellationSource.IsCancellationRequested)
+			{
+				return new List<QqSongInfo>();
+			}
+
+			string responseBody = PostString(searchEndpointUrl, requestBody, null, postJson: true);
+			if (cancellationSource.IsCancellationRequested)
+			{
+				return new List<QqSongInfo>();
+			}
+
+			if (attempt + 1 < maxAttempts && IsRateLimited(responseBody))
+			{
+				Console.WriteLine($"QQ search throttled (req_0.code 2001), retry {attempt + 1}/{maxAttempts - 1}");
+				cancellationSource.Token.WaitHandle.WaitOne(800 * (attempt + 1));
+				continue;
+			}
+
+			return ParseSongSearchResponse(responseBody);
 		}
 
-		string responseBody = PostString(searchEndpointUrl, string.Format(searchRequestTemplate, "req_0", TextEncodingService.JavaScriptStringEncode(query), maxResults), null, postJson: true);
-		if (cancellationSource.IsCancellationRequested)
+		return new List<QqSongInfo>();
+	}
+
+	private static bool IsRateLimited(string responseBody)
+	{
+		if (string.IsNullOrWhiteSpace(responseBody))
 		{
-			return new List<QqSongInfo>();
+			return false;
 		}
 
-		return ParseSongSearchResponse(responseBody);
+		try
+		{
+			JToken codeToken = JObject.Parse(responseBody)["req_0"]?["code"];
+			return codeToken != null && codeToken.Type == JTokenType.Integer && (int)codeToken == 2001;
+		}
+		catch (Exception)
+		{
+			return false;
+		}
 	}
 
 	public List<LyricSearchResult> SearchLyrics(string query, int maxResults, int sourceOrder)

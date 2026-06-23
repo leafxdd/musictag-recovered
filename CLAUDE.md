@@ -99,11 +99,17 @@ ranked candidate list shown to user → write-back to file tags.
 - **Some file names don't match the type inside** (see `docs/DECOMPILATION_NOTES.md`): e.g.
   `BaseFieldInstance.cs` → `LyricEditorDialog`, `EventRulesSchema.cs` → `FilenameRelatedBatchDialog`,
   `Template.cs` → `CustomToolStripRenderer`. File renames are done as separate, isolated passes.
-- **Do not force-rename or rewrite** (high risk, evidence required first): `PrivateImplementationDetails.cs`
-  (compiler-generated data), `PolicyTokenExporter.cs` (empty shell referenced by a resource key), the
-  remaining `_003C…_003Ed__*` async state machines in `StateFieldInstance.cs` /
-  `CombinedTagSearchDialog.cs`, the large `goto`/`switch` `InitializeComponent` in `StateFieldInstance.cs`,
-  the encoding-detection table init in `Tokenizer.cs`, and the obfuscated native `EntryPoint` strings.
+- **Rewriting obfuscated / decompiler-emitted artifacts into readable code is allowed — but only when it
+  stays strictly behavior-equivalent**, proven by a clean build + smoke tests and a careful read of the
+  diff. This covers the `goto`/`switch` `InitializeComponent` state machines (e.g. `StateFieldInstance.cs`,
+  `OptionsDialog.cs`), the `_003C…_003Ed__*` async state machines (`StateFieldInstance.cs` /
+  `CombinedTagSearchDialog.cs`), and the encoding-detection table init in `Tokenizer.cs`. These stay
+  high-risk: prefer the smallest equivalent form, and when a change can live in hand-written code, add it
+  there rather than reshaping the generated block. Compiler-generated data (`PrivateImplementationDetails.cs`)
+  and the empty `PolicyTokenExporter.cs` shell carry no readability win — leave them absent a concrete reason.
+- **The obfuscated native `EntryPoint` strings are NOT obfuscation to undo** — they are the P/Invoke binding
+  to real `MusicTag.dll` exports, so renaming them breaks behavior-equivalence. Never change them (same
+  spirit as the persisted JSON keys and `.resx` keys below).
 - When a decompiled name's meaning is unclear, **keep it** (or use a neutral name) and record it in
   `docs/DECOMPILATION_NOTES.md` — don't guess a rename.
 - **Persisted names must stay stable**: keep old JSON keys via `[JsonProperty]` (e.g. `SourceItem`'s
