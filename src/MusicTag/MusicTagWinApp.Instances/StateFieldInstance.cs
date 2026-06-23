@@ -1825,188 +1825,6 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	[StructLayout(LayoutKind.Auto)]
-	[CompilerGenerated]
-	private struct _003CUndoRename_003Ed__169 : IAsyncStateMachine
-	{
-		public int _003C_003E1__state;
-
-		public AsyncVoidMethodBuilder _003C_003Et__builder;
-
-		public ProgressDialog frmProgress;
-
-		public StateFieldInstance _003C_003E4__this;
-
-		private UndoRenameTaskContext undoRenameContext;
-
-		private Stopwatch _003CstopWatch_003E5__2;
-
-		private TaskAwaiter _003C_003Eu__1;
-
-		private void MoveNext()
-		{
-			int num = _003C_003E1__state;
-			StateFieldInstance stateFieldInstance = _003C_003E4__this;
-			try
-			{
-				(string, bool) value = default;
-				List<SelectedListViewItemInfo> list = default;
-				if (num != 0)
-				{
-					undoRenameContext = new UndoRenameTaskContext();
-					goto IL_0191;
-				}
-				TaskAwaiter awaiter = _003C_003Eu__1;
-				_003C_003Eu__1 = default(TaskAwaiter);
-				_003C_003E1__state = -1;
-				goto IL_031b;
-				IL_03c4:
-				value = default((string, bool));
-				value.Item1 = Resources.Msg_UndoCompleted + "\n" + undoRenameContext.errorLog.ToString();
-				goto IL_0443;
-				IL_041d:
-				value.Item1 = Resources.Msg_Skipped + "\n" + undoRenameContext.errorLog.ToString();
-				goto IL_0443;
-				IL_0191:
-				undoRenameContext.progressDialog = frmProgress;
-				undoRenameContext.owner = _003C_003E4__this;
-				undoRenameContext.cancellationSource = new CancellationTokenSource();
-				undoRenameContext.progressDialog.AddCancelRequestedHandler(undoRenameContext.Cancel);
-				undoRenameContext.renameUndoOperations = TagHistoryRepository.RenameUndoOperations;
-				undoRenameContext.successCount = 0;
-				undoRenameContext.failedCount = 0;
-				undoRenameContext.skippedCount = 0;
-				undoRenameContext.processedCount = 0;
-				undoRenameContext.currentFile = null;
-				undoRenameContext.progressDialog.AddProgressUpdateHandler(undoRenameContext.UpdateProgress);
-				_003CstopWatch_003E5__2 = new Stopwatch();
-				undoRenameContext.errorLog = new Page();
-				_003CstopWatch_003E5__2.Start();
-				int num2 = 8;
-				goto IL_02e2;
-				IL_0443:
-				TagHistoryRepository.ClearUndoState();
-				goto IL_0448;
-				IL_028f:
-				switch (num2)
-				{
-				case 2:
-					break;
-				case 7:
-					goto IL_02c1;
-				case 1:
-				case 5:
-					goto IL_02e2;
-				case 6:
-					value.Item2 = true;
-					goto IL_0443;
-				case 3:
-				case 8:
-					goto IL_041d;
-				default:
-					goto IL_0443;
-				case 0:
-					goto IL_0448;
-				case 9:
-					goto IL_0453;
-				}
-				goto IL_0191;
-				IL_02e2:
-				awaiter = Task.Run((Action)undoRenameContext.UndoRenames, undoRenameContext.cancellationSource.Token).GetAwaiter();
-				if (!awaiter.IsCompleted)
-				{
-					_003C_003E1__state = 0;
-					_003C_003Eu__1 = awaiter;
-					_003C_003Et__builder.AwaitUnsafeOnCompleted(ref awaiter, ref this);
-					return;
-				}
-				goto IL_031b;
-				IL_0448:
-				_003CstopWatch_003E5__2.Stop();
-				goto IL_0453;
-				IL_031b:
-				awaiter.GetResult();
-				list = new List<SelectedListViewItemInfo>();
-				undoRenameContext.processedCount = 0;
-				goto IL_02c1;
-				IL_0453:
-				stateFieldInstance.RefreshItemsWithOptionalProgressDialog(list.ToArray(), showErrorMessageBox: false, showProgressDialog: true, refreshStatusAllInfo: true, previousMessage: value, listForMirror: true);
-				goto end_IL_001a;
-				IL_02c1:
-				while (true)
-				{
-					if (undoRenameContext.processedCount < stateFieldInstance.cachedFileListItems.Count)
-					{
-						RenameUndoListItemMatcher listItemMatcher = new RenameUndoListItemMatcher();
-						listItemMatcher.ListViewItem = stateFieldInstance.cachedFileListItems[undoRenameContext.processedCount].listViewItem;
-						(string oldPath, string newPath, bool failed) operation = undoRenameContext.renameUndoOperations.Find(listItemMatcher.MatchesCurrentPath);
-						if (!string.IsNullOrWhiteSpace(operation.oldPath))
-						{
-							if (!operation.failed)
-							{
-								listItemMatcher.ListViewItem.Tag = operation.oldPath;
-							}
-							list.Add(new SelectedListViewItemInfo
-							{
-								Index = undoRenameContext.processedCount,
-								FilePath = (listItemMatcher.ListViewItem.Tag as string)
-							});
-						}
-						undoRenameContext.processedCount++;
-						continue;
-					}
-					undoRenameContext.progressDialog.CloseAfterCompletion();
-					value.Item2 = false;
-					if (undoRenameContext.renameUndoOperations.Count > 1)
-					{
-						break;
-					}
-					if (undoRenameContext.successCount > 0)
-					{
-						goto IL_03c4;
-					}
-					if (undoRenameContext.skippedCount <= 0)
-					{
-						value.Item1 = undoRenameContext.errorLog.ToString();
-						num2 = 6;
-						goto IL_028f;
-					}
-					goto IL_041d;
-				}
-				value.Item1 = string.Format(Resources.Msg_UndoCompleted + "\n" + Resources.Msg_OK_Fail_Skip_Count, undoRenameContext.successCount, undoRenameContext.failedCount, undoRenameContext.skippedCount, undoRenameContext.processedCount) + "\n" + undoRenameContext.errorLog.ToString();
-				goto IL_0443;
-				end_IL_001a:;
-			}
-			catch (System.Exception exception)
-			{
-				_003C_003E1__state = -2;
-				_003C_003Et__builder.SetException(exception);
-				return;
-			}
-			_003C_003E1__state = -2;
-			_003C_003Et__builder.SetResult();
-		}
-
-		void IAsyncStateMachine.MoveNext()
-		{
-			//ILSpy generated this explicit interface implementation from .override directive in MoveNext
-			this.MoveNext();
-		}
-
-		[DebuggerHidden]
-		private void SetStateMachine(IAsyncStateMachine stateMachine)
-		{
-			_003C_003Et__builder.SetStateMachine(stateMachine);
-		}
-
-		void IAsyncStateMachine.SetStateMachine(IAsyncStateMachine stateMachine)
-		{
-			//ILSpy generated this explicit interface implementation from .override directive in SetStateMachine
-			this.SetStateMachine(stateMachine);
-		}
-
-	}
-
 	private sealed class ClearTagsTaskContext
 	{
 		public CancellationTokenSource cancellationSource;
@@ -6126,16 +5944,68 @@ internal class StateFieldInstance : Form
 		RefreshItemsWithOptionalProgressDialog(refreshedItems.ToArray(), showErrorMessageBox: false, showProgressDialog: true, refreshStatusAllInfo: true, previousMessage: value, listForMirror: true);
 	}
 
-	[AsyncStateMachine(typeof(_003CUndoRename_003Ed__169))]
-	private void StartUndoRename(ProgressDialog progressDialog)
+	private async void StartUndoRename(ProgressDialog progressDialog)
 	{
-		_003CUndoRename_003Ed__169 stateMachine = default(_003CUndoRename_003Ed__169);
-		stateMachine._003C_003E4__this = this;
-		stateMachine.frmProgress = progressDialog;
-		stateMachine._003C_003Et__builder = AsyncVoidMethodBuilder.Create();
-		stateMachine._003C_003E1__state = -1;
-		AsyncVoidMethodBuilder asyncVoidMethodBuilder = stateMachine._003C_003Et__builder;
-		asyncVoidMethodBuilder.Start(ref stateMachine);
+		UndoRenameTaskContext undoRenameContext = new UndoRenameTaskContext();
+		undoRenameContext.progressDialog = progressDialog;
+		undoRenameContext.owner = this;
+		undoRenameContext.cancellationSource = new CancellationTokenSource();
+		undoRenameContext.progressDialog.AddCancelRequestedHandler(undoRenameContext.Cancel);
+		undoRenameContext.renameUndoOperations = TagHistoryRepository.RenameUndoOperations;
+		undoRenameContext.successCount = 0;
+		undoRenameContext.failedCount = 0;
+		undoRenameContext.skippedCount = 0;
+		undoRenameContext.processedCount = 0;
+		undoRenameContext.currentFile = null;
+		undoRenameContext.progressDialog.AddProgressUpdateHandler(undoRenameContext.UpdateProgress);
+		Stopwatch stopWatch = new Stopwatch();
+		undoRenameContext.errorLog = new Page();
+		stopWatch.Start();
+		await Task.Run((Action)undoRenameContext.UndoRenames, undoRenameContext.cancellationSource.Token);
+		List<SelectedListViewItemInfo> list = new List<SelectedListViewItemInfo>();
+		undoRenameContext.processedCount = 0;
+		while (undoRenameContext.processedCount < cachedFileListItems.Count)
+		{
+			RenameUndoListItemMatcher listItemMatcher = new RenameUndoListItemMatcher();
+			listItemMatcher.ListViewItem = cachedFileListItems[undoRenameContext.processedCount].listViewItem;
+			(string oldPath, string newPath, bool failed) operation = undoRenameContext.renameUndoOperations.Find(listItemMatcher.MatchesCurrentPath);
+			if (!string.IsNullOrWhiteSpace(operation.oldPath))
+			{
+				if (!operation.failed)
+				{
+					listItemMatcher.ListViewItem.Tag = operation.oldPath;
+				}
+				list.Add(new SelectedListViewItemInfo
+				{
+					Index = undoRenameContext.processedCount,
+					FilePath = (listItemMatcher.ListViewItem.Tag as string)
+				});
+			}
+			undoRenameContext.processedCount++;
+		}
+		undoRenameContext.progressDialog.CloseAfterCompletion();
+		(string, bool) value = default((string, bool));
+		value.Item2 = false;
+		if (undoRenameContext.renameUndoOperations.Count > 1)
+		{
+			value.Item1 = string.Format(Resources.Msg_UndoCompleted + "\n" + Resources.Msg_OK_Fail_Skip_Count, undoRenameContext.successCount, undoRenameContext.failedCount, undoRenameContext.skippedCount, undoRenameContext.processedCount) + "\n" + undoRenameContext.errorLog.ToString();
+		}
+		else if (undoRenameContext.successCount > 0)
+		{
+			value.Item1 = Resources.Msg_UndoCompleted + "\n" + undoRenameContext.errorLog.ToString();
+		}
+		else if (undoRenameContext.skippedCount <= 0)
+		{
+			value.Item1 = undoRenameContext.errorLog.ToString();
+			value.Item2 = true;
+		}
+		else
+		{
+			value.Item1 = Resources.Msg_Skipped + "\n" + undoRenameContext.errorLog.ToString();
+		}
+		TagHistoryRepository.ClearUndoState();
+		stopWatch.Stop();
+		RefreshItemsWithOptionalProgressDialog(list.ToArray(), showErrorMessageBox: false, showProgressDialog: true, refreshStatusAllInfo: true, previousMessage: value, listForMirror: true);
 	}
 
 	[AsyncStateMachine(typeof(_003CClearTags_003Ed__170))]
