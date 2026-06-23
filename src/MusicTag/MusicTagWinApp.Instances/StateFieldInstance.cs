@@ -1182,139 +1182,6 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	[StructLayout(LayoutKind.Auto)]
-	[CompilerGenerated]
-	private struct _003CRenameFiles_003Ed__166 : IAsyncStateMachine
-	{
-		public int _003C_003E1__state;
-
-		public AsyncVoidMethodBuilder _003C_003Et__builder;
-
-		public ProgressDialog frmProgress;
-
-		public (string Path, string NewPath, int ListViewIndex)[] itemInfos;
-
-		public bool isChs2Cht;
-
-		private ConvertFilenameChineseBatchContext batchContext;
-
-		public StateFieldInstance _003C_003E4__this;
-
-		private TaskAwaiter _003C_003Eu__1;
-
-		private void MoveNext()
-		{
-			int num = _003C_003E1__state;
-			StateFieldInstance stateFieldInstance = _003C_003E4__this;
-			try
-			{
-				TaskAwaiter awaiter = default(TaskAwaiter);
-				if (num != 0)
-				{
-					batchContext = new ConvertFilenameChineseBatchContext();
-					batchContext.progressDialog = frmProgress;
-					batchContext.renameItems = itemInfos;
-					batchContext.convertSimplifiedToTraditional = isChs2Cht;
-					batchContext.cancellationSource = new CancellationTokenSource();
-					batchContext.progressDialog.AddCancelRequestedHandler(batchContext.Cancel);
-					batchContext.renamedCount = 0;
-					batchContext.failedCount = 0;
-					batchContext.skippedCount = 0;
-					batchContext.processedCount = 0;
-					batchContext.currentFile = null;
-					batchContext.progressDialog.AddProgressUpdateHandler(batchContext.UpdateProgress);
-					batchContext.messageLog = new Page();
-					awaiter = Task.Run((Action)batchContext.ConvertFilenames, batchContext.cancellationSource.Token).GetAwaiter();
-					if (!awaiter.IsCompleted)
-					{
-						_003C_003E1__state = 0;
-						_003C_003Eu__1 = awaiter;
-						_003C_003Et__builder.AwaitUnsafeOnCompleted(ref awaiter, ref this);
-						return;
-					}
-				}
-				else
-				{
-					awaiter = _003C_003Eu__1;
-					_003C_003Eu__1 = default(TaskAwaiter);
-					_003C_003E1__state = -1;
-				}
-				goto IL_01d9;
-				IL_0381:
-				(string, bool) value = default((string, bool));
-				stateFieldInstance.RefreshSelectedItems(showErrorMessageBox: false, showProgressDialog: true, refreshStatusAllInfo: true, previousMessage: value);
-				goto end_IL_001e;
-				IL_037c:
-				GC.Collect();
-				goto IL_0381;
-				IL_023d:
-				int i = default(int);
-				(string Path, string NewPath, int ListViewIndex)[] completedRenameItems = default((string, string, int)[]);
-				for (; i < completedRenameItems.Length; i++)
-				{
-					(string Path, string NewPath, int ListViewIndex) renameItem = completedRenameItems[i];
-					if (renameItem.NewPath != null)
-					{
-						stateFieldInstance.fileListView.Items[renameItem.ListViewIndex].Tag = renameItem.NewPath;
-					}
-				}
-				value.Item2 = false;
-				if (batchContext.renameItems.Length > 1)
-				{
-					value.Item1 = string.Format(Resources.Msg_SaveCompleted + "\n" + Resources.Msg_OK_Fail_Skip_Count, batchContext.renamedCount, batchContext.failedCount, batchContext.skippedCount, batchContext.processedCount) + "\n" + batchContext.messageLog.ToString();
-				}
-				else if (batchContext.renamedCount > 0)
-				{
-					value.Item1 = Resources.Msg_SaveCompleted + "\n" + batchContext.messageLog.ToString();
-				}
-				else if (batchContext.skippedCount > 0)
-				{
-					value.Item1 = Resources.Msg_Skipped + "\n" + batchContext.messageLog.ToString();
-				}
-				else
-				{
-					value.Item1 = batchContext.messageLog.ToString();
-					value.Item2 = true;
-				}
-				goto IL_037c;
-				IL_01d9:
-				awaiter.GetResult();
-				batchContext.progressDialog.CloseAfterCompletion();
-				completedRenameItems = batchContext.renameItems;
-				i = 0;
-				goto IL_023d;
-				end_IL_001e:;
-			}
-			catch (System.Exception exception)
-			{
-				_003C_003E1__state = -2;
-				_003C_003Et__builder.SetException(exception);
-				return;
-			}
-			_003C_003E1__state = -2;
-			_003C_003Et__builder.SetResult();
-		}
-
-		void IAsyncStateMachine.MoveNext()
-		{
-			//ILSpy generated this explicit interface implementation from .override directive in MoveNext
-			this.MoveNext();
-		}
-
-		[DebuggerHidden]
-		private void SetStateMachine(IAsyncStateMachine stateMachine)
-		{
-			_003C_003Et__builder.SetStateMachine(stateMachine);
-		}
-
-		void IAsyncStateMachine.SetStateMachine(IAsyncStateMachine stateMachine)
-		{
-			//ILSpy generated this explicit interface implementation from .override directive in SetStateMachine
-			this.SetStateMachine(stateMachine);
-		}
-
-	}
-
 	private sealed class SaveTagsTaskContext
 	{
 		public CancellationTokenSource cancellationSource;
@@ -6357,18 +6224,53 @@ internal class StateFieldInstance : Form
 		return stringBuilder.ToString();
 	}
 
-	[AsyncStateMachine(typeof(_003CRenameFiles_003Ed__166))]
-	private void StartRenameFiles((string Path, string NewPath, int ListViewIndex)[] itemInfos, ProgressDialog progressDialog, bool isChsToCht)
+	private async void StartRenameFiles((string Path, string NewPath, int ListViewIndex)[] itemInfos, ProgressDialog progressDialog, bool isChsToCht)
 	{
-		_003CRenameFiles_003Ed__166 stateMachine = default;
-		stateMachine._003C_003E4__this = this;
-		stateMachine.itemInfos = itemInfos;
-		stateMachine.frmProgress = progressDialog;
-		stateMachine.isChs2Cht = isChsToCht;
-		stateMachine._003C_003Et__builder = AsyncVoidMethodBuilder.Create();
-		stateMachine._003C_003E1__state = -1;
-		AsyncVoidMethodBuilder asyncVoidMethodBuilder = stateMachine._003C_003Et__builder;
-		asyncVoidMethodBuilder.Start(ref stateMachine);
+		ConvertFilenameChineseBatchContext batchContext = new ConvertFilenameChineseBatchContext();
+		batchContext.progressDialog = progressDialog;
+		batchContext.renameItems = itemInfos;
+		batchContext.convertSimplifiedToTraditional = isChsToCht;
+		batchContext.cancellationSource = new CancellationTokenSource();
+		batchContext.progressDialog.AddCancelRequestedHandler(batchContext.Cancel);
+		batchContext.renamedCount = 0;
+		batchContext.failedCount = 0;
+		batchContext.skippedCount = 0;
+		batchContext.processedCount = 0;
+		batchContext.currentFile = null;
+		batchContext.progressDialog.AddProgressUpdateHandler(batchContext.UpdateProgress);
+		batchContext.messageLog = new Page();
+		await Task.Run((Action)batchContext.ConvertFilenames, batchContext.cancellationSource.Token);
+		batchContext.progressDialog.CloseAfterCompletion();
+		(string Path, string NewPath, int ListViewIndex)[] completedRenameItems = batchContext.renameItems;
+		for (int i = 0; i < completedRenameItems.Length; i++)
+		{
+			(string Path, string NewPath, int ListViewIndex) renameItem = completedRenameItems[i];
+			if (renameItem.NewPath != null)
+			{
+				fileListView.Items[renameItem.ListViewIndex].Tag = renameItem.NewPath;
+			}
+		}
+		(string, bool) value = default((string, bool));
+		value.Item2 = false;
+		if (batchContext.renameItems.Length > 1)
+		{
+			value.Item1 = string.Format(Resources.Msg_SaveCompleted + "\n" + Resources.Msg_OK_Fail_Skip_Count, batchContext.renamedCount, batchContext.failedCount, batchContext.skippedCount, batchContext.processedCount) + "\n" + batchContext.messageLog.ToString();
+		}
+		else if (batchContext.renamedCount > 0)
+		{
+			value.Item1 = Resources.Msg_SaveCompleted + "\n" + batchContext.messageLog.ToString();
+		}
+		else if (batchContext.skippedCount > 0)
+		{
+			value.Item1 = Resources.Msg_Skipped + "\n" + batchContext.messageLog.ToString();
+		}
+		else
+		{
+			value.Item1 = batchContext.messageLog.ToString();
+			value.Item2 = true;
+		}
+		GC.Collect();
+		RefreshSelectedItems(showErrorMessageBox: false, showProgressDialog: true, refreshStatusAllInfo: true, previousMessage: value);
 	}
 
 	[AsyncStateMachine(typeof(_003CCommonSaveTags_003Ed__167))]
