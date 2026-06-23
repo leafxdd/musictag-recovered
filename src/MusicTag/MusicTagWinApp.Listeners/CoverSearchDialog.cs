@@ -520,35 +520,8 @@ internal class CoverSearchDialog : Form
 			using QqMusicTagProvider qqProvider = new QqMusicTagProvider(GetSearchCancellation());
 			return qqProvider.SearchCovers((GetCurrentTrack().Album + " " + GetCurrentTrack().Artist).Trim(), 15, existingCandidates);
 		}
-		case SearchSource.Xiami:
-		{
-			using XiamiTagProvider xiamiTagProvider = new XiamiTagProvider(GetSearchCancellation());
-			return xiamiTagProvider.SearchCovers((GetCurrentTrack().Album + " " + GetCurrentTrack().Artist).Trim(), 10, existingCandidates);
-		}
-		case SearchSource.ITunes:
-		{
-			foreach (CoverSearchResult existingCandidate in existingCandidates)
-			{
-					if (existingCandidate.SearchSource == SearchSource.ITunes)
-				{
-					return new List<CoverSearchResult>();
-				}
-			}
-			using ItunesTagProvider itunesTagProvider = new ItunesTagProvider(GetSearchCancellation());
-			return itunesTagProvider.SearchCovers((GetCurrentTrack().Album + " " + GetCurrentTrack().Artist).Trim(), 10, existingCandidates);
-		}
-			case SearchSource.Lastfm:
-			{
-				using LastfmCoverProvider lastfmCoverProvider = new LastfmCoverProvider(GetSearchCancellation());
-				return lastfmCoverProvider.SearchAlbums(GetCurrentTrack().Artist, GetCurrentTrack().Album, 15, existingCandidates);
-			}
 		default:
 			return new List<CoverSearchResult>();
-		case SearchSource.Vgmdb:
-		{
-			using VgmdbTagProvider vgmdbTagProvider = new VgmdbTagProvider(GetSearchCancellation());
-			return vgmdbTagProvider.SearchCovers(GetCurrentTrack().Artist, GetCurrentTrack().Album, 5, existingCandidates);
-		}
 		case SearchSource.Kuwo:
 		{
 			using KuwoTagProvider kuwoTagProvider = new KuwoTagProvider(GetSearchCancellation());
@@ -571,28 +544,6 @@ internal class CoverSearchDialog : Form
 			using QqMusicTagProvider qqProvider = new QqMusicTagProvider(GetSearchCancellation());
 			return qqProvider.SearchCovers((GetCurrentTrack().Title + " " + GetCurrentTrack().Artist).Trim(), 15, existingCandidates);
 		}
-		case SearchSource.Xiami:
-		{
-			using XiamiTagProvider xiamiTagProvider = new XiamiTagProvider(GetSearchCancellation());
-			return xiamiTagProvider.SearchCovers((GetCurrentTrack().Title + " " + GetCurrentTrack().Artist).Trim(), 10, existingCandidates);
-		}
-		case SearchSource.ITunes:
-		{
-			foreach (CoverSearchResult existingCandidate in existingCandidates)
-			{
-					if (existingCandidate.SearchSource == SearchSource.ITunes)
-				{
-					return new List<CoverSearchResult>();
-				}
-			}
-			using ItunesTagProvider itunesTagProvider = new ItunesTagProvider(GetSearchCancellation());
-			return itunesTagProvider.SearchCovers((GetCurrentTrack().Title + " " + GetCurrentTrack().Artist).Trim(), 10, existingCandidates);
-		}
-			case SearchSource.Lastfm:
-			{
-				using LastfmCoverProvider lastfmCoverProvider = new LastfmCoverProvider(GetSearchCancellation());
-				return lastfmCoverProvider.SearchTracks(GetCurrentTrack().Title, GetCurrentTrack().Artist, GetCurrentTrack().Album, 15, existingCandidates);
-			}
 		default:
 			return new List<CoverSearchResult>();
 		case SearchSource.Kuwo:
@@ -605,13 +556,6 @@ internal class CoverSearchDialog : Form
 
 	private List<CoverSearchResult> SearchByArtist(SearchSource source, List<CoverSearchResult> existingCandidates)
 	{
-		if (source == SearchSource.Lastfm)
-		{
-			using (LastfmCoverProvider lastfmCoverProvider = new LastfmCoverProvider(GetSearchCancellation()))
-			{
-				return lastfmCoverProvider.SearchArtists(GetCurrentTrack().Artist, 15, existingCandidates);
-			}
-		}
 		return new List<CoverSearchResult>();
 	}
 

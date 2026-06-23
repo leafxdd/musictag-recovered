@@ -40,10 +40,7 @@ internal class CoverSearchResult
 		{
 			new SourceItem(SearchSource.Music163, 0),
 			new SourceItem(SearchSource.QQ, 1),
-			new SourceItem(SearchSource.ITunes, 3, enabled: false),
-			new SourceItem(SearchSource.Kuwo, 3, enabled: false),
-			new SourceItem(SearchSource.Lastfm, 4, enabled: false, isSecondarySource: true),
-			new SourceItem(SearchSource.Vgmdb, 5, enabled: false, isSecondarySource: true)
+			new SourceItem(SearchSource.Kuwo, 3, enabled: false)
 			};
 			SourceItem.ApplySavedSourceSettings(Settings.Default.PictureInfo_SourceItemList, GetCoverSourceSettings());
 	}

@@ -1112,72 +1112,8 @@ internal class CombinedTagSearchDialog : Form
 				}
 				return results;
 			}
-		case SearchSource.Xiami:
-			{
-				using XiamiTagProvider xiamiTagProvider = new XiamiTagProvider(cancellationSource);
-				results.AddRange(xiamiTagProvider.SearchTracks((searchContext.Title + " " + searchContext.Artist).Trim(), 8, 0, searchPass, existingResults, results));
-				if (cancellationSource.IsCancellationRequested)
-				{
-					return results;
-				}
-				if (!string.IsNullOrWhiteSpace(searchContext.Artist))
-				{
-					results.AddRange(xiamiTagProvider.SearchTracks(searchContext.Title.Trim(), 5, 1, searchPass, existingResults, results));
-				}
-				if (cancellationSource.IsCancellationRequested)
-				{
-					return results;
-				}
-				if (!string.IsNullOrWhiteSpace(searchContext.Album) && searchContext.Album != searchContext.Title)
-				{
-					results.AddRange(xiamiTagProvider.SearchTracks((searchContext.Album + " " + searchContext.Artist).Trim(), 5, 2, searchPass, existingResults, results));
-				}
-				return results;
-			}
-		case SearchSource.ITunes:
-			{
-				using ItunesTagProvider itunesTagProvider = new ItunesTagProvider(cancellationSource);
-				results.AddRange(itunesTagProvider.SearchTracks((searchContext.Title + " " + searchContext.Artist).Trim(), 8, 0, searchPass, existingResults, results));
-				if (cancellationSource.IsCancellationRequested)
-				{
-					return results;
-				}
-				if (!results.Any() && !string.IsNullOrWhiteSpace(searchContext.Album) && searchContext.Album != searchContext.Title)
-				{
-					results.AddRange(itunesTagProvider.SearchTracks((searchContext.Album + " " + searchContext.Artist).Trim(), 8, 1, searchPass, existingResults, results));
-				}
-				return results;
-			}
 		default:
 			return new List<TrackSearchResult>();
-		case SearchSource.Brainz:
-			{
-				using MusicBrainzTagProvider musicBrainzProvider = new MusicBrainzTagProvider(cancellationSource);
-				results.AddRange(musicBrainzProvider.SearchTracks(searchContext.Title, searchContext.Artist, searchContext.Album, 10, 0, searchPass, existingResults, results));
-				if (cancellationSource.IsCancellationRequested)
-				{
-					return results;
-				}
-				if (!string.IsNullOrWhiteSpace(searchContext.Artist))
-				{
-					results.AddRange(musicBrainzProvider.SearchTracks(searchContext.Title, "", searchContext.Album, 10, 0, searchPass, existingResults, results));
-				}
-				return results;
-			}
-		case SearchSource.Vgmdb:
-			{
-				using VgmdbTagProvider vgmdbTagProvider = new VgmdbTagProvider(cancellationSource);
-				results.AddRange(vgmdbTagProvider.SearchTracks(searchContext.Title, searchContext.Artist, searchContext.Album, 10, 0, searchPass, existingResults, results));
-				if (cancellationSource.IsCancellationRequested)
-				{
-					return results;
-				}
-				if (!string.IsNullOrWhiteSpace(searchContext.Artist))
-				{
-					results.AddRange(vgmdbTagProvider.SearchTracks(searchContext.Title, "", searchContext.Album, 10, 0, searchPass, existingResults, results));
-				}
-				return results;
-			}
 		case SearchSource.Kuwo:
 			{
 				using KuwoTagProvider kuwoTagProvider = new KuwoTagProvider(cancellationSource);
@@ -1202,30 +1138,9 @@ internal class CombinedTagSearchDialog : Form
 
 	public static List<TrackSearchResult> SearchAlbumFallbackTracks(SearchSource source, List<TrackSearchResult> existingResults, int searchPass, TrackSearchContext searchContext, CancellationTokenSource cancellationSource)
 	{
-		List<TrackSearchResult> results = new List<TrackSearchResult>();
-		switch (source)
-		{
-		default:
-			return new List<TrackSearchResult>();
-		case SearchSource.Vgmdb:
-			{
-				using VgmdbTagProvider vgmdbTagProvider = new VgmdbTagProvider(cancellationSource);
-				if (!string.IsNullOrWhiteSpace(searchContext.Album))
-				{
-					results.AddRange(vgmdbTagProvider.SearchTracks("", searchContext.Artist, searchContext.Album, 10, 0, searchPass, existingResults, results));
-				}
-				return results;
-			}
-		case SearchSource.Brainz:
-			{
-				using MusicBrainzTagProvider musicBrainzProvider = new MusicBrainzTagProvider(cancellationSource);
-				if (!string.IsNullOrWhiteSpace(searchContext.Album))
-				{
-					results.AddRange(musicBrainzProvider.SearchTracks("", searchContext.Artist, searchContext.Album, 10, 0, searchPass, existingResults, results));
-				}
-				return results;
-			}
-		}
+		// Album-only fallback was provided solely by the removed VGMdb/MusicBrainz
+		// secondary sources, so there is no longer a source to query here.
+		return new List<TrackSearchResult>();
 	}
 
 	[AsyncStateMachine(typeof(_003CSearchCombTags_003Ed__46))]

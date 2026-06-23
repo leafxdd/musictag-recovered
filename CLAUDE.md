@@ -67,12 +67,13 @@ ranked candidate list shown to user → write-back to file tags.
   Supplies shared HTTP (`GetResponseString`/`GetResponseBytes`/`PostString`/`DownloadToStream`, all
   **synchronous over `.Result`**), a shared `CancellationTokenSource`, and a cover-downloader factory.
   Subclasses implement `CreateHttpClient()` and `GetSource()`.
-- **`SearchSource`** enum (`MusicTagWinApp.Web/`) — the 10 sources: `Music163, QQ, Xiami, Kugou,
-  MiniLyrics, ITunes, Lastfm, Brainz, Vgmdb, Kuwo`. `[Description]` gives the display name.
-- **Providers** (one class each): `NetEaseMusicTagProvider`, `QqMusicTagProvider`, `XiamiTagProvider`,
-  `KugouTagProvider`, `KuwoTagProvider`, `ItunesTagProvider`, `MusicBrainzTagProvider`,
-  `VgmdbTagProvider`, `LastfmCoverProvider`, `MiniLyricsProvider`. They expose `SearchTracks`,
-  `SearchLyrics`/`LoadLyricForTrack`, and/or `SearchCovers`.
+- **`SearchSource`** enum (`MusicTagWinApp.Web/`) — the 4 sources: `Music163, QQ, Kugou, Kuwo`.
+  `[Description]` gives the display name. Members keep **explicit ordinals** (`Music163=0, QQ=1,
+  Kugou=3, Kuwo=9`) so existing persisted `SourceItem` JSON still matches after the six retired
+  sources (Xiami/MiniLyrics/iTunes/Last.fm/MusicBrainz/VGMdb) were removed.
+- **Providers** (one class each): `NetEaseMusicTagProvider`, `QqMusicTagProvider`, `KuwoTagProvider`
+  (each does tracks + lyrics + covers), and `KugouTagProvider` (lyrics + lyric-candidate track
+  search only). They expose `SearchTracks`, `SearchLyrics`/`LoadLyricForTrack`, and/or `SearchCovers`.
 - **Result models** carry `SearchSource` + ordering (`ResultOrder`/`SearchPass`/`SourceOrder`) +
   similarity scores, and use **deferred loaders** (delegates) for lazy cover download / lazy lyric
   fetch: `TrackSearchResult` (`MusicTagWinApp.Roles/`), `LyricSearchResult`

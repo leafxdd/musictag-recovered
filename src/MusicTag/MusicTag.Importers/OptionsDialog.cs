@@ -287,16 +287,12 @@ internal class OptionsDialog : Form
 
 	private void AddSourceTreeNodes()
 	{
-		new SearchSource[8]
+		new SearchSource[4]
 		{
 			SearchSource.Music163,
 			SearchSource.QQ,
 			SearchSource.Kugou,
-			SearchSource.Kuwo,
-			SearchSource.ITunes,
-			SearchSource.Lastfm,
-			SearchSource.Brainz,
-			SearchSource.Vgmdb
+			SearchSource.Kuwo
 			}.ForEachItem(AddSourceTreeNode);
 	}
 

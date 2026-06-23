@@ -369,20 +369,10 @@ internal class LyricSearchDialog : Form
 				using QqMusicTagProvider qqProvider = new QqMusicTagProvider(cancellation);
 				return qqProvider.SearchLyrics((trackInfo.Title + " " + trackInfo.Artist).Trim(), Math.Min(15, maxResults), sourceOrder);
 			}
-			case SearchSource.Xiami:
-			{
-				using XiamiTagProvider xiamiTagProvider = new XiamiTagProvider(cancellation);
-				return xiamiTagProvider.SearchLyrics((trackInfo.Title + " " + trackInfo.Artist).Trim(), Math.Min(8, maxResults), sourceOrder);
-			}
 			case SearchSource.Kugou:
 			{
 				using KugouTagProvider kugouTagProvider = new KugouTagProvider(cancellation);
 				return kugouTagProvider.SearchLyrics((trackInfo.Title + " " + trackInfo.Artist).Trim(), Math.Min(5, maxResults), sourceOrder);
-			}
-			case SearchSource.MiniLyrics:
-			{
-				using MiniLyricsProvider miniLyricsProvider = new MiniLyricsProvider(cancellation);
-				return miniLyricsProvider.SearchLyrics(trackInfo.Title, trackInfo.Artist, sourceOrder);
 			}
 			case SearchSource.Kuwo:
 			{
@@ -413,20 +403,10 @@ internal class LyricSearchDialog : Form
 				using QqMusicTagProvider qqProvider = new QqMusicTagProvider(cancellation);
 				return qqProvider.SearchTracks((trackInfo.Title + " " + trackInfo.Artist).Trim(), 15, 0, sourceOrder, new List<TrackSearchResult>(), new List<TrackSearchResult>());
 			}
-			case SearchSource.Xiami:
-			{
-				using XiamiTagProvider xiamiTagProvider = new XiamiTagProvider(cancellation);
-				return xiamiTagProvider.SearchTracks((trackInfo.Title + " " + trackInfo.Artist).Trim(), 8, 0, sourceOrder, new List<TrackSearchResult>(), new List<TrackSearchResult>());
-			}
 			case SearchSource.Kugou:
 			{
 				using KugouTagProvider kugouTagProvider = new KugouTagProvider(cancellation);
 				return kugouTagProvider.SearchTracks((trackInfo.Title + " " + trackInfo.Artist).Trim(), 5, 0, sourceOrder, new List<TrackSearchResult>(), new List<TrackSearchResult>());
-			}
-			case SearchSource.MiniLyrics:
-			{
-				using MiniLyricsProvider miniLyricsProvider = new MiniLyricsProvider(cancellation);
-				return miniLyricsProvider.SearchTracks(trackInfo.Title, trackInfo.Artist, 0, sourceOrder, new List<TrackSearchResult>(), new List<TrackSearchResult>());
 			}
 			case SearchSource.Kuwo:
 			{
@@ -457,18 +437,11 @@ internal class LyricSearchDialog : Form
 			using QqMusicTagProvider qqProvider = new QqMusicTagProvider(cancellation);
 			return qqProvider.LoadLyricsForTrack(track);
 		}
-		case SearchSource.Xiami:
-		{
-			using XiamiTagProvider xiamiTagProvider = new XiamiTagProvider(cancellation);
-			return xiamiTagProvider.DownloadLyric(track);
-		}
 		case SearchSource.Kugou:
 		{
 			using KugouTagProvider kugouTagProvider = new KugouTagProvider(cancellation);
 			return kugouTagProvider.LoadLyricsForTrack(track);
 		}
-		case SearchSource.MiniLyrics:
-			return track.LyricResult;
 		default:
 			return null;
 		case SearchSource.Kuwo:
@@ -525,11 +498,7 @@ internal class LyricSearchDialog : Form
 		{
 			ListViewItem listViewItem = new ListViewItem("");
 			string lyricUrl = lyric.LyricUrl;
-			if (lyric.SearchSource == SearchSource.Xiami)
-			{
-				listViewItem.ImageIndex = ((lyric.LyricType <= 0) ? 1 : 0);
-			}
-			else if (lyricUrl == null && lyric.HasDownloadableLyric())
+			if (lyricUrl == null && lyric.HasDownloadableLyric())
 			{
 				listViewItem.ImageIndex = 0;
 			}
