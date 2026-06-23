@@ -51,6 +51,22 @@ try { 'Constructed=' + $form.GetType().FullName } finally { if ($form -is [Syste
     }
 }
 
+function Invoke-OptionsDialogSmokeTest {
+    $command = @'
+$ErrorActionPreference = 'Stop'
+$exe = Resolve-Path -LiteralPath 'src\MusicTag\bin\Release\net481\MusicTag.exe'
+Add-Type -AssemblyName System.Windows.Forms
+$assembly = [System.Reflection.Assembly]::LoadFrom($exe.Path)
+$type = $assembly.GetType('MusicTag.Importers.OptionsDialog', $true)
+$form = [Activator]::CreateInstance($type, $true)
+try { 'Constructed=' + $form.GetType().FullName } finally { if ($form -is [System.IDisposable]) { $form.Dispose() } }
+'@
+    & "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -Command $command
+    if ($LASTEXITCODE -ne 0) {
+        throw 'OptionsDialog smoke test failed.'
+    }
+}
+
 function Invoke-ReleaseStartupSmokeTest {
     $command = @'
 $ErrorActionPreference = 'Stop'
@@ -82,5 +98,6 @@ foreach ($configuration in $Configurations) {
 
 if ($RunSmokeTests) {
     Invoke-FilenameRelatedBatchDialogSmokeTest
+    Invoke-OptionsDialogSmokeTest
     Invoke-ReleaseStartupSmokeTest
 }
