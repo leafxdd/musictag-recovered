@@ -148,7 +148,45 @@ point; all migration work happens on branch `migrate/net481`, one commit per pha
   already compiles cleanly, so retargeting risk is low and Phase 6 should be minimal.
 - (Build log written to gitignored `artifacts/`, not committed.)
 
+**Phase 3 — migration plan (2026-06-23) ✅**
+
+Every tracked `net461`/`4.6.1` reference was located and classified. The change set is small and
+behavior-preserving:
+
+*Required (functional):*
+1. **Retarget (core)** — `src/MusicTag/MusicTag.csproj`: `<TargetFramework>net461</TargetFramework>`
+   → `net481`. Single line; drives everything else.
+2. **Runtime config** — `src/MusicTag/musictag/MusicTag.exe.config`:
+   `sku=".NETFramework,Version=v4.6.1"` → `v4.8.1`. Keep `legacyCorruptedStateExceptionsPolicy`
+   (global exception handlers rely on it) and the HighDPI appSetting. **No `bindingRedirect`s exist**,
+   so none need maintaining.
+3. **Build script** — `scripts/Verify-Build.ps1`: smoke-test output paths `bin\Release\net461\` →
+   `net481\` (2 occurrences). Required or Phase 7 smoke tests break.
+
+*Dependency strategy:*
+- Local `HintPath` DLLs (Newtonsoft.Json, FontAwesome, SQLite) are framework-agnostic — keep as-is.
+- **`System.ValueTuple` is the one watch item.** It is in-box since .NET 4.7, so under `net481` the
+  explicit `<Reference Include="System.ValueTuple">` (→ `musictag/System.ValueTuple.dll`) may become
+  redundant or trigger a duplicate-type conflict (CS0433 / CS1701). Plan: retarget first, rebuild,
+  observe; if it warns/conflicts, **remove that Reference** (mscorlib then supplies the types) and
+  confirm the bundled DLL is no longer needed at runtime.
+- All framework references resolve from the v4.8.1 targeting pack automatically.
+
+*Code-cleanup strategy:* baseline is already 0 errors / 0 warnings, so **expect no code changes.**
+Touch code only if a `net481`-specific compile error appears; keep fixes isolated and
+behavior-preserving; do not rewrite unclear decompiled logic (record TODOs instead).
+
+*Validation strategy:* after each change, clean **Rebuild** (Debug + Release) and compare against the
+0/0 baseline. Phase 7 runs `Verify-Build.ps1 -RunSmokeTests` and confirms `csc` now targets the
+`v4.8.1` reference assemblies and the exe starts.
+
+*Commit batches:* P4 `build: retarget projects to net481` (csproj + exe.config + Verify-Build.ps1) ·
+P5 `build: fix dependencies for net481` (ValueTuple, only if needed) · P6 `fix:`/`refactor:` per
+module (only if errors) · P7 `test: verify net481 migration` · P8 `docs: finalize net481 migration
+notes` (sync README / MAINTENANCE / architecture prose; deferred so P4 stays focused).
+
 ### Migration TODO
-- Phase 3: write the concrete migration plan (file changes, dependency strategy, validation).
-- Phase 3: write the concrete migration plan (file changes, dependency strategy, validation).
-- Phases 4–8: retarget → fix dependencies → clean/compile → verify → finalize docs.
+- Phase 4: apply the retarget (csproj + exe.config + Verify-Build.ps1), then rebuild and compare to
+  the 0/0 baseline.
+- Phase 5: resolve `System.ValueTuple` (and any other) dependency issues if they surface.
+- Phases 6–8: fix any compile errors → verify + smoke tests → finalize docs (README/MAINTENANCE).
