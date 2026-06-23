@@ -2,13 +2,17 @@
 
 本文档记录当前仍不适合直接重命名、删除或重构的反编译残留。处理这些项目时应单独开小批次，先确认引用关系和行为，再运行标准验证。
 
-## 暂不重命名的源码文件
+## 已完成的文件改名
 
-以下文件名仍保留反编译时期名称，但文件内的类型名已经更可读。暂不改文件路径，避免一次性引入大范围项目文件变更：
+以下三个反编译时期的文件已通过 `git mv` 改名以匹配其类型（类型名此前已可读，本次仅改文件路径）：
 
-- `src/MusicTag/MusicTagWinApp.Instances/BaseFieldInstance.cs`：当前类型是 `LyricEditorDialog`。
-- `src/MusicTag/MusicTag.Schemes/EventRulesSchema.cs`：当前类型是 `FilenameRelatedBatchDialog`。
-- `src/MusicTag/MusicTagWinApp.Listeners/Template.cs`：当前类型是 `CustomToolStripRenderer`。
+- `BaseFieldInstance.cs` → `LyricEditorDialog.cs`
+- `EventRulesSchema.cs` → `FilenameRelatedBatchDialog.cs`
+- `Template.cs` → `CustomToolStripRenderer.cs`
+
+注意：`FilenameRelatedBatchDialog`（原 `EventRulesSchema`）仍通过显式字符串
+`new ResourceManager("MusicTag.Schemes.EventRulesSchema", ...)` 加载本地化资源；该字符串对应预编译
+（附属）程序集中的资源名，**保持原样，不要随类型/文件名改动**，否则本地化文案会丢失。
 
 ## 暂不删除的空壳或生成类
 
