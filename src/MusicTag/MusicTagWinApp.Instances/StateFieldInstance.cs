@@ -606,124 +606,6 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	[StructLayout(LayoutKind.Auto)]
-	[CompilerGenerated]
-	private struct _003CRefreshItems_003Ed__97 : IAsyncStateMachine
-	{
-		public int _003C_003E1__state;
-
-		public AsyncVoidMethodBuilder _003C_003Et__builder;
-
-		public ProgressDialog frmProgress;
-
-		public SelectedListViewItemInfo[] itemInfos;
-
-		public bool listForMirror;
-
-		public StateFieldInstance _003C_003E4__this;
-
-		public (string msg, bool isErr)? prevMsgWrapper;
-
-		public bool showErrorMessageBox;
-
-		public bool refreshStatusAllInfo;
-
-		private RefreshItemsTaskContext refreshContext;
-
-		private TaskAwaiter _003C_003Eu__1;
-
-		private void MoveNext()
-		{
-			int num = _003C_003E1__state;
-			goto IL_004b;
-			IL_004b:
-			StateFieldInstance stateFieldInstance = _003C_003E4__this;
-			try
-			{
-				TaskAwaiter awaiter = default(TaskAwaiter);
-				if (num != 0)
-				{
-					refreshContext = new RefreshItemsTaskContext();
-					refreshContext.progressDialog = frmProgress;
-					refreshContext.itemInfos = itemInfos;
-					refreshContext.updateCachedListItems = listForMirror;
-					refreshContext.owner = _003C_003E4__this;
-					refreshContext.previousMessage = prevMsgWrapper;
-					refreshContext.showLoadErrors = showErrorMessageBox;
-					refreshContext.cancellationSource = new CancellationTokenSource();
-					refreshContext.currentFile = null;
-					refreshContext.processedCount = 0;
-					if (refreshContext.progressDialog != null)
-					{
-						refreshContext.progressDialog.AddCancelRequestedHandler(refreshContext.Cancel);
-						refreshContext.progressDialog.AddProgressUpdateHandler(refreshContext.UpdateProgress);
-					}
-					refreshContext.progressReporter = new Progress<List<(SelectedListViewItemInfo, ConfigDescriptorState, Dictionary<string, string>)>>(refreshContext.ApplyRefreshedItems);
-					refreshContext.loadErrors = new Page();
-					refreshContext.originalListViewSorter = stateFieldInstance.fileListView.ListViewItemSorter;
-					stateFieldInstance.fileListView.ListViewItemSorter = null;
-					stateFieldInstance.fileListView.BeginUpdate();
-					Task task = Task.Run(new Action(refreshContext.RefreshItems), refreshContext.cancellationSource.Token);
-					if (refreshContext.progressDialog == null)
-					{
-						task.Wait();
-						goto IL_0243;
-					}
-					awaiter = task.GetAwaiter();
-					if (!awaiter.IsCompleted)
-					{
-						_003C_003E1__state = 0;
-						_003C_003Eu__1 = awaiter;
-						_003C_003Et__builder.AwaitUnsafeOnCompleted(ref awaiter, ref this);
-						return;
-					}
-				}
-				else
-				{
-					awaiter = _003C_003Eu__1;
-					_003C_003Eu__1 = default(TaskAwaiter);
-					_003C_003E1__state = -1;
-				}
-				awaiter.GetResult();
-				goto IL_0243;
-				IL_0243:
-				stateFieldInstance.ApplyFileSelectionMode(FileSelectionMode.RefreshOnly, refreshStatusAllInfo);
-				stateFieldInstance.fileListView.EndUpdate();
-				refreshContext.progressDialog?.CloseAfterCompletion();
-				stateFieldInstance.BeginInvoke(new Action(refreshContext.ShowCompletionMessages));
-			}
-			catch (System.Exception exception)
-			{
-				_003C_003E1__state = -2;
-				_003C_003Et__builder.SetException(exception);
-				return;
-			}
-			_003C_003E1__state = -2;
-			goto IL_02ac;
-			IL_02ac:
-			_003C_003Et__builder.SetResult();
-		}
-
-		void IAsyncStateMachine.MoveNext()
-		{
-			//ILSpy generated this explicit interface implementation from .override directive in MoveNext
-			this.MoveNext();
-		}
-
-		[DebuggerHidden]
-		private void SetStateMachine(IAsyncStateMachine stateMachine)
-		{
-			_003C_003Et__builder.SetStateMachine(stateMachine);
-		}
-
-		void IAsyncStateMachine.SetStateMachine(IAsyncStateMachine stateMachine)
-		{
-			//ILSpy generated this explicit interface implementation from .override directive in SetStateMachine
-			this.SetStateMachine(stateMachine);
-		}
-
-	}
-
 	private sealed class FileListFilterContext
 	{
 		public StateFieldInstance owner;
@@ -5123,21 +5005,41 @@ internal class StateFieldInstance : Form
 		};
 	}
 
-	[AsyncStateMachine(typeof(_003CRefreshItems_003Ed__97))]
-	private void StartRefreshItems(SelectedListViewItemInfo[] itemInfos, ProgressDialog progressDialog, bool showErrorMessageBox, bool refreshStatusAllInfo, (string msg, bool isErr)? previousMessage = null, bool listForMirror = false)
+	private async void StartRefreshItems(SelectedListViewItemInfo[] itemInfos, ProgressDialog progressDialog, bool showErrorMessageBox, bool refreshStatusAllInfo, (string msg, bool isErr)? previousMessage = null, bool listForMirror = false)
 	{
-		_003CRefreshItems_003Ed__97 stateMachine = default(_003CRefreshItems_003Ed__97);
-		stateMachine._003C_003E4__this = this;
-		stateMachine.itemInfos = itemInfos;
-		stateMachine.frmProgress = progressDialog;
-		stateMachine.showErrorMessageBox = showErrorMessageBox;
-		stateMachine.refreshStatusAllInfo = refreshStatusAllInfo;
-		stateMachine.prevMsgWrapper = previousMessage;
-		stateMachine.listForMirror = listForMirror;
-		stateMachine._003C_003Et__builder = AsyncVoidMethodBuilder.Create();
-		stateMachine._003C_003E1__state = -1;
-		AsyncVoidMethodBuilder asyncVoidMethodBuilder = stateMachine._003C_003Et__builder;
-		asyncVoidMethodBuilder.Start(ref stateMachine);
+		RefreshItemsTaskContext refreshContext = new RefreshItemsTaskContext();
+		refreshContext.progressDialog = progressDialog;
+		refreshContext.itemInfos = itemInfos;
+		refreshContext.updateCachedListItems = listForMirror;
+		refreshContext.owner = this;
+		refreshContext.previousMessage = previousMessage;
+		refreshContext.showLoadErrors = showErrorMessageBox;
+		refreshContext.cancellationSource = new CancellationTokenSource();
+		refreshContext.currentFile = null;
+		refreshContext.processedCount = 0;
+		if (refreshContext.progressDialog != null)
+		{
+			refreshContext.progressDialog.AddCancelRequestedHandler(refreshContext.Cancel);
+			refreshContext.progressDialog.AddProgressUpdateHandler(refreshContext.UpdateProgress);
+		}
+		refreshContext.progressReporter = new Progress<List<(SelectedListViewItemInfo, ConfigDescriptorState, Dictionary<string, string>)>>(refreshContext.ApplyRefreshedItems);
+		refreshContext.loadErrors = new Page();
+		refreshContext.originalListViewSorter = fileListView.ListViewItemSorter;
+		fileListView.ListViewItemSorter = null;
+		fileListView.BeginUpdate();
+		Task task = Task.Run(new Action(refreshContext.RefreshItems), refreshContext.cancellationSource.Token);
+		if (refreshContext.progressDialog == null)
+		{
+			task.Wait();
+		}
+		else
+		{
+			await task;
+		}
+		ApplyFileSelectionMode(FileSelectionMode.RefreshOnly, refreshStatusAllInfo);
+		fileListView.EndUpdate();
+		refreshContext.progressDialog?.CloseAfterCompletion();
+		BeginInvoke(new Action(refreshContext.ShowCompletionMessages));
 	}
 
 	private void FileList_ItemSelectionChanged(object sender, ListViewItemSelectionChangedEventArgs e)
