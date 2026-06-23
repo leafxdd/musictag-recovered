@@ -30,7 +30,6 @@
 
 ## 暂不重写的大型反编译控制流
 
-- `src/MusicTag/MusicTagWinApp.Instances/StateFieldInstance.cs` 的 `InitializeComponent`（约 7583 行起）仍包含大量 `switch`/`goto` 形式的反编译控制流。该函数负责主窗体控件创建和事件绑定，改动风险高。
 - `src/MusicTag/MusicTagWinApp.Common/Tokenizer.cs` 仍包含大块编码检测表初始化控制流。该代码影响文件编码识别，建议只在有明确测试样本时局部修改。
 
 ## 后续处理原则
