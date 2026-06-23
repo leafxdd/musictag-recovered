@@ -2,7 +2,7 @@
 
 这是从原版 `musictag` 本地音乐标签工具恢复出来的源码项目。原程序是一个基于 `.NET Framework 4.6.1` 的 Windows WinForms 桌面软件，用于编辑本地音乐文件标签、歌词、封面，并支持从多个网络来源搜索音乐标签信息。
 
-当前仓库的目标不是重写软件，而是在尽量保持原行为不变的前提下，把反编译源码整理成更接近普通 GitHub 项目的形态，方便后续维护和排查联网搜索问题。
+当前仓库的目标不是重写软件，而是在尽量保持原行为不变的前提下，把反编译源码整理成更接近普通 GitHub 项目的形态，方便后续维护和排查联网搜索问题。目前已在保持功能等效的前提下，将目标框架从 `.NET Framework 4.6.1` 迁移到 `.NET Framework 4.8.1`。
 
 ## 项目结构
 
@@ -18,7 +18,7 @@
 
 - Windows。
 - Visual Studio Build Tools 2022 或更新版本，安装 MSBuild 和 .NET Framework 构建工具。
-- .NET Framework 4.6.1 Developer Pack 或兼容的 targeting pack。
+- .NET Framework 4.8.1 Developer Pack 或兼容的 targeting pack。
 - PowerShell，用于运行验证脚本。
 
 如果 `msbuild` 没有加入环境变量，验证脚本会优先尝试通过 PATH、`vswhere` 和常见 Build Tools 安装路径自动查找。
@@ -40,7 +40,7 @@
 构建输出位于：
 
 ```text
-src/MusicTag/bin/Release/net461/MusicTag.exe
+src/MusicTag/bin/Release/net481/MusicTag.exe
 ```
 
 构建时会自动复制必要运行文件，例如 `MusicTag.dll`、`MediaInfo.dll`、`SQLite.Interop.dll`、`MusicTag.db`、`MusicTag.dat`、多语言资源 DLL 和 FontAwesome 字体。构建日志会写入 `artifacts/` 目录。
@@ -50,7 +50,7 @@ src/MusicTag/bin/Release/net461/MusicTag.exe
 构建成功后，可以直接运行：
 
 ```powershell
-.\src\MusicTag\bin\Release\net461\MusicTag.exe
+.\src\MusicTag\bin\Release\net481\MusicTag.exe
 ```
 
 首次维护或调试时，建议先运行 `.\scripts\Verify-Build.ps1 -RunSmokeTests`，确认程序能够构造关键窗口并正常启动数秒。

@@ -3,7 +3,7 @@
 ## Current State
 
 - The buildable source lives in `src/MusicTag`.
-- The project targets `.NET Framework 4.6.1` and builds with Visual Studio Build Tools 2022 or newer.
+- The project targets `.NET Framework 4.8.1` and builds with Visual Studio Build Tools 2022 or newer.
 - Runtime dependencies from the original distribution are kept in `src/MusicTag/musictag` and copied to the output directory by the project file.
 - `tools/` is ignored and intentionally left as a local reverse-engineering toolbox.
 - `.gitattributes` normalizes source/project text files and marks original runtime assets as binary.

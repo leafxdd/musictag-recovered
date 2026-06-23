@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-`MusicTag` is a **decompiled-and-recovered** .NET Framework 4.6.1 WinForms desktop app (a local
+`MusicTag` is a **decompiled-and-recovered** .NET Framework WinForms desktop app (a local
 music-tag/lyrics/cover editor with online metadata search). The goal is **not** a rewrite: keep the
 original runtime behavior intact while incrementally turning de4dot/decompiler output into readable
 code. Treat every change as behavior-preserving unless a build warning or runtime error proves the
@@ -27,13 +27,14 @@ not raw `msbuild` (it auto-resolves MSBuild via PATH → `vswhere` → known Bui
 - Smoke tests: (1) reflectively construct `MusicTag.Schemes.FilenameRelatedBatchDialog`, (2) launch
   `MusicTag.exe` and confirm it stays alive ~5s. Adding a new top-level dialog or breaking startup
   fails these.
-- Output: `src/MusicTag/bin/Release/net461/MusicTag.exe`. MSBuild logs → `artifacts/`.
+- Output: `src/MusicTag/bin/Release/net481/MusicTag.exe`. MSBuild logs → `artifacts/`.
 - Standard post-change pass: `.\scripts\Verify-Build.ps1 -RunSmokeTests`, then `git diff --check`,
   then `codegraph sync`.
 
 ## Architecture (big picture)
 
-Single WinExe, `net461`, x86 (`Prefer32Bit`). Entry point `MusicTag.Schemes/Program.cs`
+Single WinExe, `net481` (.NET Framework 4.8.1, migrated from 4.6.1 — see migration log below), x86
+(`Prefer32Bit`). Entry point `MusicTag.Schemes/Program.cs`
 (`Program.Main`): single-instance guard (enumerates windows, forwards args via `WM_COPYDATA`) →
 `Application.Run(new StateFieldInstance(args))`.
 
@@ -224,6 +225,21 @@ notes` (sync README / MAINTENANCE / architecture prose; deferred so P4 stays foc
   compile against the v4.8.1 reference assemblies + the app constructs a key dialog and runs. **Not
   exercised:** live online-search providers (no automated tests exist — accepted risk per the plan).
 
-### Migration TODO
-- Phase 8: sync remaining prose docs (`README.md`, `docs/MAINTENANCE.md`, this file's architecture
-  section) to net481 and write the final summary.
+**Phase 8 — finalize (2026-06-23) ✅**
+- Synced prose docs to net481: `README.md` (overview note, env requirement, two build/run paths),
+  `docs/MAINTENANCE.md` (target framework), and this file's architecture section.
+
+### Migration result
+- **Status: migrated to .NET Framework 4.8.1 successfully.** Clean Rebuild (Debug + Release) is green
+  with 0 errors / 0 warnings (matches the net461 baseline); `Verify-Build.ps1 -RunSmokeTests` passes;
+  the exe is marked `.NETFramework,Version=v4.8.1` and runs on the 4.8.1 runtime.
+- Change footprint (no application/business code touched): `MusicTag.csproj` (TFM `net461`→`net481`,
+  dropped the `System.ValueTuple` reference), `musictag/MusicTag.exe.config` (supportedRuntime sku),
+  `scripts/Verify-Build.ps1` (output paths), plus docs.
+- Key decisions: work on branch `migrate/net481`, one commit per phase, `master` = rollback point;
+  removed the now-in-box `System.ValueTuple` reference to clear the CS0433 duplicate-type conflict.
+- Known issues / follow-ups:
+  - Live online-search providers were not exercised beyond app startup (no automated test suite).
+  - `musictag/System.ValueTuple.dll` is now an unreferenced orphan — safe to delete in a later pass.
+  - The broader decompiler-cleanup effort (`docs/MAINTENANCE.md`) continues independently of this
+    migration.
