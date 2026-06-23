@@ -137,7 +137,18 @@ point; all migration work happens on branch `migrate/net481`, one commit per pha
 - NuGet restore: trivial (no package references); `dotnet` SDK `10.0.301` also present.
 - Conclusion: environment fully supports retargeting to `net481` — safe to proceed.
 
+**Phase 2 — net461 baseline build (2026-06-23) ✅ clean**
+- Clean **Rebuild** of `MusicTag.sln` (Release, `Any CPU`) via VS Build Tools 18 MSBuild:
+  **build succeeded, 0 errors, 0 warnings.** Verified it was a real compile (log shows `CoreClean`
+  + `CoreCompile` invoking Roslyn `csc.exe` over all ~130 `.cs` files against the `v4.6.1` reference
+  assemblies, `/out:…\net461\MusicTag.exe`); the first incremental run was a no-op, so a forced
+  rebuild was used for the true baseline.
+- Restore: no-op (no package references). Compiler already runs with `/nowarn:CS0162,CS0414,CS0649`.
+- Classification: **no environment / dependency / code / config blockers.** The recovered code
+  already compiles cleanly, so retargeting risk is low and Phase 6 should be minimal.
+- (Build log written to gitignored `artifacts/`, not committed.)
+
 ### Migration TODO
-- Phase 2: capture the `net461` baseline build (errors/warnings) via `scripts\Verify-Build.ps1`.
+- Phase 3: write the concrete migration plan (file changes, dependency strategy, validation).
 - Phase 3: write the concrete migration plan (file changes, dependency strategy, validation).
 - Phases 4–8: retarget → fix dependencies → clean/compile → verify → finalize docs.
