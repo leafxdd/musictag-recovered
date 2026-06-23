@@ -185,7 +185,6 @@ internal class CombinedTagSearchDialog : Form
 		}
 	}
 
-	[CompilerGenerated]
 	private sealed class CoverDownloadRequestContext
 	{
 		public CoverSearchResult CoverResult;
@@ -193,7 +192,6 @@ internal class CombinedTagSearchDialog : Form
 		public CombinedTagSearchDialog Owner;
 	}
 
-	[CompilerGenerated]
 	private sealed class CoverImageLoadTask
 	{
 		public Size? OriginalImageSize;
@@ -244,7 +242,6 @@ internal class CombinedTagSearchDialog : Form
 			}
 		}
 
-	[CompilerGenerated]
 	private sealed class CoverDownloadFile
 	{
 		public string LocalCoverPath;
@@ -523,7 +520,6 @@ internal class CombinedTagSearchDialog : Form
 
 	}
 
-	[CompilerGenerated]
 	private sealed class TrackSearchCoordinator
 	{
 		public CombinedTagSearchDialog Owner;
@@ -631,7 +627,6 @@ internal class CombinedTagSearchDialog : Form
 		}
 	}
 
-	[CompilerGenerated]
 	private sealed class TrackSearchLimitState
 	{
 		public List<TrackSearchResult> CurrentBatch;
@@ -673,7 +668,6 @@ internal class CombinedTagSearchDialog : Form
 			}
 		}
 
-	[CompilerGenerated]
 	private sealed class TrackResultLimitCollector
 	{
 		public List<TrackSearchResult> LimitedResults;
@@ -776,25 +770,18 @@ internal class CombinedTagSearchDialog : Form
 
 	private static SearchSource? lastPreferredSource;
 
-	[CompilerGenerated]
 	private TrackSearchContext currentSearchContext;
 
-	[CompilerGenerated]
 	private SearchSource? preferredSource;
 
-	[CompilerGenerated]
 	private readonly CancellationTokenSource cancellationSource;
 
-	[CompilerGenerated]
 	private static List<TrackSearchResult> cachedSearchResults;
 
-	[CompilerGenerated]
 	private readonly HashSet<string> queuedCoverDownloadPaths;
 
-	[CompilerGenerated]
 	private readonly Dictionary<string, Image> coverImageCache;
 
-	[CompilerGenerated]
 	private readonly TaskbarProgressController taskbarProgress;
 
 	private IContainer components;
@@ -1547,7 +1534,6 @@ internal class CombinedTagSearchDialog : Form
 		ResumeLayout(performLayout: false);
 	}
 
-	[CompilerGenerated]
 	private void AddCachedResultsOnTimerTick(object sender, EventArgs args)
 	{
 		AddSearchResultsToList(cachedSearchResults);
@@ -1555,7 +1541,6 @@ internal class CombinedTagSearchDialog : Form
 		cachedResultsTimer.Stop();
 	}
 
-	[CompilerGenerated]
 	private void FocusResultList()
 	{
 		searchResultsListView.Focus();

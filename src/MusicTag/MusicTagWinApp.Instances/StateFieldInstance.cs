@@ -490,7 +490,6 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	[CompilerGenerated]
 	private sealed class RefreshItemsTaskContext
 	{
 		public CancellationTokenSource cancellationSource;
@@ -725,7 +724,6 @@ internal class StateFieldInstance : Form
 
 	}
 
-	[CompilerGenerated]
 	private sealed class FileListFilterContext
 	{
 		public StateFieldInstance owner;
@@ -744,7 +742,6 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	[CompilerGenerated]
 	private sealed class FilterValueCollector
 	{
 		public ListViewItem listViewItem;
@@ -769,7 +766,6 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	[CompilerGenerated]
 	private sealed class FileListFilterItemContext
 	{
 		public ListViewItem listViewItem;
@@ -800,7 +796,6 @@ internal class StateFieldInstance : Form
 
 	}
 
-	[CompilerGenerated]
 	private sealed class TagEditorStateLoadContext
 	{
 		public StateFieldInstance owner;
@@ -883,7 +878,6 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	[CompilerGenerated]
 	private sealed class ComboBoxFilterOptionUpdater
 	{
 		public ComboBox comboBox;
@@ -905,7 +899,6 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	[CompilerGenerated]
 	private sealed class LyricDownloadTaskContext
 	{
 		public CancellationTokenSource cancellationSource;
@@ -1012,7 +1005,6 @@ internal class StateFieldInstance : Form
 
 	}
 
-	[CompilerGenerated]
 	private sealed class SelectedItemFilterValueCounter
 	{
 		public ListViewItem listViewItem;
@@ -1038,7 +1030,6 @@ internal class StateFieldInstance : Form
 
 	}
 
-	[CompilerGenerated]
 	private sealed class CoverTypeMenuContext
 	{
 		public string coverType;
@@ -1046,7 +1037,6 @@ internal class StateFieldInstance : Form
 		public StateFieldInstance owner;
 	}
 
-	[CompilerGenerated]
 	private sealed class CoverTypeMenuItemClickContext
 	{
 		public ConfigDescriptorState.PictureData pictureData;
@@ -1060,7 +1050,6 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	[CompilerGenerated]
 	private sealed class ReleaseYearSearchTaskContext
 	{
 		public CancellationTokenSource cancellationSource;
@@ -1166,7 +1155,6 @@ internal class StateFieldInstance : Form
 
 	}
 
-	[CompilerGenerated]
 	private sealed class PictureCompressionOptions
 	{
 		public int maxResolution;
@@ -1176,7 +1164,6 @@ internal class StateFieldInstance : Form
 		public long maxByteLength;
 	}
 
-	[CompilerGenerated]
 	private sealed class PictureCompressionItem
 	{
 		public ConfigDescriptorState.PictureData pictureData;
@@ -1184,7 +1171,6 @@ internal class StateFieldInstance : Form
 		public PictureCompressionOptions options;
 	}
 
-	[CompilerGenerated]
 	private sealed class PictureCompressionWorker
 	{
 		public Image workingImage;
@@ -1387,7 +1373,6 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	[CompilerGenerated]
 	private sealed class ConvertFilenameChineseBatchContext
 	{
 		public CancellationTokenSource cancellationSource;
@@ -1469,7 +1454,6 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	[CompilerGenerated]
 	private sealed class RenameFailureRecorder
 	{
 		public string CurrentPath;
@@ -1618,7 +1602,6 @@ internal class StateFieldInstance : Form
 
 	}
 
-	[CompilerGenerated]
 	private sealed class SaveTagsTaskContext
 	{
 		public CancellationTokenSource cancellationSource;
@@ -1939,7 +1922,6 @@ internal class StateFieldInstance : Form
 
 	}
 
-	[CompilerGenerated]
 	private sealed class SaveTagsFileContext
 	{
 		public string filePath;
@@ -1947,7 +1929,6 @@ internal class StateFieldInstance : Form
 		public SaveTagsTaskContext batchContext;
 	}
 
-	[CompilerGenerated]
 	private sealed class SaveTagFailureReporter
 	{
 		public ConfigDescriptorState tagState;
@@ -2091,7 +2072,6 @@ internal class StateFieldInstance : Form
 
 	}
 
-	[CompilerGenerated]
 	private sealed class UndoSaveTagsTaskContext
 	{
 		public CancellationTokenSource cancellationSource;
@@ -2243,7 +2223,6 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	[CompilerGenerated]
 	private sealed class UndoSaveTagsFileContext
 	{
 		public string filePath;
@@ -2251,7 +2230,6 @@ internal class StateFieldInstance : Form
 		public UndoSaveTagsTaskContext taskContext;
 	}
 
-	[CompilerGenerated]
 	private sealed class UndoSaveTagFailureReporter
 	{
 		public ConfigDescriptorState tagState;
@@ -2273,7 +2251,6 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	[CompilerGenerated]
 	private sealed class UndoSaveTagsListItemMatcher
 	{
 		public ListViewItem listViewItem;
@@ -2411,7 +2388,6 @@ internal class StateFieldInstance : Form
 
 	}
 
-	[CompilerGenerated]
 	private sealed class UndoRenameTaskContext
 	{
 		public CancellationTokenSource cancellationSource;
@@ -2496,7 +2472,6 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	[CompilerGenerated]
 	private sealed class RenameUndoErrorRecorder
 	{
 		public string CurrentPath;
@@ -2511,7 +2486,6 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	[CompilerGenerated]
 	private sealed class RenameUndoListItemMatcher
 	{
 		public ListViewItem ListViewItem;
@@ -2704,7 +2678,6 @@ internal class StateFieldInstance : Form
 
 	}
 
-	[CompilerGenerated]
 	private sealed class ClearTagsTaskContext
 	{
 		public CancellationTokenSource cancellationSource;
@@ -2826,7 +2799,6 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	[CompilerGenerated]
 	private sealed class TagSaveFileContext
 	{
 		public string FilePath;
@@ -2959,7 +2931,6 @@ internal class StateFieldInstance : Form
 
 	}
 
-	[CompilerGenerated]
 	private sealed class DeleteFilesTaskContext
 	{
 		public CancellationTokenSource cancellationSource;
@@ -3139,7 +3110,6 @@ internal class StateFieldInstance : Form
 
 	}
 
-	[CompilerGenerated]
 	private sealed class SaveLrcFilesTaskContext
 	{
 		public CancellationTokenSource cancellationSource;
@@ -3241,7 +3211,6 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	[CompilerGenerated]
 	private sealed class SaveLrcErrorRecorder
 	{
 		public string filePath;
@@ -3344,7 +3313,6 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	[CompilerGenerated]
 	private sealed class ExtractCoversTaskContext
 	{
 		public CancellationTokenSource cancellationSource;
@@ -3453,7 +3421,6 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	[CompilerGenerated]
 	private sealed class ExtractCoverErrorRecorder
 	{
 		public string FilePath;
@@ -3556,7 +3523,6 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	[CompilerGenerated]
 	private sealed class RestoreHistoryTagsContext
 	{
 		public ConfigDescriptorState selectedTagState;
@@ -3569,7 +3535,6 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	[CompilerGenerated]
 	private sealed class RenameFilesCompletionContext
 	{
 		public (string Path, string NewPath, int Index)[] renameItems;
@@ -3589,7 +3554,6 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	[CompilerGenerated]
 	private sealed class AppSettingsSaveTask
 	{
 		public AppSettingData appSettingsData;
@@ -3767,15 +3731,12 @@ internal class StateFieldInstance : Form
 
 	private ComponentResourceManager localizedResources;
 
-	[CompilerGenerated]
 	private static string currentLanguageCode;
 
-	[CompilerGenerated]
 	private static readonly List<CustomColumnsDialog.ColumnHeaderInfo> configuredColumnHeaders;
 
 	public static Dictionary<string, string> EnabledTagTypesByExtension;
 
-	[CompilerGenerated]
 	private readonly ImageList fileTypeImageList;
 
 	private readonly Dictionary<string, ComboBox> tagComboBoxes;
@@ -3784,15 +3745,12 @@ internal class StateFieldInstance : Form
 
 	private readonly Dictionary<string, (Dictionary<string, int> valueCounts, List<(string value, bool wasRemoved)> changedValues)> selectedFilterValueStates;
 
-	[CompilerGenerated]
 	private readonly string[] editableTagFieldNames;
 
 	private string lastFileListFilterText;
 
-	[CompilerGenerated]
 	private Button[] tagEncodingButtons;
 
-	[CompilerGenerated]
 	private ListViewFileSetting fileSettings;
 
 	private ConfigDescriptorState selectedTagState;
@@ -3803,14 +3761,12 @@ internal class StateFieldInstance : Form
 
 	private int currentCoverIndex;
 
-	[CompilerGenerated]
 	private readonly TaskbarProgressController taskbarProgress;
 
 	private bool hasShownMainForm;
 
 	private bool skipSavingSettingsOnClose;
 
-	[CompilerGenerated]
 	private readonly string[] startupFileArgs;
 
 	public static readonly Dictionary<string, string> KnownTagTypesByExtension;
@@ -9618,13 +9574,11 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	[CompilerGenerated]
 	private void ApplyTagPanelLayoutAfterResize()
 	{
 		ApplyTagPanelLayout();
 	}
 
-	[CompilerGenerated]
 	private void ResizeStatusLabels()
 	{
 		Size statusLabelSize = new Size(statusLabelsPanel.Width - statusLabelsPanel.Padding.Left - statusLabelsPanel.Padding.Right, DatabaseMapper.ScaleByDpi(20f));
@@ -9634,7 +9588,6 @@ internal class StateFieldInstance : Form
 		coverMimeTypeLabel.Size = statusLabelSize;
 	}
 
-	[CompilerGenerated]
 	private void ClearTagFieldSelectionState(KeyValuePair<string, ComboBox> reference)
 	{
 		string key = reference.Key;
@@ -9646,7 +9599,6 @@ internal class StateFieldInstance : Form
 		filterOptions.Clear();
 	}
 
-	[CompilerGenerated]
 	private bool ValidateNumberedTagField(string fieldName, string message)
 	{
 		ComboBox comboBox = tagComboBoxes[fieldName];
