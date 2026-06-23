@@ -197,5 +197,16 @@ notes` (sync README / MAINTENANCE / architecture prose; deferred so P4 stays foc
 - Note: `/t:Rebuild` alone first failed with `NETSDK1005` because it skips restore after a TFM change —
   must pass `/restore` (which `Verify-Build.ps1` already does).
 
+**Phase 5 — dependency fix (2026-06-23) ✅ green**
+- Removed the explicit `<Reference Include="System.ValueTuple">` from `MusicTag.csproj` (the type is
+  in-box in net481 mscorlib). Clean Rebuild Debug + Release: **0 errors, 0 warnings** — matches the
+  net461 baseline. `csc` no longer references the external `System.ValueTuple.dll`, and it is no
+  longer copied to the output dir (correct — the framework supplies `ValueTuple`).
+- Other bundled deps (Newtonsoft.Json, FontAwesome, SQLite) and all framework references resolve
+  cleanly under net481; no `bindingRedirect`s needed.
+- Leftover: `musictag/System.ValueTuple.dll` stays in the repo but is now unreferenced — a candidate
+  for a later cleanup pass (left in place per the conservative policy).
+
 ### Migration TODO
-- Phase 5: remove the redundant `System.ValueTuple` reference (in-box on net481) → green build.
+- Phase 6: build is already green (0/0) — confirm no further code changes are needed.
+- Phase 7: full verify + smoke tests. Phase 8: finalize docs (README / MAINTENANCE).

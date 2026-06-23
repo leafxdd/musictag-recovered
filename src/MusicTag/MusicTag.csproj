@@ -24,9 +24,6 @@
     <Reference Include="System.Configuration" />
     <Reference Include="System.Core" />
     <Reference Include="System.Net.Http" />
-    <Reference Include="System.ValueTuple">
-      <HintPath>musictag/System.ValueTuple.dll</HintPath>
-    </Reference>
     <Reference Include="Newtonsoft.Json">
       <HintPath>musictag/Newtonsoft.Json.dll</HintPath>
     </Reference>
