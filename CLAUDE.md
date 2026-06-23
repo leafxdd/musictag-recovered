@@ -207,6 +207,23 @@ notes` (sync README / MAINTENANCE / architecture prose; deferred so P4 stays foc
 - Leftover: `musictag/System.ValueTuple.dll` stays in the repo but is now unreferenced — a candidate
   for a later cleanup pass (left in place per the conservative policy).
 
+**Phase 6 — decompiled-artifact cleanup / compile fixes (2026-06-23) ✅ no-op**
+- The net481 build is already 0 errors / 0 warnings, so no compile fixes were required and the
+  retarget needed no decompiled-code changes (behavior-preserving). General decompiler cleanup is a
+  separate, ongoing effort (`docs/MAINTENANCE.md` changelog) and is intentionally out of scope here.
+
+**Phase 7 — verify (2026-06-23) ✅ passed**
+- `Verify-Build.ps1 -RunSmokeTests`: Debug + Release build green; smoke test 1 reflectively
+  constructed `MusicTag.Schemes.FilenameRelatedBatchDialog` from the net481 exe; smoke test 2 launched
+  `MusicTag.exe` and it stayed alive 5s (`StartedAndStayedAlive=True`) — so native `MusicTag.dll`
+  P/Invoke, SQLite, FontAwesome and `MusicTag.exe.config` all load on the 4.8.1 runtime.
+- Output exe carries the embedded `.NETFramework,Version=v4.8.1` TargetFramework attribute; its copied
+  `MusicTag.exe.config` declares the v4.8.1 supportedRuntime; all runtime DLLs present;
+  `System.ValueTuple.dll` correctly absent from output.
+- Functional-equivalence basis: zero code changes beyond removing the ValueTuple reference + a clean
+  compile against the v4.8.1 reference assemblies + the app constructs a key dialog and runs. **Not
+  exercised:** live online-search providers (no automated tests exist — accepted risk per the plan).
+
 ### Migration TODO
-- Phase 6: build is already green (0/0) — confirm no further code changes are needed.
-- Phase 7: full verify + smoke tests. Phase 8: finalize docs (README / MAINTENANCE).
+- Phase 8: sync remaining prose docs (`README.md`, `docs/MAINTENANCE.md`, this file's architecture
+  section) to net481 and write the final summary.
