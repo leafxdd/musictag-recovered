@@ -2302,93 +2302,6 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	[StructLayout(LayoutKind.Auto)]
-	[CompilerGenerated]
-	private struct _003CExtractCovers_003Ed__174 : IAsyncStateMachine
-	{
-		public int _003C_003E1__state;
-
-		public AsyncVoidMethodBuilder _003C_003Et__builder;
-
-		public ProgressDialog frmProgress;
-
-		public SelectedListViewItemInfo[] itemInfos;
-
-		private ExtractCoversTaskContext extractCoversContext;
-
-		public StateFieldInstance _003C_003E4__this;
-
-		private TaskAwaiter _003C_003Eu__1;
-
-		private void MoveNext()
-		{
-			int num = _003C_003E1__state;
-			StateFieldInstance stateFieldInstance = _003C_003E4__this;
-			try
-			{
-				TaskAwaiter awaiter;
-				if (num != 0)
-				{
-					extractCoversContext = new ExtractCoversTaskContext();
-					extractCoversContext.progressDialog = frmProgress;
-					extractCoversContext.itemsToExtract = itemInfos;
-					extractCoversContext.cancellationSource = new CancellationTokenSource();
-					extractCoversContext.progressDialog.AddCancelRequestedHandler(extractCoversContext.Cancel);
-					extractCoversContext.processedCount = 0;
-					extractCoversContext.currentFile = null;
-					extractCoversContext.progressDialog.AddProgressUpdateHandler(extractCoversContext.UpdateProgress);
-					extractCoversContext.extractedCount = 0;
-					extractCoversContext.failedCount = 0;
-					extractCoversContext.skippedCount = 0;
-					extractCoversContext.errorLog = new Page();
-					awaiter = Task.Run((Action)extractCoversContext.ExtractCovers, extractCoversContext.cancellationSource.Token).GetAwaiter();
-					if (!awaiter.IsCompleted)
-					{
-						_003C_003E1__state = 0;
-						_003C_003Eu__1 = awaiter;
-						_003C_003Et__builder.AwaitUnsafeOnCompleted(ref awaiter, ref this);
-						return;
-					}
-				}
-				else
-				{
-					awaiter = _003C_003Eu__1;
-					_003C_003Eu__1 = default(TaskAwaiter);
-					_003C_003E1__state = -1;
-				}
-				awaiter.GetResult();
-				extractCoversContext.progressDialog.CloseAfterCompletion();
-				stateFieldInstance.BeginInvoke(new Action(extractCoversContext.ShowCompletionResult));
-			}
-			catch (System.Exception exception)
-			{
-				_003C_003E1__state = -2;
-				_003C_003Et__builder.SetException(exception);
-				return;
-			}
-			_003C_003E1__state = -2;
-			_003C_003Et__builder.SetResult();
-		}
-
-		void IAsyncStateMachine.MoveNext()
-		{
-			//ILSpy generated this explicit interface implementation from .override directive in MoveNext
-			this.MoveNext();
-		}
-
-		[DebuggerHidden]
-		private void SetStateMachine(IAsyncStateMachine stateMachine)
-		{
-			_003C_003Et__builder.SetStateMachine(stateMachine);
-		}
-
-		void IAsyncStateMachine.SetStateMachine(IAsyncStateMachine stateMachine)
-		{
-			//ILSpy generated this explicit interface implementation from .override directive in SetStateMachine
-			this.SetStateMachine(stateMachine);
-		}
-	}
-
 	private sealed class RestoreHistoryTagsContext
 	{
 		public ConfigDescriptorState selectedTagState;
@@ -5818,17 +5731,23 @@ internal class StateFieldInstance : Form
 		BeginInvoke(new Action(saveLrcContext.ShowCompletionResult));
 	}
 
-	[AsyncStateMachine(typeof(_003CExtractCovers_003Ed__174))]
-	private void StartExtractCovers(SelectedListViewItemInfo[] itemInfos, ProgressDialog progressDialog)
+	private async void StartExtractCovers(SelectedListViewItemInfo[] itemInfos, ProgressDialog progressDialog)
 	{
-		_003CExtractCovers_003Ed__174 stateMachine = default(_003CExtractCovers_003Ed__174);
-		stateMachine._003C_003E4__this = this;
-		stateMachine.itemInfos = itemInfos;
-		stateMachine.frmProgress = progressDialog;
-			stateMachine._003C_003Et__builder = CreateAsyncVoidMethodBuilder();
-		stateMachine._003C_003E1__state = -1;
-		AsyncVoidMethodBuilder asyncVoidMethodBuilder = stateMachine._003C_003Et__builder;
-		asyncVoidMethodBuilder.Start(ref stateMachine);
+		ExtractCoversTaskContext extractCoversContext = new ExtractCoversTaskContext();
+		extractCoversContext.progressDialog = progressDialog;
+		extractCoversContext.itemsToExtract = itemInfos;
+		extractCoversContext.cancellationSource = new CancellationTokenSource();
+		extractCoversContext.progressDialog.AddCancelRequestedHandler(extractCoversContext.Cancel);
+		extractCoversContext.processedCount = 0;
+		extractCoversContext.currentFile = null;
+		extractCoversContext.progressDialog.AddProgressUpdateHandler(extractCoversContext.UpdateProgress);
+		extractCoversContext.extractedCount = 0;
+		extractCoversContext.failedCount = 0;
+		extractCoversContext.skippedCount = 0;
+		extractCoversContext.errorLog = new Page();
+		await Task.Run((Action)extractCoversContext.ExtractCovers, extractCoversContext.cancellationSource.Token);
+		extractCoversContext.progressDialog.CloseAfterCompletion();
+		BeginInvoke(new Action(extractCoversContext.ShowCompletionResult));
 	}
 
 	private void EditSingleFieldEncoding_Click(object sender, EventArgs e)
@@ -8194,11 +8113,6 @@ internal class StateFieldInstance : Form
 	private void EnableCheckForUpdatesMenuItem()
 	{
 		checkForUpdatesMenuItem.Enabled = true;
-	}
-
-	internal static AsyncVoidMethodBuilder CreateAsyncVoidMethodBuilder()
-	{
-		return AsyncVoidMethodBuilder.Create();
 	}
 
 	private static bool ShouldChangeTagsFromFilenameDialog(FilenameRelatedBatchDialog dialog)

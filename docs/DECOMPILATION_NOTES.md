@@ -23,8 +23,9 @@
 
 以下文件仍包含 `_003C..._003Ed__*` 形式的 async 状态机结构体。它们与 `[AsyncStateMachine]` 特性和手写 async shell 互相引用，直接改名或重写风险较高：
 
-- `src/MusicTag/MusicTagWinApp.Instances/StateFieldInstance.cs`
-- `src/MusicTag/MusicTag.Mocks/CombinedTagSearchDialog.cs`
+- `src/MusicTag/MusicTag.Mocks/CombinedTagSearchDialog.cs`（剩 3 个）
+
+`src/MusicTag/MusicTagWinApp.Instances/StateFieldInstance.cs` 中原有的 12 个 async 状态机已全部重写为手写 `async`/`async void` 方法（见 `MAINTENANCE.md` 变更日志），该文件现已不含任何 `_003C..._003Ed__* : IAsyncStateMachine` 结构体。
 
 建议只在需要修复对应功能时逐个处理，例如下载歌词、下载封面、自动匹配标签、保存/撤销标签、批量重命名、删除文件、导出封面等流程。
 
