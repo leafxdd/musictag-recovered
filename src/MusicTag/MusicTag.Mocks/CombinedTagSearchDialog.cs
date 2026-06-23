@@ -361,81 +361,6 @@ internal class CombinedTagSearchDialog : Form
 			}
 		}
 
-	[StructLayout(LayoutKind.Auto)]
-	[CompilerGenerated]
-	private struct _003CSearchCombTags_003Ed__46 : IAsyncStateMachine
-	{
-		public int _003C_003E1__state;
-
-		public AsyncVoidMethodBuilder _003C_003Et__builder;
-
-		public CombinedTagSearchDialog _003C_003E4__this;
-
-		private TaskAwaiter<bool> _003C_003Eu__1;
-
-		private void MoveNext()
-		{
-			int state = _003C_003E1__state;
-			CombinedTagSearchDialog creatorListenerMock = _003C_003E4__this;
-			try
-			{
-				TaskAwaiter<bool> awaiter;
-				if (state == 0)
-				{
-					awaiter = _003C_003Eu__1;
-					_003C_003Eu__1 = default(TaskAwaiter<bool>);
-					state = -1;
-					_003C_003E1__state = -1;
-				}
-				else
-				{
-					TrackSearchCoordinator trackSearchCoordinator = new TrackSearchCoordinator();
-					trackSearchCoordinator.Owner = creatorListenerMock;
-					cachedSearchResults = new List<TrackSearchResult>();
-					trackSearchCoordinator.ProgressReporter = new Progress<List<TrackSearchResult>>(trackSearchCoordinator.OnSearchResultsReported);
-					creatorListenerMock.taskbarProgress.SetProgressState(TaskbarProgressBarStatus.Indeterminate);
-					awaiter = Task.Run((Func<bool>)trackSearchCoordinator.SearchAllSources, creatorListenerMock.cancellationSource.Token).GetAwaiter();
-					if (!awaiter.IsCompleted)
-					{
-						_003C_003E1__state = 0;
-						_003C_003Eu__1 = awaiter;
-						_003C_003Et__builder.AwaitUnsafeOnCompleted(ref awaiter, ref this);
-						return;
-					}
-				}
-				cachedSearchCompleted = awaiter.GetResult();
-				creatorListenerMock.progressPictureBox.Hide();
-				creatorListenerMock.taskbarProgress.SetProgressState(TaskbarProgressBarStatus.NoProgress);
-			}
-			catch (System.Exception exception)
-			{
-				_003C_003E1__state = -2;
-				_003C_003Et__builder.SetException(exception);
-				return;
-			}
-			_003C_003E1__state = -2;
-			_003C_003Et__builder.SetResult();
-		}
-
-		void IAsyncStateMachine.MoveNext()
-		{
-			//ILSpy generated this explicit interface implementation from .override directive in MoveNext
-			this.MoveNext();
-		}
-
-		[DebuggerHidden]
-		private void SetStateMachine(IAsyncStateMachine stateMachine)
-		{
-			_003C_003Et__builder.SetStateMachine(stateMachine);
-		}
-
-		void IAsyncStateMachine.SetStateMachine(IAsyncStateMachine stateMachine)
-		{
-			//ILSpy generated this explicit interface implementation from .override directive in SetStateMachine
-			this.SetStateMachine(stateMachine);
-		}
-	}
-
 		private int activeMediaDownloadCount;
 
 	private static bool cachedSearchCompleted;
@@ -902,15 +827,16 @@ internal class CombinedTagSearchDialog : Form
 		return new List<TrackSearchResult>();
 	}
 
-	[AsyncStateMachine(typeof(_003CSearchCombTags_003Ed__46))]
-	private void SearchCombinedTagsAsync()
+	private async void SearchCombinedTagsAsync()
 	{
-		_003CSearchCombTags_003Ed__46 stateMachine = default(_003CSearchCombTags_003Ed__46);
-		stateMachine._003C_003E4__this = this;
-		stateMachine._003C_003Et__builder = AsyncVoidMethodBuilder.Create();
-		stateMachine._003C_003E1__state = -1;
-		AsyncVoidMethodBuilder asyncVoidMethodBuilder = stateMachine._003C_003Et__builder;
-		asyncVoidMethodBuilder.Start(ref stateMachine);
+		TrackSearchCoordinator trackSearchCoordinator = new TrackSearchCoordinator();
+		trackSearchCoordinator.Owner = this;
+		cachedSearchResults = new List<TrackSearchResult>();
+		trackSearchCoordinator.ProgressReporter = new Progress<List<TrackSearchResult>>(trackSearchCoordinator.OnSearchResultsReported);
+		taskbarProgress.SetProgressState(TaskbarProgressBarStatus.Indeterminate);
+		cachedSearchCompleted = await Task.Run((Func<bool>)trackSearchCoordinator.SearchAllSources, cancellationSource.Token);
+		progressPictureBox.Hide();
+		taskbarProgress.SetProgressState(TaskbarProgressBarStatus.NoProgress);
 	}
 
 	private void SortCurrentSearchResults(List<TrackSearchResult> results)

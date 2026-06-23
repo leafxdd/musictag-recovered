@@ -19,15 +19,14 @@
 - `src/MusicTag/MusicTagWinApp.Exporters/PolicyTokenExporter.cs`：当前是空静态类。名称同时出现在资源键 `MusicTagWinApp.Exporters.PolicyTokenExporter` 中，并被错误/提示窗口标题间接使用。是否删除或改名需要先确认资源兼容性。
 - `src/MusicTag/PrivateImplementationDetails.cs`：编译器生成的静态数据容器。虽然名称不可读，但通常承载反编译出的数组或常量数据，不应手工改名或删除。
 
-## 暂不展开的 async 状态机
+## 已重写的 async 状态机
 
-以下文件仍包含 `_003C..._003Ed__*` 形式的 async 状态机结构体。它们与 `[AsyncStateMachine]` 特性和手写 async shell 互相引用，直接改名或重写风险较高：
+项目中原有的全部 `_003C..._003Ed__*` async 状态机结构体已全部重写为手写 `async`/`async void` 方法（详见 `MAINTENANCE.md` 变更日志）：
 
-- `src/MusicTag/MusicTag.Mocks/CombinedTagSearchDialog.cs`（剩 3 个）
+- `src/MusicTag/MusicTagWinApp.Instances/StateFieldInstance.cs`（原 12 个：刷新列表、下载歌词、查询年份、批量重命名/保存标签/清除标签/删除文件/保存 LRC/导出封面、撤销保存标签/撤销重命名、保存设置）
+- `src/MusicTag/MusicTag.Mocks/CombinedTagSearchDialog.cs`（原 3 个：延迟下载歌词、延迟下载封面、联合搜索）
 
-`src/MusicTag/MusicTagWinApp.Instances/StateFieldInstance.cs` 中原有的 12 个 async 状态机已全部重写为手写 `async`/`async void` 方法（见 `MAINTENANCE.md` 变更日志），该文件现已不含任何 `_003C..._003Ed__* : IAsyncStateMachine` 结构体。
-
-建议只在需要修复对应功能时逐个处理，例如下载歌词、下载封面、自动匹配标签、保存/撤销标签、批量重命名、删除文件、导出封面等流程。
+对全代码库 grep `: IAsyncStateMachine` / `[AsyncStateMachine` 现已无任何匹配。每次重写都是行为等价的“编译器逆操作”，并以 Debug+Release 构建 0/0 + 冒烟测试验证；但这些文件写入/搜索路径本身没有自动化测试覆盖（项目无此类测试），等价性依据是各条变更日志中记录的逆向分析，而非实际运行。
 
 ## 暂不重写的大型反编译控制流
 
