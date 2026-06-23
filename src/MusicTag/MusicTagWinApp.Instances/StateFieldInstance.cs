@@ -1528,130 +1528,6 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	[StructLayout(LayoutKind.Auto)]
-	[CompilerGenerated]
-	private struct _003CCommonSaveTags_003Ed__167 : IAsyncStateMachine
-	{
-		public int _003C_003E1__state;
-
-		public AsyncVoidMethodBuilder _003C_003Et__builder;
-
-		public ProgressDialog frmProgress;
-
-		public SelectedListViewItemInfo[] itemInfos;
-
-		public Dictionary<string, object> valueMap;
-
-		public StateFieldInstance _003C_003E4__this;
-
-		public bool canCancelFileReadonly;
-
-		public bool needUpdatePictureResolution;
-
-		private SaveTagsTaskContext saveTagsContext;
-
-		private Stopwatch _003CstopWatch_003E5__2;
-
-		private TaskAwaiter _003C_003Eu__1;
-
-		private void MoveNext()
-		{
-			int num = _003C_003E1__state;
-			StateFieldInstance stateFieldInstance = _003C_003E4__this;
-			try
-			{
-				(string, bool) value = default;
-				TaskAwaiter awaiter;
-				if (num != 0)
-				{
-					saveTagsContext = new SaveTagsTaskContext();
-					saveTagsContext.progressDialog = frmProgress;
-					saveTagsContext.itemsToSave = itemInfos;
-					saveTagsContext.tagValues = valueMap;
-					saveTagsContext.owner = _003C_003E4__this;
-					saveTagsContext.canCancelReadOnly = canCancelFileReadonly;
-					saveTagsContext.shouldRefreshPictureResolution = needUpdatePictureResolution;
-					saveTagsContext.cancellationSource = new CancellationTokenSource();
-					saveTagsContext.progressDialog.AddCancelRequestedHandler(saveTagsContext.Cancel);
-					saveTagsContext.savedCount = 0;
-					saveTagsContext.failedCount = 0;
-					saveTagsContext.skippedCount = 0;
-					saveTagsContext.processedCount = 0;
-					saveTagsContext.currentFile = null;
-					saveTagsContext.progressDialog.AddProgressUpdateHandler(saveTagsContext.UpdateProgress);
-					_003CstopWatch_003E5__2 = new Stopwatch();
-					saveTagsContext.messageLog = new Page();
-					_003CstopWatch_003E5__2.Start();
-					awaiter = Task.Run((Action)saveTagsContext.SaveTags, saveTagsContext.cancellationSource.Token).GetAwaiter();
-					if (!awaiter.IsCompleted)
-					{
-						_003C_003E1__state = 0;
-						_003C_003Eu__1 = awaiter;
-						_003C_003Et__builder.AwaitUnsafeOnCompleted(ref awaiter, ref this);
-						return;
-					}
-				}
-				else
-				{
-					awaiter = _003C_003Eu__1;
-					_003C_003Eu__1 = default(TaskAwaiter);
-					_003C_003E1__state = -1;
-				}
-				awaiter.GetResult();
-				saveTagsContext.progressDialog.CloseAfterCompletion();
-				value = default((string, bool));
-				value.Item2 = false;
-				if (saveTagsContext.itemsToSave.Length > 1)
-				{
-					value.Item1 = string.Format(Resources.Msg_SaveCompleted + "\n" + Resources.Msg_OK_Fail_Skip_Count, saveTagsContext.savedCount, saveTagsContext.failedCount, saveTagsContext.skippedCount, saveTagsContext.processedCount) + "\n" + saveTagsContext.messageLog.ToString();
-				}
-				else if (saveTagsContext.savedCount > 0)
-				{
-					value.Item1 = Resources.Msg_SaveCompleted + "\n" + saveTagsContext.messageLog.ToString();
-				}
-				else if (saveTagsContext.skippedCount > 0)
-				{
-					value.Item1 = Resources.Msg_Skipped + "\n" + saveTagsContext.messageLog.ToString();
-				}
-				else
-				{
-					value.Item1 = saveTagsContext.messageLog.ToString();
-					value.Item2 = true;
-				}
-				GC.Collect();
-				_003CstopWatch_003E5__2.Stop();
-				stateFieldInstance.RefreshSelectedItems(showErrorMessageBox: false, showProgressDialog: true, refreshStatusAllInfo: true, previousMessage: value);
-			}
-			catch (System.Exception exception)
-			{
-				_003C_003E1__state = -2;
-				_003C_003Et__builder.SetException(exception);
-				return;
-			}
-			_003C_003E1__state = -2;
-			_003C_003Et__builder.SetResult();
-		}
-
-		void IAsyncStateMachine.MoveNext()
-		{
-			//ILSpy generated this explicit interface implementation from .override directive in MoveNext
-			this.MoveNext();
-		}
-
-		[DebuggerHidden]
-		private void SetStateMachine(IAsyncStateMachine stateMachine)
-		{
-			_003C_003Et__builder.SetStateMachine(stateMachine);
-		}
-
-		void IAsyncStateMachine.SetStateMachine(IAsyncStateMachine stateMachine)
-		{
-			//ILSpy generated this explicit interface implementation from .override directive in SetStateMachine
-			this.SetStateMachine(stateMachine);
-		}
-
-	}
-
 	private sealed class UndoSaveTagsTaskContext
 	{
 		public CancellationTokenSource cancellationSource;
@@ -6273,20 +6149,50 @@ internal class StateFieldInstance : Form
 		RefreshSelectedItems(showErrorMessageBox: false, showProgressDialog: true, refreshStatusAllInfo: true, previousMessage: value);
 	}
 
-	[AsyncStateMachine(typeof(_003CCommonSaveTags_003Ed__167))]
-	private void StartCommonSaveTags(SelectedListViewItemInfo[] itemInfos, ProgressDialog progressDialog, Dictionary<string, object> valueMap, bool canCancelFileReadonly, bool needUpdatePictureResolution = false)
+	private async void StartCommonSaveTags(SelectedListViewItemInfo[] itemInfos, ProgressDialog progressDialog, Dictionary<string, object> valueMap, bool canCancelFileReadonly, bool needUpdatePictureResolution = false)
 	{
-		_003CCommonSaveTags_003Ed__167 stateMachine = default(_003CCommonSaveTags_003Ed__167);
-		stateMachine._003C_003E4__this = this;
-		stateMachine.itemInfos = itemInfos;
-		stateMachine.frmProgress = progressDialog;
-		stateMachine.valueMap = valueMap;
-		stateMachine.canCancelFileReadonly = canCancelFileReadonly;
-		stateMachine.needUpdatePictureResolution = needUpdatePictureResolution;
-		stateMachine._003C_003Et__builder = AsyncVoidMethodBuilder.Create();
-		stateMachine._003C_003E1__state = -1;
-		AsyncVoidMethodBuilder asyncVoidMethodBuilder = stateMachine._003C_003Et__builder;
-		asyncVoidMethodBuilder.Start(ref stateMachine);
+		SaveTagsTaskContext saveTagsContext = new SaveTagsTaskContext();
+		saveTagsContext.progressDialog = progressDialog;
+		saveTagsContext.itemsToSave = itemInfos;
+		saveTagsContext.tagValues = valueMap;
+		saveTagsContext.owner = this;
+		saveTagsContext.canCancelReadOnly = canCancelFileReadonly;
+		saveTagsContext.shouldRefreshPictureResolution = needUpdatePictureResolution;
+		saveTagsContext.cancellationSource = new CancellationTokenSource();
+		saveTagsContext.progressDialog.AddCancelRequestedHandler(saveTagsContext.Cancel);
+		saveTagsContext.savedCount = 0;
+		saveTagsContext.failedCount = 0;
+		saveTagsContext.skippedCount = 0;
+		saveTagsContext.processedCount = 0;
+		saveTagsContext.currentFile = null;
+		saveTagsContext.progressDialog.AddProgressUpdateHandler(saveTagsContext.UpdateProgress);
+		Stopwatch stopWatch = new Stopwatch();
+		saveTagsContext.messageLog = new Page();
+		stopWatch.Start();
+		await Task.Run((Action)saveTagsContext.SaveTags, saveTagsContext.cancellationSource.Token);
+		saveTagsContext.progressDialog.CloseAfterCompletion();
+		(string, bool) value = default((string, bool));
+		value.Item2 = false;
+		if (saveTagsContext.itemsToSave.Length > 1)
+		{
+			value.Item1 = string.Format(Resources.Msg_SaveCompleted + "\n" + Resources.Msg_OK_Fail_Skip_Count, saveTagsContext.savedCount, saveTagsContext.failedCount, saveTagsContext.skippedCount, saveTagsContext.processedCount) + "\n" + saveTagsContext.messageLog.ToString();
+		}
+		else if (saveTagsContext.savedCount > 0)
+		{
+			value.Item1 = Resources.Msg_SaveCompleted + "\n" + saveTagsContext.messageLog.ToString();
+		}
+		else if (saveTagsContext.skippedCount > 0)
+		{
+			value.Item1 = Resources.Msg_Skipped + "\n" + saveTagsContext.messageLog.ToString();
+		}
+		else
+		{
+			value.Item1 = saveTagsContext.messageLog.ToString();
+			value.Item2 = true;
+		}
+		GC.Collect();
+		stopWatch.Stop();
+		RefreshSelectedItems(showErrorMessageBox: false, showProgressDialog: true, refreshStatusAllInfo: true, previousMessage: value);
 	}
 
 	[AsyncStateMachine(typeof(_003CUndoSaveTags_003Ed__168))]
