@@ -28,9 +28,10 @@
 
 对全代码库 grep `: IAsyncStateMachine` / `[AsyncStateMachine` 现已无任何匹配。每次重写都是行为等价的“编译器逆操作”，并以 Debug+Release 构建 0/0 + 冒烟测试验证；但这些文件写入/搜索路径本身没有自动化测试覆盖（项目无此类测试），等价性依据是各条变更日志中记录的逆向分析，而非实际运行。
 
-## 暂不重写的大型反编译控制流
+## 已重写的大型反编译控制流
 
-- `src/MusicTag/MusicTagWinApp.Common/Tokenizer.cs` 仍包含大块编码检测表初始化控制流。该代码影响文件编码识别，建议只在有明确测试样本时局部修改。
+- `src/MusicTag/MusicTagWinApp.Common/Tokenizer.cs` 的编码检测频率表初始化(`EncodingDetector.InitializeFrequencyTables`)原为约 4480 行的 `goto`/`switch` 混淆状态机,已重写为数据驱动的小型加载器(7 个 `static readonly int[]` 三元组表 + 一个 `LoadFrequencyTable` 回放循环),并删除了仅服务于它的 `PostRole`/`InvokeRole`/`DestroyRole` 桩(它们分别恒为 `true`/`false`/单元赋值,使原控制流完全静态)。等价性以**逐字节方式验证**:用反射 dump 原始构建中 7 张表的全部非零单元(共 3301 个),重写后重新 dump 并对 SHA256,结果完全一致;未改动的 `Score*Encoding` 只读这些表,故检测结果不变。验证脚本 `artifacts/Dump-TokenizerTables.ps1`、`artifacts/Generate-TokenizerRegion.ps1` 位于 gitignored 的 `artifacts/`。
+- 附带发现(未处理):`EncodingDetector` 在全代码库中**从未被实例化**——`Tokenizer.DetectFileEncoding` 走的是 native `ResolveToken`(`MusicTag.dll`)P/Invoke,这套托管打分器目前是死代码。按保守策略仅去混淆其初始化,是否删除整个未用类留待后续单独决定。
 
 ## 后续处理原则
 
