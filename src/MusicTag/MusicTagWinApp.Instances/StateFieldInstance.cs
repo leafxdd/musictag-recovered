@@ -802,91 +802,6 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	[StructLayout(LayoutKind.Auto)]
-	[CompilerGenerated]
-	private struct _003CDownloadLyric_003Ed__120 : IAsyncStateMachine
-	{
-		public int _003C_003E1__state;
-
-		public AsyncVoidMethodBuilder _003C_003Et__builder;
-
-		public SimpleProgressDialog form;
-
-		public LyricSearchResult lyricInfo;
-
-		public StateFieldInstance _003C_003E4__this;
-
-		private LyricDownloadTaskContext lyricDownloadContext;
-
-		private ComboBox lyricTextComboBox;
-
-		private TaskAwaiter<string> _003C_003Eu__1;
-
-		private void MoveNext()
-		{
-			int state = _003C_003E1__state;
-			StateFieldInstance stateFieldInstance = _003C_003E4__this;
-			try
-			{
-				TaskAwaiter<string> awaiter;
-				if (state == 0)
-				{
-					awaiter = _003C_003Eu__1;
-					_003C_003Eu__1 = default(TaskAwaiter<string>);
-					_003C_003E1__state = -1;
-				}
-				else
-				{
-					lyricDownloadContext = new LyricDownloadTaskContext();
-					lyricDownloadContext.progressDialog = form;
-					lyricDownloadContext.lyricResult = lyricInfo;
-					lyricDownloadContext.cancellationSource = new CancellationTokenSource();
-					lyricDownloadContext.progressDialog.SetCancelAction(lyricDownloadContext.Cancel);
-					lyricTextComboBox = stateFieldInstance.lyricsComboBox;
-					awaiter = Task.Run((Func<string>)lyricDownloadContext.DownloadLyricText, lyricDownloadContext.cancellationSource.Token).GetAwaiter();
-					if (!awaiter.IsCompleted)
-					{
-						_003C_003E1__state = 0;
-						_003C_003Eu__1 = awaiter;
-						_003C_003Et__builder.AwaitUnsafeOnCompleted(ref awaiter, ref this);
-						return;
-					}
-				}
-				string result = awaiter.GetResult();
-				lyricTextComboBox.Text = result;
-				lyricTextComboBox = null;
-				lyricDownloadContext.progressDialog.CloseProgressDialog();
-			}
-			catch (System.Exception exception)
-			{
-				_003C_003E1__state = -2;
-				_003C_003Et__builder.SetException(exception);
-				return;
-			}
-			_003C_003E1__state = -2;
-			_003C_003Et__builder.SetResult();
-		}
-
-		void IAsyncStateMachine.MoveNext()
-		{
-			//ILSpy generated this explicit interface implementation from .override directive in MoveNext
-			this.MoveNext();
-		}
-
-		[DebuggerHidden]
-		private void SetStateMachine(IAsyncStateMachine stateMachine)
-		{
-			_003C_003Et__builder.SetStateMachine(stateMachine);
-		}
-
-		void IAsyncStateMachine.SetStateMachine(IAsyncStateMachine stateMachine)
-		{
-			//ILSpy generated this explicit interface implementation from .override directive in SetStateMachine
-			this.SetStateMachine(stateMachine);
-		}
-
-	}
-
 	private sealed class SelectedItemFilterValueCounter
 	{
 		public ListViewItem listViewItem;
@@ -949,90 +864,6 @@ internal class StateFieldInstance : Form
 		internal string FetchReleaseYear()
 		{
 			return CombinedTagSearchDialog.FetchMissingNetEaseReleaseYear(trackResult, cancellationSource);
-		}
-
-	}
-
-	[StructLayout(LayoutKind.Auto)]
-	[CompilerGenerated]
-	private struct _003CSearchYear_003Ed__144 : IAsyncStateMachine
-	{
-		public int _003C_003E1__state;
-
-		public AsyncVoidMethodBuilder _003C_003Et__builder;
-
-		public SimpleProgressDialog form;
-
-		public TrackSearchResult cti;
-
-		public StateFieldInstance _003C_003E4__this;
-
-		private ReleaseYearSearchTaskContext releaseYearContext;
-
-		private TaskAwaiter<string> _003C_003Eu__1;
-
-		private void MoveNext()
-		{
-			int state = _003C_003E1__state;
-			StateFieldInstance stateFieldInstance = _003C_003E4__this;
-			try
-			{
-				TaskAwaiter<string> awaiter;
-				if (state == 0)
-				{
-					awaiter = _003C_003Eu__1;
-					_003C_003Eu__1 = default(TaskAwaiter<string>);
-					_003C_003E1__state = -1;
-				}
-				else
-				{
-					releaseYearContext = new ReleaseYearSearchTaskContext();
-					releaseYearContext.progressDialog = form;
-					releaseYearContext.trackResult = cti;
-					releaseYearContext.cancellationSource = new CancellationTokenSource();
-					releaseYearContext.progressDialog.SetCancelAction(releaseYearContext.Cancel);
-					awaiter = Task.Run((Func<string>)releaseYearContext.FetchReleaseYear, releaseYearContext.cancellationSource.Token).GetAwaiter();
-					if (!awaiter.IsCompleted)
-					{
-						_003C_003E1__state = 0;
-						_003C_003Eu__1 = awaiter;
-						_003C_003Et__builder.AwaitUnsafeOnCompleted(ref awaiter, ref this);
-						return;
-					}
-				}
-				string result = awaiter.GetResult();
-				if (!string.IsNullOrWhiteSpace(result))
-				{
-					stateFieldInstance.yearComboBox.Text = result;
-				}
-				releaseYearContext.progressDialog.CloseProgressDialog();
-			}
-			catch (System.Exception exception)
-			{
-				_003C_003E1__state = -2;
-				_003C_003Et__builder.SetException(exception);
-				return;
-			}
-			_003C_003E1__state = -2;
-			_003C_003Et__builder.SetResult();
-		}
-
-		void IAsyncStateMachine.MoveNext()
-		{
-			//ILSpy generated this explicit interface implementation from .override directive in MoveNext
-			this.MoveNext();
-		}
-
-		[DebuggerHidden]
-		private void SetStateMachine(IAsyncStateMachine stateMachine)
-		{
-			_003C_003Et__builder.SetStateMachine(stateMachine);
-		}
-
-		void IAsyncStateMachine.SetStateMachine(IAsyncStateMachine stateMachine)
-		{
-			//ILSpy generated this explicit interface implementation from .override directive in SetStateMachine
-			this.SetStateMachine(stateMachine);
 		}
 
 	}
@@ -5588,17 +5419,18 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	[AsyncStateMachine(typeof(_003CDownloadLyric_003Ed__120))]
-	private void StartDownloadLyric(LyricSearchResult lyricResult, SimpleProgressDialog progressDialog)
+	private async void StartDownloadLyric(LyricSearchResult lyricResult, SimpleProgressDialog progressDialog)
 	{
-		_003CDownloadLyric_003Ed__120 stateMachine = default(_003CDownloadLyric_003Ed__120);
-		stateMachine._003C_003E4__this = this;
-		stateMachine.lyricInfo = lyricResult;
-		stateMachine.form = progressDialog;
-		stateMachine._003C_003Et__builder = AsyncVoidMethodBuilder.Create();
-		stateMachine._003C_003E1__state = -1;
-		AsyncVoidMethodBuilder asyncVoidMethodBuilder = stateMachine._003C_003Et__builder;
-		asyncVoidMethodBuilder.Start(ref stateMachine);
+		LyricDownloadTaskContext lyricDownloadContext = new LyricDownloadTaskContext();
+		lyricDownloadContext.progressDialog = progressDialog;
+		lyricDownloadContext.lyricResult = lyricResult;
+		lyricDownloadContext.cancellationSource = new CancellationTokenSource();
+		lyricDownloadContext.progressDialog.SetCancelAction(lyricDownloadContext.Cancel);
+		ComboBox lyricTextComboBox = lyricsComboBox;
+		string result = await Task.Run((Func<string>)lyricDownloadContext.DownloadLyricText, lyricDownloadContext.cancellationSource.Token);
+		lyricTextComboBox.Text = result;
+		lyricTextComboBox = null;
+		lyricDownloadContext.progressDialog.CloseProgressDialog();
 	}
 
 	private void ApplyFileSelectionMode(FileSelectionMode selectionMode, bool refreshStatusAllInfo)
@@ -6159,16 +5991,19 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	[AsyncStateMachine(typeof(_003CSearchYear_003Ed__144))]
-	private void StartSearchYearLookup(TrackSearchResult searchResult, SimpleProgressDialog progressDialog)
+	private async void StartSearchYearLookup(TrackSearchResult searchResult, SimpleProgressDialog progressDialog)
 	{
-		_003CSearchYear_003Ed__144 stateMachine = default;
-		stateMachine._003C_003E4__this = this;
-		stateMachine.cti = searchResult;
-		stateMachine.form = progressDialog;
-		stateMachine._003C_003Et__builder = AsyncVoidMethodBuilder.Create();
-		stateMachine._003C_003E1__state = -1;
-		stateMachine._003C_003Et__builder.Start(ref stateMachine);
+		ReleaseYearSearchTaskContext releaseYearContext = new ReleaseYearSearchTaskContext();
+		releaseYearContext.progressDialog = progressDialog;
+		releaseYearContext.trackResult = searchResult;
+		releaseYearContext.cancellationSource = new CancellationTokenSource();
+		releaseYearContext.progressDialog.SetCancelAction(releaseYearContext.Cancel);
+		string result = await Task.Run((Func<string>)releaseYearContext.FetchReleaseYear, releaseYearContext.cancellationSource.Token);
+		if (!string.IsNullOrWhiteSpace(result))
+		{
+			yearComboBox.Text = result;
+		}
+		releaseYearContext.progressDialog.CloseProgressDialog();
 	}
 
 	private void ToggleCoverResolutionLimit_Click(object sender, EventArgs e)
