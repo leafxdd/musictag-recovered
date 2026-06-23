@@ -47,11 +47,7 @@ internal static class Program
 		AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
 		Application.EnableVisualStyles();
 		Application.SetCompatibleTextRenderingDefault(defaultValue: false);
-		Version version = Environment.OSVersion.Version;
-		if (version.Major > 6 || (version.Major == 6 && version.Minor >= 3))
-		{
-			NativeMethods.SetProcessDpiAwareness(1);
-		}
+		// DPI awareness is declared in the embedded application manifest (app.manifest).
 		Application.Run(new StateFieldInstance(args));
 	}
 

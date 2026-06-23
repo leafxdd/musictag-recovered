@@ -48,6 +48,13 @@ Single WinExe, `net481` (.NET Framework 4.8.1, migrated from 4.6.1 — see migra
 - **`DatabaseMapper`** (`MusicTagWinApp.Instances/DatabaseMapper.cs`) — shared utility hub: DPI scaling,
   resource-bitmap loading, image resize/save, AES decrypt, URL encoding, temp/log cleanup, error
   dialogs, exception logging.
+- **HiDPI**: the process is **System DPI Aware**, declared in the embedded `src/MusicTag/app.manifest`
+  (`<dpiAware>true</dpiAware>` + `<dpiAwareness>system</dpiAwareness>` + `<supportedOS>` for Win7–11,
+  embedded via `<ApplicationManifest>` in the csproj). The UI scales once at startup through
+  `AutoScaleMode.Dpi` + `DatabaseMapper.GetDpiScale`/`ScaleByDpi` (the scale is cached → scale-once,
+  not per-monitor). Don't re-add a runtime `SetProcessDpiAwareness` call — the manifest is the single
+  source of truth. (A missing DPI manifest is what made the recovered app run DPI-unaware, so Windows
+  bitmap-stretched the window and text/icons looked blurry above 100% scaling.)
 - **Tag history / undo** — SQLite (`System.Data.SQLite`) via `TagHistoryRepository`
   (`MusicTagWinApp.Listeners/`); `MusicTag.db` ships alongside the exe.
 

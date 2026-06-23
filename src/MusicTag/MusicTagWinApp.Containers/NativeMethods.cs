@@ -184,7 +184,4 @@ internal static class NativeMethods
 
 	[DllImport("user32.dll", EntryPoint = "GetWindowThreadProcessId")]
 	public static extern int GetWindowThreadProcessId(IntPtr windowHandle, out int processId);
-
-	[DllImport("Shcore.dll", EntryPoint = "SetProcessDpiAwareness")]
-	public static extern int SetProcessDpiAwareness(int dpiAwareness);
 }
