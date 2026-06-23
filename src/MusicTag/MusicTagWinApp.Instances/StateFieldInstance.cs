@@ -3579,89 +3579,6 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	[StructLayout(LayoutKind.Auto)]
-	[CompilerGenerated]
-	private struct _003CSaveAppSettingData_003Ed__200 : IAsyncStateMachine
-	{
-		public int _003C_003E1__state;
-
-		public AsyncVoidMethodBuilder _003C_003Et__builder;
-
-		public StateFieldInstance _003C_003E4__this;
-
-		public SimpleProgressDialog form;
-
-		private TaskAwaiter _003C_003Eu__1;
-
-		private void MoveNext()
-		{
-			int num = _003C_003E1__state;
-			StateFieldInstance stateFieldInstance = _003C_003E4__this;
-			try
-			{
-				TaskAwaiter awaiter;
-				if (num != 0)
-				{
-					AppSettingsSaveTask appSettingsSaveTask = new AppSettingsSaveTask();
-					appSettingsSaveTask.owner = _003C_003E4__this;
-					stateFieldInstance.SaveCurrentFileListColumnWidths();
-					appSettingsSaveTask.appSettingsData = new AppSettingData
-					{
-						ListViewFileSetting = stateFieldInstance.FileSettings
-					};
-					if (stateFieldInstance.Visible)
-					{
-						stateFieldInstance.MainFormPosSizeInfo.Location = stateFieldInstance.Location;
-						stateFieldInstance.MainFormPosSizeInfo.Size = stateFieldInstance.Size;
-						stateFieldInstance.MainFormPosSizeInfo.Maximized = stateFieldInstance.WindowState == FormWindowState.Maximized;
-					}
-					awaiter = Task.Run((Action)appSettingsSaveTask.SaveSettings).GetAwaiter();
-					if (!awaiter.IsCompleted)
-					{
-						_003C_003E1__state = 0;
-						_003C_003Eu__1 = awaiter;
-						_003C_003Et__builder.AwaitUnsafeOnCompleted(ref awaiter, ref this);
-						return;
-					}
-				}
-				else
-				{
-					awaiter = _003C_003Eu__1;
-					_003C_003Eu__1 = default(TaskAwaiter);
-					_003C_003E1__state = -1;
-				}
-				awaiter.GetResult();
-				form.CloseProgressDialog();
-			}
-			catch (System.Exception exception)
-			{
-				_003C_003E1__state = -2;
-				_003C_003Et__builder.SetException(exception);
-				return;
-			}
-			_003C_003E1__state = -2;
-			_003C_003Et__builder.SetResult();
-		}
-
-		void IAsyncStateMachine.MoveNext()
-		{
-			//ILSpy generated this explicit interface implementation from .override directive in MoveNext
-			this.MoveNext();
-		}
-
-		[DebuggerHidden]
-		private void SetStateMachine(IAsyncStateMachine stateMachine)
-		{
-			_003C_003Et__builder.SetStateMachine(stateMachine);
-		}
-
-		void IAsyncStateMachine.SetStateMachine(IAsyncStateMachine stateMachine)
-		{
-			//ILSpy generated this explicit interface implementation from .override directive in SetStateMachine
-			this.SetStateMachine(stateMachine);
-		}
-	}
-
 	private sealed class FileListLabelEditContext
 	{
 		public string OriginalPath;
@@ -7325,15 +7242,23 @@ internal class StateFieldInstance : Form
 		progressDialog.ShowProgressDialog();
 	}
 
-	[AsyncStateMachine(typeof(_003CSaveAppSettingData_003Ed__200))]
-	private void StartSaveAppSettingData(SimpleProgressDialog progressDialog)
+	private async void StartSaveAppSettingData(SimpleProgressDialog progressDialog)
 	{
-		_003CSaveAppSettingData_003Ed__200 stateMachine = default;
-		stateMachine._003C_003E4__this = this;
-		stateMachine.form = progressDialog;
-		stateMachine._003C_003Et__builder = AsyncVoidMethodBuilder.Create();
-		stateMachine._003C_003E1__state = -1;
-		stateMachine._003C_003Et__builder.Start(ref stateMachine);
+		AppSettingsSaveTask appSettingsSaveTask = new AppSettingsSaveTask();
+		appSettingsSaveTask.owner = this;
+		SaveCurrentFileListColumnWidths();
+		appSettingsSaveTask.appSettingsData = new AppSettingData
+		{
+			ListViewFileSetting = FileSettings
+		};
+		if (Visible)
+		{
+			MainFormPosSizeInfo.Location = Location;
+			MainFormPosSizeInfo.Size = Size;
+			MainFormPosSizeInfo.Maximized = WindowState == FormWindowState.Maximized;
+		}
+		await Task.Run((Action)appSettingsSaveTask.SaveSettings);
+		progressDialog.CloseProgressDialog();
 	}
 
 	private void UpdateWindowTitle()
