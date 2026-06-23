@@ -60,131 +60,6 @@ internal class CombinedTagSearchDialog : Form
 		}
 	}
 
-	[StructLayout(LayoutKind.Auto)]
-	[CompilerGenerated]
-	private struct _003CDownloadLyric_003Ed__40 : IAsyncStateMachine
-	{
-		public int _003C_003E1__state;
-
-		public AsyncVoidMethodBuilder _003C_003Et__builder;
-
-		public LyricSearchResult li;
-
-		public CombinedTagSearchDialog _003C_003E4__this;
-
-		private DeferredLyricDownloadContext lyricDownloadContext;
-
-		public int taskNo;
-
-		public int taskSubNo;
-
-		private TaskAwaiter<LyricSearchResult> _003C_003Eu__1;
-
-		private void MoveNext()
-		{
-			int num = default(int);
-			num = _003C_003E1__state;
-			CombinedTagSearchDialog creatorListenerMock = _003C_003E4__this;
-			try
-			{
-				if (num != 0)
-				{
-					lyricDownloadContext = new DeferredLyricDownloadContext();
-					lyricDownloadContext.LyricResult = li;
-					lyricDownloadContext.Owner = _003C_003E4__this;
-				}
-				try
-				{
-					TaskAwaiter<LyricSearchResult> awaiter;
-					if (num != 0)
-					{
-						awaiter = Task.Run((Func<LyricSearchResult>)lyricDownloadContext.LoadLyric, creatorListenerMock.cancellationSource.Token).GetAwaiter();
-						if (!awaiter.IsCompleted)
-						{
-							_003C_003E1__state = 0;
-							_003C_003Eu__1 = awaiter;
-							_003C_003Et__builder.AwaitUnsafeOnCompleted(ref awaiter, ref this);
-							return;
-						}
-					}
-					else
-					{
-						awaiter = _003C_003Eu__1;
-						_003C_003Eu__1 = default(TaskAwaiter<LyricSearchResult>);
-						num = -1;
-						_003C_003E1__state = -1;
-					}
-					LyricSearchResult result = awaiter.GetResult();
-					if (result != null && result.HasDownloadableLyric())
-					{
-						lyricDownloadContext.LyricResult.Lyric = result.Lyric;
-						lyricDownloadContext.LyricResult.TranslatedLyric = result.TranslatedLyric;
-						((creatorListenerMock.searchResultsListView.Items[lyricDownloadContext.LyricResult.ListItemIndex].SubItems[creatorListenerMock.sourceColumn.Index] as EmbeddedControlSubItem).EmbeddedControl as TagSearchCandidatePanel).Lyric = "Y";
-					}
-					List<TrackSearchResult>.Enumerator enumerator = cachedSearchResults.GetEnumerator();
-					try
-					{
-						while (enumerator.MoveNext())
-						{
-							TrackSearchResult current = enumerator.Current;
-							if (creatorListenerMock.cancellationSource.IsCancellationRequested)
-							{
-								break;
-							}
-							lyricDownloadContext.LyricResult = current.LyricResult;
-							if (lyricDownloadContext.LyricResult == null || lyricDownloadContext.LyricResult.IsLoaded)
-							{
-								continue;
-							}
-							lyricDownloadContext.LyricResult.IsLoaded = true;
-							creatorListenerMock.DownloadLyricAsync(lyricDownloadContext.LyricResult, taskNo, ++taskSubNo);
-							goto end_IL_001a;
-						}
-					}
-					finally
-					{
-						if (num < 0)
-						{
-							((IDisposable)enumerator/*cast due to constrained. prefix*/).Dispose();
-						}
-					}
-				}
-				catch (System.Exception v)
-				{
-					Console.WriteLine("DownloadLyric error:" + v.GetMessageChain());
-				}
-				creatorListenerMock.activeMediaDownloadCount--;
-				end_IL_001a:;
-			}
-			catch (System.Exception exception)
-			{
-				_003C_003E1__state = -2;
-				_003C_003Et__builder.SetException(exception);
-				return;
-			}
-			_003C_003E1__state = -2;
-			_003C_003Et__builder.SetResult();
-		}
-
-		void IAsyncStateMachine.MoveNext()
-		{
-			//ILSpy generated this explicit interface implementation from .override directive in MoveNext
-			this.MoveNext();
-		}
-
-		[DebuggerHidden]
-		private void SetStateMachine(IAsyncStateMachine stateMachine)
-		{
-			_003C_003Et__builder.SetStateMachine(stateMachine);
-		}
-
-		void IAsyncStateMachine.SetStateMachine(IAsyncStateMachine stateMachine)
-		{
-			//ILSpy generated this explicit interface implementation from .override directive in SetStateMachine
-			this.SetStateMachine(stateMachine);
-		}
-	}
-
 	private sealed class CoverDownloadRequestContext
 	{
 		public CoverSearchResult CoverResult;
@@ -1012,18 +887,41 @@ internal class CombinedTagSearchDialog : Form
 		searchResultsListView.EndUpdate();
 	}
 
-	[AsyncStateMachine(typeof(_003CDownloadLyric_003Ed__40))]
-	private void DownloadLyricAsync(LyricSearchResult lyricResult, int taskNo, int taskSubNo)
+	private async void DownloadLyricAsync(LyricSearchResult lyricResult, int taskNo, int taskSubNo)
 	{
-		_003CDownloadLyric_003Ed__40 stateMachine = default(_003CDownloadLyric_003Ed__40);
-		stateMachine._003C_003E4__this = this;
-		stateMachine.li = lyricResult;
-		stateMachine.taskNo = taskNo;
-		stateMachine.taskSubNo = taskSubNo;
-		stateMachine._003C_003Et__builder = AsyncVoidMethodBuilder.Create();
-		stateMachine._003C_003E1__state = -1;
-		AsyncVoidMethodBuilder asyncVoidMethodBuilder = stateMachine._003C_003Et__builder;
-		asyncVoidMethodBuilder.Start(ref stateMachine);
+		DeferredLyricDownloadContext lyricDownloadContext = new DeferredLyricDownloadContext();
+		lyricDownloadContext.LyricResult = lyricResult;
+		lyricDownloadContext.Owner = this;
+		try
+		{
+			LyricSearchResult result = await Task.Run((Func<LyricSearchResult>)lyricDownloadContext.LoadLyric, cancellationSource.Token);
+			if (result != null && result.HasDownloadableLyric())
+			{
+				lyricDownloadContext.LyricResult.Lyric = result.Lyric;
+				lyricDownloadContext.LyricResult.TranslatedLyric = result.TranslatedLyric;
+				((searchResultsListView.Items[lyricDownloadContext.LyricResult.ListItemIndex].SubItems[sourceColumn.Index] as EmbeddedControlSubItem).EmbeddedControl as TagSearchCandidatePanel).Lyric = "Y";
+			}
+			foreach (TrackSearchResult current in cachedSearchResults)
+			{
+				if (cancellationSource.IsCancellationRequested)
+				{
+					break;
+				}
+				lyricDownloadContext.LyricResult = current.LyricResult;
+				if (lyricDownloadContext.LyricResult == null || lyricDownloadContext.LyricResult.IsLoaded)
+				{
+					continue;
+				}
+				lyricDownloadContext.LyricResult.IsLoaded = true;
+				DownloadLyricAsync(lyricDownloadContext.LyricResult, taskNo, ++taskSubNo);
+				return;
+			}
+		}
+		catch (System.Exception v)
+		{
+			Console.WriteLine("DownloadLyric error:" + v.GetMessageChain());
+		}
+		activeMediaDownloadCount--;
 	}
 
 	[AsyncStateMachine(typeof(_003CDownloadPicture_003Ed__41))]
