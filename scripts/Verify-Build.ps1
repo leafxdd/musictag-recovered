@@ -38,7 +38,7 @@ function Resolve-MSBuild {
 function Invoke-FilenameRelatedBatchDialogSmokeTest {
     $command = @'
 $ErrorActionPreference = 'Stop'
-$exe = Resolve-Path -LiteralPath 'src\MusicTag\bin\Release\net461\MusicTag.exe'
+$exe = Resolve-Path -LiteralPath 'src\MusicTag\bin\Release\net481\MusicTag.exe'
 Add-Type -AssemblyName System.Windows.Forms
 $assembly = [System.Reflection.Assembly]::LoadFrom($exe.Path)
 $type = $assembly.GetType('MusicTag.Schemes.FilenameRelatedBatchDialog', $true)
@@ -54,7 +54,7 @@ try { 'Constructed=' + $form.GetType().FullName } finally { if ($form -is [Syste
 function Invoke-ReleaseStartupSmokeTest {
     $command = @'
 $ErrorActionPreference = 'Stop'
-$exe = Resolve-Path -LiteralPath 'src\MusicTag\bin\Release\net461\MusicTag.exe'
+$exe = Resolve-Path -LiteralPath 'src\MusicTag\bin\Release\net481\MusicTag.exe'
 Get-Process | Where-Object { $_.Path -eq $exe.Path } | Stop-Process -Force -ErrorAction SilentlyContinue
 $process = Start-Process -FilePath $exe.Path -WorkingDirectory (Split-Path -LiteralPath $exe.Path) -WindowStyle Hidden -PassThru
 Start-Sleep -Seconds 5

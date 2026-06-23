@@ -185,8 +185,17 @@ P5 `build: fix dependencies for net481` (ValueTuple, only if needed) · P6 `fix:
 module (only if errors) · P7 `test: verify net481 migration` · P8 `docs: finalize net481 migration
 notes` (sync README / MAINTENANCE / architecture prose; deferred so P4 stays focused).
 
+**Phase 4 — retarget to net481 (2026-06-23) ✅ (build red as predicted; fixed in P5)**
+- Applied: `MusicTag.csproj` `net461`→`net481`; `MusicTag.exe.config` sku `v4.6.1`→`v4.8.1`;
+  `Verify-Build.ps1` smoke-test paths `net461`→`net481`.
+- Clean Rebuild (`/restore /t:Rebuild`) confirms the retarget took effect: `csc` now references the
+  **v4.8.1** reference assemblies and defines `NET481;NET48_OR_GREATER;NET481_OR_GREATER`, output to
+  `…\net481\`.
+- Surfaced exactly the predicted dependency conflict: **CS0433** — `ValueTuple` is defined in both the
+  external `System.ValueTuple v4.0.3.0` and `net481` mscorlib (2 sites in `StateFieldInstance.cs`).
+  Resolved in Phase 5 by removing the explicit reference.
+- Note: `/t:Rebuild` alone first failed with `NETSDK1005` because it skips restore after a TFM change —
+  must pass `/restore` (which `Verify-Build.ps1` already does).
+
 ### Migration TODO
-- Phase 4: apply the retarget (csproj + exe.config + Verify-Build.ps1), then rebuild and compare to
-  the 0/0 baseline.
-- Phase 5: resolve `System.ValueTuple` (and any other) dependency issues if they surface.
-- Phases 6–8: fix any compile errors → verify + smoke tests → finalize docs (README/MAINTENANCE).
+- Phase 5: remove the redundant `System.ValueTuple` reference (in-box on net481) → green build.
