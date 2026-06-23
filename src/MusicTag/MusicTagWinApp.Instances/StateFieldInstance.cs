@@ -1972,112 +1972,6 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	[StructLayout(LayoutKind.Auto)]
-	[CompilerGenerated]
-	private struct _003CClearTags_003Ed__170 : IAsyncStateMachine
-	{
-		public int _003C_003E1__state;
-
-		public AsyncVoidMethodBuilder _003C_003Et__builder;
-
-		public ProgressDialog frmProgress;
-
-		public SelectedListViewItemInfo[] itemInfos;
-
-		public bool canCancelFileReadonly;
-
-		private ClearTagsTaskContext clearTagsContext;
-
-		public StateFieldInstance _003C_003E4__this;
-
-		private TaskAwaiter _003C_003Eu__1;
-
-		private void MoveNext()
-		{
-			int num = _003C_003E1__state;
-			StateFieldInstance stateFieldInstance = _003C_003E4__this;
-			try
-			{
-				(string, bool) value = default;
-				TaskAwaiter awaiter;
-				if (num != 0)
-				{
-					clearTagsContext = new ClearTagsTaskContext();
-					clearTagsContext.progressDialog = frmProgress;
-					clearTagsContext.itemsToClear = itemInfos;
-					clearTagsContext.canCancelFileReadonly = canCancelFileReadonly;
-					clearTagsContext.cancellationSource = new CancellationTokenSource();
-					clearTagsContext.progressDialog.AddCancelRequestedHandler(clearTagsContext.Cancel);
-					clearTagsContext.successCount = 0;
-					clearTagsContext.failedCount = 0;
-					clearTagsContext.processedCount = 0;
-					clearTagsContext.currentFile = null;
-					clearTagsContext.progressDialog.AddProgressUpdateHandler(clearTagsContext.UpdateProgress);
-					clearTagsContext.errorLog = new Page();
-					awaiter = Task.Run((Action)clearTagsContext.ClearTags, clearTagsContext.cancellationSource.Token).GetAwaiter();
-					if (!awaiter.IsCompleted)
-					{
-						_003C_003E1__state = 0;
-						_003C_003Eu__1 = awaiter;
-						_003C_003Et__builder.AwaitUnsafeOnCompleted(ref awaiter, ref this);
-						return;
-					}
-				}
-				else
-				{
-					awaiter = _003C_003Eu__1;
-					_003C_003Eu__1 = default(TaskAwaiter);
-					_003C_003E1__state = -1;
-				}
-				awaiter.GetResult();
-				clearTagsContext.progressDialog.CloseAfterCompletion();
-				value.Item2 = false;
-				if (clearTagsContext.itemsToClear.Length > 1)
-				{
-					value.Item1 = string.Format(Resources.Msg_CleartagsCompleted + "\n" + Resources.Msg_OK_Fail_Count, clearTagsContext.successCount, clearTagsContext.failedCount, clearTagsContext.processedCount) + "\n" + clearTagsContext.errorLog.ToString();
-				}
-				else if (clearTagsContext.successCount > 0)
-				{
-					value.Item1 = Resources.Msg_CleartagsCompleted;
-				}
-				else
-				{
-					value.Item1 = clearTagsContext.errorLog.ToString();
-					value.Item2 = true;
-				}
-				GC.Collect();
-				stateFieldInstance.RefreshSelectedItems(showErrorMessageBox: false, showProgressDialog: true, refreshStatusAllInfo: true, previousMessage: value);
-			}
-			catch (System.Exception exception)
-			{
-				_003C_003E1__state = -2;
-				_003C_003Et__builder.SetException(exception);
-				return;
-			}
-			_003C_003E1__state = -2;
-			_003C_003Et__builder.SetResult();
-		}
-
-		void IAsyncStateMachine.MoveNext()
-		{
-			//ILSpy generated this explicit interface implementation from .override directive in MoveNext
-			this.MoveNext();
-		}
-
-		[DebuggerHidden]
-		private void SetStateMachine(IAsyncStateMachine stateMachine)
-		{
-			_003C_003Et__builder.SetStateMachine(stateMachine);
-		}
-
-		void IAsyncStateMachine.SetStateMachine(IAsyncStateMachine stateMachine)
-		{
-			//ILSpy generated this explicit interface implementation from .override directive in SetStateMachine
-			this.SetStateMachine(stateMachine);
-		}
-
-	}
-
 	private sealed class DeleteFilesTaskContext
 	{
 		public CancellationTokenSource cancellationSource;
@@ -2167,94 +2061,6 @@ internal class StateFieldInstance : Form
 
 			owner.removeItemsMenuItem.PerformClick();
 		}
-	}
-
-	[StructLayout(LayoutKind.Auto)]
-	[CompilerGenerated]
-	private struct _003CRemoveFiles_003Ed__172 : IAsyncStateMachine
-	{
-		public int _003C_003E1__state;
-
-		public AsyncVoidMethodBuilder _003C_003Et__builder;
-
-		public ProgressDialog frmProgress;
-
-		public SelectedListViewItemInfo[] itemInfos;
-
-		public StateFieldInstance _003C_003E4__this;
-
-		private DeleteFilesTaskContext deleteFilesContext;
-
-		private TaskAwaiter _003C_003Eu__1;
-
-		private void MoveNext()
-		{
-			int num = _003C_003E1__state;
-			StateFieldInstance stateFieldInstance = _003C_003E4__this;
-			try
-			{
-				TaskAwaiter awaiter;
-				if (num != 0)
-				{
-					deleteFilesContext = new DeleteFilesTaskContext();
-					deleteFilesContext.progressDialog = frmProgress;
-					deleteFilesContext.itemsToDelete = itemInfos;
-					deleteFilesContext.owner = _003C_003E4__this;
-					deleteFilesContext.cancellationSource = new CancellationTokenSource();
-					deleteFilesContext.progressDialog.AddCancelRequestedHandler(deleteFilesContext.Cancel);
-					deleteFilesContext.processedCount = 0;
-					deleteFilesContext.currentFile = null;
-					deleteFilesContext.progressDialog.AddProgressUpdateHandler(deleteFilesContext.UpdateProgress);
-					deleteFilesContext.deletedCount = 0;
-					deleteFilesContext.failedCount = 0;
-					deleteFilesContext.errorLog = new Page();
-					awaiter = Task.Run((Action)deleteFilesContext.DeleteFiles, deleteFilesContext.cancellationSource.Token).GetAwaiter();
-					if (!awaiter.IsCompleted)
-					{
-						_003C_003E1__state = 0;
-						_003C_003Eu__1 = awaiter;
-						_003C_003Et__builder.AwaitUnsafeOnCompleted(ref awaiter, ref this);
-						return;
-					}
-				}
-				else
-				{
-					awaiter = _003C_003Eu__1;
-					_003C_003Eu__1 = default(TaskAwaiter);
-					_003C_003E1__state = -1;
-				}
-				awaiter.GetResult();
-				deleteFilesContext.progressDialog.CloseAfterCompletion();
-				stateFieldInstance.BeginInvoke(new Action(deleteFilesContext.ShowCompletionResult));
-			}
-			catch (System.Exception exception)
-			{
-				_003C_003E1__state = -2;
-				_003C_003Et__builder.SetException(exception);
-				return;
-			}
-			_003C_003E1__state = -2;
-			_003C_003Et__builder.SetResult();
-		}
-
-		void IAsyncStateMachine.MoveNext()
-		{
-			//ILSpy generated this explicit interface implementation from .override directive in MoveNext
-			this.MoveNext();
-		}
-
-		[DebuggerHidden]
-		private void SetStateMachine(IAsyncStateMachine stateMachine)
-		{
-			_003C_003Et__builder.SetStateMachine(stateMachine);
-		}
-
-		void IAsyncStateMachine.SetStateMachine(IAsyncStateMachine stateMachine)
-		{
-			//ILSpy generated this explicit interface implementation from .override directive in SetStateMachine
-			this.SetStateMachine(stateMachine);
-		}
-
 	}
 
 	private sealed class SaveLrcFilesTaskContext
@@ -2370,93 +2176,6 @@ internal class StateFieldInstance : Form
 			DatabaseMapper.WriteSaveLyricsLog(filePath + ": " + message);
 			taskContext.errorLog.AddLine(taskContext.currentFile.Name);
 			taskContext.errorLog.AddLine(message);
-		}
-	}
-
-	[StructLayout(LayoutKind.Auto)]
-	[CompilerGenerated]
-	private struct _003CSaveLrcFiles_003Ed__173 : IAsyncStateMachine
-	{
-		public int _003C_003E1__state;
-
-		public AsyncVoidMethodBuilder _003C_003Et__builder;
-
-		public ProgressDialog frmProgress;
-
-		public SelectedListViewItemInfo[] itemInfos;
-
-		private SaveLrcFilesTaskContext saveLrcContext;
-
-		public StateFieldInstance _003C_003E4__this;
-
-		private TaskAwaiter _003C_003Eu__1;
-
-		private void MoveNext()
-		{
-			int num = _003C_003E1__state;
-			StateFieldInstance stateFieldInstance = _003C_003E4__this;
-			try
-			{
-				TaskAwaiter awaiter;
-				if (num != 0)
-				{
-					saveLrcContext = new SaveLrcFilesTaskContext();
-					saveLrcContext.progressDialog = frmProgress;
-					saveLrcContext.itemsToSave = itemInfos;
-					saveLrcContext.cancellationSource = new CancellationTokenSource();
-					saveLrcContext.progressDialog.AddCancelRequestedHandler(saveLrcContext.Cancel);
-					saveLrcContext.processedCount = 0;
-					saveLrcContext.currentFile = null;
-					saveLrcContext.progressDialog.AddProgressUpdateHandler(saveLrcContext.UpdateProgress);
-					saveLrcContext.savedCount = 0;
-					saveLrcContext.failedCount = 0;
-					saveLrcContext.skippedCount = 0;
-					saveLrcContext.errorLog = new Page();
-					awaiter = Task.Run((Action)saveLrcContext.SaveLrcFiles, saveLrcContext.cancellationSource.Token).GetAwaiter();
-					if (!awaiter.IsCompleted)
-					{
-						_003C_003E1__state = 0;
-						_003C_003Eu__1 = awaiter;
-						_003C_003Et__builder.AwaitUnsafeOnCompleted(ref awaiter, ref this);
-						return;
-					}
-				}
-				else
-				{
-					awaiter = _003C_003Eu__1;
-					_003C_003Eu__1 = default(TaskAwaiter);
-					_003C_003E1__state = -1;
-				}
-				awaiter.GetResult();
-				saveLrcContext.progressDialog.CloseAfterCompletion();
-				stateFieldInstance.BeginInvoke(new Action(saveLrcContext.ShowCompletionResult));
-			}
-			catch (System.Exception exception)
-			{
-				_003C_003E1__state = -2;
-				_003C_003Et__builder.SetException(exception);
-				return;
-			}
-			_003C_003E1__state = -2;
-			_003C_003Et__builder.SetResult();
-		}
-
-		void IAsyncStateMachine.MoveNext()
-		{
-			//ILSpy generated this explicit interface implementation from .override directive in MoveNext
-			this.MoveNext();
-		}
-
-		[DebuggerHidden]
-		private void SetStateMachine(IAsyncStateMachine stateMachine)
-		{
-			_003C_003Et__builder.SetStateMachine(stateMachine);
-		}
-
-		void IAsyncStateMachine.SetStateMachine(IAsyncStateMachine stateMachine)
-		{
-			//ILSpy generated this explicit interface implementation from .override directive in SetStateMachine
-			this.SetStateMachine(stateMachine);
 		}
 	}
 
@@ -6008,18 +5727,39 @@ internal class StateFieldInstance : Form
 		RefreshItemsWithOptionalProgressDialog(list.ToArray(), showErrorMessageBox: false, showProgressDialog: true, refreshStatusAllInfo: true, previousMessage: value, listForMirror: true);
 	}
 
-	[AsyncStateMachine(typeof(_003CClearTags_003Ed__170))]
-	private void StartClearTags(SelectedListViewItemInfo[] itemInfos, ProgressDialog progressDialog, bool canCancelFileReadonly)
+	private async void StartClearTags(SelectedListViewItemInfo[] itemInfos, ProgressDialog progressDialog, bool canCancelFileReadonly)
 	{
-		_003CClearTags_003Ed__170 stateMachine = default(_003CClearTags_003Ed__170);
-		stateMachine._003C_003E4__this = this;
-		stateMachine.itemInfos = itemInfos;
-		stateMachine.frmProgress = progressDialog;
-		stateMachine.canCancelFileReadonly = canCancelFileReadonly;
-		stateMachine._003C_003Et__builder = AsyncVoidMethodBuilder.Create();
-		stateMachine._003C_003E1__state = -1;
-		AsyncVoidMethodBuilder asyncVoidMethodBuilder = stateMachine._003C_003Et__builder;
-		asyncVoidMethodBuilder.Start(ref stateMachine);
+		ClearTagsTaskContext clearTagsContext = new ClearTagsTaskContext();
+		clearTagsContext.progressDialog = progressDialog;
+		clearTagsContext.itemsToClear = itemInfos;
+		clearTagsContext.canCancelFileReadonly = canCancelFileReadonly;
+		clearTagsContext.cancellationSource = new CancellationTokenSource();
+		clearTagsContext.progressDialog.AddCancelRequestedHandler(clearTagsContext.Cancel);
+		clearTagsContext.successCount = 0;
+		clearTagsContext.failedCount = 0;
+		clearTagsContext.processedCount = 0;
+		clearTagsContext.currentFile = null;
+		clearTagsContext.progressDialog.AddProgressUpdateHandler(clearTagsContext.UpdateProgress);
+		clearTagsContext.errorLog = new Page();
+		await Task.Run((Action)clearTagsContext.ClearTags, clearTagsContext.cancellationSource.Token);
+		clearTagsContext.progressDialog.CloseAfterCompletion();
+		(string, bool) value = default((string, bool));
+		value.Item2 = false;
+		if (clearTagsContext.itemsToClear.Length > 1)
+		{
+			value.Item1 = string.Format(Resources.Msg_CleartagsCompleted + "\n" + Resources.Msg_OK_Fail_Count, clearTagsContext.successCount, clearTagsContext.failedCount, clearTagsContext.processedCount) + "\n" + clearTagsContext.errorLog.ToString();
+		}
+		else if (clearTagsContext.successCount > 0)
+		{
+			value.Item1 = Resources.Msg_CleartagsCompleted;
+		}
+		else
+		{
+			value.Item1 = clearTagsContext.errorLog.ToString();
+			value.Item2 = true;
+		}
+		GC.Collect();
+		RefreshSelectedItems(showErrorMessageBox: false, showProgressDialog: true, refreshStatusAllInfo: true, previousMessage: value);
 	}
 
 	private void StartBatchLyricsOperation(string lyricsOperationResourceKey)
@@ -6040,30 +5780,42 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	[AsyncStateMachine(typeof(_003CRemoveFiles_003Ed__172))]
-	private void StartRemoveFiles(SelectedListViewItemInfo[] itemInfos, ProgressDialog progressDialog)
+	private async void StartRemoveFiles(SelectedListViewItemInfo[] itemInfos, ProgressDialog progressDialog)
 	{
-		_003CRemoveFiles_003Ed__172 stateMachine = default(_003CRemoveFiles_003Ed__172);
-		stateMachine._003C_003E4__this = this;
-		stateMachine.itemInfos = itemInfos;
-		stateMachine.frmProgress = progressDialog;
-		stateMachine._003C_003Et__builder = AsyncVoidMethodBuilder.Create();
-		stateMachine._003C_003E1__state = -1;
-		AsyncVoidMethodBuilder asyncVoidMethodBuilder = stateMachine._003C_003Et__builder;
-		asyncVoidMethodBuilder.Start(ref stateMachine);
+		DeleteFilesTaskContext deleteFilesContext = new DeleteFilesTaskContext();
+		deleteFilesContext.progressDialog = progressDialog;
+		deleteFilesContext.itemsToDelete = itemInfos;
+		deleteFilesContext.owner = this;
+		deleteFilesContext.cancellationSource = new CancellationTokenSource();
+		deleteFilesContext.progressDialog.AddCancelRequestedHandler(deleteFilesContext.Cancel);
+		deleteFilesContext.processedCount = 0;
+		deleteFilesContext.currentFile = null;
+		deleteFilesContext.progressDialog.AddProgressUpdateHandler(deleteFilesContext.UpdateProgress);
+		deleteFilesContext.deletedCount = 0;
+		deleteFilesContext.failedCount = 0;
+		deleteFilesContext.errorLog = new Page();
+		await Task.Run((Action)deleteFilesContext.DeleteFiles, deleteFilesContext.cancellationSource.Token);
+		deleteFilesContext.progressDialog.CloseAfterCompletion();
+		BeginInvoke(new Action(deleteFilesContext.ShowCompletionResult));
 	}
 
-	[AsyncStateMachine(typeof(_003CSaveLrcFiles_003Ed__173))]
-	private void StartSaveLrcFiles(SelectedListViewItemInfo[] itemInfos, ProgressDialog progressDialog)
+	private async void StartSaveLrcFiles(SelectedListViewItemInfo[] itemInfos, ProgressDialog progressDialog)
 	{
-		_003CSaveLrcFiles_003Ed__173 stateMachine = default(_003CSaveLrcFiles_003Ed__173);
-		stateMachine._003C_003E4__this = this;
-		stateMachine.itemInfos = itemInfos;
-		stateMachine.frmProgress = progressDialog;
-		stateMachine._003C_003Et__builder = AsyncVoidMethodBuilder.Create();
-		stateMachine._003C_003E1__state = -1;
-		AsyncVoidMethodBuilder asyncVoidMethodBuilder = stateMachine._003C_003Et__builder;
-		asyncVoidMethodBuilder.Start(ref stateMachine);
+		SaveLrcFilesTaskContext saveLrcContext = new SaveLrcFilesTaskContext();
+		saveLrcContext.progressDialog = progressDialog;
+		saveLrcContext.itemsToSave = itemInfos;
+		saveLrcContext.cancellationSource = new CancellationTokenSource();
+		saveLrcContext.progressDialog.AddCancelRequestedHandler(saveLrcContext.Cancel);
+		saveLrcContext.processedCount = 0;
+		saveLrcContext.currentFile = null;
+		saveLrcContext.progressDialog.AddProgressUpdateHandler(saveLrcContext.UpdateProgress);
+		saveLrcContext.savedCount = 0;
+		saveLrcContext.failedCount = 0;
+		saveLrcContext.skippedCount = 0;
+		saveLrcContext.errorLog = new Page();
+		await Task.Run((Action)saveLrcContext.SaveLrcFiles, saveLrcContext.cancellationSource.Token);
+		saveLrcContext.progressDialog.CloseAfterCompletion();
+		BeginInvoke(new Action(saveLrcContext.ShowCompletionResult));
 	}
 
 	[AsyncStateMachine(typeof(_003CExtractCovers_003Ed__174))]
