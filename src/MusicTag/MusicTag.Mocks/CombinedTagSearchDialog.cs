@@ -194,207 +194,6 @@ internal class CombinedTagSearchDialog : Form
 			}
 		}
 
-	[StructLayout(LayoutKind.Auto)]
-	[CompilerGenerated]
-	private struct _003CDownloadPicture_003Ed__41 : IAsyncStateMachine
-	{
-		public int _003C_003E1__state;
-
-		public AsyncVoidMethodBuilder _003C_003Et__builder;
-
-		public CoverSearchResult pi;
-
-		public CombinedTagSearchDialog _003C_003E4__this;
-
-		private CoverImageLoadTask coverLoadTask;
-
-		public int taskNo;
-
-		public int taskSubNo;
-
-		private TaskAwaiter<Image> _003C_003Eu__1;
-
-		private void MoveNext()
-		{
-			int num = _003C_003E1__state;
-			CombinedTagSearchDialog creatorListenerMock = _003C_003E4__this;
-			try
-			{
-					CoverDownloadRequestContext coverDownloadRequest = default(CoverDownloadRequestContext);
-					if (num != 0)
-					{
-						coverDownloadRequest = new CoverDownloadRequestContext();
-						coverDownloadRequest.CoverResult = pi;
-						coverDownloadRequest.Owner = _003C_003E4__this;
-					}
-				try
-				{
-					TaskAwaiter<Image> awaiter;
-					if (num != 0)
-					{
-						coverLoadTask = new CoverImageLoadTask();
-						coverLoadTask.Request = coverDownloadRequest;
-						coverLoadTask.OriginalImageSize = null;
-						awaiter = Task.Run((Func<Image>)coverLoadTask.LoadOrDownloadImage, creatorListenerMock.cancellationSource.Token).GetAwaiter();
-						if (!awaiter.IsCompleted)
-						{
-							_003C_003E1__state = 0;
-							_003C_003Eu__1 = awaiter;
-							_003C_003Et__builder.AwaitUnsafeOnCompleted(ref awaiter, ref this);
-							return;
-						}
-					}
-					else
-					{
-						awaiter = _003C_003Eu__1;
-						_003C_003Eu__1 = default(TaskAwaiter<Image>);
-						num = -1;
-						_003C_003E1__state = -1;
-					}
-					Image result = awaiter.GetResult();
-					creatorListenerMock.searchResultsListView.BeginUpdate();
-					CoverImageListViewItem coverImageListViewItem = creatorListenerMock.searchResultsListView.Items[coverLoadTask.Request.CoverResult.ListViewIndex] as CoverImageListViewItem;
-					if (result != null)
-					{
-						creatorListenerMock.coverImageCache.Add(coverLoadTask.Request.CoverResult.LocalCoverPath, result);
-						coverImageListViewItem.AssociatedValue = coverLoadTask.Request.CoverResult.LocalCoverPath;
-						IEnumerator enumerator = creatorListenerMock.searchResultsListView.Items.GetEnumerator();
-						try
-						{
-							while (enumerator.MoveNext())
-							{
-								CoverImageListViewItem matchingCoverItem = (CoverImageListViewItem)enumerator.Current;
-								if ((string)matchingCoverItem.AssociatedValue != (string)coverImageListViewItem.AssociatedValue)
-								{
-									continue;
-								}
-								matchingCoverItem.CoverImage = creatorListenerMock.coverImageCache[coverLoadTask.Request.CoverResult.LocalCoverPath];
-								if (coverLoadTask.OriginalImageSize.HasValue)
-								{
-									matchingCoverItem.CoverImage.Tag = coverLoadTask.OriginalImageSize?.Width + "x" + coverLoadTask.OriginalImageSize?.Height;
-								}
-								else
-								{
-									matchingCoverItem.CoverImage.Tag = "";
-								}
-								((matchingCoverItem.SubItems[creatorListenerMock.sourceColumn.Index] as EmbeddedControlSubItem).EmbeddedControl as TagSearchCandidatePanel).PictureSize = matchingCoverItem.CoverImage.Tag as string;
-							}
-						}
-						finally
-						{
-							if (num < 0 && enumerator is IDisposable disposable)
-							{
-								disposable.Dispose();
-							}
-						}
-					}
-					else
-					{
-						coverImageListViewItem.AssociatedValue = coverLoadTask.Request.CoverResult.LocalCoverPath;
-						if (creatorListenerMock.coverImageCache.ContainsKey(coverLoadTask.Request.CoverResult.LocalCoverPath))
-						{
-							coverImageListViewItem.CoverImage = creatorListenerMock.coverImageCache[coverLoadTask.Request.CoverResult.LocalCoverPath];
-							TagSearchCandidatePanel searchCandidatePanel = (coverImageListViewItem.SubItems[creatorListenerMock.sourceColumn.Index] as EmbeddedControlSubItem).EmbeddedControl as TagSearchCandidatePanel;
-							IEnumerator enumerator = creatorListenerMock.searchResultsListView.Items.GetEnumerator();
-							try
-							{
-								while (enumerator.MoveNext())
-								{
-									CoverImageListViewItem matchingCoverItem = (CoverImageListViewItem)enumerator.Current;
-									if (!(matchingCoverItem.AssociatedValue == coverImageListViewItem.AssociatedValue))
-									{
-										continue;
-									}
-									Image image = matchingCoverItem.CoverImage;
-									if (image == null || image.Tag == null)
-									{
-										continue;
-									}
-									searchCandidatePanel.PictureSize = matchingCoverItem.CoverImage.Tag as string;
-									break;
-								}
-							}
-							finally
-							{
-								if (num < 0 && enumerator is IDisposable disposable2)
-								{
-									disposable2.Dispose();
-								}
-							}
-						}
-					}
-					creatorListenerMock.searchResultsListView.EndUpdate();
-					bool queuedNextCoverDownload = false;
-					List<TrackSearchResult>.Enumerator enumerator2 = cachedSearchResults.GetEnumerator();
-					try
-					{
-						while (enumerator2.MoveNext())
-						{
-							TrackSearchResult current = enumerator2.Current;
-							if (creatorListenerMock.cancellationSource.IsCancellationRequested)
-							{
-								break;
-							}
-							CoverSearchResult filterDescriptor = current.Cover;
-							if (filterDescriptor == null || filterDescriptor.CoverDownloadQueued)
-							{
-								continue;
-							}
-							filterDescriptor.CoverDownloadQueued = true;
-							creatorListenerMock.DownloadCoverAsync(filterDescriptor, taskNo, ++taskSubNo);
-							queuedNextCoverDownload = true;
-							break;
-						}
-					}
-					finally
-					{
-						if (num < 0)
-						{
-							((IDisposable)enumerator2/*cast due to constrained. prefix*/).Dispose();
-						}
-					}
-					if (!queuedNextCoverDownload)
-					{
-						coverLoadTask = null;
-						creatorListenerMock.activeMediaDownloadCount--;
-					}
-				}
-				catch (System.Exception v)
-				{
-					Console.WriteLine("DownloadPicture error:" + v.GetMessageChain());
-					creatorListenerMock.activeMediaDownloadCount--;
-				}
-			}
-			catch (System.Exception exception)
-			{
-				_003C_003E1__state = -2;
-				_003C_003Et__builder.SetException(exception);
-				return;
-			}
-			_003C_003E1__state = -2;
-			_003C_003Et__builder.SetResult();
-		}
-
-		void IAsyncStateMachine.MoveNext()
-		{
-			//ILSpy generated this explicit interface implementation from .override directive in MoveNext
-			this.MoveNext();
-		}
-
-		[DebuggerHidden]
-		private void SetStateMachine(IAsyncStateMachine stateMachine)
-		{
-			_003C_003Et__builder.SetStateMachine(stateMachine);
-		}
-
-		void IAsyncStateMachine.SetStateMachine(IAsyncStateMachine stateMachine)
-		{
-			//ILSpy generated this explicit interface implementation from .override directive in SetStateMachine
-			this.SetStateMachine(stateMachine);
-		}
-
-	}
-
 	private sealed class TrackSearchCoordinator
 	{
 		public CombinedTagSearchDialog Owner;
@@ -924,18 +723,93 @@ internal class CombinedTagSearchDialog : Form
 		activeMediaDownloadCount--;
 	}
 
-	[AsyncStateMachine(typeof(_003CDownloadPicture_003Ed__41))]
-	private void DownloadCoverAsync(CoverSearchResult coverResult, int taskNo, int taskSubNo)
+	private async void DownloadCoverAsync(CoverSearchResult coverResult, int taskNo, int taskSubNo)
 	{
-		_003CDownloadPicture_003Ed__41 stateMachine = default(_003CDownloadPicture_003Ed__41);
-		stateMachine._003C_003E4__this = this;
-		stateMachine.pi = coverResult;
-		stateMachine.taskNo = taskNo;
-		stateMachine.taskSubNo = taskSubNo;
-		stateMachine._003C_003Et__builder = AsyncVoidMethodBuilder.Create();
-		stateMachine._003C_003E1__state = -1;
-		AsyncVoidMethodBuilder asyncVoidMethodBuilder = stateMachine._003C_003Et__builder;
-		asyncVoidMethodBuilder.Start(ref stateMachine);
+		CoverDownloadRequestContext coverDownloadRequest = new CoverDownloadRequestContext();
+		coverDownloadRequest.CoverResult = coverResult;
+		coverDownloadRequest.Owner = this;
+		try
+		{
+			CoverImageLoadTask coverLoadTask = new CoverImageLoadTask();
+			coverLoadTask.Request = coverDownloadRequest;
+			coverLoadTask.OriginalImageSize = null;
+			Image result = await Task.Run((Func<Image>)coverLoadTask.LoadOrDownloadImage, cancellationSource.Token);
+			searchResultsListView.BeginUpdate();
+			CoverImageListViewItem coverImageListViewItem = searchResultsListView.Items[coverLoadTask.Request.CoverResult.ListViewIndex] as CoverImageListViewItem;
+			if (result != null)
+			{
+				coverImageCache.Add(coverLoadTask.Request.CoverResult.LocalCoverPath, result);
+				coverImageListViewItem.AssociatedValue = coverLoadTask.Request.CoverResult.LocalCoverPath;
+				foreach (CoverImageListViewItem matchingCoverItem in searchResultsListView.Items)
+				{
+					if ((string)matchingCoverItem.AssociatedValue != (string)coverImageListViewItem.AssociatedValue)
+					{
+						continue;
+					}
+					matchingCoverItem.CoverImage = coverImageCache[coverLoadTask.Request.CoverResult.LocalCoverPath];
+					if (coverLoadTask.OriginalImageSize.HasValue)
+					{
+						matchingCoverItem.CoverImage.Tag = coverLoadTask.OriginalImageSize?.Width + "x" + coverLoadTask.OriginalImageSize?.Height;
+					}
+					else
+					{
+						matchingCoverItem.CoverImage.Tag = "";
+					}
+					((matchingCoverItem.SubItems[sourceColumn.Index] as EmbeddedControlSubItem).EmbeddedControl as TagSearchCandidatePanel).PictureSize = matchingCoverItem.CoverImage.Tag as string;
+				}
+			}
+			else
+			{
+				coverImageListViewItem.AssociatedValue = coverLoadTask.Request.CoverResult.LocalCoverPath;
+				if (coverImageCache.ContainsKey(coverLoadTask.Request.CoverResult.LocalCoverPath))
+				{
+					coverImageListViewItem.CoverImage = coverImageCache[coverLoadTask.Request.CoverResult.LocalCoverPath];
+					TagSearchCandidatePanel searchCandidatePanel = (coverImageListViewItem.SubItems[sourceColumn.Index] as EmbeddedControlSubItem).EmbeddedControl as TagSearchCandidatePanel;
+					foreach (CoverImageListViewItem matchingCoverItem in searchResultsListView.Items)
+					{
+						if (!(matchingCoverItem.AssociatedValue == coverImageListViewItem.AssociatedValue))
+						{
+							continue;
+						}
+						Image image = matchingCoverItem.CoverImage;
+						if (image == null || image.Tag == null)
+						{
+							continue;
+						}
+						searchCandidatePanel.PictureSize = matchingCoverItem.CoverImage.Tag as string;
+						break;
+					}
+				}
+			}
+			searchResultsListView.EndUpdate();
+			bool queuedNextCoverDownload = false;
+			foreach (TrackSearchResult current in cachedSearchResults)
+			{
+				if (cancellationSource.IsCancellationRequested)
+				{
+					break;
+				}
+				CoverSearchResult filterDescriptor = current.Cover;
+				if (filterDescriptor == null || filterDescriptor.CoverDownloadQueued)
+				{
+					continue;
+				}
+				filterDescriptor.CoverDownloadQueued = true;
+				DownloadCoverAsync(filterDescriptor, taskNo, ++taskSubNo);
+				queuedNextCoverDownload = true;
+				break;
+			}
+			if (!queuedNextCoverDownload)
+			{
+				coverLoadTask = null;
+				activeMediaDownloadCount--;
+			}
+		}
+		catch (System.Exception v)
+		{
+			Console.WriteLine("DownloadPicture error:" + v.GetMessageChain());
+			activeMediaDownloadCount--;
+		}
 	}
 
 	private List<TrackSearchResult> SearchCurrentContextTracks(SearchSource source, bool useLinkedNetEaseId, List<TrackSearchResult> existingResults, int searchPass)
