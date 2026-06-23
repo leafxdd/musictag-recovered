@@ -1,0 +1,32 @@
+# Local reverse-engineering tools and original loose extraction.
+# Do not broaden `/musictag/`: `src/MusicTag/musictag/` contains required runtime assets.
+tools/
+/musictag/
+ext-test.dll
+
+**/bin/
+**/obj/
+**/.vs/
+**/*.user
+**/*.rsuser
+**/*.suo
+**/*.userosscache
+**/*.sln.docstates
+*.tmp
+*.temp
+*.bak
+*.orig
+*.log
+*.cache
+*.nupkg
+*.snupkg
+Thumbs.db
+Desktop.ini
+.DS_Store
+TestResults/
+packages/
+
+decompiled/
+recovered-src/
+artifacts/
+.codegraph/

@@ -1,0 +1,413 @@
+# Maintenance Notes
+
+## Current State
+
+- The buildable source lives in `src/MusicTag`.
+- The project targets `.NET Framework 4.6.1` and builds with Visual Studio Build Tools 2022 or newer.
+- Runtime dependencies from the original distribution are kept in `src/MusicTag/musictag` and copied to the output directory by the project file.
+- `tools/` is ignored and intentionally left as a local reverse-engineering toolbox.
+- `.gitattributes` normalizes source/project text files and marks original runtime assets as binary.
+
+## Refactoring Policy
+
+The recovered code still contains decompiler and obfuscation artifacts. Prefer small, verifiable changes:
+
+1. Rename one class, method, or cluster at a time.
+2. Use CodeGraph before text search when locating callers.
+3. Preserve behavior unless a build warning or runtime error proves the decompiler produced invalid logic.
+4. Run Debug and Release builds after each batch.
+5. Run the Release smoke test before treating a refactor as safe.
+
+Use `.\scripts\Verify-Build.ps1 -RunSmokeTests` for the standard local validation pass. The script writes MSBuild logs to `artifacts/`.
+
+## Completed Cleanup
+
+- Moved the buildable project to `src/MusicTag`.
+- Removed root-level original binaries, intermediate decompiler outputs, old build outputs, and temporary artifacts.
+- Added `.gitattributes` to keep GitHub checkouts consistent and prevent binary runtime dependencies from text normalization.
+- Added `scripts/Verify-Build.ps1` as the standard local/CI build entry point with MSBuild log output.
+- Reworked the combined tag-search dialog source ordering and result-list population variables around readable source/result names.
+- Replaced the auto-match metadata search task state machine with direct helper methods for target selection, result application, and parallel-worker queue handoff.
+- Cleaned the auto-match fallback lyric search path by replacing numbered locals and manual enumerator flow with readable source, candidate-track, and lyric-result variables.
+- Renamed small encoding detector score variables in `Tokenizer` while intentionally leaving the large table-initialization state machine unchanged.
+- Renamed `MusicTag.de4dot.csproj` to `MusicTag.csproj`.
+- Renamed enum display-name helper code to `EnumDisplayNameExtensions.GetDisplayName`.
+- Renamed `RepositoryAccountComp` to `DoubleBufferedSplitContainer` and replaced decompiler `goto` flow with direct control initialization.
+- Fixed two real `CS1717` warnings in encoding score logic by restoring the intended score increment.
+- Suppressed high-volume decompiler noise warnings: `CS0162`, `CS0414`, and `CS0649`.
+- Renamed the online candidate search dialog from `ParserTagListener` to `TagSearchDialog`.
+- Renamed its core search helpers to describe the query path: `SearchByAlbumAndArtist`, `SearchByTitleAndArtist`, `SearchByArtist`, `AddCandidatesToList`, and `StartCoverDownload`.
+- Simplified the search dialog constructor, first-show cache path, and layout code from decompiler `switch`/`goto` flow into direct UI logic.
+- Replaced the decompiled online candidate-search state machine with `StartCandidateSearch` plus `CandidateSearchWorker`.
+- Made online candidate search tolerate a failing web source by logging that source's error and continuing with the remaining sources.
+- Renamed search-dialog state fields to describe their purpose, including current track, preferred source, cached candidates, search cancellation, and cover download tracking.
+- Renamed search-dialog WinForms controls to readable roles such as `candidateListView`, `candidateImageList`, `progressPictureBox`, and `coverContextMenu`.
+- Renamed search-dialog event handlers to readable actions such as `ConfirmSelection`, `CancelSelection`, `ShowCoverContextMenu`, `OpenSelectedCover`, and `ExtractSelectedCover`.
+- Replaced the generated open-cover lambda class with explicit `OpenCoverImage` and `SaveCoverImage` methods.
+- Rewrote the search-dialog `InitializeComponent` from decompiled `while`/`switch`/`goto` flow into normal WinForms initialization.
+- Removed now-unused decompiler wrapper methods around simple WinForms and image-list API calls.
+- Replaced the decompiled cover-download async state machine with `StartCoverDownload`, `CoverImageLoader`, and direct queue/update helpers.
+- Preserved the existing cover-download throttling behavior while making duplicate cover paths, image decoding, and fallback images explicit.
+- Added readable `FilterDescriptor` properties for cover URL, local cover path, source, list index, queued state, and cover downloader.
+- Migrated `TagSearchDialog` to the readable `FilterDescriptor` properties while keeping the old method names as a compatibility layer for remaining providers.
+- Migrated the main online provider candidate-creation code to the readable `FilterDescriptor` properties.
+- Removed unused `FilterDescriptor` setter compatibility methods once no callers remained.
+- Removed the remaining `FilterDescriptor` compatibility getters and JSON wrapper methods once all callers used readable properties directly.
+- Simplified `SourceItem` by removing decompiler-generated comparer classes, fake status methods, and obfuscated constructor flow.
+- Refactored the lexicon Trie implementation around readable child lookup, node kind, value, and matcher APIs.
+- Simplified the lexicon mapping writer and callback matcher by replacing decompiled `goto` flow with direct loops and result accessors.
+- Rewrote the Chinese character/phrase mapping converter with readable mapper selection, text conversion, character conversion, and phrase replacement flow.
+- Renamed the phrase mapping value object from `ValContainerCandidate` to `PhraseMapping`.
+- Renamed the Chinese conversion entry point from `FilterMapperStructBuilder` to `ChineseTextConverter`.
+- Renamed the phrase matching support classes to `TrieNode`, `TrieMatcher`, `PhraseTrie`, `PhraseMatcher`, and `PhraseTrieBuilder`.
+- Replaced the decompiled folder picker `DecoratorContainerConsumer` with readable `FolderSelectionDialog` properties, dialog methods, and named Win32 dialog options.
+- Renamed the Kugou online tag/lyric provider from `ObserverContainerCandidate` to `KugouTagProvider`.
+- Simplified Kugou search-result JSON parsing, lyric detail parsing, and translated lyric extraction by removing decompiled `goto` flow and wrapper methods.
+- Renamed the VGMdb online provider from `ClientDescriptor` to `VgmdbTagProvider`.
+- Fixed VGMdb cover-candidate lookup to load each matched album instead of repeatedly loading the first search result.
+- Simplified VGMdb album search JSON parsing and removed simple decompiler wrapper methods around HTTP headers, timeouts, and album-detail parsing.
+- Renamed VGMdb provider entry points to describe their purpose: `SearchCovers`, `SearchTracks`, `SearchCoversForCandidateTracks`, and `LoadAlbumDetails`.
+- Replaced the VGMdb track-result limit `goto` with explicit `reachedLimit` loop control.
+- Rewrote VGMdb album-detail JSON parsing with readable helpers for localized names, credits, discs, and tracks, removing fake wrapper methods and decompiled `goto` flow.
+- Renamed VGMdb album and disc data containers from decompiled names to `VgmdbAlbum` and `VgmdbDisc`, with readable fields such as `AlbumUrl`, `ReleaseDate`, `CoverImageUrl`, `PerformerNames`, and `Tracks`.
+- Cleaned VGMdb provider local variables and duplicate-result tracking around track search, cover lookup, album search requests, and search-result JSON parsing.
+- Cleaned remaining VGMdb provider indentation artifacts around release-date parsing, result ordering, album search, and JSON parse error handlers without changing search logic.
+- Hardened VGMdb album-search parsing so malformed album containers or non-object album items are skipped instead of aborting the whole album candidate list.
+- Hardened VGMdb album-detail parsing so malformed localized names, credits, discs, or track entries are skipped instead of aborting the whole album detail response.
+- Renamed the shared online-provider base methods to readable names such as `GetSource`, `CreateHttpClient`, `GetResponseString`, `DownloadToStream`, and `CreateCoverDownloader`.
+- Simplified shared HTTP download/post helpers by removing fake decompiler wrapper methods and replacing the stream-download `goto` loop with direct read/write flow.
+- Hardened the shared online-provider cancellation source so default-constructed providers and generic cover downloaders use a local non-cancelled token instead of risking null dereferences.
+- Renamed the iTunes provider from `CreatorInterceptor` to `ItunesTagProvider`, renamed its search entry points to `SearchCovers` and `SearchTracks`, and replaced the decompiled iTunes result container with `ItunesSearchResult`.
+- Hardened iTunes search-result parsing so malformed result containers or non-object items are skipped, and renamed track search ordering parameters to match their assigned `SearchPass` and `SourceOrder` roles.
+- Renamed the Last.fm cover provider from `TaskInterceptor` to `LastfmCoverProvider`, with readable `SearchTracks`, `SearchAlbums`, `SearchArtists`, and image-selection helpers.
+- Cleaned remaining Last.fm cover provider indentation artifacts in image search and best-image selection without changing query, de-duplication, or fallback-size behavior.
+- Hardened Last.fm cover parsing so malformed result containers, non-object result items, or malformed image entries are skipped instead of aborting the whole cover candidate list.
+- Renamed the MiniLyrics provider from `CandidateFieldInstance` to `MiniLyricsProvider`, with readable lyric search/download entry points and direct request encoding, response decoding, and XML attribute parsing helpers.
+- Renamed the shared text encoding helper from `InfoGlobalService` to `TextEncodingService`, with readable XML, HTML, and JavaScript encoding method names and no decompiler wrapper methods.
+- Renamed the Xiami provider from `SchemaDescriptor` to `XiamiTagProvider`, with readable `SearchCovers`, `SearchLyrics`, `SearchTracks`, `SearchSongs`, `ParseSongs`, and `NormalizeResourceUrl` entry/helper names.
+- Replaced Xiami track, song JSON, lyric, URL, and artist-name parsing `goto` flow with direct logic; renamed Xiami song/artist containers to `XiamiSong` and `XiamiArtist` with readable field names.
+- Removed Xiami Cookie/PInvoke helper closure classes and fake wrapper methods; renamed request signing, endpoint, referer, cookie-header, and lyric download helpers to describe their runtime purpose.
+- Replaced the decompiled online-lyric search async state machine in `PrinterField` with a normal `async` flow and a readable `LyricSearchSession` that preserves the two-stage known-ID/candidate-track search order.
+- Rewrote `PrinterField` construction, basic layout initialization, cached-result display, button handlers, and per-track lyric download dispatch to remove decompiled `goto` flow and simple WinForms wrapper methods.
+- Renamed `PrinterField` track/source/cache/progress fields and public selection methods to readable names such as `SetTrackInfo`, `SetSelectedSource`, `GetSelectedLyric`, and `ClearCachedLyrics`, while removing private generated getter/setter wrappers.
+- Renamed the remaining `PrinterField` lyric-search, track-search, layout, image setup, and event-handler methods to readable names such as `SearchLyricsBySource`, `SearchTracksBySource`, `StartLyricSearch`, `AddLyricsToList`, and `InitializeImagesAndColumns`.
+- Renamed `PrinterField` WinForms control fields to readable names such as `lyricListView`, `titleColumn`, `sourceColumn`, `okButton`, `cancelButton`, and `progressImage`.
+- Rewrote the outer `InterceptorDescriptorAdapter` auto-match dialog construction, layout, and button/list event handlers as normal WinForms code with readable control names such as `tagListView`, `overwriteColumn`, `webSearchThreadCountTrackBar`, and `skipInstrumentalLyricsCheckBox`.
+- Removed the now-unused fake `InterceptorDescriptorAdapter` outer WinForms wrapper methods generated by the decompiler.
+- Replaced the generated `ClassStub`/`ExporterStub` auto-match row closures with readable `MatchConditionListBuilder` and `MatchConditionRowControls` classes, preserving saved write-mode and overwrite behavior.
+- Replaced the generated `InterceptorDescriptorAdapter` auto-match async state machine with a readable `StartAutoMatchTags` async flow and `AutoMatchTagsWorker`, preserving progress, cancellation, and final summary behavior.
+- Renamed the donation QR-code form from `StubDescriptorAdapter` to `DonateDialog` and rewrote its layout/constructor/disposal code without decompiler wrapper methods.
+- Renamed the about/donation wrapper form from `Wrapper` to `AboutDialog` and rewrote its constructor, layout, button handlers, icon loading, and localized text selection without decompiled `goto` flow or wrapper methods.
+- Renamed `ListStubSerializer` to `TagTextEncoding` and rewrote tag text encoding selection, byte decoding, genre decoding, and transcoding helpers with readable method/field names and no generated closure or wrapper methods.
+- Renamed the `InterceptorDescriptorAdapter` internal file queue, active-worker counter, and cover temp-file cache helpers to `FilePathQueue`, `ActiveWorkerCounter`, and `CoverTempFileCache`, with readable outer fields for active file paths and parallel processor queues.
+- Renamed the QQ album DTO from `RulesDescriptorAdapter` to `QqAlbumInfo`, with readable `Id`, `Mid`, `Name`, `Title`, and `Subtitle` fields.
+- Renamed the QQ song DTO from `IndexerWriter` to `QqSongInfo`, replaced its generated wrapper methods with readable artist/genre helpers, and rewrote QQ search-result parsing without decompiled `goto` flow.
+- Renamed the QQ provider from `ValueDescriptor` to `QqMusicTagProvider` across search dialogs, lyric lookup, mocks, cover download callbacks, and the shared downloader special case.
+- Renamed QQ provider entry points to `SearchLyrics`, `SearchCovers`, `SearchTracks`, and `LoadLyricsForTrack`; removed remaining QQ lyric parsing `goto` flow and fake static wrapper methods around callback JSON, P/Invoke string loading, cancellation, and lyric merging.
+- Renamed the QQ artist DTO from `ConnectionDescriptor` to `QqArtistInfo`, with readable `Id`, `Mid`, `Name`, and `Title` fields, and simplified QQ track-result assembly from manual enumerator flow to `foreach`.
+- Removed the remaining `SongDetailRequestContext` helper from the QQ provider and replaced it with a direct deferred lyric-load callback; also renamed QQ song-search JSON locals from generic decompiler names to `songs` and `songJson`.
+- Hardened MusicBrainz artist-credit, release-type, and release-track parsing so missing/non-array credit, secondary type, media, track-list, or recording fields no longer abort an otherwise usable release response; also cleaned remaining indentation artifacts.
+- Hardened MusicBrainz recording-search parsing so malformed recording or release items are skipped instead of aborting the whole candidate list, and reused the shared release-type parser instead of duplicating it.
+- Hardened MusicBrainz album-search parsing so malformed `releases` containers or release items are skipped instead of aborting the whole album candidate list.
+- Rewrote `LyricSearchResult` lyric output formatting and lyric-result validity checks without decompiled `goto` flow, removing fake wrapper methods around settings and `MessageMapper` calls.
+- Replaced the generated `LyricSearchResult` lyric-result sort closure with `SortLyricResults`/`CompareLyricResults`, and renamed lyric source settings APIs to `GetLyricSourceSettings`, `GetSortedLyricSourceSettings`, and `SaveLyricSourceSettings`.
+- Added readable `LyricSearchResult` lyric-result properties for URL, track ID, title, artist, album, original title, source, lyric type, translated lyric, load state, deferred loader, source order, and result order while keeping the old decompiler method names as a compatibility layer.
+- Migrated QQ lyric result creation and the lyric search result list display to the readable `LyricSearchResult` properties.
+- Hardened lyric result icon selection so a missing lyric URL no longer risks a null dereference when deciding between LRC and TXT icons.
+- Migrated the remaining lyric providers and auto-match flows from `LyricSearchResult`'s decompiler accessors to readable properties, including Music163, Kugou, Kuwo, Xiami, MiniLyrics, and deferred lyric download paths.
+- Removed the old `LyricSearchResult` compatibility accessors and renamed the remaining lyric formatting, validity, and similarity-score call sites to `GetFormattedLyricText`, `HasDownloadableLyric`, and `UpdateSimilarityScores`.
+- Renamed the recovered lyric result model from `GlobalDescriptorAdapter` to `LyricSearchResult`, including its source file and all provider/dialog call sites.
+- Replaced `TokenSystemRole`'s decompiled lyric result setter/getter pair `InitComparator`/`LoginComparator` with the readable `LyricResult` property across lyric providers, dialogs, and auto-match flows.
+- Replaced `TokenSystemRole`'s decompiled source and provider-track-id accessors `CreateListener`/`SortListener`/`IncludeListener`/`CancelListener` with readable `Source` and `SourceTrackId` properties across online providers and selection flows.
+- Replaced `TokenSystemRole`'s decompiled result-order/search-pass/source-order accessors with readable `ResultOrder`, `SearchPass`, and `SourceOrder` properties across provider result sorting and auto-match ranking.
+- Replaced `TokenSystemRole`'s decompiled cover accessor pair `ResetComparator`/`MapComparator` with the readable `Cover` property across cover providers, auto-match, and write-back flows.
+- Replaced `TokenSystemRole`'s decompiled year, genre, track-label, and original-title accessors with readable `Year`, `Genre`, `TrackLabel`, and `OriginalTitle` properties across tag providers, auto-match, and write-back flows.
+- Replaced `TokenSystemRole`'s decompiled similarity-score and provider-specific ID accessors with readable `SimilarityScores`, `QqMusicMid`, `KugouHash`, `KugouDurationMs`, and `NetEaseAlbumId` properties.
+- Renamed `TokenSystemRole`'s source-setting and ranking methods to readable names such as `GetTagSourceSettings`, `SaveTagSourceSettings`, `UpdateSimilarityScores`, `SortBySimilarity`, and `PromoteBestMatch`.
+- Rewrote the track similarity score calculation without decompiled `goto` flow and removed the now-unused fake `FlushStatus`/`FillStatus` wrappers.
+- Renamed `TokenSystemRole`'s text normalization and instrumental-match helpers to readable names such as `NormalizeForMatch`, `ContainsEitherWay`, `IsInstrumentalTitle`, and `FindNonInstrumentalBaseTrack`.
+- Rewrote `TokenSystemRole` text-candidate normalization and constructor initialization without decompiled `goto` flow, removing the related fake wrapper methods.
+- Replaced `TokenSystemRole`'s generated sorting closure classes with direct `CompareBySimilarity` and `CompareByArtistSimilarity` methods, preserving score/source/search/result ordering.
+- Converted `TokenSystemRole` title, artist, album, and track backing fields to normal auto-properties and removed the remaining generated-field attributes from the class.
+- Renamed the recovered online track candidate model from `TokenSystemRole` to `TrackSearchResult`, including its source file and provider/dialog call sites.
+- Renamed `TrackSearchResult.PromoteBestMatch` parameters and core ranking locals to describe the target track, current best candidate, artist-ranked candidates, early-pass candidates, and promotion state; removed a leftover no-op decompiler loop.
+- Replaced the remaining numbered locals in `TrackSearchResult.PromoteBestMatch` and `FindNonInstrumentalBaseTrack` with descriptive candidate/title/artist/album variable names.
+- Added named `TrackSearchResult` similarity score accessors for title, artist, and album matches, replacing raw `SimilarityScores[0]`/`[1]`/`[2]` index checks across ranking and auto-match code.
+- Replaced `TrackSearchResult.PromoteBestMatch` raw similarity thresholds, top-result order, and search-pass numbers with named constants and readable match-condition variables.
+- Named the `TrackSearchResult.CalculateSimilarityScores` text-candidate array slots and alternate-title loop so title/artist/album similarity inputs no longer depend on bare numeric indexes.
+- Renamed the Kugou search-result DTO from `SerializerInterceptor` to `KugouSongInfo`, including readable song, album, hash, duration, and source-type fields.
+- Renamed the Kugou provider entry points and helpers to readable names such as `SearchLyrics`, `SearchTracks`, `LoadLyricsForTrack`, `SearchSongs`, and `ParseSongSearchResponse`.
+- Renamed the NetEase/Music163 provider from `DispatcherTokenExporter` to `NetEaseMusicTagProvider`, including its file, constructors, cover downloader references, and caller sites.
+- Renamed NetEase provider entry points and response helpers to readable names such as `SearchLyrics`, `SearchCovers`, `SearchTracks`, `LoadLyricsForTrack`, `GetAlbumReleaseYear`, `SearchSongs`, `LoadSongDetails`, and `ParseLyricResponse`.
+- Renamed NetEase song and album DTOs from `ProcessTokenExporter`/`StatusTagListener` to `NetEaseSongInfo`/`NetEaseAlbumInfo`, replacing obfuscated fields with readable IDs, titles, artists, album metadata, cover URLs, track numbers, aliases, and comment JSON.
+- Converted NetEase song DTO generated getter methods into normal properties such as `Album`, `ArtistNames`, `Aliases`, `ArtistJson`, and `AliasJson`.
+- Rewrote `NetEaseSongInfo` artist/alias formatting and constructor initialization as direct code, removing fake decompiler boolean helpers and `goto` flow.
+- Removed generated NetEase provider helper classes for lyric duplicate checking and album-request header copying, replacing them with direct readable logic.
+- Rewrote NetEase `LoadLyricsForTrack` and lyric response parsing without decompiled `goto` flow or wrapper setters, and replaced the generated deferred-lyric loader class with a direct lambda.
+- Rewrote NetEase album release-year cache lookup/update without the generated predicate holder class, renamed the cache to `albumInfoCache`, and simplified static endpoint initialization.
+- Rewrote NetEase song and album JSON response parsing without decompiled `goto` flow, replacing generic temporaries with readable song, album, artist, alias, bitrate, and comment JSON variables.
+- Removed NetEase fake wrapper methods around HTTP headers, album request posting, JSON token conversion, URL encoding, and console logging; renamed endpoint, encrypted-request, lyric URL, and native interop fields/methods by observed purpose.
+- Cleaned remaining NetEase request and lyric parsing code by renaming the album HTTP client factory, replacing manual enumerator loops with `foreach`, and renaming lyric JSON extraction from `LogoutInfo` to `ExtractLyricTexts`.
+- Cleaned the MusicBrainz provider query construction and recording-search parsing by replacing fake wrapper methods, direct static initialization, a `goto`-based recordings parser, and the obfuscated `CollectProducer` entry point with readable search, lookup, and parsing names.
+- Rewrote the MusicBrainz album/release parser without decompiled `goto` flow, added readable release-type and artist-credit helpers, and removed the unused artist-search parser/endpoint.
+- Renamed the MusicBrainz provider from `ContainerDescriptorAdapter` to `MusicBrainzTagProvider`, and renamed the shared `ClassInterceptor` candidate DTO to `MusicBrainzReleaseMatch` with readable recording, release, artist, album, date, country, media, disc, and track fields.
+- Cleaned remaining VGMdb provider endpoint fields, HTTP client locals, album-detail parser name, exception variables, cover-search indentation, and track-result order parameter names.
+- Rewrote the main file list sorter from `CustomerMapperStructBuilder` to `ListViewItemNaturalComparer`, removing fake wrapper methods and `goto` flow while preserving natural sorting for track and disc columns.
+- Renamed the selected file-list item wrapper from `MerchantGlobal` to `SelectedListViewItemInfo`, replacing the decompiled index/path fields with readable `Index` and `FilePath` names across batch tag, rename, lyric, cover, and remove-file flows.
+- Renamed the selected-item collection and read-only-file confirmation helpers from `SetupDescriptor`/`PushDescriptor` to `CollectSelectedListViewItemInfos` and `ConfirmReadOnlyFileHandling`, including readable local names for the read-only path check.
+- Renamed the batch refresh/save/file operation starters from decompiled `*Interceptor`/`*Stub` names to readable entry points such as `RefreshSelectedItems`, `StartCommonSaveTags`, `StartClearTags`, `StartRemoveFiles`, `StartSaveLrcFiles`, and `StartExtractCovers`.
+- Renamed the operation progress window type and source file from `MerchantSystemContainer` to `ProgressDialog`, updating batch refresh, auto-match, rename, tag-save, lyric, cover, and file-operation call sites.
+- Rewrote `ProgressDialog` internals without decompiled `goto` flow, fake wrapper methods, or generated field names, preserving the existing public entry points used by batch operations.
+- Renamed `ProgressDialog` public methods from decompiled names such as `SortSystem`, `CancelSystem`, `PrepareSystem`, and `PushSystem` to readable handler, close, and progress-update APIs across batch operation call sites.
+- Cleaned remaining progress-dialog call sites by replacing `merchantSystemContainer` locals with `progressDialog`, renaming undo/rename/lyrics operation starters, and removing `goto` flow from the small async state-machine starter wrappers.
+- Renamed the add-file/add-folder entry points to readable names such as `StartAddAnyFiles`, `StartAddConfiguredFileList`, `AddFilesFromPaths`, `AddFolderButton_Click`, and `FileList_DragDrop`, removing local decompiled `goto`/`switch` flow from folder selection and drag/drop handling.
+- Rewrote the directory change/manage/refresh entry points as `ChangeDirectoryButton_Click`, `ManageDirectoriesButton_Click`, `RefreshConfiguredFileList_Click`, and `ClearLoadedFileList`, removing generated folder-selection closure classes and naming the file-list status summary helper by its duration/file-size behavior.
+- Replaced the generated add-file async state machines and worker closures with normal `async` methods plus readable `AddAnyFileCollector` and `AddFilesWorker` classes, preserving cancellation, progress updates, icon loading, duplicate skipping, and load-error reporting.
+- Rewrote the file-list selection changed handler as `FileList_ItemSelectionChanged`, removed its generated filter-summary closure classes, and renamed row/status helpers such as `UpdateListViewItemValues`, `BuildBasicFileDisplayValues`, `RefreshStatusLabelsFromCachedTotals`, and `GetSelectedFilterValue`.
+- Rewrote the remove-selected-items and selection-status timer handlers as `RemoveSelectedItemsFromList_Click` and `SelectionStatusUpdateTimer_Tick`, replacing decompiled `goto` flow and generated selected-item removal predicates with direct cached duration/file-size updates.
+- Renamed the selection-dependent command enablement flow to `UpdateSelectionCommandState`, grouping controls by whether they need any selection or exactly one selected file, and renamed the delayed filter timer restart helper.
+- Renamed the taskbar progress wrapper from `ProductFieldInstance` to `TaskbarProgressController`, replacing fake decompiler helper methods and `goto` construction with direct progress state/value APIs.
+- Rewrote app/list-view setting data models without generated closure classes, fake boolean helpers, or `_002Ector` compatibility calls while keeping the serialized properties and public setting methods stable.
+- Cleaned the column-customization settings flow by naming the column-settings APIs, replacing generated comparison/predicate classes with direct helpers, and removing fake constructor guards from `ColumnHeaderInfo`.
+- Renamed source-setting helpers for cover, lyric, and tag search from decompiled account/list names to readable methods such as `GetCoverSourceSettings`, `GetSortedCoverSourceSettings`, `SaveCoverSourceSettings`, `GetSortedBySequence`, and `ApplySavedSourceSettings`.
+- Renamed the cover search candidate model from `FilterDescriptor` to `CoverSearchResult`, updating cover providers, the search dialog, track results, and cover-download call sites.
+- Renamed `SourceItem` properties from `Src`/`Seq` to `Source`/`Sequence` across cover, lyric, and tag-source flows while preserving the existing JSON setting field names with `JsonProperty` mappings.
+- Renamed remaining `SourceItem` settings from `IsOther`/`WebSearchItemsLimit` to `IsSecondarySource`/`SearchResultLimit`, and renamed the effective limit helper while keeping old persisted JSON names compatible.
+- Replaced generated closure classes in the tag-history/undo cache cleanup path with a named `TagHistoryChangeDetector` and direct predicates, removing fake helper wrappers from `WrapperTagListener`.
+- Inlined pure string/path wrapper methods in `DatabaseMapper`, removing `FillProxy`, `InvokeProxy`, `RemoveProxy`, and `InsertProxy` from log path construction and error-message formatting.
+- Rewrote `DatabaseMapper` constant-branch artifacts around byte-size formatting, AES decrypt setup, image resize/save helpers, temp-log cleanup, lyric paths, exception formatting, read-only handling, and static initialization; removed the related fake helpers and generated exception-message closure.
+- Removed the remaining `DatabaseMapper` `goto`/`IL_*` artifacts by replacing the generated temp-file timestamp sorter and exception-log formatter with readable direct code.
+- Renamed the generic collection helper from `InstanceObject` to `CollectionExtensions`, replacing `SetMapper`/`FillMapper`/`ConcatMapper`/`MoveMapper` with readable `ForEachItem`, `ForEachWhile`, and `AddEntriesFrom` APIs and removing generated closure classes.
+- Rewrote the main form source-menu initialization as `InitializeSourceMenus`, replacing decompiled enumerator/goto flow and `PatchStub`/`CloneStub`/`CollectStub` handlers with readable cover, lyric, and tag source click handlers.
+- Rewrote the main form static initialization for supported/restricted file extensions without decompiled `goto` flow, removing the generated extension-mapping closure plus `ComparePage`/`ClonePage` wrappers.
+- Replaced the generated combo-tag search value setter closure with `SetComboBoxSearchValue`, removing its decompiled `goto` flow and fake boolean/wrapper helpers while preserving non-empty string and positive-number assignment behavior.
+- Replaced the generated multi-select combo-box update closures with `BeginComboBoxUpdate` and `EndComboBoxUpdate`, removing cached closure fields from the main form helper class.
+- Replaced remaining small main-form generated closures for combo-box caret reset, dropped-file path normalization, and message-box closing with named helper methods.
+- Renamed the main form title updater from `WriteStub` to `UpdateWindowTitle` and replaced the generated `ResetTitle` directory predicate with `IsEnabledConfiguredDirectory`.
+- Replaced the generated selected-list-view-item projection closure with `CreateSelectedListViewItemInfo`, removing the cached `_003C_003E9__73_0` delegate and compiler-generated method from the main form helper class.
+- Replaced generated selected-file path and rename tuple projection closures with `GetSelectedItemFilePath` and `CreateRenameItemInfo`, sharing the helpers across auto-match, filename-rule, and CHT/CHS batch rename flows.
+- Replaced the remaining generated `FilterForListView` projection/predicate closures with named cached-item and column-header helpers, reusing the existing combo-box begin/end update helpers.
+- Replaced the final main-form compiler-generated closure predicates for picture-processing failure checks with `HasPictureProcessingFailure`, removing the empty `_003C_003Ec` helper class from `StateFieldInstance`.
+- Removed the now-unused `StateAccountComp` generated predicate class after replacing the column-header lookup with direct `FindColumnHeaderIndexByName` logic.
+- Renamed simple main-form generated callback methods from `PrintStub`/`StopStub`/`DisableStub`/`CheckStub`/`PrepareStub` to readable tag-field, batch-refresh, and update-check callbacks, merging duplicate refresh and enablement handlers.
+- Replaced `PrinterFieldInstance` decompiled image accessors `DeleteToken`/`CompareToken` with a `CoverImage` property and removed fake boolean helper methods from its constructors.
+- Replaced `IdentifierContainerCandidate` `PopToken`/`SelectToken` and `ParamTokenExporter` `ComputeToken`/`PatchToken` with readable `AssociatedValue` and `Values` properties, removing fake boolean helper methods from both small item classes.
+- Replaced small generated closure classes in `FieldObject` and `ExporterWriter` with direct predicates for enabled directory entries and blank similarity fragments.
+- Renamed the update-check service entry point from `ConcatToken` to `CheckNewVersion` and replaced its generated closure cache with named prompt-thread and message helpers.
+- Renamed update-check URL and assembly metadata helpers in `AccountGlobalService` to readable names such as `UpdateInfoUrl`, `GetFileVersion`, and `GetAssemblyTitle`, updating exception-log and About dialog callers.
+- Rewrote `AccountGlobalService.CheckNewVersion` as a normal `async` method, removing the decompiled state-machine struct, generated closure classes, and fake wrapper helpers while preserving update prompt and failure-message behavior.
+- Replaced small generated closure classes in `TemplateComparatorImporter`, `WorkerComparatorImporter`, `WrapperTagListener`, `AccountObject`, and `CreatorListenerMock` with named helpers for overwrite options, search limits, undo temp-file cleanup, and cover opening.
+- Replaced the remaining generated closure predicates in `InterceptorDescriptorAdapter` with named helpers for text-tag match keys, selected cover data, and year-field lookup during web auto-match.
+- Rewrote `ParameterMapper` unhandled-exception event handlers and exception logging flow as normal `async` methods, removing the generated closure class and decompiled async state-machine source while preserving log, prompt, and exit behavior.
+- Replaced the remaining `ParameterMapper` generated command-line forwarding helper with `BuildForwardedCommandLine`, and removed constant fake branch helpers from single-instance handoff logic.
+- Replaced the generated closure class in `EventRulesSchema` with named helpers for selected pattern radio buttons, capture-group combo-box mapping, selected capture groups, and numeric tag values.
+- Simplified `WrapperTagListener` tag-history internals by removing generated helper classes, constant fake branches, and wrapper methods around SQLite commands, tag copying, undo snapshot storage, and summary generation.
+- Simplified `Bridge` constructors by removing constant fake dispatch helpers and assigning text, width, and images directly.
+- Simplified `ComparatorGlobalService` constructors and sub-item drawing by removing constant fake branch helpers and drawing the configured image directly.
+- Replaced `WorkerComparatorImporter` generated helper classes for source lookup and restricted-extension saving with `FindSourceItemByName` and direct dictionary update logic.
+- Rewrote `Container` list-view comparer classes to share `CompareSortableText`, removing per-comparer constant fake branch helpers while preserving numeric, date, text, and descending sort behavior.
+- Cleaned `Resources` decompiler artifacts by removing fake resource-manager wrapper methods and migrating about/donation/app-icon resource calls to natural resource-key properties.
+- Migrated a small resource-accessor batch to natural resource-key properties for adjust-timetag, subdirectory, exception, progress-summary, tag-history, and Chinese text-conversion resources.
+- Migrated another low-risk resource-accessor batch across small dialogs, settings, search, update-check, and config-state files; removed 16 now-unused obfuscated `Resources` methods.
+- Migrated all external call sites of obfuscated `Resources.*()` accessors to natural resource-key properties, including the main form, auto-match dialog, filename-rule dialog, settings, database message helpers, and progress flows.
+- Rebuilt `Resources.cs` as a normal strong-typed resource wrapper with readable `ResourceManager`/`Culture` accessors and one property per `.resx` key, removing the remaining unused obfuscated accessor methods.
+- Replaced the last dynamic resource lookups that used `Resources.ExcludeProducer`/`ConcatProducer` with `Resources.ResourceManager`/`Culture`, then removed those obfuscated compatibility properties.
+- Rewrote `TemplateComparatorImporter` as a direct overwrite-options dialog with readable fields, layout, event handlers, and persistence flow, removing its decompiled `goto` blocks and fake helper wrappers while keeping `MapField()` stable for callers.
+- Rewrote the directory management dialog `FieldObject` with readable file-setting state, deletion tracking, layout, and event handlers; replaced `FillSystem`/`ReadSystem` call sites with `SetFileSetting`/`HasChanges`.
+- Replaced list-view sub-item pseudo accessors with readable properties: `Printer.SortValue`, `UtilsTagListener.EmbeddedControl`, `Filter.Images`, `ComparatorGlobalService.IconImage`, and `FactorySystemContainer.IsChecked`, updating comparer, editor-control, cover-match, and overwrite-option call sites.
+- Simplified `Printer`, `Filter`, `ComparatorGlobalService`, `FactorySystemContainer`, and `ResolverInterceptor` by removing fake constructor wrappers, constant branch helpers, `[SpecialName]` methods, and `goto`-style drawing flow.
+- Replaced `Bridge` pseudo accessors with readable `CheckedImage`, `UncheckedImage`, and `IsEditable` properties, removing its fake initialization helper and updating the boolean image drawing/editability call sites.
+- Replaced `DicContainerConsumer` editor-control pseudo accessors with `EditorControl`, removing its fake branch helpers and direct constructor wrappers.
+- Cleaned the bounded message-log helper `Page` by replacing `ValidateToken`/`AssetToken` with `AddLine`/`LineCount`, removing generated property wrappers and append helper methods across load/save/error summary call sites.
+- Replaced `InstanceSystemContainer` fake static constructor and obfuscated `ShowWindowAsync` constants with named Win32 `ShowWindow*` constants, updating the single window-restore caller in `ParameterMapper`.
+- Cleaned `ParameterMapper` startup flow by replacing decompiled entry-point names with `RunApplication`, `TryFindExistingInstance`, `ActivateExistingInstance`, and `HandleUnhandledException`; removed generated startup-time/lock accessors and the empty async `NoOp` placeholder.
+- Tightened single-instance matching in `ParameterMapper` to compare against the candidate process executable path before forwarding command-line arguments to an existing window.
+- Renamed `ExporterWriter` to `TextSimilarityCalculator` and rewrote its text/artist similarity helpers as direct Levenshtein-based code, removing the decompiled switch/goto state machine and fake facade wrappers.
+- Renamed the custom column-header base class from `Attribute` to `CustomColumnHeader`, updating drawable sub-item signatures and `Container` cast sites while avoiding confusion with `System.Attribute`.
+- Renamed the unused plain text sub-item from `Base` to `PlainTextSubItem`, removing its fake boolean helpers and matching the source filename to the type.
+- Cleaned `WrapperTagListener` undo-cache accessors by replacing the generated `SortTag()` method with the `UndoTags` property and replacing the generated transaction accessor with a direct `currentTransaction` field.
+- Renamed `WrapperTagListener` constructor parameter from `nov` to `useTransaction` across tag-history and undo call sites.
+- Renamed `WrapperTagListener` database lifecycle methods to `EnsureConnectionOpen`, `CloseConnection`, and `InitializeDatabase`, and removed unused private query wrappers left by the decompiler.
+- Renamed `WrapperTagListener` SQL helpers to `PrepareCommand`, `ExecuteNonQuery`, and `ExecuteReader`, and renamed core history operations such as `GetHistoryRecords`, `UpdateHistoryFilePath`, `DeleteHistoryByFilePath`, `DeleteHistoryBySerial`, and `ClearAllHistory`.
+- Renamed private tag-history helpers to `InsertHistoryRecord` and `LoadHistoryRecords`, replacing remaining opaque `StopTag`/`DisableTag` call sites.
+- Renamed the remaining public `WrapperTagListener` undo/history helpers to readable APIs such as `CreateTagSnapshot`, `CopyEditableTagFields`, `AddHistoryRecordIfChanged`, `AddUndoRecord`, `RestoreUndoPayloads`, `ClearUndoState`, and rename-undo preview helpers.
+- Cleaned the options dialog constructor and field-access wrappers in `WorkerComparatorImporter`, replacing generated `CalcGlobal`/`InterruptGlobal`/`StopGlobal`-style methods with named fields and public state properties for file-filter and notification-area changes.
+- Inlined another `WorkerComparatorImporter` helper batch for resource lookup, control text assignment, combo-box selection, setting reads, and list splitting; replaced the decompiled `OnShown` self-call wrapper with the intended `base.OnShown` call.
+- Renamed the custom list-view control from `ProccesorTokenExporter` to `HeaderAwareListView`, replacing decompiled event accessors and fake double-buffering wrappers with a normal `HeaderRightClick` event and `SetDoubleBuffered` method.
+- Renamed the Win32/Shell interop wrapper from `InstanceSystemContainer` to `NativeMethods`, replacing obfuscated PInvoke method, delegate, struct, and field names with API-oriented names across process activation, shell icon lookup, folder selection, header hit testing, and message forwarding call sites.
+- Replaced the decompiled `TokenizerMapper` task scheduler with a readable `LimitedConcurrencyTaskScheduler`, removing `goto` flow and fake helper wrappers while preserving the queued task and maximum-concurrency behavior.
+- Replaced the decompiled full-width/ASCII token helper `IteratorStubSerializer` with `AsciiTokenClassifier`, naming the letter and digit boundary checks used by `TrieMatcher`.
+- Replaced the decompiled text-box find/replace helper `ExceptionStubSerializer` with `TextBoxFindReplaceController`, naming search text, match-case, find-next/previous, replace-current, and replace-all behavior while preserving shortcut handling.
+- Renamed the Kuwo search adapter from `RegistryDescriptorAdapter` to `KuwoTagProvider`, replacing generated closure helpers and `goto` JSON parsing with readable track, lyric, cover, and song-detail flows; Kuwo track search no longer returns an empty candidate list solely because the song-detail probe temporarily returns non-JSON content.
+- Replaced the Kuwo result model `ResolverInterceptor` with `KuwoSongInfo`, naming fields such as `TrackId`, `Title`, `Artist`, `Album`, `CoverUrl`, `LargeCoverUrl`, and `LoadedLyric` so Kuwo search and deferred download code no longer depends on obfuscated member names.
+- Replaced the source-order editor control `InterpreterObjectStub` with `SourceOrderControl`, naming `SetSources` and `ApplyListViewOrder` while rewriting its generated WinForms layout, move-up/down logic, button-state timer, and fake wrapper methods as direct control code.
+- Renamed `ExceptionDescriptor` to `TrackSearchContext`, replacing generated accessors such as `CancelAccount`, `PushAccount`, and `SortAccount` with `LinkedMusicMetadata`, `FilePath`, and `TagState`, and simplifying the linked NetEase metadata and filename-title fallback logic.
+- Replaced the character-set selection dialog `PredicateContainerConsumer` with `CharacterSetSelectionDialog`, naming its tag-state, field-name, current-value, and selected-encoding APIs while rewriting the generated layout and encoding preview flow as direct dialog code.
+- Replaced `EventRulesSchema` generated async state-machine source for rename/tag-change batch operations with normal `async` entry points, and renamed the private batch workers to `RenameFilesBatchWorker` and `ChangeTagsBatchWorker`.
+- Removed small `EventRulesSchema` generated helper classes around saved filename-pattern settings and regex capture-group mapping, replacing them with direct LINQ lookups and duplicate-selection checks; `OnLoad` now calls `base.OnLoad` instead of the decompiled self-recursive wrapper.
+- Rewrote `EventRulesSchema` capture-group list setup and localized-text initialization as direct UI code, renaming the tab layout event handlers and removing the now-unused decompiler wrapper methods.
+- Rewrote `EventRulesSchema` pattern and regex confirmation handlers with readable names such as `ConfirmPatternSettings`, `ConfirmRegexSettings`, and `ValidateFilenamePattern`, replacing decompiled `goto` validation and fake resource/message wrappers.
+- Replaced `EventRulesSchema` pseudo-property wrappers for batch mode, regex mode, localized resources, and batch messages with readable members such as `IsChangeTagsModeSelected`, `usesRegexCaptureGroups`, `resourceManager`, and `batchMessages`; updated the main-form batch dispatch check accordingly.
+- Replaced the `EventRulesSchema.ProductGlobal` filename regex helper and its generated closure/property wrappers with `FilenameRegexCaptureExtractor`, preserving protected bracket/quote segment masking while exposing readable `Captures`.
+- Replaced the remaining generated `EventRulesSchema` tag-change closure classes with `PendingTagUpdate`, naming pending tag changes, numeric disc/track normalization, and filename-pattern parameter mapping while inlining one-off wrapper calls in `ChangeTags`.
+- Renamed `EventRulesSchema` batch state fields to readable names for selected filename patterns, regex capture maps, related-file rename options, success/failure/skip/processed counters, and the tag-history transaction.
+- Renamed `EventRulesSchema` layout entry points to `InitializeComponent` and `UpdateResponsiveLayout`, then inlined and removed low-risk layout wrapper methods for text, margin, width, and constant checked-state assignments.
+- Inlined the remaining `EventRulesSchema.InitializeComponent` WinForms wrapper batch for layout suspension/resume, control names, sizes, tab indexes, control collection additions, and constant branch helpers.
+- Simplified `EventRulesSchema` rename/tag batch workers by inlining progress, failure-message, string, file-existence, cancellation, and path helper wrappers; `RenameFiles` now uses a normal `for` loop instead of a decompiled `goto` loop.
+- Removed the empty decompiler compatibility `_002Ector` extension and its no-op call sites across form, adapter, state, and mock classes.
+- Renamed `WrapperTagListener` tag-history storage fields such as database path, shared SQLite connection, serial counters, history tag fields, retention count, and undo payload byte budget, and simplified undo-preview helpers.
+- Rewrote the main form tag-encoding button setup in `StateFieldInstance.PrepareDescriptor` as straight-line initialization, replacing generated layout closure classes and fake button-array accessors with readable `TagEncodingLayoutContext`, `TagComboBoxWidthUpdater`, and `tagEncodingButtons` members.
+- Rewrote the file-list filter dropdown initialization in `StateFieldInstance.NewDescriptor`, replacing generated closure classes with `FilterListViewTypeMenuItem_Click`, `RefreshFilteredFileList`, and `GetEditableTagFieldNames`.
+- Removed another `StateFieldInstance` generated accessor batch by replacing `QueryStub`, `ValidateStub`, `ResolveStub`, `CancelStub`, and `IncludeStub` with readable fields for tag combo boxes, tag-field text handlers, selected-filter value state, and the last file-list filter text.
+- Removed `StateFieldInstance` accessors for current language, configured column headers, and file-type image list, replacing `NewStub`, `SearchStub`, `DestroyStub`, and `PushStub` with `CurrentLanguageCode`, `configuredColumnHeaders`, and `fileTypeImageList`.
+- Replaced the decompiled lyric time-offset dialog `ExpressionToken` with `LyricTimeOffsetDialog`, rewriting its generated WinForms layout and removing related `BaseFieldInstance` wrapper methods around the selected offset and failure message.
+- Cleaned another `WorkerComparatorImporter` batch by inlining one-line wrapper methods for settings/resources/control access, renaming source-limit and translated-lyric handlers, and replacing small `goto` blocks with straight-line option-dialog logic.
+- Removed the remaining `WorkerComparatorImporter` WinForms designer wrapper methods for layout suspension, controls collection additions, control names, sizes, locations, margins, tab indexes, and event hookup, leaving those assignments as direct control operations.
+- Simplified more `WorkerComparatorImporter` option-dialog logic by renaming active event handlers, rewriting tree-node panel switching, localizing text setup, and save/close persistence flow without decompiler constant-branch helpers.
+- Rewrote `WorkerComparatorImporter` saved-option loading as a straight-line settings initialization flow, renamed its layout/component/source-tree entry points, and restored missing option-button click bindings for lyric directory, local lyric directory, restricted extensions, and tag-history clearing.
+- Replaced the decompiled lyric-save helper `UtilsObject` with `LyricSaveFileDialog`, exposing readable initial-directory, file-name, and selected-encoding properties while rewriting Vista and legacy save-dialog flows without generated accessor wrappers.
+- Removed an unused `StateFieldInstance` generated closure around editable tag-field combo boxes and replaced it with `RegisterEditableTagField`, keeping tag labels and changed-state indicators explicit.
+- Renamed and simplified another `StateFieldInstance` generated closure used by batch tag-save failures, replacing `ClassGlobalAttribute` with `TagSaveFailureReporter` and direct fallback-message selection.
+- Replaced `StateFieldInstance` file-list settings accessors and label-edit closure classes with readable `FileSettings` and `FileListLabelEditContext` members, rewriting the list-view rename commit path without decompiled `goto` flow.
+- Replaced the generated `StateFieldInstance` message-box window collector `AuthenticationObjectStub` with `MessageBoxWindowCollector`, naming the thread filtering, dialog enumeration, and known-caption close path while removing another `goto` block.
+- Renamed the main-form cached file-list storage from `SortStub` to `cachedFileListItems`, named the hidden-state tuple field, removed the constructor's fake `ForgotPage` branch, and replaced the generated startup-argument accessor with `startupFileArgs`.
+- Removed another `StateFieldInstance` accessor/wrapper batch by replacing `GetTaskbarProgress`, `DeletePage`, and one-line ToolStrip/Button helper methods with direct `taskbarProgress`, `Settings.Default`, image, size, and `ImageScalingSize` assignments.
+- Removed more `StateFieldInstance` menu/localization wrappers such as `RemovePage`, `DestroyPage`, `ConnectPage`, `SetupPage`, `PostPage`, `InvokePage`, and `InsertPage`, replacing them with direct resource lookup, text, checked-state, culture, and dropdown assignments.
+- Renamed more `StateFieldInstance` initialization entry points to `RegisterEditableTagFields`, `ApplyToolbarImagesAndScaling`, `InitializeFileListFilterMenu`, and `InitializeFileListColumnsAndIcons`, while removing constant-branch localization and column setup code plus dead image/tooltip/dispose wrappers.
+- Renamed `Container` list-view sorting comparers to `TextSubItemComparer`, `PrinterSortValueComparer`, `ItemTextComparer`, and `AssociatedValueComparer`, and rewrote the column-click handler to use direct item, column, and checked-state access instead of generated dispatcher wrappers.
+- Renamed `Container` embedded-control bookkeeping from `DefinitionStub` / `m_Decorator` to `EmbeddedControlBinding` / `embeddedControlBindings`, naming the bound control and subitem fields used by inline editor controls.
+- Replaced `Container` embedded-control API artifacts `ResetQueue`, `WriteQueue`, `OrderQueue`, and `FindQueue` with `AttachEmbeddedControl`, `RemoveEmbeddedControl`, and `EmbeddedControlInset`, then updated the mock, batch-rename, and write-options callers.
+- Renamed `Container` sorting and row-painting members from `ConnectQueue`, `m_Producer`, `request`, and `_Map` to `SortingEnabled`, `sortedColumnBackBrush`, `selectedRowBackBrush`, and `inactiveSelectedRowBackBrush`, removing the unused brush pseudo-property wrappers.
+- Rewrote `Container.WndProc`, column-header painting, and subitem painting as direct WinForms code, replacing generated `goto` flow and wrapper methods with `UpdateEmbeddedControlBounds`, `ScrollListView`, `DrawCustomColumnHeader`, and `DrawCustomSubItem`.
+- Renamed `Container` active-edit and sorting state fields from `_Listener`, `_Comparator`, `account`, `info`, and `_Model` to `activeSubItem`, `activeItem`, `activeColumnIndex`, `inlineTextEditor`, and `sortedColumnIndex`.
+- Rewrote the remaining `Container` inline-editor event handlers, replacing generated `RemoveQueue`, `ViewQueue`, `AwakeQueue`, `InitQueue`, `LoginQueue`, and `CustomizeQueue` flow with readable editor commit, hover invalidation, and hidden-subitem scrolling handlers.
+- Removed the last `Container` decompiler dispatcher wrappers and constant-branch helpers; the file no longer contains `goto IL_` labels, `PushDispatcher`, `AwakeDispatcher`, `[SpecialName]`, or compiler-generated marker residue.
+- Rewrote the `BaseFieldInstance` constructor as direct initialization code, naming the search/save icon properties and removing constructor-only wrappers around icon sizing and search-source menu population.
+- Removed `DatabaseMapper` compiler-generated image-codec lookup closures, replacing them with direct encoder/decoder `First` predicates and deleting the now-unused encoder-list wrapper.
+- Inlined small `DatabaseMapper` path, directory, file-length, and console-output wrappers in cache cleanup and path construction helpers while preserving the original string-concatenation behavior.
+- Renamed the main-form splitter debounce timer from `m_DicTag` / `AwakeStub` / `VerifyStub` to `comboBoxSelectionResetTimer`, `RestartComboBoxSelectionResetTimer`, and `ResetComboBoxSelectionTimer_Tick`, removing the local generated `goto` flow.
+- Renamed `BaseFieldInstance` lyric-dialog APIs and state from descriptor-style generated names to `SetSearchContext`, `GetLyricText`, `SetLyricText`, `ShouldSaveAfterClose`, `searchContext`, `downloadCancellation`, and `saveAfterCloseRequested`.
+- Rewrote `BaseFieldInstance` localized-text and editor-layout initialization as `InitializeLocalizedText` and `UpdateEditorLayout`, removing related generated `goto` flow and one-line layout wrappers.
+- Renamed `BaseFieldInstance` lyric-download progress, save-LRC, and editor shortcut handlers to readable WinForms event names, replacing generated `goto` flow, control-collection wrappers, and dispose logic with direct code while preserving the original save-path behavior.
+- Replaced the decompiled `BaseFieldInstance` lyric-download async state machine and generated closure with `DownloadDeferredLyricAsync` and `LoadDeferredLyricText`, preserving deferred lyric loading while ensuring the progress panel is hidden on cancellation or download errors.
+- Renamed another `BaseFieldInstance` batch of lyric editor fields and event handlers, replacing `_TokenField`, `procObject`, and generated `*Mapper` handlers with `lastLoadedLyricText`, `findReplaceController`, and readable search, import, reset, find, and timetag action names.
+- Renamed the shared LRC import helper from `StartMapper` to `ImportLrcText`, inlining path lookup, dialog setup, encoding detection, file read, and error logging wrappers while updating the batch-import caller.
+- Cleaned the tag-history selection dialog `TestAccountComp` by naming its file-path and selected-tag APIs, rewriting show/OK/cancel/double-click/dispose/history-row logic, and deleting the related generated wrappers and marker attributes.
+- Renamed `TestAccountComp` to `TagHistorySelectionDialog`, moved the source file to match the class name, and rewrote its generated WinForms initialization as direct control setup with no `goto IL_` or wrapper residue.
+- Renamed `AccountObject` to `PictureFromTagsDialog`, named its selected-picture/file-list APIs, and rewrote the layout, OK, double-click, dispose, context-menu, and extraction handlers around readable picture-from-tags actions.
+- Replaced `PictureFromTagsDialog` generated picture-search async state machine and closure with readable `StartPictureSearchAsync` / `CollectEmbeddedPictures` helpers, preserving background tag-picture extraction, UI progress reporting, cancellation, and taskbar progress cleanup.
+- Rewrote `PictureFromTagsDialog.InitializeComponent` as direct WinForms setup, renamed the remaining UI fields to natural names, and removed its decompiler wrapper methods and `goto IL_` layout flow.
+- Replaced the decompiled candidate-source panel `Exception` with `TagSearchCandidatePanel`, naming picture-size, genre, lyric, selection, and context-menu APIs while rewriting the generated layout and visibility logic as normal WinForms code.
+- Replaced the decompiled find/replace dialog `ClientToken` with `FindReplaceDialog`, exposing a readable `FindReplaceController` property and rewriting the generated layout, button handlers, and load positioning without wrapper methods.
+- Renamed `DicContainerConsumer` to `EditableColumnHeader` and updated the list-view editor selection path to use readable names for editable custom column headers.
+- Converted the small `VgmdbDisc` data holder from public fields/manual getter boilerplate to simple properties while preserving the existing VGMdb parser contract.
+- Converted `VgmdbAlbum` public data fields and manual collection getters to properties, and factored repeated localized-name fallback logic into `GetLocalizedValue`.
+- Renamed the generated search-result selection closure in `CreatorListenerMock` to `SearchResultSelectionContext`, naming its list-item and owner references plus the selection callback used by `TagSearchCandidatePanel`.
+- Renamed the generated deferred-lyric closure in `CreatorListenerMock` to `DeferredLyricDownloadContext`, naming the lyric result, owner form, and background load callback used by the existing lyric download state machine.
+- Renamed another `CreatorListenerMock` accessor batch for cached search results, queued cover downloads, cover image cache, and taskbar progress to readable helper names.
+- Renamed the next `CreatorListenerMock` search-dialog accessors to `GetSearchContext`, `SetSearchContext`, `SetPreferredSource`, `GetPreferredSource`, `GetCancellationSource`, and `GetSelectedTrackResult`, updating the main-form launch path in `StateFieldInstance`.
+- Renamed `CreatorListenerMock` search-result ranking helpers to `SortBySearchContextSimilarity`, `PromoteBestSearchMatch`, and `RankSearchResults`, removed the unused best-match wrapper, and fixed the filename fallback branch to sort the fallback result copy it rescored.
+- Renamed the `CreatorListenerMock` provider-search helpers to `SearchCurrentContextTracks`, `SearchTracksFromSource`, `SearchCurrentContextAlbumFallback`, and `SearchAlbumFallbackTracks`, including readable parameters for search pass, existing results, cancellation, and the linked NetEase-id path used by single-source searches.
+- Rewrote `CreatorListenerMock` result-list image setup, localized text application, cached-result reuse on show, close cleanup, and search-dialog layout refresh as direct readable code, removing several generated `goto` blocks and unused wrapper methods.
+- Replaced `CreatorListenerMock.RateObject` with a direct WinForms-style `InitializeComponent`, preserving the existing controls, event wiring, layout values, and menu setup while deleting the now-unused `*Indexer` wrapper methods.
+- Renamed and rewrote `CreatorListenerMock` result-list UI event handlers for OK/cancel, double-click selection, focus highlighting, cover context menu, open-cover, and extract-cover actions, removing another generated closure/wrapper batch.
+- Renamed the NetEase release-year helper to `FetchMissingNetEaseReleaseYear`, removed its generated album-id wrapper, and cleaned selected-cover image handling plus `Dispose` into direct readable control flow.
+- Rewrote `ServerStubSerializer` as a readable XML-backed `SettingsProvider`, replacing generated `goto` flow and wrapper methods with direct load, read, save, machine-node, and machine-independent setting helpers while preserving the existing config filename and XML hierarchy.
+- Simplified `StateFieldInstance` undo save/rename processed counters and fixed local indentation in the rename undo item scan.
+- Removed more `StateFieldInstance` generated constant-branch and type-cast wrappers from refresh, lyric download, picture compression, filename conversion, and save-tags batch paths while preserving the existing async state-machine structure.
+- Rewrote the `StateFieldInstance` undo-save worker and async completion shell into direct loops, and removed the remaining generated constant/type-cast wrappers from save-tags and undo-rename completion paths.
+- Rewrote the `StateFieldInstance` clear-tags and delete-files async shells into direct flows, and inlined single-use wrappers around list-view tags, lyric editor text, drag data, resources, and failure messages.
+- Inlined another `StateFieldInstance` batch of one-off timer, control, resource, file-size, and tag-load wrappers, leaving direct WinForms/property calls in the affected UI paths.
+- Removed more `StateFieldInstance` UI wrapper calls around toolstrip enabled state, transparent colors, text assignment, and confirmation prompts, replacing them with direct property/API calls.
+- Removed another `StateFieldInstance` UI wrapper batch for toolstrip click handlers, item names, AddRange calls, and layout suspend/resume calls.
+- Removed the remaining `StateFieldInstance` control property wrappers for location, name, size, margin, child-control access, tab index, and flow-layout breaks; only the decompiler constant-branch helpers remain in that wrapper cluster.
+- Removed the remaining `StateFieldInstance` constant `ForgotPage`/`DisablePage` helper residue and simplified the related constant branches in `InitializeComponent`.
+- Removed the empty `WrapperTagListener` decompiler subtype and updated tag-history callers to use `TagHistoryRepository` directly.
+- Removed the remaining `AutoMatchTagsDialog` one-line decompiler wrappers around thread priority, stopwatch, settings, exception messages, tag load errors, cover-file writes, and constant predicates.
+- Removed `CombinedTagSearchDialog` private getter/accessor wrappers for search context, cancellation, cached results, cover queues, cover cache, taskbar progress, and deferred lyric result access.
+- Removed the `OptionsDialog` constant boolean helpers `AddValue`/`UpdateValue`, simplified the resulting constant branches, and repaired `CombinedTagSearchDialog` search-dialog indentation.
+- Repaired additional `CombinedTagSearchDialog` indentation around close/layout/search-ranking helpers and removed decompiler metadata attributes from `AutoMatchTagsDialog` worker accessors.
+- Replaced the generated `Tokenizer.EncodingNameTables` static constructor with direct encoding-name arrays and removed generated accessor metadata attributes.
+- Made `Verify-Build.ps1` fail immediately when MSBuild or the filename-related batch dialog smoke test returns a non-zero exit code.
+- Renamed the `Tokenizer` file-encoding entry points and detector wrapper from generated names to readable `DetectFileEncoding`, `ReadFileSampleBytes`, `EncodingDetector`, and `DetectEncodingIndex` names.
+- Renamed more `StateFieldInstance` generated UI fields to readable names for the status-label panel, change-directory toolbar button, tag-history context menu item, and cover-resolution compression flag.
+- Repaired additional `StateFieldInstance` indentation residue in toolbar image scaling and tag-editor initialization setup.
+- Renamed the remaining `StateFieldInstance` cover preview panel controls to readable cover panel, mime type, dimensions, file size, picture type, and overwrite-checkbox names.
+- Renamed the `StateFieldInstance` cover preview `PictureBox` field from a generated name to `coverPictureBox`.
+- Renamed `StateFieldInstance` cover-layout size state and the main split container to `lastTagPanelSplitterDistance`, `lastCoverPreviewSize`, and `mainSplitContainer`.
+- Renamed `StateFieldInstance` main layout fields for the tag editor panel, file filter status strip, and file summary status strip.
+- Renamed `StateFieldInstance` file-list status and filter bar fields to readable selected/total status labels, separator, filter label, filter text box, and filter type drop-down names.
+- Renamed `StateFieldInstance` tag-source menu fields for cover, lyric, and combined-tag source menu items plus their toolbar split buttons.
+- Renamed `StateFieldInstance` tag-source root/default menu items and repaired source-menu initialization indentation residue.
+- Renamed `StateFieldInstance` top-level menu fields for file, edit, view, batch, tools, language, and help menus.
+- Renamed `StateFieldInstance` File menu child fields for directory management, save/read/remove tags, character set, Chinese conversion, tag history, and exit actions.
+- Renamed `StateFieldInstance` Edit menu child fields for selection, undo, rename, remove-items, remove-files, and open-directory actions.
+- Renamed `StateFieldInstance` View menu refresh/customize-columns fields and the matching refresh toolbar button field.
+- Renamed `StateFieldInstance` Tools, Language, and Help menu child fields plus the matching options toolbar button field.
+- Renamed `StateFieldInstance` Batch menu and toolbar fields for auto-match tags, lyric, extract-cover, Chinese conversion, and filename-related actions.
+- Renamed `StateFieldInstance` Batch lyric submenu fields and the matching Save-as-LRC toolbar split-button child fields.
+- Renamed `StateFieldInstance` Batch Chinese-conversion submenu fields for tag and filename simplified/traditional conversion actions.
+- Renamed `StateFieldInstance` Batch toolbar separator fields around the batch action buttons and repaired the related toolbar image-scaling indentation.
+- Renamed `StateFieldInstance` main toolbar button fields for add/manage directories, save/read/remove tags, undo, character set, Chinese conversion, tag history, and file selection actions.
+- Renamed `StateFieldInstance` main toolbar separator fields for directory, tag-action, selection, and source groups.
+- Renamed `StateFieldInstance` main toolbar Chinese-conversion drop-down items for traditional-to-simplified and simplified-to-traditional tag conversion.
+- Renamed the first four `StateFieldInstance` tag-editor row panels and combo boxes for title, artist, album, and year fields.
+- Renamed the next four `StateFieldInstance` tag-editor row panels and combo boxes for track, disc, genre, and album-artist fields.
+- Renamed the remaining `StateFieldInstance` tag-editor combo boxes and row panels for composer, lyricist, comment, and lyrics fields.
+- Renamed `StateFieldInstance` tag-editor field labels plus the lyrics row edit and encoding buttons.
+- Renamed `StateFieldInstance` tag-editor character-set buttons for title through comment fields.
+- Renamed `StateFieldInstance` track/disc tag-editor group and column panels.
+- Renamed `StateFieldInstance` cover navigation controls, cover file dialog, and tag-editor spacer panel.
+- Renamed `StateFieldInstance` cover context menu and cover action menu items.
+- Renamed `StateFieldInstance` current tag and cover-preview state fields.
+- Renamed `StateFieldInstance` main file list view field.
+- Renamed `StateFieldInstance` file list header and item context menu fields.
+- Renamed `StateFieldInstance` file-list refresh, filter, and status timer fields.
+- Renamed `StateFieldInstance` notification-area icon and exit context menu fields.
+- Renamed `StateFieldInstance` cover-save dialog, tooltip, edit separator, and Chinese-conversion menu fields.
+- Renamed `StateFieldInstance` main menu, main toolbar, and File-menu exit separator fields.
+- Renamed `StateFieldInstance` File-menu separator between directory actions and tag actions.
+- Renamed `StateFieldInstance` form-lifecycle flags for shown-state layout callbacks and skipping settings save after database initialization failure.
+- Renamed `StateFieldInstance` tag-editor layout cache, restore window state, component container, and `Dispose` parameter fields.
+- Renamed `StateFieldInstance` static file-extension tag-type maps for known and enabled extensions.
+- Renamed `StateFieldInstance` localized component resource manager from the decompiled `_RoleField` to `localizedResources`.
+- Renamed `Tokenizer.EncodingDetector` private encoding scoring functions from decompiled `*Error` names to explicit `Score*Encoding` names based on the fixed encoding-name table indexes.
+- Removed the single-use `Tokenizer.EncodingDetector.RemoveRole` wrapper by inlining the frequency-table lookup at its only call site.
+- Removed the unused private `Tokenizer.EncodingDetector.RemoveError` method after confirming it had no callers.
+- Renamed the decompiled lyric editor dialog class from `BaseFieldInstance` to `LyricEditorDialog` while leaving the file path unchanged to avoid file rename churn.
+- Renamed the filename-related batch dialog class from `EventRulesSchema` to `FilenameRelatedBatchDialog` and updated the smoke test reflection target.
+- Renamed `LyricSearchDialog` static cached lyric-search context fields from generated `baseField`/`stateField` names to `cachedLyricSearchContext` and `cachedLyricSearchSource`.
+- Cleaned `LyricSearchDialog` local parameter names and repaired the decompiled indentation residue in `AddLyricsToList` without changing the list population logic.
+- Cleaned `PictureFromTagsDialog` lifecycle event parameter names and repaired decompiled indentation residue in selected-picture and extract-cover helpers.
+- Updated `Verify-Build.ps1` to resolve MSBuild through PATH, `vswhere`, and known Build Tools paths so newer Visual Studio Build Tools installs work without manually editing PATH.
+- Cleaned local naming residue in `CustomColumnsDialog.OnShown` and `DoubleBufferedSplitContainer.SetPanelDoubleBuffered`.
+- Renamed `Tokenizer.EncodingDetector` Japanese encoding scoring byte-array parameters from generated names to `bytes`.
+- Renamed the remaining `Tokenizer.EncodingDetector` encoding scoring byte-array parameters from generated names to `bytes`.
+- Cleaned small generated parameter names in tag history, options, image subitem, file-path, and MusicBrainz provider constructors/handlers.
+- Fixed `MusicBrainzTagProvider` query-term quoting to use the C# `{0}` format placeholder instead of the literal C-style `%s` placeholder.
+- Repaired decompiled indentation residue in `LyricTextProcessor` nested lyric-line construction and metadata merge helper.
+- Renamed `PhraseTrie` constructor parameters from generated names to `character`, `nodeKind`, and `replacements`.
+- Simplified `Tokenizer.EncodingDetector.ScoreUtf8Encoding` by removing a generated constant-false wrapper branch and renamed the frequency-table write wrapper parameters.
+- Hardened Kuwo search/detail parsing so non-array `abslist`/`SUBLIST` payloads, non-object lyric items, and malformed individual lyric lines are skipped instead of aborting the whole response; also repaired translated-lyric timestamp indentation residue.
+- Hardened Xiami numeric JSON field parsing so malformed optional integer/long fields no longer skip an otherwise usable song candidate.
+- Renamed provider ordering parameters from generic `sourceIndex`/`rowIndex` names to `searchPass` and `sourceOrder` across lyric/track search entry points and the lyric-search dispatch helpers.
+- Repaired remaining indentation residue in `LyricSearchDialog` lyric source dispatch and `LyricTextProcessor` nested lyric-line/metadata helper blocks.
+- Cleaned `ConfigDescriptorState` picture-loading diagnostics, renamed local picture/key parameters, and repaired DllImport indentation without changing native entry points.
+- Expanded the README with Chinese project overview, environment requirements, build/run instructions, known limitations, and maintenance workflow; also added common temporary, log, OS cache, test result, and package output patterns to `.gitignore`.
+- Renamed the unused custom ToolStrip renderer class from the generic decompiler name `Template` to `CustomToolStripRenderer`; the file path is intentionally left unchanged pending a separate file-rename pass.
+- Rechecked ignored output state and added extra Visual Studio/.NET cache and package patterns such as `*.rsuser`, `*.userosscache`, `*.sln.docstates`, `*.cache`, `*.nupkg`, and `*.snupkg`.
+- Hardened NetEase JSON parsing so non-array song/artist/alias payloads, malformed optional numeric fields, missing lyric fields, and missing album objects do not abort otherwise usable search or lyric results.
+- Cleaned small lyric-search and NetEase parser naming residue by replacing generic `value`/`list`/`item` locals with track context, search source, display lyric list, lyric item, and JSON field names.
+- Fixed MiniLyrics provider availability handling so it starts as available, while malformed XML or missing response nodes are logged and skipped for the current response instead of permanently disabling the source.
+- Hardened QQ and Kugou provider parsing so non-array song lists, non-object song items, malformed numeric fields, and missing lyric/translation JSON fields are skipped or treated as empty instead of aborting usable results.
+- Hardened remaining iTunes and MusicBrainz numeric parsing so malformed integer/long fields no longer abort otherwise usable search or release-track results; also repaired small decompiled indentation residue in the iTunes provider.
+- Removed the last direct provider-side `JToken.Value<T>()` numeric read by routing NetEase album picture document IDs through the existing tolerant numeric helper.
+- Added `docs/DECOMPILATION_NOTES.md` to track uncertain decompiler leftovers such as file/type name mismatches, empty/generated classes, async state machines, and large control-flow-heavy methods that should not be force-renamed or rewritten without separate evidence.
+- Clarified that the root `/musictag/` ignore rule is only for loose original extraction output, while `src/MusicTag/musictag/` contains required runtime assets that should remain part of the recovered project.
+
+## Useful Commands
+
+```powershell
+.\scripts\Verify-Build.ps1 -RunSmokeTests
+.\scripts\Verify-Build.ps1 -Configurations Release
+```
