@@ -30,7 +30,9 @@
 
 ## 暂不重写的大型反编译控制流
 
-- `src/MusicTag/MusicTagWinApp.Instances/StateFieldInstance.cs` 的 `InitializeComponent` 仍包含大量 `switch`/`goto` 形式的反编译控制流。该函数负责主窗体控件创建和事件绑定，改动风险高。
+- `src/MusicTag/MusicTagWinApp.Instances/StateFieldInstance.cs` 的 `InitializeComponent`（约 7583 行起）仍包含大量 `switch`/`goto` 形式的反编译控制流。该函数负责主窗体控件创建和事件绑定，改动风险高。
+- `src/MusicTag/MusicTag.Importers/OptionsDialog.cs` 的 `InitializeComponent`（约 986 行起）仍是 `goto IL_*` 标签式扁平化控制流。变更日志已说明它被刻意保留（其中含一个不再显示的 iTunes 参数面板），且新增的“联网请求”选项控件是加在手写方法里、未触碰 `InitializeComponent`。改动风险高。
+- `src/MusicTag/MusicTag.Schemes/FilenameRelatedBatchDialog.cs`（原 `EventRulesSchema`）的 `InitializeComponent`（约 1202–1880 行，679 行）仍是控制流扁平化残留：`int num = 35; while (true) { switch (num) { ... } }`，把设计器初始化打散到 64 个编号 `case`，通过 47 处 `goto case`、7 处 `num = X; break;`（`break` 后由 `while` 重新分发）以及若干 `case` 直落（fall-through）串接，含 2 个 `return` 出口。早期变更日志（“Inlined the remaining `EventRulesSchema.InitializeComponent` WinForms wrapper batch”）只内联了一层 wrapper 方法，并未拆掉这个分发器。它属于纯静态控制流（`num` 只被赋编译期常量、无数据相关分支），理论上可线性化为顺序代码；但这是 UI 布局代码，冒烟测试只能捕获构造期崩溃、无法验证细微的尺寸/位置回归，应作为独立的高风险任务谨慎处理（注意：冒烟测试会反射构造该对话框，任何破坏其 `InitializeComponent` 的改动都会令冒烟测试失败）。
 - `src/MusicTag/MusicTagWinApp.Common/Tokenizer.cs` 仍包含大块编码检测表初始化控制流。该代码影响文件编码识别，建议只在有明确测试样本时局部修改。
 
 ## 后续处理原则
