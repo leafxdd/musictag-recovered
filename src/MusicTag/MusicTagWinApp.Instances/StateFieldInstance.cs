@@ -1230,36 +1230,32 @@ internal class StateFieldInstance : Form
 		internal void SaveTags()
 		{
 			bool compressedInputPictures = false;
-			Func<ConfigDescriptorState, string, bool> applyLyrics = default(Func<ConfigDescriptorState, string, bool>);
-			Func<ConfigDescriptorState, bool, bool> convertChineseText = default(Func<ConfigDescriptorState, bool, bool>);
-			TagHistoryRepository tagHistoryRepository = default(TagHistoryRepository);
-			SaveTagsFileContext fileContext = default(SaveTagsFileContext);
-			switch (1)
+			if (tagValues.TryGetValue("allpicturedata", out var value))
 			{
-			case 1:
-				goto case 5;
-			case 5:
-			{
-				if (tagValues.TryGetValue("allpicturedata", out var value))
+				List<ConfigDescriptorState.PictureData> pictures = value as List<ConfigDescriptorState.PictureData>;
+				CompressPictures(pictures, useRestoreLimits: false);
+				if (pictures.Exists(HasPictureProcessingFailure))
 				{
-					List<ConfigDescriptorState.PictureData> pictures = value as List<ConfigDescriptorState.PictureData>;
-					CompressPictures(pictures, useRestoreLimits: false);
-					if (pictures.Exists(HasPictureProcessingFailure))
-					{
-						DatabaseMapper.WriteSaveTagsLog(Resources.Msg_CompressPictureFail);
-						messageLog.AddLine(Resources.Msg_CompressPictureFail);
-						return;
-					}
-					compressedInputPictures = true;
+					DatabaseMapper.WriteSaveTagsLog(Resources.Msg_CompressPictureFail);
+					messageLog.AddLine(Resources.Msg_CompressPictureFail);
+					return;
 				}
-				applyLyrics = applyLyricsAction ?? (applyLyricsAction = ApplyLyricsBatchAction);
-				convertChineseText = convertChineseTextAction ?? (convertChineseTextAction = ConvertChineseTextFields);
-				tagHistoryRepository = new TagHistoryRepository(useTransaction: true);
-				TagHistoryRepository.ClearUndoState();
-				goto case 2;
+				compressedInputPictures = true;
 			}
-			case 7:
+			Func<ConfigDescriptorState, string, bool> applyLyrics = applyLyricsAction ?? (applyLyricsAction = ApplyLyricsBatchAction);
+			Func<ConfigDescriptorState, bool, bool> convertChineseText = convertChineseTextAction ?? (convertChineseTextAction = ConvertChineseTextFields);
+			TagHistoryRepository tagHistoryRepository = new TagHistoryRepository(useTransaction: true);
+			TagHistoryRepository.ClearUndoState();
+			while (processedCount < itemsToSave.Length)
 			{
+				if (cancellationSource.IsCancellationRequested)
+				{
+					break;
+				}
+				SaveTagsFileContext fileContext = new SaveTagsFileContext();
+				fileContext.batchContext = this;
+				fileContext.filePath = Path.GetFullPath(itemsToSave[processedCount].FilePath);
+				currentFile = new FileInfo(fileContext.filePath);
 				DatabaseMapper.ClearReadOnlyIfAllowed(currentFile, canCancelReadOnly);
 				DateTime lastWriteTime = currentFile.LastWriteTime;
 				bool tagFileLoaded = false;
@@ -1280,21 +1276,22 @@ internal class StateFieldInstance : Form
 						{
 							if (!convertChineseText(failureReporter.tagState, (bool)convertToTraditionalValue))
 							{
-								goto IL_06b2;
+								processedCount++;
+								continue;
 							}
 						}
 						else if (tagValues.TryGetValue("lyrics_handle", out lyricsImportValue))
 						{
 							if (!applyLyrics(failureReporter.tagState, lyricsImportValue as string))
 							{
-								goto IL_06b2;
+								processedCount++;
+								continue;
 							}
 						}
 						else
 						{
 							foreach (KeyValuePair<string, object> tagValueEntry in tagValues)
 							{
-								_ = tagValueEntry.Key;
 								if (tagValueEntry.Value is string text)
 								{
 									if (text == "<blank>")
@@ -1327,7 +1324,7 @@ internal class StateFieldInstance : Form
 								}
 								failureReporter.tagState[tagValueEntry.Key] = tagValueEntry.Value;
 							}
-							if (!compressedInputPictures & shouldRefreshPictureResolution)
+							if (!compressedInputPictures && shouldRefreshPictureResolution)
 							{
 								failureReporter.tagState.LoadAllPictures();
 								List<ConfigDescriptorState.PictureData> currentPictures = failureReporter.tagState["allpicturedata"] as List<ConfigDescriptorState.PictureData>;
@@ -1406,33 +1403,7 @@ internal class StateFieldInstance : Form
 						messageLog.AddLine(ex2.Message);
 					}
 				}
-				goto IL_06b2;
-			}
-			case 2:
-			case 6:
-				if (processedCount >= itemsToSave.Length)
-				{
-					break;
-				}
-				fileContext = new SaveTagsFileContext();
-				fileContext.batchContext = this;
-				goto case 0;
-			case 0:
-			case 3:
-				if (cancellationSource.IsCancellationRequested)
-				{
-					break;
-				}
-				goto default;
-			default:
-				fileContext.filePath = Path.GetFullPath(itemsToSave[processedCount].FilePath);
-				currentFile = new FileInfo(fileContext.filePath);
-				goto case 7;
-			case 8:
-				return;
-				IL_06b2:
 				processedCount++;
-				goto case 2;
 			}
 			tagHistoryRepository.Dispose();
 		}
