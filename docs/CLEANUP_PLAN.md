@@ -37,11 +37,11 @@
   - [x] `musictag/MusicTag.config`：删 `<ItunesSearchParams_Country>`。
   - [x] `Resources`：删 `CountryList`(Resources.cs + resx)。注：iTunes dialog-text 资源键(`panelTagSrcItunesParams`/`lblItunesCountry`)不在 resx 中,无需删。
   - 验证：现有 OptionsDialog 反射构造 smoke test 兜底。注：`InitializeComponent` 已去扁平化为直线代码,当初保留理由已不成立。
-- [ ] **批次 3 — 退役源恒空搜索 pass（P2/P3）**
-  - [ ] `CoverSearchDialog.cs`：删 `SearchByArtist`(557)及 “artist” pass 调用(116-125,150-153)。
-  - [ ] `CombinedTagSearchDialog.cs`：删 `SearchAlbumFallbackTracks`(823)+ `SearchCurrentContextAlbumFallback`(818)及 `SearchAllSources` album-fallback 循环(283-294)。
-  - [ ] `AutoMatchTagsDialog.cs`：删 album-fallback 调用(1074-1085)。
-  - 先确认空批次 rank/report 无副作用,再删整段循环;若有副作用则只删方法体调用、保留外壳。
+- [x] **批次 3 — 退役源恒空搜索 pass（P2/P3）** ✅ 完成
+  - [x] `CoverSearchDialog.cs`：删 `SearchByArtist`(恒空桩)及 “artist” pass 调用(多源 + preferred-source 两处)。
+  - [x] `CombinedTagSearchDialog.cs`：删 `SearchAlbumFallbackTracks`(恒空,注释已说明 fallback 仅由已删 VGMdb/MusicBrainz 提供)+ 实例包装 `SearchCurrentContextAlbumFallback`,及 `SearchAllSources` 内**两处** album-fallback 块（preferred-source 路径 + 多源循环 —— 计划仅列了多源循环,删方法需连 preferred 一并删,两块都是各自 return 前最后一块、`CurrentBatch` 恒空使 rank/report 只上报空列表,行为等价）。
+  - [x] `AutoMatchTagsDialog.cs`：删 album-fallback 块(1074-1085);`AddRankedCandidates` 空输入纯 no-op(无进度上报)。
+  - 已确认:三处空 pass 均不产候选、不上报、不改剩余计数,候选列表与排序不变。
 - [ ] **批次 4 — 死分支 + 命名修正（小心）**
   - [ ] `EditableListView.cs`：删死类 `TextSubItemComparer`(30-59)+ 折叠 598 行恒假分支。**不修正**抽象类型判断本身（会改排序行为,另立项）。
   - [ ] `StateFieldInstance.cs`：删 Undo 的 “Skipped” 死分支(5533 UndoSaveTags、5596 UndoRename)。
@@ -65,3 +65,4 @@
 - 2026-06-24 建文档,锁定 6 批计划。开始批次 1。
 - 2026-06-24 **批次 1 完成**。删 `WindowPlacement` 三件套、两个死枚举文件、`HtmlEncode/HtmlDecode`、`TrieNode.AddWord/GetChild(string)`、`DatabaseMapper` 死参 `interpolationMode`、provider DTO 只写不读字段(Kuwo 14 / Kugou 6 / QQ 7 / NetEase 1)+ `KuwoTagProvider.FillExtendedSongMetadata`。16 文件改(含 2 文件删),纯删除 −174 行。Debug+Release 0/0 + 3 smoke 全过。构建即验证了所有删除字段确为只写不读(否则编译失败)。commit `74f81a0`。
 - 2026-06-24 **批次 2 完成**。删退役 iTunes 源的全部残留:`OptionsDialog.cs` 的 itunes* 控件字段/构造初始化/本地化/CountryList 加载/Show-Hide/`case "TagSrcITunes"`/响应式宽度/Settings 保存/InitializeComponent 块(−82)、`Settings.cs` 的 `ItunesSearchParams_Country`、`Resources.cs`+`.resx` 的 `CountryList`、`MusicTag.config` 的持久值。5 文件改,纯删除 −103 行。Debug+Release 0/0 + 3 smoke 全过(OptionsDialog 反射构造守住 designer 手术)。commit `82c1969`。
+- 2026-06-24 **批次 3 完成**。删退役源恒空搜索 pass:`CoverSearchDialog.SearchByArtist` 桩 + 两处调用;`CombinedTagSearchDialog` 的 `SearchAlbumFallbackTracks`/`SearchCurrentContextAlbumFallback` 两方法 + `SearchAllSources` 两处 album-fallback 块(preferred + 多源);`AutoMatchTagsDialog` album-fallback 块。3 文件改,纯删除 −62 行。已逐一追踪 rank/report 链确认空 pass 无副作用(空列表→排序/限流/上报皆 no-op,不改剩余计数,候选与排序不变)。Debug+Release 0/0 + 3 smoke 全过。commit `c15d874`。
