@@ -80,9 +80,11 @@ CRC-16 校验,只有原版 EXE 放行标签读写;重编译的 EXE 必须给 DLL
 - **rc4 / rc3 = “163 key” 编/解码**:AES-ECB + base64 + `163 key(Don't modify):` 前缀,互为逆。rc4 把 `music:{...}` 明文编码写入 comment(受 `CommentTagWrite163Key` 开关控制);rc3 从文件 comment 解码回明文用于预填搜索。
 - **de = 编码检测**:输入文件前 ≤2000 字节,输出 .NET 编码名;唯一消费者是导入 `.lrc`(`LyricEditorDialog.ImportLrcText`)。结果 `ISO8859-1`/空 视为“未检测”→ 回退 `Encoding.Default`。可用托管 charset 检测库(UTF.Unknown / Ude.NetStandard)替代,保留该回退。
 
-### 3.6 格式覆盖约束(阶段 A 的功能边界)
+### 3.6 格式覆盖约束(阶段 A 的功能边界)— 已实测(TagLibSharp 2.3.0)
 应用支持的扩展名:`.aac .aiff/.aif/.aifc .ape .dff .dsf .flac .mpc .mp3 .mp4/.m4a .ogg .opus .tak .wav .wma .wv`。
-TagLibSharp(NuGet `TagLibSharp`,.NET Standard 2.0,net481 可用)覆盖主流格式,但**预判不支持 DSD(.dsf/.dff)、TAK(.tak)、裸 .aac(ADTS)** ——这是阶段 A 必须先 PoC 实测确认的缺口(见 §9 决策点)。
+**阶段 0 实测**(反射枚举 `FileTypes.AvailableTypes` + `SupportedMimeType` 特性,`artifacts/tlspoc/`):
+TagLibSharp 2.3.0(NuGet,引用 `lib/net462/TagLibSharp.dll`)支持其中 **15 个**——含 `.dsf`(DSD)与 `.aac`(此前误判为不支持);
+**仅 3 个边缘容器不支持**:`.dff`(DSDIFF,主流 DSD 容器 `.dsf` 已支持)、`.tak`、`.aifc`(压缩 AIFF,`.aif`/`.aiff` 已支持)。缺口比原预判小得多(见 §9 决策点)。
 
 ## 4. 总体策略与阶段划分
 
@@ -127,7 +129,7 @@ TagLibSharp(NuGet `TagLibSharp`,.NET Standard 2.0,net481 可用)覆盖主流格�
 - 联网四源 + 导入 .lrc 的人工冒烟(自动化不覆盖)。
 
 ## 9. 风险、决策点与回退
-- **决策点(冷门格式)**:DSD/TAK/裸 aac 若 TagLibSharp 不支持,三选一:(a) 仅这些格式保留 native 标签 I/O —— 但那部分仍被门 gate,**补丁无法移除**,与初衷冲突;(b) 自实现最小读写(.dsf 尾部 ID3v2、TAK 的 APEv2 等);(c) 明确降级(只读/不支持)。需你拍板。
+- **决策点(冷门格式)**:实测仅 `.dff` / `.tak` / `.aifc` 三个边缘容器 TagLibSharp 不支持(`.dsf`/`.aac` 已支持)。三选一:(a) 仅这三个格式保留 native 标签 I/O —— 但那部分仍被门 gate,**补丁无法移除**,与初衷冲突;(b) 自实现最小读写(`.dff` 的 DIIN/ID3 chunk、`.tak` 的 APEv2 等);(c) 明确降级(只读/不支持)。鉴于缺口已缩到三个冷门容器,(c) 的代价很低,推荐(c)。需你拍板。
 - **raw 编码重解码**(§6 硬骨头):TagLibSharp 抽象层可能够不到帧级字节,最坏要 fork/反射;可先降级为可选特性。
 - **网易云算法对齐**:weapi/163key 常量记错即全废,靠 native 对拍兜底。
 - **回退**:阶段 A/B 各自一组提交,任一阶段出问题可单独 `git revert`;补丁原版 DLL 始终是 `artifacts/MusicTag.dll.orig` + git 历史。
@@ -141,3 +143,24 @@ TagLibSharp(NuGet `TagLibSharp`,.NET Standard 2.0,net481 可用)覆盖主流格�
 - PB3 `refactor: 编码检测改用托管 charset 库`
 - PB4 `build: 删除 MusicTag.dll / MediaInfo.dll 及其引用`
 - PX `docs: 收尾同步 README/MAINTENANCE/DECOMPILATION_NOTES`
+
+## 11. 阶段 0 实测结果(2026-06-25,已完成)
+
+**环境**:TagLibSharp 2.3.0(NuGet;net481 集成时引用 `lib/net462/TagLibSharp.dll`)。探针留存于 `artifacts/`(gitignored):`tlspoc/`(格式枚举)、`GoldenCompare.cs`+`gc.exe`(x86 对拍)、`gc_result.txt`(对拍输出)。
+
+**① 格式覆盖**(反射枚举 `FileTypes.AvailableTypes` + `SupportedMimeType`,确定性):18 个应用扩展名支持 **15** 个;**仅 `.dff` / `.tak` / `.aifc` 不支持**(`.dsf`/`.aac` 实测支持,修正原预判)。
+
+**② 黄金对拍**(9 个真实样本 mp3×3 / flac×3 / ogg×3,native 打补丁版当 oracle):
+- **文本字段主路径等价**:title/album/year/track/disc/genre/albumartist/composer/comment/lyrics 在三格式上逐字段一致;`comment` 的 "163 key" 原样读出(印证阶段 A 不碰 comment),`lyrics` 完全一致。
+- **已定位、可控的映射细节**(阶段 A 落实):
+  1. **多值连接符**:native 用**配置的** `ConnectorsArtists`(默认 `/`)join,非 "; "。TagLibSharp 已正确分出多值(`Performers=["赵乃吉","DJ细霖"]`),用同一配置连接符 join 即等价。
+  2. **`lyricist`**:9 样本均空(两边都空);需容器级映射(ID3v2 `TEXT` / Xiph `LYRICIST` / APE `Lyricist`)并用带值样本验证。
+  3. **`trackstr` 无值**:native 给 `"0"`(而 `track` 给空)——量级 quirk,决定是否复刻。
+  4. **有损格式 `BitsPerSample`**:native 填 `16`,TagLibSharp 给 `0`(仅无损有意义)。
+  5. **`_ext`**:native 返回大写。
+  6. **mp3/ogg 时长、码率**:估算口径差极小(时长 <40ms;ogg 码率 native 实测平均 vs taglib 标称);flac 时长完全一致。
+- 🔴 **阶段 A 首要核查项**:`半壶纱.mp3` 封面数 **native=0 / TagLibSharp=6**,其余有封面样本两边都=1。疑似 native 漏读该文件多图(taglib 更全),需查清图片帧结构与两边语义,再定封面映射口径。
+
+**③ 编码检测库候选**(阶段 B `de` 替代):**UTF.Unknown**(MIT,活跃,Mozilla 通用字符集检测移植)或 Ude.NetStandard;保留 `ISO8859-1`/空 → `Encoding.Default` 回退,阶段 B 对 `.lrc` 小样本对拍。
+
+**结论**:标签 I/O 可整体迁移到 TagLibSharp、**补丁可移除**;唯一需先查清的是封面读取语义差异。冷门格式缺口收窄到三个边缘容器,推荐对其明确降级(§9 c)。
