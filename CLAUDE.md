@@ -96,17 +96,20 @@ ranked candidate list shown to user → write-back to file tags.
   split and group classes almost arbitrarily — providers, dialogs, and models are scattered across
   them. Namespace matches the folder, but neither tells you what's inside. **Locate code by type name
   via CodeGraph (`.codegraph/` exists — use it before grep/Read), not by folder.**
-- **Some file names don't match the type inside** (see `docs/DECOMPILATION_NOTES.md`): e.g.
-  `BaseFieldInstance.cs` → `LyricEditorDialog`, `EventRulesSchema.cs` → `FilenameRelatedBatchDialog`,
-  `Template.cs` → `CustomToolStripRenderer`. File renames are done as separate, isolated passes.
+- **A file name may not signal the type inside.** The three known decompiler-era misnamed files have
+  since been renamed to match their types (`BaseFieldInstance.cs`→`LyricEditorDialog.cs`,
+  `EventRulesSchema.cs`→`FilenameRelatedBatchDialog.cs`, `Template.cs`→`CustomToolStripRenderer.cs` — the
+  last later deleted as dead code; see `docs/DECOMPILATION_NOTES.md`). Still locate code by type name, not
+  by file or folder, and do any further file renames as separate, isolated passes.
 - **Rewriting obfuscated / decompiler-emitted artifacts into readable code is allowed — but only when it
   stays strictly behavior-equivalent**, proven by a clean build + smoke tests and a careful read of the
-  diff. This covers the `goto`/`switch` `InitializeComponent` state machines (e.g. `StateFieldInstance.cs`,
-  `OptionsDialog.cs`), the `_003C…_003Ed__*` async state machines (`StateFieldInstance.cs` /
-  `CombinedTagSearchDialog.cs`), and the encoding-detection table init in `Tokenizer.cs`. These stay
-  high-risk: prefer the smallest equivalent form, and when a change can live in hand-written code, add it
-  there rather than reshaping the generated block. Compiler-generated data (`PrivateImplementationDetails.cs`)
-  and the empty `PolicyTokenExporter.cs` shell carry no readability win — leave them absent a concrete reason.
+  diff. The large historical blocks this covered have all been reconstructed: every `goto`/`switch`
+  `InitializeComponent` designer state machine (`StateFieldInstance.cs`, `OptionsDialog.cs`,
+  `FilenameRelatedBatchDialog.cs`), every `_003C…_003Ed__*` async state machine (the 12 in
+  `StateFieldInstance.cs` + 3 in `CombinedTagSearchDialog.cs`), and the `Tokenizer.cs` encoding-detection
+  table init (whose unused `EncodingDetector` scorer was then removed entirely). Treat the rule as a
+  standing policy for any artifact that resurfaces: prefer the smallest equivalent form, and when a change
+  can live in hand-written code, add it there rather than reshaping a generated block.
 - **The obfuscated native `EntryPoint` strings are NOT obfuscation to undo** — they are the P/Invoke binding
   to real `MusicTag.dll` exports, so renaming them breaks behavior-equivalence. Never change them (same
   spirit as the persisted JSON keys and `.resx` keys below).
@@ -120,7 +123,8 @@ ranked candidate list shown to user → write-back to file tags.
   `MusicTag.dat`, `en`/`zh-CHS`/`zh-CHT` resource DLLs, FontAwesome ttf) — keep it. Root `/musictag/` is
   ignored loose extraction. `tools/` (de4dot, dnSpy, ILSpy, die) is an ignored local RE toolbox.
 - Style (`.editorconfig`): **tabs** in `.cs` (size 4), 2-space in `csproj`/`sln`/`md`; CRLF; UTF-8;
-  final newline. Build suppresses decompiler-noise warnings `CS0162;CS0414;CS0649` via `NoWarn`.
+  final newline. Build suppresses only `CS0649` via `NoWarn` (interop/deserialization/designer fields the
+  compiler can't see assigned); `CS0162`/`CS0414` were dropped once cleanup reached zero of each.
 
 ## .NET Framework 4.8.1 migration (in progress)
 

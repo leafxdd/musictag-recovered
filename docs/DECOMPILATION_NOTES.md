@@ -8,7 +8,7 @@
 
 - `BaseFieldInstance.cs` → `LyricEditorDialog.cs`
 - `EventRulesSchema.cs` → `FilenameRelatedBatchDialog.cs`
-- `Template.cs` → `CustomToolStripRenderer.cs`
+- `Template.cs` → `CustomToolStripRenderer.cs`（此条仅记改名历史；该类未被使用，后于 commit `5964fa9` 作为死代码删除，见 `MAINTENANCE.md`）
 
 注意：`FilenameRelatedBatchDialog`（原 `EventRulesSchema`）仍通过显式字符串
 `new ResourceManager("MusicTag.Schemes.EventRulesSchema", ...)` 加载本地化资源；该字符串对应预编译
