@@ -73,7 +73,7 @@ internal class TrackSearchContext
 		{
 			JObject metadata = JObject.Parse(match.Groups[1].Value);
 			LinkedMusicMetadata = (
-				musicId: metadata["musicId"]?.Value<long>() ?? 0L,
+				musicId: long.TryParse(metadata["musicId"]?.ToString(), out var linkedMusicId) ? linkedMusicId : 0L,
 				title: metadata["musicName"]?.ToString() ?? "",
 				artist: metadata["artist"]?[0]?[0]?.ToString() ?? "",
 				album: metadata["album"]?.ToString() ?? "",

@@ -12,7 +12,12 @@
     <LangVersion>latest</LangVersion>
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
     <CheckForOverflowUnderflow>False</CheckForOverflowUnderflow>
-    <NoWarn>$(NoWarn);CS0162;CS0414;CS0649</NoWarn>
+    <!-- CS0649 only: these fields ARE assigned at runtime where the compiler can't
+         see it - P/Invoke Marshal.PtrToStructure (NativeNotificationHeader,
+         NativePictureEntry, ThumbButton), BinaryFormatter deserialization
+         (MappingChars), and the WinForms designer (components). CS0162/CS0414 were
+         dropped after the dead-code cleanup left zero unreachable/unused-field warnings. -->
+    <NoWarn>$(NoWarn);CS0649</NoWarn>
   </PropertyGroup>
   <PropertyGroup>
     <ApplicationIcon>app.ico</ApplicationIcon>
