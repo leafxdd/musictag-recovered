@@ -14,6 +14,16 @@
 `new ResourceManager("MusicTag.Schemes.EventRulesSchema", ...)` 加载本地化资源；该字符串对应预编译
 （附属）程序集中的资源名，**保持原样，不要随类型/文件名改动**，否则本地化文案会丢失。
 
+同理：`OptionsDialog`（原 `MusicTag.Importers.WorkerComparatorImporter`）的本地化文案存放在附属程序集的
+`MusicTag.Importers.WorkerComparatorImporter.<culture>.resources` 资源集中，故其通过
+`new ResourceManager("MusicTag.Importers.WorkerComparatorImporter", ...)` 读取（**此字符串保持原样**）。
+此前的恢复代码误将其指向 `typeof(StateFieldInstance)` 的资源集——该资源集不含这些键，于是 `GetDialogText`
+全部回退到代码内的 fallback 文案（旧控件 fallback 是英文，故"标签源/歌词下载/杂项1/杂项2/图片源…"等显示为英文），
+本地化看似"丢失"。已于 commit 修正指向。配套新增**有意为空**的中性 resx
+`src/MusicTag/MusicTag.Importers.WorkerComparatorImporter.resx`：附属程序集只覆盖各语言,主程序集需有同名中性资源集
+作为 fallback 终点,否则对附属程序集中**缺失**的键（恢复期新增的 `Network`/`gbNetworkOptions`/QQ-Cookie/UA 等控件）
+`ResourceManager.GetString` 会抛 `MissingManifestResourceException`;有了它,缺失键返回 null,代码内中文 fallback 生效。
+
 ## 已删除的空壳/生成类
 
 以下两个反编译空壳/生成类经确认无活动引用后已删除（详见 `MAINTENANCE.md`，commit `5964fa9`）：

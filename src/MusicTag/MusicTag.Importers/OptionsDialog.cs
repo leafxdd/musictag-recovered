@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
 using System.Linq;
+using System.Resources;
 using System.Windows.Forms;
 using MusicTag.Consumers;
 using MusicTag.Mocks;
@@ -21,7 +22,7 @@ namespace MusicTag.Importers;
 
 internal class OptionsDialog : Form
 {
-	private readonly ComponentResourceManager dialogResources;
+	private readonly ResourceManager dialogResources;
 
 	private readonly List<int> pictureSizeLimitOptions;
 
@@ -261,7 +262,7 @@ internal class OptionsDialog : Form
 
 	public OptionsDialog()
 	{
-		dialogResources = new ComponentResourceManager(typeof(StateFieldInstance));
+		dialogResources = new ResourceManager("MusicTag.Importers.WorkerComparatorImporter", typeof(OptionsDialog).Assembly);
 		pictureSizeLimitOptions = new List<int>();
 		pictureResolutionLimitOptions = new List<int>();
 		durationFilterOptions = new List<int>();
