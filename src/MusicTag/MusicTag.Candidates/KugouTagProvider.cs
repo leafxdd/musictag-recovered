@@ -155,7 +155,7 @@ internal class KugouTagProvider : RemoteTagProviderBase
 				track.KugouHash = searchResultDetailLoader.SearchResult.Hash;
 				track.KugouDurationMs = searchResultDetailLoader.SearchResult.DurationMs;
 				LyricSearchResult lyric = new LyricSearchResult();
-				lyric.LyricUrl = string.Format(lyricUrlTemplate, BuildEncodedLyricKeyword(searchResultDetailLoader.SearchResult.Title, searchResultDetailLoader.SearchResult.Artist), searchResultDetailLoader.SearchResult.Hash, searchResultDetailLoader.SearchResult.DurationMs);
+				lyric.LyricUrl = string.Format(lyricUrlTemplate, BuildEncodedLyricKeyword(searchResultDetailLoader.SearchResult.Artist, searchResultDetailLoader.SearchResult.Title), searchResultDetailLoader.SearchResult.Hash, searchResultDetailLoader.SearchResult.DurationMs);
 				lyric.SearchSource = GetSource();
 				lyric.DeferredLyricLoader = searchResultDetailLoader.Load;
 				track.LyricResult = lyric;
@@ -312,17 +312,17 @@ internal class KugouTagProvider : RemoteTagProviderBase
 		return lyric;
 	}
 
-	private string BuildEncodedLyricKeyword(string fallbackKeyword, string primaryKeyword)
+	private string BuildEncodedLyricKeyword(string artist, string title)
 	{
-		if (!string.IsNullOrWhiteSpace(fallbackKeyword) && !string.IsNullOrWhiteSpace(primaryKeyword))
+		if (!string.IsNullOrWhiteSpace(artist) && !string.IsNullOrWhiteSpace(title))
 		{
-			return DatabaseMapper.UrlEncodeUtf8(primaryKeyword.Trim() + " - " + fallbackKeyword.Trim());
+			return DatabaseMapper.UrlEncodeUtf8(title.Trim() + " - " + artist.Trim());
 		}
-		if (string.IsNullOrWhiteSpace(primaryKeyword))
+		if (string.IsNullOrWhiteSpace(title))
 		{
-			return DatabaseMapper.UrlEncodeUtf8(fallbackKeyword.Trim() ?? "");
+			return DatabaseMapper.UrlEncodeUtf8(artist.Trim() ?? "");
 		}
-		return DatabaseMapper.UrlEncodeUtf8(primaryKeyword.Trim() ?? "");
+		return DatabaseMapper.UrlEncodeUtf8(title.Trim() ?? "");
 	}
 
 	private string ParseTranslatedLyric(string content, LyricTextProcessor lyricMerger)
