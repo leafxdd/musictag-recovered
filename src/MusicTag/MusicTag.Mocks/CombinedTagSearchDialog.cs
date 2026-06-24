@@ -238,11 +238,6 @@ internal class CombinedTagSearchDialog : Form
 					searchLimits.CurrentBatch = Owner.SearchCurrentContextTracks(preferredSource.Value, useLinkedNetEaseId: false, searchLimits.AccumulatedResults, 0);
 					searchLimits.RankLimitAndReportCurrentBatch(useProviderRanking: true);
 				}
-				if (!Owner.cancellationSource.IsCancellationRequested && searchLimits.RemainingGlobalResults > 0 && searchLimits.RemainingResultsBySource[preferredSource.Value] > 0)
-				{
-					searchLimits.CurrentBatch = Owner.SearchCurrentContextAlbumFallback(preferredSource.Value, searchLimits.AccumulatedResults, 0);
-					searchLimits.RankLimitAndReportCurrentBatch(useProviderRanking: false);
-				}
 				return !Owner.cancellationSource.IsCancellationRequested;
 			}
 			List<SourceItem> tagSources = TrackSearchResult.GetSortedTagSourceSettings();
@@ -277,18 +272,6 @@ internal class CombinedTagSearchDialog : Form
 						continue;
 					}
 					searchLimits.CurrentBatch.AddRange(Owner.SearchCurrentContextTracks(secondarySource.SearchSource, useLinkedNetEaseId: false, searchLimits.AccumulatedResults, searchPass++));
-				}
-				searchLimits.RankLimitAndReportCurrentBatch(useProviderRanking: false);
-			}
-			if (!Owner.cancellationSource.IsCancellationRequested && searchLimits.RemainingGlobalResults > 0)
-			{
-				searchLimits.CurrentBatch = new List<TrackSearchResult>();
-				foreach (SourceItem albumFallbackSource in tagSources)
-				{
-					if (!Owner.cancellationSource.IsCancellationRequested && albumFallbackSource.Enabled && albumFallbackSource.IsSecondarySource && searchLimits.RemainingResultsBySource[albumFallbackSource.SearchSource] > 0)
-					{
-						searchLimits.CurrentBatch.AddRange(Owner.SearchCurrentContextAlbumFallback(albumFallbackSource.SearchSource, searchLimits.AccumulatedResults, searchPass++));
-					}
 				}
 				searchLimits.RankLimitAndReportCurrentBatch(useProviderRanking: false);
 			}
@@ -813,18 +796,6 @@ internal class CombinedTagSearchDialog : Form
 				return results;
 			}
 		}
-	}
-
-	private List<TrackSearchResult> SearchCurrentContextAlbumFallback(SearchSource source, List<TrackSearchResult> existingResults, int searchPass)
-	{
-		return SearchAlbumFallbackTracks(source, existingResults, searchPass, currentSearchContext, cancellationSource);
-	}
-
-	public static List<TrackSearchResult> SearchAlbumFallbackTracks(SearchSource source, List<TrackSearchResult> existingResults, int searchPass, TrackSearchContext searchContext, CancellationTokenSource cancellationSource)
-	{
-		// Album-only fallback was provided solely by the removed VGMdb/MusicBrainz
-		// secondary sources, so there is no longer a source to query here.
-		return new List<TrackSearchResult>();
 	}
 
 	private async void SearchCombinedTagsAsync()

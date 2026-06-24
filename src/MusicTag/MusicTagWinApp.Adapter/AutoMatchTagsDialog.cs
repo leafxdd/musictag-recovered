@@ -1071,18 +1071,6 @@ internal class AutoMatchTagsDialog : Form
 				}
 				metadataSearch.AddRankedCandidates(useProviderRanking: false);
 			}
-			if (!metadataSearch.rankedTracks.Any() && !GetCancellationSource().IsCancellationRequested && metadataSearch.remainingGlobalResults > 0)
-			{
-				metadataSearch.candidateTracks = new List<TrackSearchResult>();
-				foreach (SourceItem albumFallbackSource in tagSources)
-				{
-					if (!GetCancellationSource().IsCancellationRequested && albumFallbackSource.Enabled && albumFallbackSource.IsSecondarySource && metadataSearch.remainingResultsBySource[albumFallbackSource.SearchSource] > 0)
-					{
-						metadataSearch.candidateTracks.AddRange(CombinedTagSearchDialog.SearchAlbumFallbackTracks(albumFallbackSource.SearchSource, metadataSearch.rankedTracks, sourceOrderIndex++, metadataSearch.searchContext, GetCancellationSource()));
-					}
-				}
-				metadataSearch.AddRankedCandidates(useProviderRanking: false);
-			}
 			if (metadataSearch.rankedTracks.Any())
 			{
 				TrackSearchResult bestTrack = metadataSearch.rankedTracks[0];

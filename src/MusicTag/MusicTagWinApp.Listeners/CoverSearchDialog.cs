@@ -113,17 +113,6 @@ internal class CoverSearchDialog : Form
 				}
 			}
 
-			if (!string.IsNullOrWhiteSpace(dialog.GetCurrentTrack().Artist))
-			{
-				foreach (SourceItem sourceItem in sources)
-				{
-					if (CanSearch(sourceItem, isOtherSource: true))
-					{
-						SearchAndReport(sourceItem, "artist", () => dialog.SearchByArtist(sourceItem.SearchSource, accumulatedCandidates));
-					}
-				}
-			}
-
 			return !dialog.GetSearchCancellation().IsCancellationRequested;
 		}
 
@@ -145,11 +134,6 @@ internal class CoverSearchDialog : Form
 			if (dialog.GetCurrentTrack().Title != dialog.GetCurrentTrack().Album)
 			{
 				SearchAndReport(sourceItem, "title/artist", () => dialog.SearchByTitleAndArtist(preferredSource, accumulatedCandidates));
-			}
-
-			if (!string.IsNullOrWhiteSpace(dialog.GetCurrentTrack().Artist))
-			{
-				SearchAndReport(sourceItem, "artist", () => dialog.SearchByArtist(preferredSource, accumulatedCandidates));
 			}
 		}
 
@@ -552,11 +536,6 @@ internal class CoverSearchDialog : Form
 			return kuwoTagProvider.SearchCovers((GetCurrentTrack().Title + " " + GetCurrentTrack().Artist).Trim(), 5, existingCandidates);
 		}
 		}
-	}
-
-	private List<CoverSearchResult> SearchByArtist(SearchSource source, List<CoverSearchResult> existingCandidates)
-	{
-		return new List<CoverSearchResult>();
 	}
 
 	private async void StartCandidateSearch()
