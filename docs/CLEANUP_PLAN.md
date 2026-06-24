@@ -51,9 +51,10 @@
   - [x] `TrackSearchContext:76` `JToken.Value<long>()` → `long.TryParse(token.ToString())` 容错读取(对齐既有 `GetNullableLongField` 与 resilience 不变量;非数值 musicId 不再抛异常丢掉整个 LinkedMusicMetadata）。
   - [x] `NoWarn` 收窄:移除 `CS0162`/`CS0414`(全量 Rebuild 实测两者均 0),**保留 `CS0649`**——移除后暴露 15 条全是误报(interop `Marshal.PtrToStructure`:`NativeNotificationHeader`/`NativePictureEntry`/`ThumbButton`;`BinaryFormatter` 反序列化:`MappingChars`;WinForms designer:`components`),字段不可删,已在 csproj 加注释说明。
   - [~] no-op 转发/恒等 getter 簇内联、习语残留(while+无条件 break、双重否定、重复计数、多余别名、Stopwatch 写后不读、提前 Dispose、Kugou 关键词参数顺序)：**按保守政策推迟**——纯装饰性、对反编译码 churn 大而行为/可读性收益近零,且每处都带非零风险,违背「最小 diff、不做大范围重写」。非用户所求(死代码/残留/命名)的核心,留作独立专项按需处理。
-- [ ] **批次 6 — 文档同步**
-  - [ ] `CLAUDE.md`(96-107) 过期反编译约定（文件已改名、async 状态机已重写、Tokenizer 表初始化已删）。
-  - [ ] `docs/MAINTENANCE.md` 追加本轮变更日志；`DECOMPILATION_NOTES.md` 同步。
+- [x] **批次 6 — 文档同步** ✅ 完成
+  - [x] `CLAUDE.md` 过期反编译约定:三处文件改名已全做(CustomToolStripRenderer 还被删)、三类高风险块(InitializeComponent 设计器状态机 / `_003C` async 状态机 / Tokenizer 表初始化)已全部重建、`PrivateImplementationDetails`/`PolicyTokenExporter` 已不存在 —— 改为过去时/标准政策表述;NoWarn 说明改为仅 CS0649。
+  - [x] `docs/MAINTENANCE.md` 追加本轮批次 1-5 变更日志(5 条,含真实哈希)。
+  - [x] `docs/DECOMPILATION_NOTES.md`:本就已被 `7c2584c` 修正到位(改名/async/Tokenizer 均准确);仅补注 CustomToolStripRenderer 改名后已删,保持「已完成改名」清单自洽。commit `a9eb55a`。
 
 ## 验证协议
 
@@ -67,3 +68,14 @@
 - 2026-06-24 **批次 3 完成**。删退役源恒空搜索 pass:`CoverSearchDialog.SearchByArtist` 桩 + 两处调用;`CombinedTagSearchDialog` 的 `SearchAlbumFallbackTracks`/`SearchCurrentContextAlbumFallback` 两方法 + `SearchAllSources` 两处 album-fallback 块(preferred + 多源);`AutoMatchTagsDialog` album-fallback 块。3 文件改,纯删除 −62 行。已逐一追踪 rank/report 链确认空 pass 无副作用(空列表→排序/限流/上报皆 no-op,不改剩余计数,候选与排序不变)。Debug+Release 0/0 + 3 smoke 全过。commit `c15d874`。
 - 2026-06-24 **批次 4 完成**。死分支:`EditableListView.TextSubItemComparer` 死类 + 恒假抽象类型分支折叠;`StateFieldInstance` 两个 Undo 的 “Skipped” 死分支(已证 skippedCount 在两 undo context 内恒 0)。命名:`LoadPictureSummary(includePictureBytes→flagOnly)`(名实相反,纯值不变 token 替换 6 处)、`IsSelectedCoverData→HasProcessingFailed`。4 文件改,−52/+9。Debug+Release 0/0 + 3 smoke 全过(构建验证改名各调用点完整)。commit `3710e9c`。
 - 2026-06-24 **批次 5 完成（部分推迟）**。`TrackSearchContext` musicId 改容错 `long.TryParse`;`NoWarn` 收窄为仅 `CS0649`(移除已 0 的 CS0162/CS0414,CS0649 是 interop/反序列化/designer 误报必留,加注释)。2 文件改,+7/−2。关键发现:全量 Rebuild 暴露 15 条 CS0649 全为运行期赋值字段误报,非死代码。no-op 转发内联/装饰性习语清扫按保守政策**主动推迟**(churn 大、收益近零、非用户核心诉求)。Debug+Release 全量 Rebuild **0 warning/0 error** + 3 smoke 全过。commit `f88ffee`。
+- 2026-06-24 **批次 6 完成**。文档同步:`CLAUDE.md` 反编译约定整段去过期(改名/三类高风险块/已删空壳),NoWarn 注释改 CS0649-only;`MAINTENANCE.md` 追加批次 1-5 日志;`DECOMPILATION_NOTES.md` 补 CustomToolStripRenderer 删除注。纯文档,无构建影响。commit `a9eb55a`。
+
+## 收尾总结
+
+6 批全部完成,**14 个代码/文档提交**(7 代码 + 7 文档进度),全程行为保留:每个代码批次 Debug+Release 构建 0/0 + 3 个 smoke test 全过。净删除约 **−390 行代码**(批次 1−174 / 批次 2−103 / 批次 3−62 / 批次 4−52+9 / 批次 5+7−2),零功能回归(构建即验证字段/调用点完整性,死分支均经数据流证明恒不可达)。
+
+**做了什么**:孤儿死成员(struct/enum/方法/只写字段)、退役源(iTunes UI/config/resource、恒空搜索 pass)、恒不可达分支(抽象类型判断、恒 0 的 skippedCount)、误导命名(名实相反的 `flagOnly`、`HasProcessingFailed`)、一处容错读取对齐、构建告警收窄(CS0162/0414 移除、CS0649 留并说明)、文档去过期。
+
+**主动未做(诚实记录)**:批次 5 的 no-op 转发器/恒等 getter 批量内联与装饰性习语清扫 —— 对反编译码 churn 大、行为/可读性收益近零,违背「最小 diff、不做大范围重写」,留作独立专项。`musictag/System.ValueTuple.dll` 等孤儿运行期资产已在更早批次处理。
+
+**未覆盖验证(项目固有)**:无单元测试;联网 provider 的实际写回路径不被 smoke test 触及,等价性依据数据流分析与构建,非实跑。
