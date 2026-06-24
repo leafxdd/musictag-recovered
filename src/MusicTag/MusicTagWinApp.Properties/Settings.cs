@@ -321,23 +321,6 @@ internal sealed class Settings : ApplicationSettingsBase
 		}
 	}
 
-	[DefaultSettingValue("US")]
-	[SettingsProvider(typeof(XmlSettingsProvider))]
-	[DebuggerNonUserCode]
-	[UserScopedSetting]
-	[SettingsManageability(SettingsManageability.Roaming)]
-	public string ItunesSearchParams_Country
-	{
-		get
-		{
-			return (string)this["ItunesSearchParams_Country"];
-		}
-		set
-		{
-			this["ItunesSearchParams_Country"] = value;
-		}
-	}
-
 	[DebuggerNonUserCode]
 	[DefaultSettingValue("")]
 	[SettingsManageability(SettingsManageability.Roaming)]

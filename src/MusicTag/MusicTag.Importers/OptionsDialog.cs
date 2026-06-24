@@ -29,8 +29,6 @@ internal class OptionsDialog : Form
 
 	private readonly List<int> durationFilterOptions;
 
-	private readonly List<string> itunesCountryCodes;
-
 	private readonly Dictionary<SourceItem, int> searchResultLimitsBySource;
 
 	private const string DefaultLrcFileEncodings = "UTF-8|UTF-16|GBK|GB18030|GB2312|BIG5";
@@ -142,16 +140,6 @@ internal class OptionsDialog : Form
 	private RadioButton id3v24RadioButton;
 
 	private RadioButton id3v23RadioButton;
-
-	private GroupBox itunesParametersGroupBox;
-
-	private FlowLayoutPanel itunesParametersPanel;
-
-	private FlowLayoutPanel itunesCountryPanel;
-
-	private Label itunesCountryLabel;
-
-	private ComboBox itunesCountryComboBox;
 
 	private Label fileFilterLabel;
 
@@ -277,7 +265,6 @@ internal class OptionsDialog : Form
 		pictureSizeLimitOptions = new List<int>();
 		pictureResolutionLimitOptions = new List<int>();
 		durationFilterOptions = new List<int>();
-		itunesCountryCodes = new List<string>();
 		searchResultLimitsBySource = new Dictionary<SourceItem, int>();
 		InitializeComponent();
 		optionsTreeView.ExpandAll();
@@ -385,7 +372,6 @@ internal class OptionsDialog : Form
 		coverSourceOrderControl.Title = GetDialogText("panelTagSrcPicture", "Cover sources");
 		lyricSourceOrderControl.Title = GetDialogText("panelTagSrcLyric", "Lyric sources");
 		tagSourceOrderControl.Title = GetDialogText("panelTagSrcComb", "Tag sources");
-		itunesParametersGroupBox.Text = GetDialogText("panelTagSrcItunesParams", itunesParametersGroupBox.Text);
 		translatedLyricGroupBox.Text = GetDialogText("panelDownloadTrans", translatedLyricGroupBox.Text);
 		downloadTranslatedLyricsCheckBox.Text = Resources.Enable;
 		skipOriginalLyricCheckBox.Text = GetDialogText("cbDontDownloadOrigLyric", skipOriginalLyricCheckBox.Text);
@@ -417,7 +403,6 @@ internal class OptionsDialog : Form
 		durationFilterLabel.Text = GetDialogText("lblFileFilterByDuration", durationFilterLabel.Text);
 		ignoreVideoFilesCheckBox.Text = GetDialogText("cbFileFilterIgnoreVideoFile", ignoreVideoFilesCheckBox.Text);
 		lrcEncodingLabel.Text = GetDialogText("lblLrcEncoding", lrcEncodingLabel.Text);
-		itunesCountryLabel.Text = GetDialogText("lblItunesCountry", itunesCountryLabel.Text);
 		keepFileUpdateTimeCheckBox.Text = GetDialogText("cbKeepFileUpdateTime", keepFileUpdateTimeCheckBox.Text);
 		saveLrcWhileSavingTagsCheckBox.Text = GetDialogText("cbSaveLrcFileWhileSaveTags", saveLrcWhileSavingTagsCheckBox.Text);
 		webSearchLimitGroupBox.Text = GetDialogText("gbWebSearchLimit", webSearchLimitGroupBox.Text);
@@ -558,17 +543,6 @@ internal class OptionsDialog : Form
 		durationFilterComboBox.SelectedIndex = durationFilterIndex >= 0 ? durationFilterIndex : 0;
 		ignoreVideoFilesCheckBox.Checked = Settings.Default.FileFilterIgnoreVideoFile;
 
-		foreach (string countryEntry in Resources.CountryList.Split(';'))
-		{
-			string[] countryParts = countryEntry.Split('|');
-			string countryCode = countryParts[0];
-			string countryName = countryParts[1];
-			itunesCountryCodes.Add(countryCode);
-			itunesCountryComboBox.Items.Add(countryCode + " - " + countryName);
-		}
-		int countryIndex = itunesCountryCodes.IndexOf(Settings.Default.ItunesSearchParams_Country);
-		itunesCountryComboBox.SelectedIndex = countryIndex >= 0 ? countryIndex : 0;
-
 		keepFileUpdateTimeCheckBox.Checked = Settings.Default.SaveTagsKeepUpdateTime;
 		saveLrcWhileSavingTagsCheckBox.Checked = Settings.Default.SaveLrcWhileSaveTags;
 		checkForUpdatesOnStartupCheckBox.Checked = Settings.Default.CheckForUpdatesOnStartup;
@@ -612,7 +586,6 @@ internal class OptionsDialog : Form
 		lyricSourceOrderControl.Hide();
 		tagSourceOrderControl.Hide();
 		sourceLimitPanel.Hide();
-		itunesParametersGroupBox.Hide();
 		webSearchLimitGroupBox.Hide();
 		translatedLyricGroupBox.Hide();
 		lyricCleanupOptionsPanel.Hide();
@@ -633,9 +606,6 @@ internal class OptionsDialog : Form
 			translatedLyricGroupBox.Show();
 			lyricCleanupOptionsPanel.Show();
 			return;
-		case "TagSrcITunes":
-			itunesParametersGroupBox.Show();
-			break;
 		case "Others":
 			searchAndTagOptionsPanel.Show();
 			return;
@@ -700,7 +670,6 @@ internal class OptionsDialog : Form
 		webSearchLimitGroupBox.Width = availableContentWidth;
 		webSearchItemLimitTrackBar.Width = availableContentWidth;
 		sourceLimitPanel.Width = availableContentWidth;
-		itunesParametersGroupBox.Width = availableContentWidth;
 		tagSourceOrderControl.Width = availableContentWidth;
 		lyricSourceOrderControl.Width = availableContentWidth;
 		coverSourceOrderControl.Width = availableContentWidth;
@@ -786,7 +755,6 @@ internal class OptionsDialog : Form
 		Settings.Default.ID3v2Version = (id3v23RadioButton.Checked ? 3 : 4);
 		Settings.Default.FileFilterByDuration = durationFilterOptions[durationFilterComboBox.SelectedIndex];
 		Settings.Default.FileFilterIgnoreVideoFile = ignoreVideoFilesCheckBox.Checked;
-		Settings.Default.ItunesSearchParams_Country = itunesCountryCodes[itunesCountryComboBox.SelectedIndex];
 		Settings.Default.CommentTagWrite163Key = writeNetEaseCommentKeyCheckBox.Checked;
 		Settings.Default.SaveTagsKeepUpdateTime = keepFileUpdateTimeCheckBox.Checked;
 		Settings.Default.SaveLrcWhileSaveTags = saveLrcWhileSavingTagsCheckBox.Checked;
@@ -1043,11 +1011,6 @@ internal class OptionsDialog : Form
 		ignoreVideoFilesCheckBox = new CheckBox();
 		commentTagLabel = new Label();
 		writeNetEaseCommentKeyCheckBox = new CheckBox();
-		itunesParametersGroupBox = new GroupBox();
-		itunesParametersPanel = new FlowLayoutPanel();
-		itunesCountryPanel = new FlowLayoutPanel();
-		itunesCountryLabel = new Label();
-		itunesCountryComboBox = new ComboBox();
 		sourceLimitPanel = new FlowLayoutPanel();
 		webSearchItemLimitLabel = new Label();
 		webSearchItemLimitTrackBar = new TrackBar();
@@ -1113,9 +1076,6 @@ internal class OptionsDialog : Form
 		((ISupportInitialize)pictureResolutionLimitTrackBar).BeginInit();
 		id3v2VersionPanel.SuspendLayout();
 		fileFilterPanel.SuspendLayout();
-		itunesParametersGroupBox.SuspendLayout();
-		itunesParametersPanel.SuspendLayout();
-		itunesCountryPanel.SuspendLayout();
 		sourceLimitPanel.SuspendLayout();
 		((ISupportInitialize)webSearchItemLimitTrackBar).BeginInit();
 		webSearchLimitGroupBox.SuspendLayout();
@@ -1187,7 +1147,6 @@ internal class OptionsDialog : Form
 		sourceOrderPanel.Controls.Add(translatedLyricGroupBox);
 		sourceOrderPanel.Controls.Add(lyricCleanupOptionsPanel);
 		sourceOrderPanel.Controls.Add(searchAndTagOptionsPanel);
-		sourceOrderPanel.Controls.Add(itunesParametersGroupBox);
 		sourceOrderPanel.Controls.Add(sourceLimitPanel);
 		sourceOrderPanel.Controls.Add(webSearchLimitGroupBox);
 		sourceOrderPanel.Controls.Add(saveAndNotificationOptionsPanel);
@@ -1618,43 +1577,6 @@ internal class OptionsDialog : Form
 		writeNetEaseCommentKeyCheckBox.TabIndex = 24;
 		writeNetEaseCommentKeyCheckBox.Text = "Comment tag write \"163 key\" mark, if you use 163 tag SearchSource";
 		writeNetEaseCommentKeyCheckBox.UseVisualStyleBackColor = true;
-		itunesParametersGroupBox.Controls.Add(itunesParametersPanel);
-		itunesParametersGroupBox.Location = new Point(420, 400);
-		itunesParametersGroupBox.Margin = new Padding(0, 0, 0, 10);
-		itunesParametersGroupBox.Name = "panelTagSrcItunesParams";
-		itunesParametersGroupBox.Padding = new Padding(5);
-		itunesParametersGroupBox.Size = new Size(383, 55);
-		itunesParametersGroupBox.TabIndex = 7;
-		itunesParametersGroupBox.TabStop = false;
-		itunesParametersGroupBox.Text = "Parameters";
-		itunesParametersPanel.Controls.Add(itunesCountryPanel);
-		itunesParametersPanel.Dock = DockStyle.Fill;
-		itunesParametersPanel.Location = new Point(5, 20);
-		itunesParametersPanel.Margin = new Padding(0);
-		itunesParametersPanel.Name = "flowLayoutPanel8";
-		itunesParametersPanel.Size = new Size(373, 30);
-		itunesParametersPanel.TabIndex = 0;
-		itunesCountryPanel.Controls.Add(itunesCountryLabel);
-		itunesCountryPanel.Controls.Add(itunesCountryComboBox);
-		itunesCountryPanel.Location = new Point(3, 0);
-		itunesCountryPanel.Margin = new Padding(3, 0, 0, 0);
-		itunesCountryPanel.Name = "flowLayoutPanel12";
-		itunesCountryPanel.Size = new Size(332, 22);
-		itunesCountryPanel.TabIndex = 5;
-		itunesCountryLabel.AutoSize = true;
-		itunesCountryLabel.Location = new Point(0, 4);
-		itunesCountryLabel.Margin = new Padding(0, 4, 0, 0);
-		itunesCountryLabel.Name = "lblItunesCountry";
-		itunesCountryLabel.Size = new Size(54, 14);
-		itunesCountryLabel.TabIndex = 0;
-		itunesCountryLabel.Text = "Country:";
-		itunesCountryComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
-		itunesCountryComboBox.FormattingEnabled = true;
-		itunesCountryComboBox.Location = new Point(60, 0);
-		itunesCountryComboBox.Margin = new Padding(6, 0, 0, 0);
-		itunesCountryComboBox.Name = "cbItunesCountry";
-		itunesCountryComboBox.Size = new Size(180, 22);
-		itunesCountryComboBox.TabIndex = 1;
 		sourceLimitPanel.Controls.Add(webSearchItemLimitLabel);
 		sourceLimitPanel.Controls.Add(webSearchItemLimitTrackBar);
 		sourceLimitPanel.Location = new Point(420, 475);
@@ -2063,10 +1985,6 @@ internal class OptionsDialog : Form
 		id3v2VersionPanel.PerformLayout();
 		fileFilterPanel.ResumeLayout(false);
 		fileFilterPanel.PerformLayout();
-		itunesParametersGroupBox.ResumeLayout(performLayout: false);
-		itunesParametersPanel.ResumeLayout(performLayout: false);
-		itunesCountryPanel.ResumeLayout(performLayout: false);
-		itunesCountryPanel.PerformLayout();
 		sourceLimitPanel.ResumeLayout(performLayout: false);
 		sourceLimitPanel.PerformLayout();
 		((ISupportInitialize)webSearchItemLimitTrackBar).EndInit();

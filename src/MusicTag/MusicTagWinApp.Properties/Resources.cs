@@ -133,8 +133,6 @@ internal class Resources
 
 	internal static string content => ResourceManager.GetString("content", resourceCulture);
 
-	internal static string CountryList => ResourceManager.GetString("CountryList", resourceCulture);
-
 	internal static string cover => ResourceManager.GetString("cover", resourceCulture);
 
 	internal static string customcolumns => ResourceManager.GetString("customcolumns", resourceCulture);
