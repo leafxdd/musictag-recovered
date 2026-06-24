@@ -42,11 +42,11 @@
   - [x] `CombinedTagSearchDialog.cs`：删 `SearchAlbumFallbackTracks`(恒空,注释已说明 fallback 仅由已删 VGMdb/MusicBrainz 提供)+ 实例包装 `SearchCurrentContextAlbumFallback`,及 `SearchAllSources` 内**两处** album-fallback 块（preferred-source 路径 + 多源循环 —— 计划仅列了多源循环,删方法需连 preferred 一并删,两块都是各自 return 前最后一块、`CurrentBatch` 恒空使 rank/report 只上报空列表,行为等价）。
   - [x] `AutoMatchTagsDialog.cs`：删 album-fallback 块(1074-1085);`AddRankedCandidates` 空输入纯 no-op(无进度上报)。
   - 已确认:三处空 pass 均不产候选、不上报、不改剩余计数,候选列表与排序不变。
-- [ ] **批次 4 — 死分支 + 命名修正（小心）**
-  - [ ] `EditableListView.cs`：删死类 `TextSubItemComparer`(30-59)+ 折叠 598 行恒假分支。**不修正**抽象类型判断本身（会改排序行为,另立项）。
-  - [ ] `StateFieldInstance.cs`：删 Undo 的 “Skipped” 死分支(5533 UndoSaveTags、5596 UndoRename)。
-  - [ ] 改名 `ConfigDescriptorState.LoadPictureSummary` 参数 `includePictureBytes`→`flagOnly`（纯重命名）。
-  - [ ] 改名 `AutoMatchTagsDialog.IsSelectedCoverData`→`HasProcessingFailed`。
+- [x] **批次 4 — 死分支 + 命名修正（小心）** ✅ 完成
+  - [x] `EditableListView.cs`：删死类 `TextSubItemComparer` + 折叠恒假分支(`subItem.GetType() == typeof(DrawableListViewSubItem)`,而该类是 `abstract` 故精确类型判断恒假 → 唯一实例化点不可达)。**未**改抽象类型判断语义,只把恒假 `else if` 折叠进恒取的末尾 `else`。
+  - [x] `StateFieldInstance.cs`：删 Undo 的 “Skipped” 死分支。已证 `UndoSaveTagsTaskContext`(1502-1652)/`UndoRenameTaskContext`(1691-1778)内 `skippedCount` 仅声明+读取、从不自增 → 恒 0;UndoSaveTags 删恒假 `else if (skippedCount>0)`,UndoRename 把恒真 `else if (skippedCount<=0)` 折叠、删死的末尾 `else{Msg_Skipped}`。多文件汇总行仍报该计数(恒 0),不动。
+  - [x] 改名 `ConfigDescriptorState.LoadPictureSummary` 参数 `includePictureBytes`→`flagOnly`(名实相反:true=只标志、false=载字节);纯 token 替换 6 处,布尔值全不变。
+  - [x] 改名 `AutoMatchTagsDialog.IsSelectedCoverData`→`HasProcessingFailed`(方法体仅 `return coverData.ProcessingFailed`,与选择无关）。
 - [ ] **批次 5 — 可读性残留 + 构建卫生（可选,纯整洁）**
   - [ ] no-op 转发/恒等 getter 簇内联（AutoMatchWorker、SFI、PhraseTrie 冗余 override 等）。
   - [ ] 习语残留:while+无条件 break、双重否定、重复计数类、多余别名、Stopwatch 写后不读、提前 Dispose、KugouTagProvider 关键词参数顺序。
@@ -66,3 +66,4 @@
 - 2026-06-24 **批次 1 完成**。删 `WindowPlacement` 三件套、两个死枚举文件、`HtmlEncode/HtmlDecode`、`TrieNode.AddWord/GetChild(string)`、`DatabaseMapper` 死参 `interpolationMode`、provider DTO 只写不读字段(Kuwo 14 / Kugou 6 / QQ 7 / NetEase 1)+ `KuwoTagProvider.FillExtendedSongMetadata`。16 文件改(含 2 文件删),纯删除 −174 行。Debug+Release 0/0 + 3 smoke 全过。构建即验证了所有删除字段确为只写不读(否则编译失败)。commit `74f81a0`。
 - 2026-06-24 **批次 2 完成**。删退役 iTunes 源的全部残留:`OptionsDialog.cs` 的 itunes* 控件字段/构造初始化/本地化/CountryList 加载/Show-Hide/`case "TagSrcITunes"`/响应式宽度/Settings 保存/InitializeComponent 块(−82)、`Settings.cs` 的 `ItunesSearchParams_Country`、`Resources.cs`+`.resx` 的 `CountryList`、`MusicTag.config` 的持久值。5 文件改,纯删除 −103 行。Debug+Release 0/0 + 3 smoke 全过(OptionsDialog 反射构造守住 designer 手术)。commit `82c1969`。
 - 2026-06-24 **批次 3 完成**。删退役源恒空搜索 pass:`CoverSearchDialog.SearchByArtist` 桩 + 两处调用;`CombinedTagSearchDialog` 的 `SearchAlbumFallbackTracks`/`SearchCurrentContextAlbumFallback` 两方法 + `SearchAllSources` 两处 album-fallback 块(preferred + 多源);`AutoMatchTagsDialog` album-fallback 块。3 文件改,纯删除 −62 行。已逐一追踪 rank/report 链确认空 pass 无副作用(空列表→排序/限流/上报皆 no-op,不改剩余计数,候选与排序不变)。Debug+Release 0/0 + 3 smoke 全过。commit `c15d874`。
+- 2026-06-24 **批次 4 完成**。死分支:`EditableListView.TextSubItemComparer` 死类 + 恒假抽象类型分支折叠;`StateFieldInstance` 两个 Undo 的 “Skipped” 死分支(已证 skippedCount 在两 undo context 内恒 0)。命名:`LoadPictureSummary(includePictureBytes→flagOnly)`(名实相反,纯值不变 token 替换 6 处)、`IsSelectedCoverData→HasProcessingFailed`。4 文件改,−52/+9。Debug+Release 0/0 + 3 smoke 全过(构建验证改名各调用点完整)。commit `3710e9c`。
