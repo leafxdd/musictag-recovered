@@ -714,13 +714,13 @@ internal class CombinedTagSearchDialog : Form
 				{
 					break;
 				}
-				CoverSearchResult filterDescriptor = current.Cover;
-				if (filterDescriptor == null || filterDescriptor.CoverDownloadQueued)
+				CoverSearchResult nextCover = current.Cover;
+				if (nextCover == null || nextCover.CoverDownloadQueued)
 				{
 					continue;
 				}
-				filterDescriptor.CoverDownloadQueued = true;
-				DownloadCoverAsync(filterDescriptor, taskNo, ++taskSubNo);
+				nextCover.CoverDownloadQueued = true;
+				DownloadCoverAsync(nextCover, taskNo, ++taskSubNo);
 				queuedNextCoverDownload = true;
 				break;
 			}

@@ -741,15 +741,15 @@ internal class CoverSearchDialog : Form
 		{
 			return;
 		}
-		ConfigDescriptorState.PictureData testsRegistry = new ConfigDescriptorState.PictureData
+		ConfigDescriptorState.PictureData pictureData = new ConfigDescriptorState.PictureData
 		{
 			ImageBytes = File.ReadAllBytes(imageKey)
 		};
-		using (ConfigDescriptorState.LoadPictureImage(testsRegistry))
+		using (ConfigDescriptorState.LoadPictureImage(pictureData))
 		{
-			if (testsRegistry.MimeType != null && testsRegistry.Width > 0 && testsRegistry.Height > 0)
+			if (pictureData.MimeType != null && pictureData.Width > 0 && pictureData.Height > 0)
 			{
-				useImage(testsRegistry);
+				useImage(pictureData);
 			}
 		}
 	}

@@ -58,8 +58,7 @@ internal class LyricSearchDialog : Form
 			{
 				SourceItem selectedSourceItem = LyricSearchResult.GetLyricSourceSettings().Find(sourceItem => sourceItem.SearchSource == selectedSource);
 				sourceResultLimits[selectedSourceItem] = selectedSourceItem.GetEffectiveSearchResultLimit();
-				SearchSource? selectedSearchSource = selectedSource;
-				if (((selectedSearchSource.GetValueOrDefault() == SearchSource.Music163) & selectedSearchSource.HasValue) && dialog.trackInfo.LinkedMusicMetadata.musicId > 0L)
+				if (selectedSource == SearchSource.Music163 && dialog.trackInfo.LinkedMusicMetadata.musicId > 0L)
 				{
 					AddResults(selectedSourceItem, dialog.SearchLyricsFromSource(selectedSource.Value, useKnownMusicId: true, lyrics, 0, searchCandidateTracks: false), lyrics);
 				}

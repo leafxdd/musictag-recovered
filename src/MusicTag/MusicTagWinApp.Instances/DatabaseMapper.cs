@@ -669,13 +669,13 @@ internal static class DatabaseMapper
 			return bitmap;
 		}
 		Size size = new Size(ScaleByDpi(16f), ScaleByDpi(16f));
-		Bitmap bitmap2 = new Bitmap(size.Width, size.Height, PixelFormat.Format32bppArgb);
-		Graphics graphics = Graphics.FromImage(bitmap2);
+		Bitmap scaledBitmap = new Bitmap(size.Width, size.Height, PixelFormat.Format32bppArgb);
+		Graphics graphics = Graphics.FromImage(scaledBitmap);
 		graphics.InterpolationMode = InterpolationMode.Bicubic;
 		graphics.CompositingQuality = CompositingQuality.HighQuality;
 		graphics.SmoothingMode = SmoothingMode.AntiAlias;
 		graphics.DrawImage(bitmap, new Rectangle(Point.Empty, size));
-		return bitmap2;
+		return scaledBitmap;
 	}
 
 	public static Bitmap ResizeBitmapIfNeeded(Bitmap bitmap, Size size)

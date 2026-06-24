@@ -1042,14 +1042,14 @@ internal class FilenameRelatedBatchDialog : Form
 			{
 				regexCaptureGroupMap.Add(captureGroup, selectedIndex);
 			}
-			Dictionary<string, object> value2 = new Dictionary<string, object>
+			Dictionary<string, object> regexCondition = new Dictionary<string, object>
 			{
 				["regex"] = filenameRegexPattern,
 				["match_group_map"] = regexCaptureGroupMap
 			};
 				usesRegexCaptureGroups = true;
 				IsChangeTagsModeSelected = true;
-			Settings.Default.FilenameRelRegexCondition = JsonConvert.SerializeObject(value2);
+			Settings.Default.FilenameRelRegexCondition = JsonConvert.SerializeObject(regexCondition);
 			Settings.Default.FilenameRelSelectedTab = tabControl.SelectedTab.Name;
 			Settings.Default.Save();
 			base.DialogResult = DialogResult.OK;

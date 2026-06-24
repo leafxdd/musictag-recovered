@@ -5421,7 +5421,6 @@ internal class StateFieldInstance : Form
 			}
 		}
 		(string, bool) value = default((string, bool));
-		value.Item2 = false;
 		if (batchContext.renameItems.Length > 1)
 		{
 			value.Item1 = string.Format(Resources.Msg_SaveCompleted + "\n" + Resources.Msg_OK_Fail_Skip_Count, batchContext.renamedCount, batchContext.failedCount, batchContext.skippedCount, batchContext.processedCount) + "\n" + batchContext.messageLog.ToString();
@@ -5466,7 +5465,6 @@ internal class StateFieldInstance : Form
 		await Task.Run((Action)saveTagsContext.SaveTags, saveTagsContext.cancellationSource.Token);
 		saveTagsContext.progressDialog.CloseAfterCompletion();
 		(string, bool) value = default((string, bool));
-		value.Item2 = false;
 		if (saveTagsContext.itemsToSave.Length > 1)
 		{
 			value.Item1 = string.Format(Resources.Msg_SaveCompleted + "\n" + Resources.Msg_OK_Fail_Skip_Count, saveTagsContext.savedCount, saveTagsContext.failedCount, saveTagsContext.skippedCount, saveTagsContext.processedCount) + "\n" + saveTagsContext.messageLog.ToString();
@@ -5524,7 +5522,6 @@ internal class StateFieldInstance : Form
 		}
 		undoSaveTagsContext.progressDialog.CloseAfterCompletion();
 		(string, bool) value = default((string, bool));
-		value.Item2 = false;
 		if (undoSaveTagsContext.undoTagSnapshots.Count > 1)
 		{
 			value.Item1 = string.Format(Resources.Msg_UndoCompleted + "\n" + Resources.Msg_OK_Fail_Skip_Count, undoSaveTagsContext.restoredCount, undoSaveTagsContext.failedCount, undoSaveTagsContext.skippedCount, undoSaveTagsContext.processedCount) + "\n" + undoSaveTagsContext.messageLog.ToString();
@@ -5588,7 +5585,6 @@ internal class StateFieldInstance : Form
 		}
 		undoRenameContext.progressDialog.CloseAfterCompletion();
 		(string, bool) value = default((string, bool));
-		value.Item2 = false;
 		if (undoRenameContext.renameUndoOperations.Count > 1)
 		{
 			value.Item1 = string.Format(Resources.Msg_UndoCompleted + "\n" + Resources.Msg_OK_Fail_Skip_Count, undoRenameContext.successCount, undoRenameContext.failedCount, undoRenameContext.skippedCount, undoRenameContext.processedCount) + "\n" + undoRenameContext.errorLog.ToString();
@@ -5628,7 +5624,6 @@ internal class StateFieldInstance : Form
 		await Task.Run((Action)clearTagsContext.ClearTags, clearTagsContext.cancellationSource.Token);
 		clearTagsContext.progressDialog.CloseAfterCompletion();
 		(string, bool) value = default((string, bool));
-		value.Item2 = false;
 		if (clearTagsContext.itemsToClear.Length > 1)
 		{
 			value.Item1 = string.Format(Resources.Msg_CleartagsCompleted + "\n" + Resources.Msg_OK_Fail_Count, clearTagsContext.successCount, clearTagsContext.failedCount, clearTagsContext.processedCount) + "\n" + clearTagsContext.errorLog.ToString();

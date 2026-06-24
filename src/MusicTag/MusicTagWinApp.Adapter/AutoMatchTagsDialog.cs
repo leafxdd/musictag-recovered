@@ -1646,16 +1646,16 @@ internal class AutoMatchTagsDialog : Form
 			Console.WriteLine("DeserializeObject autoMatchTagsCondition fail " + ex.Message);
 		}
 		Action<string, bool> addMatchConditionRow = listBuilder.AddFieldRow;
-		addMatchConditionRow("cover", arg2: true);
-		addMatchConditionRow("lyrics", arg2: true);
-		addMatchConditionRow("title", arg2: false);
-		addMatchConditionRow("artist", arg2: false);
-		addMatchConditionRow("album", arg2: false);
-		addMatchConditionRow("year", arg2: false);
-		addMatchConditionRow("trackstr", arg2: false);
-		addMatchConditionRow("discstr", arg2: false);
-		addMatchConditionRow("genre", arg2: false);
-		addMatchConditionRow("comment", arg2: false);
+		addMatchConditionRow("cover", true);
+		addMatchConditionRow("lyrics", true);
+		addMatchConditionRow("title", false);
+		addMatchConditionRow("artist", false);
+		addMatchConditionRow("album", false);
+		addMatchConditionRow("year", false);
+		addMatchConditionRow("trackstr", false);
+		addMatchConditionRow("discstr", false);
+		addMatchConditionRow("genre", false);
+		addMatchConditionRow("comment", false);
 		listBuilder.UpdateOverwriteHeader();
 		string language = StateFieldInstance.CurrentLanguageCode;
 		if (language != "zh-CHS" && language != "zh-CHT")
