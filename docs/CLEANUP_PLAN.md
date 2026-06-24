@@ -55,6 +55,20 @@
   - [x] `CLAUDE.md` 过期反编译约定:三处文件改名已全做(CustomToolStripRenderer 还被删)、三类高风险块(InitializeComponent 设计器状态机 / `_003C` async 状态机 / Tokenizer 表初始化)已全部重建、`PrivateImplementationDetails`/`PolicyTokenExporter` 已不存在 —— 改为过去时/标准政策表述;NoWarn 说明改为仅 CS0649。
   - [x] `docs/MAINTENANCE.md` 追加本轮批次 1-5 变更日志(5 条,含真实哈希)。
   - [x] `docs/DECOMPILATION_NOTES.md`:本就已被 `7c2584c` 修正到位(改名/async/Tokenizer 均准确);仅补注 CustomToolStripRenderer 改名后已删,保持「已完成改名」清单自洽。commit `a9eb55a`。
+- [x] **批次 7 — 重启批次 5 推迟项,逐子类穷举(应 `/goal`「力求完整解决」)** ✅ 完成
+  - [x] **Stopwatch 写后不读(真死代码,已删 6 处)**:`StateFieldInstance` 的 `StartCommonSaveTags`/`StartUndoSaveTags`/`StartUndoRename` 各 1 处(`new`/`Start`/`Stop`,`.Elapsed` 从不读);`AutoMatchTagsDialog` 的 per-file load worker、cover 处理路径、`StartAutoMatchTags` 各 1 处。后者连带 `FinishSearch` 去掉无用 `Stopwatch` 参数(单一调用点)+ 文件内 `using System.Diagnostics;` 变无用一并删。commit `4eb2ca1`(SFI+PhraseTrie)、`dca2c96`(AutoMatch)。
+  - [x] **PhraseTrie 冗余 override(已删)**:`GetChild(char)` 方法体仅 `return base.GetChild(character)`,无协变/逻辑 → 删。保留两个 `GetMatcher` override(有 char[] 转换/PhraseMatcher 构造的真实工作)。commit `4eb2ca1`。
+  - [x] **其余子类穷举复核,均无可安全且有价值的改动(诚实记录,不强行 churn)**:
+    - `while+无条件 break`:全库 6 处 `while(true)`(TrieMatcher/Program 窗口枚举/AutoMatch 临时路径/LimitedConcurrencyTaskScheduler/TextBoxFindReplace/FilenameRelatedBatch)**全是条件 break 的正常循环**,无一是「首轮必 break」残留 → 0。
+    - `双重否定`/`三元布尔`(`x ? true : false`):全库 0 命中。
+    - `no-op 转发器 / 恒等 getter`:跨库多行 grep + worker 访问器复核 —— 命中项全为 ①抽象基类/框架要求的 override(`GetSource`/`CreateHttpClient`/`GetHashCode`)、②有意义命名的谓词助手(`HasText`/`HasTitle`/`AsciiTokenClassifier.Is*`,提升可读性)、③一致风格的恒等 getter(`GetOwnerDialog`/`GetActiveFilePathMap`/`IsParallelWorker` 等 `return field;`)。无可删的纯转发;恒等 getter 内联将波及数十调用点、churn 大、收益≈0,违背最小 diff → 不动。
+    - `提前 Dispose`:全库 `.Dispose()` 命中全为必需资源释放(designer `components.Dispose()`、`updateTimer`、tag 文件句柄、SQLite 事务、GDI `graphics`)→ 移动/删除任一即行为变更 → 0 可动项。
+    - `Kugou 关键词参数顺序`:`BuildEncodedLyricKeyword(fallback, primary)` 在 `LoadLyrics`(`Artist,Title`→"Title - Artist")与 `SearchTracks`(`Title,Artist`→"Artist - Title")传参不一致。但只影响 `LyricUrl` 字符串值(仅 `LyricSearchDialog` 用其 `.lrc` 后缀判图标,与关键词内容无关;实际抓取走 `DeferredLyricLoader`→`LoadLyrics`)。改它是**行为值变更而非清理** → 不动,作为潜在 latent bug 留给人决策(见下「潜在缺陷」)。
+  - 验证:Debug+Release 0/0 + 3 smoke 全过(两 commit 各验一次)。结论:批次 5 推迟项中**唯一**真死代码是 Stopwatch×6 与 PhraseTrie override×1,均已清除;其余子类经证据穷举确认无安全且有价值的动作。
+
+## 潜在缺陷(非清理,留待人决策)
+
+- **Kugou 歌词关键词拼接方向不一致**(`KugouTagProvider.BuildEncodedLyricKeyword`):`LoadLyrics`(line 105)传 `(song.Artist, song.Title)` 得 "Title - Artist";`SearchTracks`(line 158)传 `(Title, Artist)` 得 "Artist - Title"。当前只影响 `TrackSearchResult.LyricResult.LyricUrl` 的字符串值,**不影响实际歌词抓取**(抓取走 `DeferredLyricLoader`→`LoadLyrics`,与 `SearchTracks` 拼的那个 URL 无关;该 URL 仅在 `LyricSearchDialog.cs:499` 用于 `.lrc` 后缀的图标判断,与关键词内容无关)。故无可观察的行为差异,但两处拼接方向相反本身是可疑的——若将来有人改用该 `LyricUrl` 直接抓取,方向不一致会致错。**未改**(行为保留),标记供人确认期望方向。
 
 ## 验证协议
 
@@ -69,13 +83,14 @@
 - 2026-06-24 **批次 4 完成**。死分支:`EditableListView.TextSubItemComparer` 死类 + 恒假抽象类型分支折叠;`StateFieldInstance` 两个 Undo 的 “Skipped” 死分支(已证 skippedCount 在两 undo context 内恒 0)。命名:`LoadPictureSummary(includePictureBytes→flagOnly)`(名实相反,纯值不变 token 替换 6 处)、`IsSelectedCoverData→HasProcessingFailed`。4 文件改,−52/+9。Debug+Release 0/0 + 3 smoke 全过(构建验证改名各调用点完整)。commit `3710e9c`。
 - 2026-06-24 **批次 5 完成（部分推迟）**。`TrackSearchContext` musicId 改容错 `long.TryParse`;`NoWarn` 收窄为仅 `CS0649`(移除已 0 的 CS0162/CS0414,CS0649 是 interop/反序列化/designer 误报必留,加注释)。2 文件改,+7/−2。关键发现:全量 Rebuild 暴露 15 条 CS0649 全为运行期赋值字段误报,非死代码。no-op 转发内联/装饰性习语清扫按保守政策**主动推迟**(churn 大、收益近零、非用户核心诉求)。Debug+Release 全量 Rebuild **0 warning/0 error** + 3 smoke 全过。commit `f88ffee`。
 - 2026-06-24 **批次 6 完成**。文档同步:`CLAUDE.md` 反编译约定整段去过期(改名/三类高风险块/已删空壳),NoWarn 注释改 CS0649-only;`MAINTENANCE.md` 追加批次 1-5 日志;`DECOMPILATION_NOTES.md` 补 CustomToolStripRenderer 删除注。纯文档,无构建影响。commit `a9eb55a`。
+- 2026-06-24 **批次 7 完成(应 `/goal` 重启批次 5 推迟项)**。逐子类穷举:真死代码仅 Stopwatch 写后不读×6(SFI 三处 + AutoMatch 三处,后者连带 `FinishSearch` 去无用参数 + 删无用 `using System.Diagnostics;`)与 PhraseTrie 冗余 override `GetChild(char)`×1 —— 全部清除。其余子类经证据复核无安全且有价值的改动:`while+无条件 break`(6 处 `while(true)` 全为条件 break)/双重否定/三元布尔=0;no-op 转发器与恒等 getter 全为必需 override、有义谓词助手或一致风格 `return field;`(内联=数十调用点 churn,违最小 diff,不动);`.Dispose()` 全为必需资源释放(designer/Timer/文件句柄/SQLite 事务/GDI),0 可动项。Kugou 关键词拼接方向不一致属行为值差异(且当前无可观察影响),记入「潜在缺陷」留人决策,未改。commit `4eb2ca1`(SFI Stopwatch×3 + PhraseTrie override)、`dca2c96`(AutoMatch Stopwatch×3 + FinishSearch 参数 + using)。两 commit Debug+Release 0/0 + 3 smoke 各验一次。
 
-## 收尾总结
+## 收尾总结(批次 1-7)
 
-6 批全部完成,**14 个代码/文档提交**(7 代码 + 7 文档进度),全程行为保留:每个代码批次 Debug+Release 构建 0/0 + 3 个 smoke test 全过。净删除约 **−390 行代码**(批次 1−174 / 批次 2−103 / 批次 3−62 / 批次 4−52+9 / 批次 5+7−2),零功能回归(构建即验证字段/调用点完整性,死分支均经数据流证明恒不可达)。
+7 批全部完成,全程行为保留:每个代码批次 Debug+Release 构建 0/0 + 3 个 smoke test 全过。净删除约 **−400 行代码**(批次 1−174 / 批次 2−103 / 批次 3−62 / 批次 4−52+9 / 批次 5+7−2 / 批次 7−13),零功能回归(构建即验证字段/调用点完整性,死分支均经数据流证明恒不可达,删除的 Stopwatch `.Elapsed` 全程不读)。
 
-**做了什么**:孤儿死成员(struct/enum/方法/只写字段)、退役源(iTunes UI/config/resource、恒空搜索 pass)、恒不可达分支(抽象类型判断、恒 0 的 skippedCount)、误导命名(名实相反的 `flagOnly`、`HasProcessingFailed`)、一处容错读取对齐、构建告警收窄(CS0162/0414 移除、CS0649 留并说明)、文档去过期。
+**做了什么**:孤儿死成员(struct/enum/方法/只写字段)、退役源(iTunes UI/config/resource、恒空搜索 pass)、恒不可达分支(抽象类型判断、恒 0 的 skippedCount)、误导命名(名实相反的 `flagOnly`、`HasProcessingFailed`)、一处容错读取对齐、构建告警收窄(CS0162/0414 移除、CS0649 留并说明)、写后不读的 Stopwatch×6 与冗余 override×1、文档去过期。
 
-**主动未做(诚实记录)**:批次 5 的 no-op 转发器/恒等 getter 批量内联与装饰性习语清扫 —— 对反编译码 churn 大、行为/可读性收益近零,违背「最小 diff、不做大范围重写」,留作独立专项。`musictag/System.ValueTuple.dll` 等孤儿运行期资产已在更早批次处理。
+**批次 7 重启了批次 5 的推迟项并逐子类穷举(诚实记录)**:其中真死代码(Stopwatch×6、PhraseTrie `GetChild(char)` override)已全部清除;其余子类经证据复核确认**无安全且有价值的动作** —— `while+无条件 break`/双重否定/三元布尔全 0;no-op 转发器与恒等 getter 全为必需 override、有义谓词助手或一致风格 `return field;`(批量内联=数十调用点 churn、收益≈0,违「最小 diff/不做大范围重写」,故不动);`.Dispose()` 全为必需资源释放,0 可动项。唯一遗留 `Kugou 关键词拼接方向不一致` 属**行为值差异**(且当前无可观察影响),已记入「潜在缺陷」留人决策,未改。`musictag/System.ValueTuple.dll` 等孤儿运行期资产已在更早批次处理。
 
 **未覆盖验证(项目固有)**:无单元测试;联网 provider 的实际写回路径不被 smoke test 触及,等价性依据数据流分析与构建,非实跑。
