@@ -4,7 +4,6 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Configuration;
-using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -183,8 +182,6 @@ internal class AutoMatchTagsDialog : Form
 					searchTask = this
 				};
 				worker.GetActiveFilePathMap().TryAdd(filePath, value: true);
-				Stopwatch stopwatch = new Stopwatch();
-				stopwatch.Start();
 				try
 				{
 					loadedTagContext.tagFile = worker.LoadCurrentTagFile();
@@ -215,7 +212,7 @@ internal class AutoMatchTagsDialog : Form
 				}
 				finally
 				{
-					FinishSearch(stopwatch);
+					FinishSearch();
 				}
 			}
 
@@ -295,10 +292,9 @@ internal class AutoMatchTagsDialog : Form
 				worker.shouldUpdateTextTags = false;
 			}
 
-			private void FinishSearch(Stopwatch stopwatch)
+			private void FinishSearch()
 			{
 				worker.GetActiveFilePathMap().TryRemove(filePath, out var _);
-				stopwatch.Stop();
 				if (worker.IsParallelWorker())
 				{
 					WaitForProcessorQueueSlot();
@@ -738,8 +734,6 @@ internal class AutoMatchTagsDialog : Form
 			{
 				return;
 			}
-			Stopwatch stopwatch = new Stopwatch();
-			stopwatch.Start();
 			if (loadErrorMessage == null)
 			{
 				ConfigDescriptorState.PictureData downloadedCoverPicture = null;
@@ -814,7 +808,6 @@ internal class AutoMatchTagsDialog : Form
 				GetOwnerDialog().failedCount++;
 			}
 			GetOwnerDialog().processedCount++;
-			stopwatch.Stop();
 		}
 
 		private IEnumerable<string> GetTextTagMatchKeys()
@@ -1775,7 +1768,6 @@ internal class AutoMatchTagsDialog : Form
 	{
 		AutoMatchTagsWorker worker = new AutoMatchTagsWorker(this, paths, progressDialog, canCancelReadonlyFile);
 		worker.RegisterProgressCallbacks();
-		Stopwatch stopwatch = Stopwatch.StartNew();
 		(string msg, bool isErr) result;
 		await Task.Run((Action)worker.Run, worker.CancellationToken);
 		progressDialog.CloseAfterCompletion();
@@ -1796,7 +1788,6 @@ internal class AutoMatchTagsDialog : Form
 			result = (autoMatchLog.ToString(), true);
 		}
 		GC.Collect();
-		stopwatch.Stop();
 		finallyCallback(result);
 	}
 
