@@ -5459,9 +5459,7 @@ internal class StateFieldInstance : Form
 		saveTagsContext.processedCount = 0;
 		saveTagsContext.currentFile = null;
 		saveTagsContext.progressDialog.AddProgressUpdateHandler(saveTagsContext.UpdateProgress);
-		Stopwatch stopWatch = new Stopwatch();
 		saveTagsContext.messageLog = new Page();
-		stopWatch.Start();
 		await Task.Run((Action)saveTagsContext.SaveTags, saveTagsContext.cancellationSource.Token);
 		saveTagsContext.progressDialog.CloseAfterCompletion();
 		(string, bool) value = default((string, bool));
@@ -5483,7 +5481,6 @@ internal class StateFieldInstance : Form
 			value.Item2 = true;
 		}
 		GC.Collect();
-		stopWatch.Stop();
 		RefreshSelectedItems(showErrorMessageBox: false, showProgressDialog: true, refreshStatusAllInfo: true, previousMessage: value);
 	}
 
@@ -5500,9 +5497,7 @@ internal class StateFieldInstance : Form
 		undoSaveTagsContext.processedCount = 0;
 		undoSaveTagsContext.currentFile = null;
 		undoSaveTagsContext.progressDialog.AddProgressUpdateHandler(undoSaveTagsContext.UpdateProgress);
-		Stopwatch stopWatch = new Stopwatch();
 		undoSaveTagsContext.messageLog = new Page();
-		stopWatch.Start();
 		await Task.Run((Action)undoSaveTagsContext.RestoreSavedTags, undoSaveTagsContext.cancellationSource.Token);
 		List<SelectedListViewItemInfo> refreshedItems = new List<SelectedListViewItemInfo>();
 		undoSaveTagsContext.processedCount = 0;
@@ -5536,7 +5531,6 @@ internal class StateFieldInstance : Form
 			value.Item2 = true;
 		}
 		TagHistoryRepository.ClearUndoState();
-		stopWatch.Stop();
 		RefreshItemsWithOptionalProgressDialog(refreshedItems.ToArray(), showErrorMessageBox: false, showProgressDialog: true, refreshStatusAllInfo: true, previousMessage: value, listForMirror: true);
 	}
 
@@ -5554,9 +5548,7 @@ internal class StateFieldInstance : Form
 		undoRenameContext.processedCount = 0;
 		undoRenameContext.currentFile = null;
 		undoRenameContext.progressDialog.AddProgressUpdateHandler(undoRenameContext.UpdateProgress);
-		Stopwatch stopWatch = new Stopwatch();
 		undoRenameContext.errorLog = new Page();
-		stopWatch.Start();
 		await Task.Run((Action)undoRenameContext.UndoRenames, undoRenameContext.cancellationSource.Token);
 		List<SelectedListViewItemInfo> list = new List<SelectedListViewItemInfo>();
 		undoRenameContext.processedCount = 0;
@@ -5595,7 +5587,6 @@ internal class StateFieldInstance : Form
 			value.Item2 = true;
 		}
 		TagHistoryRepository.ClearUndoState();
-		stopWatch.Stop();
 		RefreshItemsWithOptionalProgressDialog(list.ToArray(), showErrorMessageBox: false, showProgressDialog: true, refreshStatusAllInfo: true, previousMessage: value, listForMirror: true);
 	}
 

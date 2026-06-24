@@ -14,11 +14,6 @@ internal class PhraseTrie : TrieNode<string[]>
 	{
 	}
 
-	public override TrieNode<string[]> GetChild(char character)
-	{
-		return base.GetChild(character);
-	}
-
 	public override TrieMatcher<string[]> GetMatcher(string text)
 	{
 		return GetMatcher(text.ToCharArray());
