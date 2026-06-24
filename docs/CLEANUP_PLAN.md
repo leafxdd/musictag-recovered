@@ -31,11 +31,11 @@
     - Kugou：`AlbumId/AlbumAudioId/OriginalTitle/FileName/OtherName/SourceType`
     - QQ：`QqSongInfo.DurationSeconds/LyricPreview`、`QqAlbumInfo.Title/Subtitle`、`QqArtistInfo.Id/Mid/Title`
     - NetEase：`NetEaseAlbumInfo.Type`
-- [ ] **批次 2 — iTunes 功能退役完整清理（P2）**
-  - [ ] `OptionsDialog.cs`：删 `itunesCountryCodes`(32,280)、5 个控件字段(146-154)、本地化(388,420)、CountryList 加载+读取(561-570)、Hide(615)、`case "TagSrcITunes"`(636-638)、响应式宽度(703)、Settings 保存(789)、`InitializeComponent` 构造与布局(1046-1050,1116-1118,1190,1621-1657,2066-2069)。
-  - [ ] `Settings.cs`：删 `ItunesSearchParams_Country`(329-337)。
-  - [ ] `musictag/MusicTag.config`：删第 42 行 `<ItunesSearchParams_Country>`。
-  - [ ] `Resources`：删 `CountryList`(Resources.cs:136 + resx)+ iTunes dialog-text 资源键(`panelTagSrcItunesParams`/`lblItunesCountry`)。
+- [x] **批次 2 — iTunes 功能退役完整清理（P2）** ✅ 完成
+  - [x] `OptionsDialog.cs`：删 `itunesCountryCodes`、5 个控件字段、本地化、CountryList 加载+读取、Hide、`case "TagSrcITunes"`、响应式宽度、Settings 保存、`InitializeComponent` 构造与布局。
+  - [x] `Settings.cs`：删 `ItunesSearchParams_Country`。
+  - [x] `musictag/MusicTag.config`：删 `<ItunesSearchParams_Country>`。
+  - [x] `Resources`：删 `CountryList`(Resources.cs + resx)。注：iTunes dialog-text 资源键(`panelTagSrcItunesParams`/`lblItunesCountry`)不在 resx 中,无需删。
   - 验证：现有 OptionsDialog 反射构造 smoke test 兜底。注：`InitializeComponent` 已去扁平化为直线代码,当初保留理由已不成立。
 - [ ] **批次 3 — 退役源恒空搜索 pass（P2/P3）**
   - [ ] `CoverSearchDialog.cs`：删 `SearchByArtist`(557)及 “artist” pass 调用(116-125,150-153)。
@@ -63,4 +63,5 @@
 ## 进度日志
 
 - 2026-06-24 建文档,锁定 6 批计划。开始批次 1。
-- 2026-06-24 **批次 1 完成**。删 `WindowPlacement` 三件套、两个死枚举文件、`HtmlEncode/HtmlDecode`、`TrieNode.AddWord/GetChild(string)`、`DatabaseMapper` 死参 `interpolationMode`、provider DTO 只写不读字段(Kuwo 14 / Kugou 6 / QQ 7 / NetEase 1)+ `KuwoTagProvider.FillExtendedSongMetadata`。16 文件改(含 2 文件删),纯删除 −174 行。Debug+Release 0/0 + 3 smoke 全过。构建即验证了所有删除字段确为只写不读(否则编译失败)。
+- 2026-06-24 **批次 1 完成**。删 `WindowPlacement` 三件套、两个死枚举文件、`HtmlEncode/HtmlDecode`、`TrieNode.AddWord/GetChild(string)`、`DatabaseMapper` 死参 `interpolationMode`、provider DTO 只写不读字段(Kuwo 14 / Kugou 6 / QQ 7 / NetEase 1)+ `KuwoTagProvider.FillExtendedSongMetadata`。16 文件改(含 2 文件删),纯删除 −174 行。Debug+Release 0/0 + 3 smoke 全过。构建即验证了所有删除字段确为只写不读(否则编译失败)。commit `74f81a0`。
+- 2026-06-24 **批次 2 完成**。删退役 iTunes 源的全部残留:`OptionsDialog.cs` 的 itunes* 控件字段/构造初始化/本地化/CountryList 加载/Show-Hide/`case "TagSrcITunes"`/响应式宽度/Settings 保存/InitializeComponent 块(−82)、`Settings.cs` 的 `ItunesSearchParams_Country`、`Resources.cs`+`.resx` 的 `CountryList`、`MusicTag.config` 的持久值。5 文件改,纯删除 −103 行。Debug+Release 0/0 + 3 smoke 全过(OptionsDialog 反射构造守住 designer 手术)。commit `82c1969`。
