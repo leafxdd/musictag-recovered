@@ -75,21 +75,6 @@ internal static class NativeMethods
 		public string Data;
 	}
 
-	public struct WindowPlacement
-	{
-		public int Length;
-
-		public int Flags;
-
-		public int ShowCommand;
-
-		public Point MinPosition;
-
-		public Point MaxPosition;
-
-		public Rectangle NormalPosition;
-	}
-
 	public const int ShowWindowHide = 0;
 
 	public const int ShowWindowNormal = 1;
@@ -108,12 +93,6 @@ internal static class NativeMethods
 
 	[DllImport("user32.dll", EntryPoint = "ShowWindowAsync")]
 	public static extern bool ShowWindowAsync(IntPtr windowHandle, int command);
-
-	[DllImport("user32.dll", EntryPoint = "SetWindowPlacement")]
-	public static extern bool SetWindowPlacement(IntPtr windowHandle, [In] ref WindowPlacement placement);
-
-	[DllImport("user32.dll", EntryPoint = "GetWindowPlacement")]
-	private static extern bool GetWindowPlacement(IntPtr windowHandle, out WindowPlacement placement);
 
 	[DllImport("user32.dll", EntryPoint = "SetForegroundWindow")]
 	public static extern bool SetForegroundWindow(IntPtr windowHandle);

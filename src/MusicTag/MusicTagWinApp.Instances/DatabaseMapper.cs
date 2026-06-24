@@ -157,7 +157,7 @@ internal static class DatabaseMapper
 		}
 	}
 
-	public static void SaveJpeg(Image image, Stream output, long quality, InterpolationMode interpolationMode = InterpolationMode.HighQualityBicubic)
+	public static void SaveJpeg(Image image, Stream output, long quality)
 	{
 		EncoderParameters encoderParameters = new EncoderParameters(1);
 		encoderParameters.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, quality);
@@ -165,12 +165,12 @@ internal static class DatabaseMapper
 		image.Save(output, encoder, encoderParameters);
 	}
 
-	public static byte[] EncodeJpeg(Image image, long quality, InterpolationMode interpolationMode = InterpolationMode.HighQualityBicubic)
+	public static byte[] EncodeJpeg(Image image, long quality)
 	{
 		try
 		{
 			using MemoryStream memoryStream = new MemoryStream();
-			SaveJpeg(image, memoryStream, quality, interpolationMode);
+			SaveJpeg(image, memoryStream, quality);
 			return memoryStream.ToArray();
 		}
 		catch (Exception ex)

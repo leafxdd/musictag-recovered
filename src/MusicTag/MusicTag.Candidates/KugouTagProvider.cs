@@ -224,17 +224,11 @@ internal class KugouTagProvider : RemoteTagProviderBase
 		return new KugouSongInfo
 		{
 			AudioId = GetStringField(songJson, "audio_id"),
-			AlbumId = GetStringField(songJson, "album_id"),
-			AlbumAudioId = GetStringField(songJson, "album_audio_id"),
 			Title = GetStringField(songJson, "songname"),
-			OriginalTitle = GetStringField(songJson, "songname_original"),
 			Artist = GetStringField(songJson, "singername"),
 			Album = GetStringField(songJson, "album_name"),
-			FileName = GetStringField(songJson, "filename"),
-			OtherName = GetStringField(songJson, "othername"),
 			Hash = GetStringField(songJson, "hash"),
-			DurationMs = GetIntField(songJson, "duration") * 1000,
-			SourceType = GetIntField(songJson, "srctype")
+			DurationMs = GetIntField(songJson, "duration") * 1000
 		};
 	}
 

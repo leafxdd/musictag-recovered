@@ -25,13 +25,9 @@ internal class QqSongInfo
 
 	public string ReleaseDate;
 
-	public long? DurationSeconds;
-
 	public string Title;
 
 	public string Subtitle;
-
-	public string LyricPreview;
 
 	public QqAlbumInfo Album { get; } = new QqAlbumInfo();
 

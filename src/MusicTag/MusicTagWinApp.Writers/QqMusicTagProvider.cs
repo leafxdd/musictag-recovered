@@ -368,11 +368,9 @@ internal class QqMusicTagProvider : RemoteTagProviderBase
 		songInfo.GenreId = GetNullableIntField(songJson, "genre");
 		songInfo.TrackNumber = GetNullableIntField(songJson, "index_album");
 		songInfo.DiscNumber = GetNullableIntField(songJson, "index_cd");
-		songInfo.DurationSeconds = GetNullableLongField(songJson, "interval");
 		songInfo.ReleaseDate = GetStringField(songJson, "time_public");
 		songInfo.Title = TextEncodingService.DecodeBasicHtmlEntities(GetStringField(songJson, "title"));
 		songInfo.Subtitle = TextEncodingService.DecodeBasicHtmlEntities(GetStringField(songJson, "subtitle"));
-		songInfo.LyricPreview = GetStringField(songJson, "lyric");
 
 		ReadSingerInfo(songInfo, songJson["singer"]);
 		ReadAlbumInfo(songInfo, songJson["album"]);
@@ -390,10 +388,7 @@ internal class QqMusicTagProvider : RemoteTagProviderBase
 		{
 			songInfo.Artists.Add(new QqArtistInfo
 			{
-				Id = GetLongField(singer, "id"),
-				Mid = GetStringField(singer, "mid"),
-				Name = GetStringField(singer, "name"),
-				Title = GetStringField(singer, "title")
+				Name = GetStringField(singer, "name")
 			});
 		}
 	}
@@ -408,8 +403,6 @@ internal class QqMusicTagProvider : RemoteTagProviderBase
 		songInfo.Album.Id = GetLongField(album, "id");
 		songInfo.Album.Mid = GetStringField(album, "mid");
 		songInfo.Album.Name = TextEncodingService.DecodeBasicHtmlEntities(GetStringField(album, "name"));
-		songInfo.Album.Title = GetStringField(album, "title");
-		songInfo.Album.Subtitle = GetStringField(album, "subtitle");
 	}
 
 	private static string GetStringField(JToken token, string fieldName)

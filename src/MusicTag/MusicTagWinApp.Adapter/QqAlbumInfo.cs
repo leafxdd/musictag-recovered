@@ -7,8 +7,4 @@ internal class QqAlbumInfo
 	public string Mid;
 
 	public string Name;
-
-	public string Title;
-
-	public string Subtitle;
 }

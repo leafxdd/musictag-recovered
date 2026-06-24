@@ -6,8 +6,6 @@ internal class NetEaseAlbumInfo
 
 	public string Name;
 
-	public string Type;
-
 	public long? PublishTime;
 
 	public string CoverUrl;

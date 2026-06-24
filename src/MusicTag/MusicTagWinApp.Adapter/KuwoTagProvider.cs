@@ -329,7 +329,6 @@ internal class KuwoTagProvider : RemoteTagProviderBase
 
 					if (!string.IsNullOrWhiteSpace(song.Album))
 					{
-						FillExtendedSongMetadata(song, songJson);
 						albumResults.Add(song);
 						continue;
 					}
@@ -354,7 +353,6 @@ internal class KuwoTagProvider : RemoteTagProviderBase
 								}
 
 								KuwoSongInfo childSong = CreateSongFromJson(childJson);
-								FillExtendedSongMetadata(childSong, childJson);
 								albumResults.Add(childSong);
 							}
 							catch (Exception childParseError)
@@ -369,7 +367,6 @@ internal class KuwoTagProvider : RemoteTagProviderBase
 						continue;
 					}
 
-					FillExtendedSongMetadata(song, songJson);
 					fallbackResults.Add(song);
 				}
 				catch (Exception itemParseError)
@@ -395,26 +392,8 @@ internal class KuwoTagProvider : RemoteTagProviderBase
 			Album = ReadJsonString(token, "ALBUM"),
 			TrackId = Regex.Replace(ReadJsonString(token, "MUSICRID"), "^MUSIC_", ""),
 			ArtistId = ReadJsonString(token, "ARTISTID"),
-			OriginalTitle = ReadJsonString(token, "NAME"),
-			AlbumId = ReadJsonString(token, "ALBUMID")
+			OriginalTitle = ReadJsonString(token, "NAME")
 		};
-	}
-
-	private static void FillExtendedSongMetadata(KuwoSongInfo song, JObject token)
-	{
-		song.AlbumArtist = ReadJsonString(token, "AARTIST");
-		song.Alias = ReadJsonString(token, "ALIAS");
-		song.Duration = ReadJsonString(token, "DURATION");
-		song.FormattedArtist = ReadJsonString(token, "FARTIST");
-		song.Format = ReadJsonString(token, "FORMAT");
-		song.FormattedTitle = ReadJsonString(token, "FSONGNAME");
-		song.KMark = ReadJsonString(token, "KMARK");
-		song.MusicInfo = ReadJsonString(token, "MINFO");
-		song.MusicVideoFlag = ReadJsonString(token, "MVFLAG");
-		song.MusicVideoPicture = ReadJsonString(token, "MVPIC");
-		song.MusicVideoQuality = ReadJsonString(token, "MVQUALITY");
-		song.Subtitle = ReadJsonString(token, "SUBTITLE");
-		song.Tags = ReadJsonString(token, "TAG");
 	}
 
 	private void PopulateSongDetails(KuwoSongInfo song, string detailsJson)

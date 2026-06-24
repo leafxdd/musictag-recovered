@@ -110,17 +110,6 @@ internal class TrieNode<T> : IComparable<TrieNode<T>>
 		return Array.BinarySearch(children, new TrieNode<T>(childCharacter));
 	}
 
-	public void AddWord(string word, T value)
-	{
-		TrieNode<T> currentNode = this;
-		for (int index = 0; index < word.Length; index++)
-		{
-			TrieNodeKind kind = word.Length == index + 1 ? TrieNodeKind.Word : TrieNodeKind.Prefix;
-			currentNode.AddChild(new TrieNode<T>(word[index], (int)kind, value));
-			currentNode = currentNode.children[currentNode.FindChildIndex(word[index])];
-		}
-	}
-
 	public int CompareTo(TrieNode<T> other)
 	{
 		if (other == null)
@@ -148,25 +137,6 @@ internal class TrieNode<T> : IComparable<TrieNode<T>>
 			return null;
 		}
 		return children[childIndex];
-	}
-
-	public virtual TrieNode<T> GetChild(string word)
-	{
-		TrieNode<T> currentNode = this;
-		for (int index = 0; index < word.Length; index++)
-		{
-			int childIndex = currentNode.FindChildIndex(word[index]);
-			if (childIndex < 0)
-			{
-				return null;
-			}
-			currentNode = currentNode.children[childIndex];
-			if (currentNode == null)
-			{
-				return null;
-			}
-		}
-		return currentNode;
 	}
 
 	public virtual TrieMatcher<T> GetMatcher(string text)

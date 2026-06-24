@@ -615,7 +615,6 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase
 			{
 				Id = GetLongField(albumJson, "id"),
 				Name = GetStringOrEmpty(albumJson["name"]),
-				Type = GetStringOrEmpty(albumJson["type"]),
 				PublishTime = GetNullableLongField(albumJson, "publishTime"),
 				CoverUrl = GetStringOrEmpty(albumJson["picUrl"])
 			};
