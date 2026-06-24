@@ -14,10 +14,12 @@
 `new ResourceManager("MusicTag.Schemes.EventRulesSchema", ...)` 加载本地化资源；该字符串对应预编译
 （附属）程序集中的资源名，**保持原样，不要随类型/文件名改动**，否则本地化文案会丢失。
 
-## 暂不删除的空壳或生成类
+## 已删除的空壳/生成类
 
-- `src/MusicTag/MusicTagWinApp.Exporters/PolicyTokenExporter.cs`：当前是空静态类。名称同时出现在资源键 `MusicTagWinApp.Exporters.PolicyTokenExporter` 中，并被错误/提示窗口标题间接使用。是否删除或改名需要先确认资源兼容性。
-- `src/MusicTag/PrivateImplementationDetails.cs`：编译器生成的静态数据容器。虽然名称不可读，但通常承载反编译出的数组或常量数据，不应手工改名或删除。
+以下两个反编译空壳/生成类经确认无活动引用后已删除（详见 `MAINTENANCE.md`，commit `5964fa9`）：
+
+- `PolicyTokenExporter`：原为空静态类。其在资源系统中只是字符串键 `MusicTagWinApp.Exporters.PolicyTokenExporter`（经 `ResourceManager.GetString` 查找，用作错误/提示窗口标题），与这个空 C# 类彼此独立——删除类不影响资源查找，已由构建 + 冒烟验证。
+- `PrivateImplementationDetails`：反编译器留下的生成数据容器空壳，全代码库无引用（删除后 Debug+Release 仍 0/0，证明没有 `InitializeArray` 之类的 IL 依赖它）。
 
 ## 已重写的 async 状态机
 
@@ -31,7 +33,7 @@
 ## 已重写的大型反编译控制流
 
 - `src/MusicTag/MusicTagWinApp.Common/Tokenizer.cs` 的编码检测频率表初始化(`EncodingDetector.InitializeFrequencyTables`)原为约 4480 行的 `goto`/`switch` 混淆状态机,已重写为数据驱动的小型加载器(7 个 `static readonly int[]` 三元组表 + 一个 `LoadFrequencyTable` 回放循环),并删除了仅服务于它的 `PostRole`/`InvokeRole`/`DestroyRole` 桩(它们分别恒为 `true`/`false`/单元赋值,使原控制流完全静态)。等价性以**逐字节方式验证**:用反射 dump 原始构建中 7 张表的全部非零单元(共 3301 个),重写后重新 dump 并对 SHA256,结果完全一致;未改动的 `Score*Encoding` 只读这些表,故检测结果不变。验证脚本 `artifacts/Dump-TokenizerTables.ps1`、`artifacts/Generate-TokenizerRegion.ps1` 位于 gitignored 的 `artifacts/`。
-- 附带发现(未处理):`EncodingDetector` 在全代码库中**从未被实例化**——`Tokenizer.DetectFileEncoding` 走的是 native `ResolveToken`(`MusicTag.dll`)P/Invoke,这套托管打分器目前是死代码。按保守策略仅去混淆其初始化,是否删除整个未用类留待后续单独决定。
+- 附带发现并已处理：`EncodingDetector` 在全代码库中**从未被实例化**——`Tokenizer.DetectFileEncoding` 走的是 native `ResolveToken`(`MusicTag.dll`)P/Invoke,这套托管打分器是死代码。该未用类(连同 `EncodingNameTables`)已在后续清理批次删除(commit `5964fa9`,见 `MAINTENANCE.md`);`Tokenizer.cs` 现仅保留 `DetectFileEncoding`/`ReadFileSampleBytes` 与 `ResolveToken` P/Invoke 导入,上一条记录的频率表初始化重写因此已成历史(类不再存在)。
 
 ## 后续处理原则
 
