@@ -159,8 +159,8 @@ TagLibSharp 2.3.0(NuGet,引用 `lib/net462/TagLibSharp.dll`)支持其中 **15 �
   4. **有损格式 `BitsPerSample`**:native 填 `16`,TagLibSharp 给 `0`(仅无损有意义)。
   5. **`_ext`**:native 返回大写。
   6. **mp3/ogg 时长、码率**:估算口径差极小(时长 <40ms;ogg 码率 native 实测平均 vs taglib 标称);flac 时长完全一致。
-- 🔴 **阶段 A 首要核查项**:`半壶纱.mp3` 封面数 **native=0 / TagLibSharp=6**,其余有封面样本两边都=1。疑似 native 漏读该文件多图(taglib 更全),需查清图片帧结构与两边语义,再定封面映射口径。
+- ✅ **封面语义差异已查清**:`半壶纱.mp3` 的“6 张图”实为 Serato DJ 写入的 6 个 `PictureType.NotAPicture` / `application/json` 元数据对象(CuePoints、Serato Markers、Key、Energy、BeatGrid),**非真实封面**;native 正确过滤(返回 0),TagLibSharp 把它们计入 `Tag.Pictures`。**阶段 A 规则**:封面读写一律过滤 `Type == PictureType.NotAPicture`(或只取 `image/*` mime),即与 native 等价。其余样本的真实封面两边均 =1。
 
 **③ 编码检测库候选**(阶段 B `de` 替代):**UTF.Unknown**(MIT,活跃,Mozilla 通用字符集检测移植)或 Ude.NetStandard;保留 `ISO8859-1`/空 → `Encoding.Default` 回退,阶段 B 对 `.lrc` 小样本对拍。
 
-**结论**:标签 I/O 可整体迁移到 TagLibSharp、**补丁可移除**;唯一需先查清的是封面读取语义差异。冷门格式缺口收窄到三个边缘容器,推荐对其明确降级(§9 c)。
+**结论**:标签 I/O 可整体迁移到 TagLibSharp、**补丁可移除**;封面语义差异已查清(过滤 `NotAPicture` 即与 native 等价),**阶段 A 无已知阻塞**。冷门格式缺口收窄到三个边缘容器,推荐对其明确降级(§9 c)。
