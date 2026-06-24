@@ -90,13 +90,6 @@ internal static class NativeMethods
 		public Rectangle NormalPosition;
 	}
 
-	public enum DpiAwareness
-	{
-		None,
-		SystemAware,
-		PerMonitorAware
-	}
-
 	public const int ShowWindowHide = 0;
 
 	public const int ShowWindowNormal = 1;
