@@ -324,9 +324,9 @@ internal class ConfigDescriptorState : IDisposable
 		TagValues.Add("hasvideotrack", HasVideoTrack(nativeTagHandle));
 	}
 
-	public void LoadPictureSummary(bool includePictureBytes)
+	public void LoadPictureSummary(bool flagOnly)
 	{
-		if (includePictureBytes)
+		if (flagOnly)
 		{
 			if (!TagValues.ContainsKey("haspicture"))
 			{
@@ -389,7 +389,7 @@ internal class ConfigDescriptorState : IDisposable
 				Console.WriteLine("LoadAllPictures error:" + ex.GetMessageChain());
 				try
 				{
-					LoadPictureSummary(includePictureBytes: false);
+					LoadPictureSummary(flagOnly: false);
 					if (TagValues.TryGetValue("picturedata", out object value) && value is byte[] pictureBytes)
 					{
 						pictures.Add(new PictureData

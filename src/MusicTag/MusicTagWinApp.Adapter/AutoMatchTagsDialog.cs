@@ -393,7 +393,7 @@ internal class AutoMatchTagsDialog : Form
 			return fieldName != "cover" && fieldName != "lyrics";
 		}
 
-		private static bool IsSelectedCoverData(ConfigDescriptorState.PictureData coverData)
+		private static bool HasProcessingFailed(ConfigDescriptorState.PictureData coverData)
 		{
 			return coverData.ProcessingFailed;
 		}
@@ -1003,7 +1003,7 @@ internal class AutoMatchTagsDialog : Form
 					}
 				};
 				StateFieldInstance.CompressPictures(pictures, useRestoreLimits: false);
-				if (!pictures.Exists(IsSelectedCoverData))
+				if (!pictures.Exists(HasProcessingFailed))
 				{
 					return pictures[0];
 				}

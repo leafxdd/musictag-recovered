@@ -428,7 +428,7 @@ internal class StateFieldInstance : Form
 						{
 							tagFile.LoadBasicTagFields();
 							tagFile.LoadAudioProperties();
-							tagFile.LoadPictureSummary(includePictureBytes: true);
+							tagFile.LoadPictureSummary(flagOnly: true);
 							tagFile.LoadLyrics();
 							if (tagFile.IsExcludedByFileFilter())
 							{
@@ -559,7 +559,7 @@ internal class StateFieldInstance : Form
 					{
 						tagState.LoadBasicTagFields();
 						tagState.LoadAudioProperties();
-						tagState.LoadPictureSummary(includePictureBytes: true);
+						tagState.LoadPictureSummary(flagOnly: true);
 						tagState.LoadLyrics();
 					}
 					else
@@ -2196,7 +2196,7 @@ internal class StateFieldInstance : Form
 					Action<string> action = errorRecorder.RecordError;
 					if (configDescriptorState.IsLoadedSuccessfully())
 					{
-						configDescriptorState.LoadPictureSummary(includePictureBytes: false);
+						configDescriptorState.LoadPictureSummary(flagOnly: false);
 						if (configDescriptorState["haspicture"] is bool hasPicture && hasPicture && configDescriptorState["picturedata"] is byte[] array)
 						{
 							try
@@ -5530,10 +5530,6 @@ internal class StateFieldInstance : Form
 		{
 			value.Item1 = Resources.Msg_UndoCompleted + "\n" + undoSaveTagsContext.messageLog.ToString();
 		}
-		else if (undoSaveTagsContext.skippedCount > 0)
-		{
-			value.Item1 = Resources.Msg_Skipped + "\n" + undoSaveTagsContext.messageLog.ToString();
-		}
 		else
 		{
 			value.Item1 = undoSaveTagsContext.messageLog.ToString();
@@ -5593,14 +5589,10 @@ internal class StateFieldInstance : Form
 		{
 			value.Item1 = Resources.Msg_UndoCompleted + "\n" + undoRenameContext.errorLog.ToString();
 		}
-		else if (undoRenameContext.skippedCount <= 0)
+		else
 		{
 			value.Item1 = undoRenameContext.errorLog.ToString();
 			value.Item2 = true;
-		}
-		else
-		{
-			value.Item1 = Resources.Msg_Skipped + "\n" + undoRenameContext.errorLog.ToString();
 		}
 		TagHistoryRepository.ClearUndoState();
 		stopWatch.Stop();

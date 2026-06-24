@@ -27,37 +27,6 @@ internal class EditableListView : HeaderAwareListView
 		public EmbeddedControlSubItem SubItem;
 	}
 
-	private class TextSubItemComparer : IComparer
-	{
-		private int columnIndex;
-
-		private SortOrder sortOrder;
-
-		public TextSubItemComparer()
-		{
-			columnIndex = 0;
-			sortOrder = SortOrder.Ascending;
-		}
-
-		public TextSubItemComparer(int columnIndex, SortOrder sortOrder)
-		{
-			this.columnIndex = columnIndex;
-			this.sortOrder = sortOrder;
-		}
-
-		public int Compare(object left, object right)
-		{
-			string leftText = ((ListViewItem)left).SubItems[columnIndex].Text;
-			string rightText = ((ListViewItem)right).SubItems[columnIndex].Text;
-			int compareResult = CompareSortableText(leftText, rightText);
-			if (sortOrder == SortOrder.Descending)
-			{
-				compareResult *= -1;
-			}
-			return compareResult;
-		}
-	}
-
 	private class DrawableSubItemSortValueComparer : IComparer
 	{
 		private int columnIndex;
@@ -594,10 +563,6 @@ internal class EditableListView : HeaderAwareListView
 			{
 					base.ListViewItemSorter = new AssociatedValueComparer(base.Sorting);
 			}
-		}
-		else if (base.Items[0].SubItems[sortedColumnIndex].GetType() == typeof(DrawableListViewSubItem))
-		{
-			base.ListViewItemSorter = new TextSubItemComparer(e.Column, base.Sorting);
 		}
 		else
 		{
