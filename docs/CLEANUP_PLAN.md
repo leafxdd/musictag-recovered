@@ -47,11 +47,10 @@
   - [x] `StateFieldInstance.cs`：删 Undo 的 “Skipped” 死分支。已证 `UndoSaveTagsTaskContext`(1502-1652)/`UndoRenameTaskContext`(1691-1778)内 `skippedCount` 仅声明+读取、从不自增 → 恒 0;UndoSaveTags 删恒假 `else if (skippedCount>0)`,UndoRename 把恒真 `else if (skippedCount<=0)` 折叠、删死的末尾 `else{Msg_Skipped}`。多文件汇总行仍报该计数(恒 0),不动。
   - [x] 改名 `ConfigDescriptorState.LoadPictureSummary` 参数 `includePictureBytes`→`flagOnly`(名实相反:true=只标志、false=载字节);纯 token 替换 6 处,布尔值全不变。
   - [x] 改名 `AutoMatchTagsDialog.IsSelectedCoverData`→`HasProcessingFailed`(方法体仅 `return coverData.ProcessingFailed`,与选择无关）。
-- [ ] **批次 5 — 可读性残留 + 构建卫生（可选,纯整洁）**
-  - [ ] no-op 转发/恒等 getter 簇内联（AutoMatchWorker、SFI、PhraseTrie 冗余 override 等）。
-  - [ ] 习语残留:while+无条件 break、双重否定、重复计数类、多余别名、Stopwatch 写后不读、提前 Dispose、KugouTagProvider 关键词参数顺序。
-  - [ ] `TrackSearchContext:76` `JToken.Value<long>()` → 容错读取。
-  - [ ] 移除 `NoWarn` 三项压制(csproj:15)——Debug+Release 都验证 0 warning。
+- [x] **批次 5 — 可读性残留 + 构建卫生（可选,纯整洁）** ✅ 完成（部分按判断推迟）
+  - [x] `TrackSearchContext:76` `JToken.Value<long>()` → `long.TryParse(token.ToString())` 容错读取(对齐既有 `GetNullableLongField` 与 resilience 不变量;非数值 musicId 不再抛异常丢掉整个 LinkedMusicMetadata）。
+  - [x] `NoWarn` 收窄:移除 `CS0162`/`CS0414`(全量 Rebuild 实测两者均 0),**保留 `CS0649`**——移除后暴露 15 条全是误报(interop `Marshal.PtrToStructure`:`NativeNotificationHeader`/`NativePictureEntry`/`ThumbButton`;`BinaryFormatter` 反序列化:`MappingChars`;WinForms designer:`components`),字段不可删,已在 csproj 加注释说明。
+  - [~] no-op 转发/恒等 getter 簇内联、习语残留(while+无条件 break、双重否定、重复计数、多余别名、Stopwatch 写后不读、提前 Dispose、Kugou 关键词参数顺序)：**按保守政策推迟**——纯装饰性、对反编译码 churn 大而行为/可读性收益近零,且每处都带非零风险,违背「最小 diff、不做大范围重写」。非用户所求(死代码/残留/命名)的核心,留作独立专项按需处理。
 - [ ] **批次 6 — 文档同步**
   - [ ] `CLAUDE.md`(96-107) 过期反编译约定（文件已改名、async 状态机已重写、Tokenizer 表初始化已删）。
   - [ ] `docs/MAINTENANCE.md` 追加本轮变更日志；`DECOMPILATION_NOTES.md` 同步。
@@ -67,3 +66,4 @@
 - 2026-06-24 **批次 2 完成**。删退役 iTunes 源的全部残留:`OptionsDialog.cs` 的 itunes* 控件字段/构造初始化/本地化/CountryList 加载/Show-Hide/`case "TagSrcITunes"`/响应式宽度/Settings 保存/InitializeComponent 块(−82)、`Settings.cs` 的 `ItunesSearchParams_Country`、`Resources.cs`+`.resx` 的 `CountryList`、`MusicTag.config` 的持久值。5 文件改,纯删除 −103 行。Debug+Release 0/0 + 3 smoke 全过(OptionsDialog 反射构造守住 designer 手术)。commit `82c1969`。
 - 2026-06-24 **批次 3 完成**。删退役源恒空搜索 pass:`CoverSearchDialog.SearchByArtist` 桩 + 两处调用;`CombinedTagSearchDialog` 的 `SearchAlbumFallbackTracks`/`SearchCurrentContextAlbumFallback` 两方法 + `SearchAllSources` 两处 album-fallback 块(preferred + 多源);`AutoMatchTagsDialog` album-fallback 块。3 文件改,纯删除 −62 行。已逐一追踪 rank/report 链确认空 pass 无副作用(空列表→排序/限流/上报皆 no-op,不改剩余计数,候选与排序不变)。Debug+Release 0/0 + 3 smoke 全过。commit `c15d874`。
 - 2026-06-24 **批次 4 完成**。死分支:`EditableListView.TextSubItemComparer` 死类 + 恒假抽象类型分支折叠;`StateFieldInstance` 两个 Undo 的 “Skipped” 死分支(已证 skippedCount 在两 undo context 内恒 0)。命名:`LoadPictureSummary(includePictureBytes→flagOnly)`(名实相反,纯值不变 token 替换 6 处)、`IsSelectedCoverData→HasProcessingFailed`。4 文件改,−52/+9。Debug+Release 0/0 + 3 smoke 全过(构建验证改名各调用点完整)。commit `3710e9c`。
+- 2026-06-24 **批次 5 完成（部分推迟）**。`TrackSearchContext` musicId 改容错 `long.TryParse`;`NoWarn` 收窄为仅 `CS0649`(移除已 0 的 CS0162/CS0414,CS0649 是 interop/反序列化/designer 误报必留,加注释)。2 文件改,+7/−2。关键发现:全量 Rebuild 暴露 15 条 CS0649 全为运行期赋值字段误报,非死代码。no-op 转发内联/装饰性习语清扫按保守政策**主动推迟**(churn 大、收益近零、非用户核心诉求)。Debug+Release 全量 Rebuild **0 warning/0 error** + 3 smoke 全过。commit `f88ffee`。
