@@ -31,8 +31,6 @@ internal class LyricSearchResult
 
 	public SearchSource SearchSource { get; set; }
 
-	public int LyricType { get; set; }
-
 	public string Lyric { get; set; }
 
 	public string TranslatedLyric { get; set; }

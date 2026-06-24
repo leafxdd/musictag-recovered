@@ -45,11 +45,6 @@ internal class SourceOrderControl : UserControl
 		sources = sourceItems;
 	}
 
-	public List<SourceItem> GetSources()
-	{
-		return sources;
-	}
-
 	public void ApplyListViewOrder()
 	{
 		foreach (ListViewItem listViewItem in sourceListView.Items)

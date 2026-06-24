@@ -16,8 +16,6 @@ internal class NetEaseSongInfo
 
 	public int? TrackNumber;
 
-	public string ExtraInfo;
-
 	public long? MvId;
 
 	public long? Flag;

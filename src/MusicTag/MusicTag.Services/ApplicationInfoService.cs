@@ -82,65 +82,6 @@ internal static class ApplicationInfoService
 		return 0;
 	}
 
-	public static string GetAssemblyTitle()
-	{
-		object[] customAttributes = Assembly.GetExecutingAssembly().GetCustomAttributes(typeof(AssemblyTitleAttribute), inherit: false);
-		if (customAttributes.Length > 0)
-		{
-			AssemblyTitleAttribute assemblyTitleAttribute = (AssemblyTitleAttribute)customAttributes[0];
-			if (assemblyTitleAttribute.Title != "")
-			{
-				return assemblyTitleAttribute.Title;
-			}
-		}
-		return Path.GetFileNameWithoutExtension(Assembly.GetExecutingAssembly().CodeBase);
-	}
-
-	public static string GetAssemblyVersion()
-	{
-		return Assembly.GetExecutingAssembly().GetName().Version.ToString();
-	}
-
-	public static string GetAssemblyDescription()
-	{
-		object[] customAttributes = Assembly.GetExecutingAssembly().GetCustomAttributes(typeof(AssemblyDescriptionAttribute), inherit: false);
-		if (customAttributes.Length == 0)
-		{
-			return "";
-		}
-		return ((AssemblyDescriptionAttribute)customAttributes[0]).Description;
-	}
-
-	public static string GetAssemblyProduct()
-	{
-		object[] customAttributes = Assembly.GetExecutingAssembly().GetCustomAttributes(typeof(AssemblyProductAttribute), inherit: false);
-		if (customAttributes.Length == 0)
-		{
-			return "";
-		}
-		return ((AssemblyProductAttribute)customAttributes[0]).Product;
-	}
-
-	public static string GetAssemblyCopyright()
-	{
-		object[] customAttributes = Assembly.GetExecutingAssembly().GetCustomAttributes(typeof(AssemblyCopyrightAttribute), inherit: false);
-		if (customAttributes.Length == 0)
-		{
-			return "";
-		}
-		return ((AssemblyCopyrightAttribute)customAttributes[0]).Copyright;
-	}
-
-	public static string GetAssemblyCompany()
-	{
-		object[] customAttributes = Assembly.GetExecutingAssembly().GetCustomAttributes(typeof(AssemblyCompanyAttribute), inherit: false);
-		if (customAttributes.Length == 0)
-		{
-			return "";
-		}
-		return ((AssemblyCompanyAttribute)customAttributes[0]).Company;
-	}
-
 	public static string GetFileVersion()
 	{
 		object[] customAttributes = Assembly.GetExecutingAssembly().GetCustomAttributes(typeof(AssemblyFileVersionAttribute), false);

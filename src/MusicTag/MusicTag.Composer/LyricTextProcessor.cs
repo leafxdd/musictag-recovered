@@ -745,51 +745,5 @@ internal class LyricTextProcessor
 		return lyricText;
 	}
 
-	public static (string, string) SplitXiamiTranslatedLyric(string lyricText)
-	{
-		Regex timestampOrTranslationMarkerRegex = new Regex($"({TimestampRegex})|(\\[x-trans\\])");
-		StringBuilder originalLyricBuilder = new StringBuilder();
-		StringBuilder translatedLyricBuilder = new StringBuilder();
-		string previousTimestampPrefix = "";
-		string[] lyricLines = lyricText.Split(new char[1] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
-		foreach (string lyricLine in lyricLines)
-		{
-			StringBuilder timestampPrefixBuilder = new StringBuilder();
-			bool isTranslationLine = false;
-			foreach (Match markerMatch in timestampOrTranslationMarkerRegex.Matches(lyricLine))
-			{
-				if (!string.IsNullOrEmpty(markerMatch.Groups[1].Value))
-				{
-					timestampPrefixBuilder.Append(markerMatch.Groups[1].Value);
-				}
-				if (!string.IsNullOrEmpty(markerMatch.Groups[5].Value))
-				{
-					isTranslationLine = true;
-				}
-			}
-			string lyricContent = "";
-			string[] lineParts = timestampOrTranslationMarkerRegex.Split(lyricLine);
-			if (lineParts != null && lineParts.Length != 0)
-			{
-				lyricContent = lineParts[lineParts.Length - 1].Trim();
-			}
-			if (timestampPrefixBuilder.Length > 0)
-			{
-				originalLyricBuilder.Append(timestampPrefixBuilder.ToString() + lyricContent + "\n");
-			}
-			else if (isTranslationLine)
-			{
-				translatedLyricBuilder.Append(previousTimestampPrefix + lyricContent + "\n");
-			}
-			else
-			{
-				originalLyricBuilder.Append(lyricLine + "\n");
-				translatedLyricBuilder.Append(lyricLine + "\n");
-			}
-			previousTimestampPrefix = timestampPrefixBuilder.ToString();
-		}
-		return (originalLyricBuilder.ToString(), translatedLyricBuilder.ToString());
-	}
-
 }
 

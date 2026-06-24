@@ -271,46 +271,6 @@ internal class EditableListView : HeaderAwareListView
 		});
 	}
 
-	public void RemoveEmbeddedControl(EmbeddedControlSubItem subItem)
-	{
-		Control control = subItem.EmbeddedControl;
-		for (int index = 0; index < embeddedControlBindings.Count; index++)
-		{
-			if (((EmbeddedControlBinding)embeddedControlBindings[index]).SubItem == subItem)
-			{
-				embeddedControlBindings.RemoveAt(index);
-				subItem.EmbeddedControl = null;
-				base.Controls.Remove(control);
-				control.Dispose();
-				return;
-			}
-		}
-	}
-
-	public Brush SortedColumnBackBrush
-	{
-		get
-		{
-			return sortedColumnBackBrush;
-		}
-		set
-		{
-			sortedColumnBackBrush = value;
-		}
-	}
-
-	public Brush SelectedRowBackBrush
-	{
-		get
-		{
-			return selectedRowBackBrush;
-		}
-		set
-		{
-			selectedRowBackBrush = value;
-		}
-	}
-
 	private void CommitInlineTextEditorOnEnter(object sender, KeyPressEventArgs e)
 	{
 		if (e.KeyChar == '\r')

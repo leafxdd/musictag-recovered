@@ -527,11 +527,6 @@ internal class ConfigDescriptorState : IDisposable
 		return SaveTagFileNative(nativeTagHandle, Settings.Default.ID3v2Version);
 	}
 
-	public bool ContainsRawValue(string key)
-	{
-		return TagValues.ContainsKey(key);
-	}
-
 	public bool TryGetRawValue(string key, out object value)
 	{
 		bool found = TagValues.TryGetValue(key, out object rawValue);
@@ -580,32 +575,6 @@ internal class ConfigDescriptorState : IDisposable
 		long minutes = totalMinutes % 60L;
 		long hours = totalMinutes / 60L;
 		return $"{hours:00}:{minutes:00}:{seconds:00}";
-	}
-
-	public static long ParseDurationTextToMilliseconds(string durationText)
-	{
-		try
-		{
-			long minutes = 0L;
-			long seconds = 0L;
-			int colonIndex = durationText.IndexOf(':');
-			if (colonIndex > 0)
-			{
-				minutes = long.Parse(durationText.Substring(0, colonIndex));
-			}
-			int dotIndex = durationText.IndexOf('.', colonIndex + 1);
-			if (dotIndex > 0)
-			{
-				seconds = long.Parse(durationText.Substring(colonIndex + 1, dotIndex - colonIndex - 1));
-			}
-			long milliseconds = int.Parse(durationText.Substring(dotIndex + 1));
-			return minutes * 60L * 1000L + seconds * 1000L + milliseconds;
-		}
-		catch (Exception ex)
-		{
-			Console.WriteLine("StringToDuration error:" + ex.Message);
-		}
-		return 0L;
 	}
 
 	public static string ReadAndFreeNativeString(IntPtr nativeStringPointer)

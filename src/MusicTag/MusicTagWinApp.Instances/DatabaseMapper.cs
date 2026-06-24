@@ -90,32 +90,6 @@ internal static class DatabaseMapper
 		}
 	}
 
-	public static string EncodeBase64String(string text, string encodingName = "UniCode")
-	{
-		try
-		{
-			return Convert.ToBase64String(Encoding.GetEncoding(encodingName).GetBytes(text));
-		}
-		catch
-		{
-			return text;
-		}
-	}
-
-	public static string DecryptRijndaelEcbBase64(string encryptedBase64, string key)
-	{
-		byte[] keyBytes = Encoding.UTF8.GetBytes(key);
-		byte[] encryptedBytes = Convert.FromBase64String(encryptedBase64);
-		using RijndaelManaged rijndael = new RijndaelManaged
-		{
-			Key = keyBytes,
-			Mode = CipherMode.ECB,
-			Padding = PaddingMode.PKCS7
-		};
-		byte[] decryptedBytes = rijndael.CreateDecryptor().TransformFinalBlock(encryptedBytes, 0, encryptedBytes.Length);
-		return Encoding.UTF8.GetString(decryptedBytes);
-	}
-
 	public static byte[] ComputeMd5Hash(byte[] bytes)
 	{
 		return new MD5CryptoServiceProvider().ComputeHash(bytes);
@@ -206,36 +180,9 @@ internal static class DatabaseMapper
 		}
 	}
 
-	public static bool SaveJpegFile(Image image, string filePath, long quality, InterpolationMode interpolationMode = InterpolationMode.HighQualityBicubic)
-	{
-		try
-		{
-			using (FileStream output = new FileStream(filePath, FileMode.Create))
-			{
-				SaveJpeg(image, output, quality, interpolationMode);
-			}
-			return true;
-		}
-		catch (Exception ex)
-		{
-			Console.WriteLine("BitmapToJpeg fail " + ex.Message);
-			return false;
-		}
-	}
-
 	public static ImageCodecInfo GetImageEncoderByMimeType(string mimeType)
 	{
 		return ImageCodecInfo.GetImageEncoders().First(encoder => encoder.MimeType == mimeType);
-	}
-
-	public static ImageCodecInfo GetImageDecoderByMimeType(string mimeType)
-	{
-		return ImageCodecInfo.GetImageDecoders().First(decoder => decoder.MimeType == mimeType);
-	}
-
-	public static ImageCodecInfo GetImageEncoderByFormatId(Guid formatId)
-	{
-		return ImageCodecInfo.GetImageEncoders().First(encoder => encoder.FormatID == formatId);
 	}
 
 	public static ImageCodecInfo GetImageDecoderByFormatId(Guid formatId)
@@ -305,12 +252,6 @@ internal static class DatabaseMapper
 		return new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddMilliseconds(unixMilliseconds);
 	}
 
-	public static long DateTimeToUnixMilliseconds(DateTime value)
-	{
-		DateTime dateTime = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-		return (long)(value - dateTime).TotalMilliseconds;
-	}
-
 	public static string EnsureDirectoryExists(string directoryPath)
 	{
 		if (!Directory.Exists(directoryPath))
@@ -338,11 +279,6 @@ internal static class DatabaseMapper
 	public static string GetUndoTempDirectoryPath()
 	{
 		return GetApplicationDirectory() + "temp\\Undo\\";
-	}
-
-	public static string GetLogDirectory()
-	{
-		return EnsureDirectoryExists(GetApplicationDirectory() + "temp\\Log") + "\\";
 	}
 
 	public static string GetSaveTagsLogDirectory()
@@ -385,11 +321,6 @@ internal static class DatabaseMapper
 		return startupLogFileName;
 	}
 	
-	public static string CreateCurrentLogFileName()
-	{
-		return DateTime.Now.ToString("yyyy-MM-dd HH_mm_ss") + ".log";
-	}
-
 	public static void ShowInformationMessage(string message)
 	{
 			MessageBox.Show(message, Resources.Information, MessageBoxButtons.OK, MessageBoxIcon.Asterisk);
@@ -398,11 +329,6 @@ internal static class DatabaseMapper
 	public static void ShowErrorMessage(string message)
 	{
 		MessageBox.Show(message, Resources.PolicyTokenExporter, MessageBoxButtons.OK, MessageBoxIcon.Hand);
-	}
-
-	public static void ShowWarningMessage(string message)
-	{
-		MessageBox.Show(message, Resources.Warning, MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
 	}
 
 	public static bool ConfirmYesNo(string message)
@@ -430,11 +356,6 @@ internal static class DatabaseMapper
 	{
 		message = "[" + DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss") + "]" + message;
 		AppendTextLine(filePath, message);
-	}
-
-	public static void WriteGeneralLog(string message)
-	{
-		WriteTimestampedLogLine(GetLogDirectory() + GetStartupLogFileName(), message);
 	}
 
 	public static void WriteSaveTagsLog(string message)
@@ -536,13 +457,6 @@ internal static class DatabaseMapper
 	{
 		NativeMethods.ShellFileInfo fileInfo = default(NativeMethods.ShellFileInfo);
 		NativeMethods.GetShellFileInfo(filePath, 0u, ref fileInfo, (uint)Marshal.SizeOf(fileInfo), 257u);
-		return Icon.FromHandle(fileInfo.IconHandle);
-	}
-
-	public static Icon GetLargeFileIcon(string filePath)
-	{
-		NativeMethods.ShellFileInfo fileInfo = default(NativeMethods.ShellFileInfo);
-		NativeMethods.GetShellFileInfo(filePath, 0u, ref fileInfo, (uint)Marshal.SizeOf(fileInfo), 256u);
 		return Icon.FromHandle(fileInfo.IconHandle);
 	}
 
@@ -800,16 +714,6 @@ internal static class DatabaseMapper
 	public static bool ContainsChinese(string text)
 	{
 		return Regex.Match(text, "[\\u4e00-\\u9fa5]").Success;
-	}
-
-	public static bool ContainsCjkCharacter(string text)
-	{
-		return Regex.Match(text, "[\\u0800-\\u4e00]").Success;
-	}
-
-	public static bool ContainsKorean(string text)
-	{
-		return Regex.Match(text, "[\\uAC00-\\uD7A3]").Success;
 	}
 
 	static DatabaseMapper()

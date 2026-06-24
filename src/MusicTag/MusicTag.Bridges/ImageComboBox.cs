@@ -115,18 +115,6 @@ internal class ImageComboBox : ComboBox
 		DrawItem += DrawComboBoxItem;
 	}
 
-	public Brush SelectionBackBrush
-	{
-		get
-		{
-			return selectionBackBrush;
-		}
-		set
-		{
-			selectionBackBrush = value;
-		}
-	}
-
 	private void DrawComboBoxItem(object sender, DrawItemEventArgs e)
 	{
 		if (e.Index == -1)

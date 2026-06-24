@@ -1,15 +1,9 @@
-using System.Security;
 using System.Web;
 
 namespace MusicTag.Services;
 
 internal static class TextEncodingService
 {
-	public static string EscapeXml(string value)
-	{
-		return SecurityElement.Escape(value);
-	}
-
 	public static string DecodeBasicHtmlEntities(string value)
 	{
 		return value.Replace("&lt;", "<")
