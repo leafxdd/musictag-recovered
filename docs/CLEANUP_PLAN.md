@@ -66,9 +66,11 @@
     - `Kugou 关键词参数顺序`:`BuildEncodedLyricKeyword(fallback, primary)` 在 `LoadLyrics`(`Artist,Title`→"Title - Artist")与 `SearchTracks`(`Title,Artist`→"Artist - Title")传参不一致。但只影响 `LyricUrl` 字符串值(仅 `LyricSearchDialog` 用其 `.lrc` 后缀判图标,与关键词内容无关;实际抓取走 `DeferredLyricLoader`→`LoadLyrics`)。改它是**行为值变更而非清理** → 不动,作为潜在 latent bug 留给人决策(见下「潜在缺陷」)。
   - 验证:Debug+Release 0/0 + 3 smoke 全过(两 commit 各验一次)。结论:批次 5 推迟项中**唯一**真死代码是 Stopwatch×6 与 PhraseTrie override×1,均已清除;其余子类经证据穷举确认无安全且有价值的动作。
 
-## 潜在缺陷(非清理,留待人决策)
+## 潜在缺陷处理记录
 
-- **Kugou 歌词关键词拼接方向不一致**(`KugouTagProvider.BuildEncodedLyricKeyword`):`LoadLyrics`(line 105)传 `(song.Artist, song.Title)` 得 "Title - Artist";`SearchTracks`(line 158)传 `(Title, Artist)` 得 "Artist - Title"。当前只影响 `TrackSearchResult.LyricResult.LyricUrl` 的字符串值,**不影响实际歌词抓取**(抓取走 `DeferredLyricLoader`→`LoadLyrics`,与 `SearchTracks` 拼的那个 URL 无关;该 URL 仅在 `LyricSearchDialog.cs:499` 用于 `.lrc` 后缀的图标判断,与关键词内容无关)。故无可观察的行为差异,但两处拼接方向相反本身是可疑的——若将来有人改用该 `LyricUrl` 直接抓取,方向不一致会致错。**未改**(行为保留),标记供人确认期望方向。
+- **Kugou 歌词关键词拼接方向不一致 — 已解决(commit `38c452b`)**。原状:`LoadLyrics`(line 105)传 `(song.Artist, song.Title)` 得 "Title - Artist";`SearchTracks`(line 158)传 `(Title, Artist)` 得 "Artist - Title"。根因:`BuildEncodedLyricKeyword` 形参名 `(fallbackKeyword, primaryKeyword)` 与体内拼接顺序 `primary - fallback` 相反,诱使 `SearchTracks` 传反。
+  - 处理:两调用点统一收敛到**线上抓取方向** "Title - Artist"(只改 `SearchTracks` 实参,`LoadLyrics` 不动),并把形参重命名为 `(artist, title)` 以杜绝再次传反。`LoadLyrics` 行为不变;仅 `SearchTracks` 的 `LyricUrl` 值变化,而该字段全库只在 `LyricSearchDialog.cs:499` 被读、仅用于 `null`/`.lrc` 后缀的图标判断(关键词内容不影响)→ **变更不可观察**。Debug+Release 0/0 + 3 smoke 全过。
+  - 仍开放(非本轮范围):Kugou API 究竟 "歌名 - 歌手" 还是 "歌手 - 歌名" 命中率更高,属行为值问题,需实际联网测试定夺;本次只消除了不一致,未断言哪个方向更优。
 
 ## 验证协议
 
@@ -84,6 +86,7 @@
 - 2026-06-24 **批次 5 完成（部分推迟）**。`TrackSearchContext` musicId 改容错 `long.TryParse`;`NoWarn` 收窄为仅 `CS0649`(移除已 0 的 CS0162/CS0414,CS0649 是 interop/反序列化/designer 误报必留,加注释)。2 文件改,+7/−2。关键发现:全量 Rebuild 暴露 15 条 CS0649 全为运行期赋值字段误报,非死代码。no-op 转发内联/装饰性习语清扫按保守政策**主动推迟**(churn 大、收益近零、非用户核心诉求)。Debug+Release 全量 Rebuild **0 warning/0 error** + 3 smoke 全过。commit `f88ffee`。
 - 2026-06-24 **批次 6 完成**。文档同步:`CLAUDE.md` 反编译约定整段去过期(改名/三类高风险块/已删空壳),NoWarn 注释改 CS0649-only;`MAINTENANCE.md` 追加批次 1-5 日志;`DECOMPILATION_NOTES.md` 补 CustomToolStripRenderer 删除注。纯文档,无构建影响。commit `a9eb55a`。
 - 2026-06-24 **批次 7 完成(应 `/goal` 重启批次 5 推迟项)**。逐子类穷举:真死代码仅 Stopwatch 写后不读×6(SFI 三处 + AutoMatch 三处,后者连带 `FinishSearch` 去无用参数 + 删无用 `using System.Diagnostics;`)与 PhraseTrie 冗余 override `GetChild(char)`×1 —— 全部清除。其余子类经证据复核无安全且有价值的改动:`while+无条件 break`(6 处 `while(true)` 全为条件 break)/双重否定/三元布尔=0;no-op 转发器与恒等 getter 全为必需 override、有义谓词助手或一致风格 `return field;`(内联=数十调用点 churn,违最小 diff,不动);`.Dispose()` 全为必需资源释放(designer/Timer/文件句柄/SQLite 事务/GDI),0 可动项。Kugou 关键词拼接方向不一致属行为值差异(且当前无可观察影响),记入「潜在缺陷」留人决策,未改。commit `4eb2ca1`(SFI Stopwatch×3 + PhraseTrie override)、`dca2c96`(AutoMatch Stopwatch×3 + FinishSearch 参数 + using)。两 commit Debug+Release 0/0 + 3 smoke 各验一次。
+- 2026-06-25 **潜在缺陷后续处理**(`/goal` 已清除后,应用户确认动手)。Kugou 关键词方向不一致已解决:两调用点统一到线上抓取方向 "Title - Artist"(仅改 `SearchTracks` 实参),并把 `BuildEncodedLyricKeyword` 形参重命名为 `(artist, title)` 杜绝再传反。`LoadLyrics` 不动,变更经证不可观察(`LyricUrl` 仅 `LyricSearchDialog.cs:499` 读、只判 `null`/`.lrc` 后缀)。Debug+Release 0/0 + 3 smoke 全过。commit `38c452b`。详见「潜在缺陷处理记录」。
 
 ## 收尾总结(批次 1-7)
 
