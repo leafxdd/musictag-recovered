@@ -45,6 +45,35 @@
 - `src/MusicTag/MusicTagWinApp.Common/Tokenizer.cs` 的编码检测频率表初始化(`EncodingDetector.InitializeFrequencyTables`)原为约 4480 行的 `goto`/`switch` 混淆状态机,已重写为数据驱动的小型加载器(7 个 `static readonly int[]` 三元组表 + 一个 `LoadFrequencyTable` 回放循环),并删除了仅服务于它的 `PostRole`/`InvokeRole`/`DestroyRole` 桩(它们分别恒为 `true`/`false`/单元赋值,使原控制流完全静态)。等价性以**逐字节方式验证**:用反射 dump 原始构建中 7 张表的全部非零单元(共 3301 个),重写后重新 dump 并对 SHA256,结果完全一致;未改动的 `Score*Encoding` 只读这些表,故检测结果不变。验证脚本 `artifacts/Dump-TokenizerTables.ps1`、`artifacts/Generate-TokenizerRegion.ps1` 位于 gitignored 的 `artifacts/`。
 - 附带发现并已处理：`EncodingDetector` 在全代码库中**从未被实例化**——`Tokenizer.DetectFileEncoding` 走的是 native `ResolveToken`(`MusicTag.dll`)P/Invoke,这套托管打分器是死代码。该未用类(连同 `EncodingNameTables`)已在后续清理批次删除(commit `5964fa9`,见 `MAINTENANCE.md`);`Tokenizer.cs` 现仅保留 `DetectFileEncoding`/`ReadFileSampleBytes` 与 `ResolveToken` P/Invoke 导入,上一条记录的频率表初始化重写因此已成历史(类不再存在)。
 
+## 原生 MusicTag.dll 的反篡改自校验门(已中和)
+
+native `musictag/MusicTag.dll`(TagLib 封装,`MainT` 命名空间)内置一道反篡改自校验,
+**是“软件读不到 MP3 标签”的根因**(commit `a9907e2`):
+
+- DLL 在首次标签操作时,用 `GetModuleFileNameW(NULL, …)` 取**宿主 EXE**(即 `MusicTag.exe`)的磁盘路径,
+  `CreateFileW` + `ReadFile` 读其**全部文件内容**,经一张半字节 CRC 表(rdata `0x100D9DF0`)算出 **CRC-16**,
+  与常量 **`0x69EB`** 比较:相等则把全局放行标志 `ds:[0x100F5D68]` 置 **2(启用)**,否则置 **1(禁用)**。
+  `0x69EB` 是**原版发行的 `MusicTag.exe`** 的内容校验和。
+- 所有**标签字段读/写**与**内嵌封面**导出/写入函数(导出名 `ee`/`d`/`g`/`gg`/`n`/`v`/`m1`/`m2`)开头都检查
+  `[0x100F5D68] == 2`,否则直接返回空/不写。音频属性(`h`/`i`/`j`/`k`/`l`)、标签类型摘要(`f`)、
+  MediaInfo 路径**不设门**。
+- 后果:本仓库**从源码重编译**出的 `MusicTag.exe` 内容必然不同 → CRC ≠ 0x69EB → 标志置 1 →
+  标签/封面读写被**静默禁用**。表现为文件仍能列出格式/时长(走 MediaInfo),但 title/artist/album/year/封面全空、
+  保存标签无效——正是用户报告的现象。managed 层无法修复(C# 改不了自身宿主 EXE 的 CRC)。
+
+**补丁(已应用)**:在校验门的赋值处中和判定,使标志恒为 2。`musictag/MusicTag.dll` 内**唯一**匹配 9 字节模式
+`0F 94 C0 40 A3 68 5D 0F 10`(= `sete al; inc eax; mov ds:[0x100F5D68],eax`;其前 4 字节为比较常量 `EB 69 00 00`),
+位于**文件偏移 208497**。把前 3 字节 `0F 94 C0`(`sete al`)改为 `B0 01 90`(`mov al,1; nop`),`inc eax` 后即恒为 2、
+无条件放行,与宿主 EXE 校验和无关。单点 3 字节修改,**不触碰任何 `EntryPoint`/ABI**,git 可回滚
+(原始字节另备份于 gitignored `artifacts/MusicTag.dll.orig`)。
+
+**⚠️ 重打补丁提醒**:此补丁直接改的是二进制 DLL。**若将来重新提取/替换 `musictag/MusicTag.dll`,必须重打此补丁**,
+否则重编译的 EXE 会再次读不到标签。复现方法:搜唯一模式 `0F 94 C0 40 A3 68 5D 0F 10`,将起始 3 字节改为
+`B0 01 90`(偏移随 DLL 版本可能变,以模式搜索为准)。
+
+验证:`Verify-Build.ps1 -RunSmokeTests` 绿;x86 P/Invoke 探针(宿主为**非原版** EXE)对 `docs/测试歌曲/` 的
+测试 MP3 正确读出 title/artist/album/year。
+
 ## 后续处理原则
 
 - 优先重命名有单一职责、少量调用点、含义能从代码直接证明的类、方法或变量。
