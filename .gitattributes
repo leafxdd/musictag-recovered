@@ -1,0 +1,34 @@
+* text=auto
+
+# Source and project files follow the repository's Windows/.NET style.
+*.cs text eol=crlf
+*.csproj text eol=crlf
+*.sln text eol=crlf
+*.config text eol=crlf
+*.manifest text eol=crlf
+*.resx text eol=crlf
+*.settings text eol=crlf
+*.json text eol=crlf
+*.yml text eol=crlf
+*.yaml text eol=crlf
+*.md text eol=crlf
+*.ps1 text eol=crlf
+*.props text eol=crlf
+*.targets text eol=crlf
+
+# Runtime assets copied from the original application must stay binary-safe.
+*.dll binary
+*.exe binary
+*.pdb binary
+*.db binary
+*.dat binary
+*.resources binary
+*.ico binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.bmp binary
+*.ttf binary
+*.woff binary
+*.woff2 binary
