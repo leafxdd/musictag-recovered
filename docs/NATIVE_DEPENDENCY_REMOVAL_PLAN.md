@@ -220,3 +220,5 @@ TagLibSharp 2.3.0(NuGet,引用 `lib/net462/TagLibSharp.dll`)支持其中 **15 �
 **结论**:四源在线路径端到端均通;QQ / 酷我的间歇性空结果为服务端限流抖动(代码已按 resilience 约束记录跳过、不拖垮候选列表),非代码缺陷。导入 `.lrc` 的人工冒烟仍未单独执行。
 
 **四源实测衍生的封面优化(2026-06-25)**:实测发现酷我封面原与歌词同走限流较凶的详情 API(`songinfoandlrc`),首张封面常 `NotStarted` 抖动、需逐张重试。本次把**酷我封面**改为直接取搜索结果(`search.kuwo.cn/r.s`)已带的 `web_albumpic_short` 字段拼出的专辑封面高清直链(`img2.kuwo.cn/star/albumcover/500/{path}`,首段尺寸归一为 `500`),下载经标准 `CreateCoverDownloader` 直取该直链、不再二次请求详情 API。落点:`KuwoSongInfo` 新增 `SearchAlbumCoverUrl` 字段;`KuwoTagProvider` 抽出 `CreateCoverResult`(直链优先,缺失时回退原详情 API 路径,行为保真),`SearchCovers` / `CreateTrackResult` 改调它。**实测**:封面 URL 由 `…/songinfoandlrc?musicId=…` 变为 `…/star/albumcover/500/s3s94/93/211513640.jpg`,**首张即 `Success` 108 KB / 56 ms**(优化前首张 `NotStarted`、第 2 张才 27 KB);歌词路径不变(仍走详情 API,已实测 1079 字正文)。封面去重改以真实封面直链为键(同专辑多曲归并为一候选,较原按 `musicId` 去重更准)。对比来源:musicdl、KMusic 的酷我实现均直接使用 `web_albumpic_short`。
+
+**酷狗歌词回退(已评估,暂不实施)**:对比 musicdl 与 MakcRe·KuGouMusicApi 发现酷狗另有 `lyrics.kugou.com/search → /download?fmt=lrc` 的免签名两步取词路径,可作 `get_krc` 返空时的兜底。但实测 `get_krc` 三轮稳定且带翻译(`landata`),而 `fmt=lrc` 仅返回纯 LRC、无翻译——该回退会降级且实测从不触发,按“不加投机性防御”的工程纪律暂不实施,在此留档备查。
