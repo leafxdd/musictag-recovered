@@ -210,3 +210,13 @@ TagLibSharp 2.3.0(NuGet,引用 `lib/net462/TagLibSharp.dll`)支持其中 **15 �
 **净结果**:全仓库 `DllImport("MusicTag.dll")` 归零——仅余标准 Win32 `user32`/`shell32`/`uxtheme` 的 P/Invoke(操作系统 API,非原版依赖)。tag 读写走 TagLibSharp(阶段 A),在线加解密走 `NetEaseCrypto`、编码检测走 UtfUnknown(阶段 B);原始 `MusicTag.dll` 仅存于 git 历史与 gitignored `artifacts/MusicTag.dll.orig`。反篡改 gate 及其 3 字节补丁永久失去意义。
 
 **验证**:每阶段 `Verify-Build.ps1 -RunSmokeTests` 绿(Debug+Release + 三冒烟:`FilenameRelatedBatchDialog`/`OptionsDialog` 反射构造 + EXE 存活);`git diff --check` 干净;`codegraph sync` 通过。**未自动化覆盖**(沿用既定可接受风险,无自动化测试):四源联网搜索与导入 `.lrc` 的端到端人工冒烟;weapi 每次随机故无法逐字节对拍(只验 `{a,b}` 形状 + 自洽 + 163key 逐字节)。
+
+**四源在线路径人工实测(2026-06-25,一次性手动验证,非自动化)**:反射探针(gitignored `artifacts/ProviderTest.cs`——`Assembly.LoadFrom` 加载构建后的 `MusicTag.exe`,以 `周杰伦 晴天` 驱动各 provider 的 `SearchTracks`/`SearchLyrics`/`SearchCovers`,并深度验证:抓一条歌词正文 + 逐张试下载封面字节落盘),四源各两轮:
+- **网易云**:搜歌 / 搜词(383 字正文)/ 搜封面 / 封面下载(Success 2.3 MB)两轮全绿。
+- **QQ**:首轮服务端反爬(业务码 `2001`,按 IP/时间限流)0/0/0,次轮 IP 未限流即全绿(7/7/6 + 封面 Success 184 KB)——`QqMusicTagProvider.SearchSongs` 已有“重试 2 次 + 退避 + 记录跳过”,空结果系服务端临时限流而非代码缺陷。
+- **酷狗**:搜歌 / 搜词(1407 字正文)两轮全绿;本源不提供封面搜索(契约如此)。
+- **酷我**:搜歌(`search.kuwo.cn`)两轮稳定;歌词 / 封面均二次走限流较凶的详情 API(`m.kuwo.cn/.../songinfoandlrc`,内置 `detailApiUnavailable` 退避),单条抖动——但歌词(819 字正文)与封面(逐张试,第 2 张 Success 27 KB)均已实测取到真实数据。
+
+**结论**:四源在线路径端到端均通;QQ / 酷我的间歇性空结果为服务端限流抖动(代码已按 resilience 约束记录跳过、不拖垮候选列表),非代码缺陷。导入 `.lrc` 的人工冒烟仍未单独执行。
+
+**四源实测衍生的封面优化(2026-06-25)**:实测发现酷我封面原与歌词同走限流较凶的详情 API(`songinfoandlrc`),首张封面常 `NotStarted` 抖动、需逐张重试。本次把**酷我封面**改为直接取搜索结果(`search.kuwo.cn/r.s`)已带的 `web_albumpic_short` 字段拼出的专辑封面高清直链(`img2.kuwo.cn/star/albumcover/500/{path}`,首段尺寸归一为 `500`),下载经标准 `CreateCoverDownloader` 直取该直链、不再二次请求详情 API。落点:`KuwoSongInfo` 新增 `SearchAlbumCoverUrl` 字段;`KuwoTagProvider` 抽出 `CreateCoverResult`(直链优先,缺失时回退原详情 API 路径,行为保真),`SearchCovers` / `CreateTrackResult` 改调它。**实测**:封面 URL 由 `…/songinfoandlrc?musicId=…` 变为 `…/star/albumcover/500/s3s94/93/211513640.jpg`,**首张即 `Success` 108 KB / 56 ms**(优化前首张 `NotStarted`、第 2 张才 27 KB);歌词路径不变(仍走详情 API,已实测 1079 字正文)。封面去重改以真实封面直链为键(同专辑多曲归并为一候选,较原按 `musicId` 去重更准)。对比来源:musicdl、KMusic 的酷我实现均直接使用 `web_albumpic_short`。

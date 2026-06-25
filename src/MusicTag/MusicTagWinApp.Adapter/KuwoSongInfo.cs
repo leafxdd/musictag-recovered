@@ -18,5 +18,7 @@ internal class KuwoSongInfo
 
 	public string LargeCoverUrl;
 
+	public string SearchAlbumCoverUrl;
+
 	public LyricSearchResult LoadedLyric;
 }

@@ -26,6 +26,8 @@ internal class KuwoTagProvider : RemoteTagProviderBase
 
 	private const string SongDetailUrlFormat = "https://m.kuwo.cn/newh5/singles/songinfoandlrc?musicId={0}";
 
+	private const string AlbumCoverUrlPrefix = "https://img2.kuwo.cn/star/albumcover/";
+
 	private static bool? detailApiUnavailable;
 
 	private static int lastDetailApiCheckTick;
@@ -157,19 +159,14 @@ internal class KuwoTagProvider : RemoteTagProviderBase
 				break;
 			}
 
-			string coverUrl = string.Format(SongDetailUrlFormat, song.TrackId);
-			if (queuedCoverUrls.Contains(coverUrl) || existingCovers.Any(existingCover => existingCover.CoverUrl == coverUrl))
+			CoverSearchResult cover = CreateCoverResult(song, null);
+			if (queuedCoverUrls.Contains(cover.CoverUrl) || existingCovers.Any(existingCover => existingCover.CoverUrl == cover.CoverUrl))
 			{
 				continue;
 			}
 
-			results.Add(new CoverSearchResult
-			{
-				CoverUrl = coverUrl,
-				SearchSource = GetSource(),
-				CoverDownloader = (cancellation, filePath, requestTimeout) => DownloadDeferredCover(song, null, cancellation, filePath)
-			});
-			queuedCoverUrls.Add(coverUrl);
+			results.Add(cover);
+			queuedCoverUrls.Add(cover.CoverUrl);
 		}
 
 		return results;
@@ -187,18 +184,35 @@ internal class KuwoTagProvider : RemoteTagProviderBase
 			Artist = song.Artist,
 			Album = song.Album
 		};
-		track.Cover = new CoverSearchResult
-		{
-			CoverUrl = detailUrl,
-			SearchSource = GetSource(),
-			CoverDownloader = (cancellation, filePath, requestTimeout) => DownloadDeferredCover(song, track, cancellation, filePath)
-		};
+		track.Cover = CreateCoverResult(song, track);
 		track.LyricResult = new LyricSearchResult
 		{
 			LyricUrl = detailUrl,
 			DeferredLyricLoader = cancellation => LoadDeferredLyric(song, track, cancellation)
 		};
 		return track;
+	}
+
+	// 封面候选:优先用搜索结果直带的专辑封面直链(绕开限流的详情 API),
+	// 仅当其缺失时回退到老的“二次请求 songinfoandlrc 取 pic”方式(track 用于回退路径的歌词并发锁)。
+	private CoverSearchResult CreateCoverResult(KuwoSongInfo song, TrackSearchResult track)
+	{
+		if (!string.IsNullOrWhiteSpace(song.SearchAlbumCoverUrl))
+		{
+			return new CoverSearchResult
+			{
+				CoverUrl = song.SearchAlbumCoverUrl,
+				SearchSource = GetSource(),
+				CoverDownloader = CreateCoverDownloader<KuwoTagProvider>(song.SearchAlbumCoverUrl)
+			};
+		}
+
+		return new CoverSearchResult
+		{
+			CoverUrl = string.Format(SongDetailUrlFormat, song.TrackId),
+			SearchSource = GetSource(),
+			CoverDownloader = (cancellation, filePath, requestTimeout) => DownloadDeferredCover(song, track, cancellation, filePath)
+		};
 	}
 
 	private static (DownloadStatus, long) DownloadDeferredCover(KuwoSongInfo song, TrackSearchResult track, CancellationTokenSource cancellation, string filePath)
@@ -391,8 +405,21 @@ internal class KuwoTagProvider : RemoteTagProviderBase
 			Album = ReadJsonString(token, "ALBUM"),
 			TrackId = Regex.Replace(ReadJsonString(token, "MUSICRID"), "^MUSIC_", ""),
 			ArtistId = ReadJsonString(token, "ARTISTID"),
-			OriginalTitle = ReadJsonString(token, "NAME")
+			OriginalTitle = ReadJsonString(token, "NAME"),
+			SearchAlbumCoverUrl = BuildAlbumCoverUrl(ReadJsonString(token, "web_albumpic_short"))
 		};
+	}
+
+	// 搜索结果里 web_albumpic_short 形如 "120/s3s94/93/xxxx.jpg"(首段为尺寸),
+	// 拼成可下载的专辑封面高清直链(尺寸取 500),让封面下载绕开限流的 songinfoandlrc 详情 API。
+	private static string BuildAlbumCoverUrl(string webAlbumPicShort)
+	{
+		if (string.IsNullOrWhiteSpace(webAlbumPicShort))
+		{
+			return "";
+		}
+
+		return AlbumCoverUrlPrefix + Regex.Replace(webAlbumPicShort.Trim(), "^\\d+/", "500/");
 	}
 
 	private void PopulateSongDetails(KuwoSongInfo song, string detailsJson)
