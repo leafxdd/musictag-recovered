@@ -13,6 +13,28 @@ decompiler emitted invalid logic.
 Read `docs/MAINTENANCE.md` (refactoring policy + full cleanup changelog) and
 `docs/DECOMPILATION_NOTES.md` (things deliberately left alone) before non-trivial work.
 
+## Public release (GitHub)
+
+Published at **https://github.com/leafxdd/musictag-recovered** (public, owner `leafxdd`). The publish
+model is deliberate — preserve these invariants when releasing or updating the public side:
+
+- **Public = an orphan single-commit snapshot, never `master`.** The public `main` is the local
+  `public-snapshot` branch — a `git checkout --orphan` snapshot of the current tree, committed once — so
+  the public history does **not** contain the deleted original native `MusicTag.dll`/`MediaInfo.dll`
+  binaries. Local `master` (full history) is the rollback point and is **never pushed**. To update the
+  public side: re-snapshot the current tree onto `public-snapshot`, then
+  `git push origin public-snapshot:main`.
+- **Never publish** (already in `.gitignore`): `docs/测试歌曲/` (copyrighted music), `docs/汉化/`,
+  `HANDOFF_REVIEW.md`.
+- **The snapshot commit uses the GitHub noreply email**
+  (`69914703+leafxdd@users.noreply.github.com`) to keep the real committer email out of public history.
+- **No formal LICENSE** — reverse-engineered third-party software has no copyright we can license; the
+  public-facing disclaimer lives at the end of `README.md`.
+- **Release ships the built exe**: `MusicTag-<ver>-net481-x86.zip` = everything in `bin/Release/net481`
+  except `.pdb`, packed under a top-level `MusicTag/` folder. First tag `v1.0.9-net481` (version from
+  the exe's assembly version `1.0.9.0`). CI (`.github/workflows/build.yml`) runs
+  `Verify-Build.ps1 -Configurations Release` on push to `main`.
+
 ## Build, verify, run
 
 There is **no unit-test suite**. Verification = build both configs + two smoke tests. Use the script,
