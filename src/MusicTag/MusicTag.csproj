@@ -52,11 +52,9 @@
     <Reference Include="System.Net.Http.WebRequest" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="musictag\MediaInfo.dll" Link="MediaInfo.dll" CopyToOutputDirectory="PreserveNewest" />
     <None Include="musictag\MusicTag.config" Link="MusicTag.config" CopyToOutputDirectory="PreserveNewest" />
     <None Include="musictag\MusicTag.dat" Link="MusicTag.dat" CopyToOutputDirectory="PreserveNewest" />
     <None Include="musictag\MusicTag.db" Link="MusicTag.db" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="musictag\MusicTag.dll" Link="MusicTag.dll" CopyToOutputDirectory="PreserveNewest" />
     <None Include="musictag\SQLite.Interop.dll" Link="SQLite.Interop.dll" CopyToOutputDirectory="PreserveNewest" />
     <None Include="musictag\UtfUnknown.dll" Link="UtfUnknown.dll" CopyToOutputDirectory="PreserveNewest" />
     <None Include="musictag\en\MusicTag.resources.dll" Link="en\MusicTag.resources.dll" CopyToOutputDirectory="PreserveNewest" />

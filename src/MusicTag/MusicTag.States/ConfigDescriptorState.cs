@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Text;
 using MusicTag.Serialization;
 using MusicTagWinApp.Instances;
@@ -11,13 +10,11 @@ using MusicTagWinApp.Properties;
 
 namespace MusicTag.States;
 
-// Tag I/O is backed by TagLibSharp (managed). The only native MusicTag.dll
-// binding left here is FreeNativeString (bb), kept because the online subsystem
-// (NetEaseMusicTagProvider / Tokenizer / TrackSearchContext) still calls
-// ConfigDescriptorState.ReadAndFreeNativeString to read native-allocated strings.
-// All field/picture/audio-property reads and writes go through TagLib.File now;
-// the public API, the TagValues cache keys and their types are unchanged so
-// every caller (StateFieldInstance, AutoMatchTagsDialog, …) is untouched.
+// Tag I/O is backed by TagLibSharp (managed). No native MusicTag.dll bindings
+// remain anywhere in the app — every field/picture/audio-property read and write
+// goes through TagLib.File. The public API, the TagValues cache keys and their
+// types are unchanged so every caller (StateFieldInstance, AutoMatchTagsDialog, …)
+// is untouched.
 internal class ConfigDescriptorState : IDisposable
 {
 	public class PictureData
@@ -537,18 +534,6 @@ internal class ConfigDescriptorState : IDisposable
 		return $"{hours:00}:{minutes:00}:{seconds:00}";
 	}
 
-	public static string ReadAndFreeNativeString(IntPtr nativeStringPointer)
-	{
-		try
-		{
-			return Marshal.PtrToStringUni(nativeStringPointer);
-		}
-		finally
-		{
-			FreeNativeString(nativeStringPointer);
-		}
-	}
-
 	// --- field mapping helpers (native field vocabulary -> TagLib) ---
 
 	private string ReadFieldText(string field)
@@ -1066,9 +1051,6 @@ internal class ConfigDescriptorState : IDisposable
 			TagLib.Id3v2.Tag.ForceDefaultVersion = true;
 		}
 	}
-
-	[DllImport("MusicTag.dll", EntryPoint = "bb")]
-	private static extern void FreeNativeString(IntPtr nativeStringPointer);
 
 	static ConfigDescriptorState()
 	{
