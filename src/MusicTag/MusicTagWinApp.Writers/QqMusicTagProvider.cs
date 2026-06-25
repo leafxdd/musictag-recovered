@@ -4,7 +4,6 @@ using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
-using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading;
 using MusicTag.Composer;
@@ -25,15 +24,15 @@ internal class QqMusicTagProvider : RemoteTagProviderBase
 {
 	private const string EmptyLyricPlaceholderBase64 = "WzAwOjAwOjAwXeatpOatjOabsuS4uuayoeacieWhq+ivjeeahOe6r+mfs+S5kO+8jOivt+aCqOaso+i1jw==";
 
-	private static readonly string callbackName;
+	private const string callbackName = "MusicJsonCallback34475857153687595";
 
-	private static readonly string searchEndpointUrl;
+	private const string searchEndpointUrl = "https://u.y.qq.com/cgi-bin/musicu.fcg";
 
-	private static readonly string searchRequestTemplate;
+	private const string searchRequestTemplate = "{{\"{0}\":{{\"method\":\"DoSearchForQQMusicDesktop\",\"module\":\"music.search.SearchCgiService\",\"param\":{{\"search_type\":0,\"query\":\"{1}\",\"page_num\":1,\"num_per_page\":{2}}}}}}}";
 
-	private static readonly string lyricUrlTemplate;
+	private const string lyricUrlTemplate = "https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg?songmid={0}&g_tk=5381&jsonpCallback={1}&format=jsonp";
 
-	private static readonly string albumCoverUrlTemplate;
+	private const string albumCoverUrlTemplate = "https://y.qq.com/music/photo_new/T002R800x800M000{0}.jpg";
 
 	protected override SearchSource GetSource()
 	{
@@ -542,26 +541,5 @@ internal class QqMusicTagProvider : RemoteTagProviderBase
 		}
 
 		return (lyric, translation);
-	}
-
-	[DllImport("MusicTag.dll", EntryPoint = "nd")]
-	private static extern IntPtr GetSearchEndpointUrlPointer();
-
-	[DllImport("MusicTag.dll", EntryPoint = "ndd")]
-	private static extern IntPtr GetSearchRequestTemplatePointer();
-
-	[DllImport("MusicTag.dll", EntryPoint = "ne")]
-	private static extern IntPtr GetLyricUrlTemplatePointer();
-
-	[DllImport("MusicTag.dll", EntryPoint = "nf")]
-	private static extern IntPtr GetAlbumCoverUrlTemplatePointer();
-
-	static QqMusicTagProvider()
-	{
-		callbackName = "MusicJsonCallback34475857153687595";
-		searchEndpointUrl = Marshal.PtrToStringUni(GetSearchEndpointUrlPointer());
-		searchRequestTemplate = Marshal.PtrToStringUni(GetSearchRequestTemplatePointer());
-		lyricUrlTemplate = Marshal.PtrToStringUni(GetLyricUrlTemplatePointer());
-		albumCoverUrlTemplate = Marshal.PtrToStringUni(GetAlbumCoverUrlTemplatePointer());
 	}
 }

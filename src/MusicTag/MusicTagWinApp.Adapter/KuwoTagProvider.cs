@@ -4,7 +4,6 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -23,9 +22,9 @@ internal class KuwoTagProvider : RemoteTagProviderBase
 {
 	private const int DetailApiRetryIntervalMs = 300000;
 
-	private static readonly string SearchUrlFormat = Marshal.PtrToStringUni(GetSearchUrlFormat());
+	private const string SearchUrlFormat = "https://search.kuwo.cn/r.s?all={0}&client=kt&pn=0&rn={1}&ver=kwplayer_ar_9.2.3.2&vipver=1&show_copyright_off=1&newver=1&correct=1&ft=music&cluster=0&strategy=2012&encoding=utf8&rformat=json&vermerge=1&mobi=1&issubtitle=1";
 
-	private static readonly string SongDetailUrlFormat = Marshal.PtrToStringUni(GetSongDetailUrlFormat());
+	private const string SongDetailUrlFormat = "https://m.kuwo.cn/newh5/singles/songinfoandlrc?musicId={0}";
 
 	private static bool? detailApiUnavailable;
 
@@ -565,10 +564,4 @@ internal class KuwoTagProvider : RemoteTagProviderBase
 	{
 		return token[propertyName]?.ToString() ?? "";
 	}
-
-	[DllImport("MusicTag.dll", EntryPoint = "pa")]
-	private static extern IntPtr GetSearchUrlFormat();
-
-	[DllImport("MusicTag.dll", EntryPoint = "pb")]
-	private static extern IntPtr GetSongDetailUrlFormat();
 }

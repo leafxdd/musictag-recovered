@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
-using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading;
 using MusicTag.Composer;
@@ -30,9 +29,9 @@ internal class KugouTagProvider : RemoteTagProviderBase
 		}
 	}
 
-	private static readonly string songSearchUrlTemplate = Marshal.PtrToStringUni(ValidateModel());
+	private const string songSearchUrlTemplate = "http://mobilecdn.kugou.com/api/v3/search/song?format=json&keyword={0}&page=1&pagesize={1}&showtype=1";
 
-	private static readonly string lyricUrlTemplate = Marshal.PtrToStringUni(AssetModel());
+	private const string lyricUrlTemplate = "https://m3ws.kugou.com/api/v1/krc/get_krc?keyword={0}&hash={1}&timelength={2}";
 
 	public static HttpClient CreateKugouHttpClient()
 	{
@@ -355,10 +354,4 @@ internal class KugouTagProvider : RemoteTagProviderBase
 		}
 		return "";
 	}
-
-	[DllImport("MusicTag.dll", EntryPoint = "nh")]
-	private static extern IntPtr ValidateModel();
-
-	[DllImport("MusicTag.dll", EntryPoint = "ni")]
-	private static extern IntPtr AssetModel();
 }

@@ -21,19 +21,21 @@ namespace MusicTagWinApp.Exporters;
 
 internal class NetEaseMusicTagProvider : RemoteTagProviderBase
 {
-	private static readonly string songSearchEndpoint;
+	private const string songSearchEndpoint = "http://music.163.com/weapi/cloudsearch/pc";
 
-	private static readonly string encryptedPostDataFormat;
+	private const string encryptedPostDataFormat = "params={0}&encSecKey={1}";
 
-	private static readonly string lyricEndpointFormat;
+	private const string lyricEndpointFormat = "http://music.163.com/api/song/lyric?os=pc&id={0}&lv=-1&kv=-1&tv=-1";
 
-	private static readonly string songDetailsEndpoint;
+	private const string songDetailsEndpoint = "http://music.163.com/weapi/v3/song/detail";
 
-	private static readonly string albumDetailsEndpointFormat;
+	private const string albumDetailsEndpointFormat = "http://music.163.com/weapi/v1/album/{0}";
 
-	private static readonly string clientHeaderName;
+	private const string clientHeaderName = "X-Real-IP";
 
-	private static readonly List<(long albumId, NetEaseAlbumInfo albumInfo)> albumInfoCache;
+	private static readonly Random clientIpRandom = new Random();
+
+	private static readonly List<(long albumId, NetEaseAlbumInfo albumInfo)> albumInfoCache = new List<(long, NetEaseAlbumInfo)>();
 
 	protected override SearchSource GetSource()
 	{
@@ -56,7 +58,7 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase
 				{ "user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36" }
 			}
 		};
-		client.DefaultRequestHeaders.Add(clientHeaderName, ConfigDescriptorState.ReadAndFreeNativeString(GetClientHeaderValuePointer()));
+		client.DefaultRequestHeaders.Add(clientHeaderName, BuildClientHeaderValue());
 		return client;
 	}
 
@@ -731,42 +733,23 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase
 		return (lyricText, translatedLyricText);
 	}
 
-	[DllImport("MusicTag.dll", EntryPoint = "na")]
-	private static extern IntPtr GetSongSearchEndpointPointer();
-
-	[DllImport("MusicTag.dll", EntryPoint = "nb")]
-	private static extern IntPtr GetEncryptedPostDataFormatPointer();
-
-	[DllImport("MusicTag.dll", EntryPoint = "nc")]
-	private static extern IntPtr GetLyricEndpointFormatPointer();
-
-	[DllImport("MusicTag.dll", EntryPoint = "naa")]
-	private static extern IntPtr GetSongDetailsEndpointPointer();
-
-	[DllImport("MusicTag.dll", EntryPoint = "nab")]
-	private static extern IntPtr GetAlbumDetailsEndpointFormatPointer();
-
-	[DllImport("MusicTag.dll", EntryPoint = "rc")]
-	private static extern IntPtr GetClientHeaderValuePointer();
-
-	[DllImport("MusicTag.dll", EntryPoint = "rc1")]
-	private static extern IntPtr GetClientHeaderNamePointer();
-
 	[DllImport("MusicTag.dll", CharSet = CharSet.Unicode, EntryPoint = "rc2")]
 	private static extern IntPtr BuildEncryptedRequestPointer(string value);
 
 	[DllImport("MusicTag.dll", CharSet = CharSet.Unicode, EntryPoint = "rc4")]
 	private static extern IntPtr BuildNetEaseCommentTagPointer(string first);
 
-	static NetEaseMusicTagProvider()
+	private static string BuildClientHeaderValue()
 	{
-		songSearchEndpoint = Marshal.PtrToStringUni(GetSongSearchEndpointPointer());
-		encryptedPostDataFormat = Marshal.PtrToStringUni(GetEncryptedPostDataFormatPointer());
-		lyricEndpointFormat = Marshal.PtrToStringUni(GetLyricEndpointFormatPointer());
-		songDetailsEndpoint = Marshal.PtrToStringUni(GetSongDetailsEndpointPointer());
-		albumDetailsEndpointFormat = Marshal.PtrToStringUni(GetAlbumDetailsEndpointFormatPointer());
-		clientHeaderName = Marshal.PtrToStringUni(GetClientHeaderNamePointer());
-		albumInfoCache = new List<(long, NetEaseAlbumInfo)>();
+		// The original native rc export returned a runtime-random 112.88.x.x address
+		// used as a fake X-Real-IP header (a China-Mobile Guangdong range) to dodge
+		// region gating. Reproduce the same shape in managed code.
+		int third, fourth;
+		lock (clientIpRandom)
+		{
+			third = clientIpRandom.Next(256);
+			fourth = clientIpRandom.Next(256);
+		}
+		return "112.88." + third + "." + fourth;
 	}
-
 }
