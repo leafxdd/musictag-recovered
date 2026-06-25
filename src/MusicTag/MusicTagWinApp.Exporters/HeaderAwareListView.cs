@@ -16,17 +16,40 @@ internal class HeaderAwareListView : ListView
 
 	private const int HeaderHitTestMessage = 0x1206;
 
+	private const int ListViewSetExtendedStyleMessage = 0x1036;
+
+	private const int ListViewExtendedStyleDoubleBuffer = 0x00010000;
+
+	private bool useDoubleBuffer = true;
+
 	[Category("Action")]
 	public event ColumnClickEventHandler HeaderRightClick;
 
-	public HeaderAwareListView()
-	{
-		DoubleBuffered = true;
-	}
-
+	// 用 comctl32 原生双缓冲(LVS_EX_DOUBLEBUFFER),而不是托管 DoubleBuffered。
+	// 托管 OptimizedDoubleBuffer 不参与原生 ListView 的内容绘制,却会把横向滚动从
+	// 增量重绘退化为整屏重绘,使 Details 视图左右滚动严重卡顿;原生双缓冲则横纵向
+	// 滚动都流畅无闪烁。
 	public void SetDoubleBuffered(bool enabled)
 	{
-		DoubleBuffered = enabled;
+		useDoubleBuffer = enabled;
+		ApplyDoubleBuffer();
+	}
+
+	protected override void OnHandleCreated(EventArgs e)
+	{
+		base.OnHandleCreated(e);
+		// ListView 改属性时会重建句柄并丢失扩展样式,因此每次句柄创建后都要重新应用。
+		ApplyDoubleBuffer();
+	}
+
+	private void ApplyDoubleBuffer()
+	{
+		if (!IsHandleCreated)
+		{
+			return;
+		}
+		IntPtr styleValue = (IntPtr)(useDoubleBuffer ? ListViewExtendedStyleDoubleBuffer : 0);
+		NativeMethods.SendMessage(Handle, ListViewSetExtendedStyleMessage, (IntPtr)ListViewExtendedStyleDoubleBuffer, styleValue);
 	}
 
 	protected virtual void OnHeaderRightClick(ColumnClickEventArgs e)
