@@ -45,10 +45,16 @@
 - `src/MusicTag/MusicTagWinApp.Common/Tokenizer.cs` 的编码检测频率表初始化(`EncodingDetector.InitializeFrequencyTables`)原为约 4480 行的 `goto`/`switch` 混淆状态机,已重写为数据驱动的小型加载器(7 个 `static readonly int[]` 三元组表 + 一个 `LoadFrequencyTable` 回放循环),并删除了仅服务于它的 `PostRole`/`InvokeRole`/`DestroyRole` 桩(它们分别恒为 `true`/`false`/单元赋值,使原控制流完全静态)。等价性以**逐字节方式验证**:用反射 dump 原始构建中 7 张表的全部非零单元(共 3301 个),重写后重新 dump 并对 SHA256,结果完全一致;未改动的 `Score*Encoding` 只读这些表,故检测结果不变。验证脚本 `artifacts/Dump-TokenizerTables.ps1`、`artifacts/Generate-TokenizerRegion.ps1` 位于 gitignored 的 `artifacts/`。
 - 附带发现并已处理：`EncodingDetector` 在全代码库中**从未被实例化**——`Tokenizer.DetectFileEncoding` 走的是 native `ResolveToken`(`MusicTag.dll`)P/Invoke,这套托管打分器是死代码。该未用类(连同 `EncodingNameTables`)已在后续清理批次删除(commit `5964fa9`,见 `MAINTENANCE.md`);`Tokenizer.cs` 现仅保留 `DetectFileEncoding`/`ReadFileSampleBytes` 与 `ResolveToken` P/Invoke 导入,上一条记录的频率表初始化重写因此已成历史(类不再存在)。
 
-## 原生 MusicTag.dll 的反篡改自校验门(已中和)
+## 原生 MusicTag.dll 的反篡改自校验门(已不再相关 — 标签 I/O 已迁出 native)
+
+> **现状(阶段 A 完成后)**:标签读写已整体迁移到托管 **TagLibSharp**(见
+> `MusicTag.States/ConfigDescriptorState.cs` 与 `NATIVE_DEPENDENCY_REMOVAL_PLAN.md` §12),
+> 不再调用任何被门 gate 的 native 标签导出。因此**这道门对本项目已无影响**,
+> 此前的 3 字节补丁已**移除**,`musictag/MusicTag.dll` 已**还原为未打补丁的原版**。
+> 下文保留对该门的二进制分析作为知识底稿——仅当将来**回退阶段 A、重新经 native 读写标签**时才再相关。
 
 native `musictag/MusicTag.dll`(TagLib 封装,`MainT` 命名空间)内置一道反篡改自校验,
-**是“软件读不到 MP3 标签”的根因**(commit `a9907e2`):
+曾是“重编译后软件读不到 MP3 标签”的根因(历史 commit `a9907e2`):
 
 - DLL 在首次标签操作时,用 `GetModuleFileNameW(NULL, …)` 取**宿主 EXE**(即 `MusicTag.exe`)的磁盘路径,
   `CreateFileW` + `ReadFile` 读其**全部文件内容**,经一张半字节 CRC 表(rdata `0x100D9DF0`)算出 **CRC-16**,
@@ -57,22 +63,24 @@ native `musictag/MusicTag.dll`(TagLib 封装,`MainT` 命名空间)内置一道�
 - 所有**标签字段读/写**与**内嵌封面**导出/写入函数(导出名 `ee`/`d`/`g`/`gg`/`n`/`v`/`m1`/`m2`)开头都检查
   `[0x100F5D68] == 2`,否则直接返回空/不写。音频属性(`h`/`i`/`j`/`k`/`l`)、标签类型摘要(`f`)、
   MediaInfo 路径**不设门**。
-- 后果:本仓库**从源码重编译**出的 `MusicTag.exe` 内容必然不同 → CRC ≠ 0x69EB → 标志置 1 →
+- 后果(历史):本仓库**从源码重编译**出的 `MusicTag.exe` 内容必然不同 → CRC ≠ 0x69EB → 标志置 1 →
   标签/封面读写被**静默禁用**。表现为文件仍能列出格式/时长(走 MediaInfo),但 title/artist/album/year/封面全空、
-  保存标签无效——正是用户报告的现象。managed 层无法修复(C# 改不了自身宿主 EXE 的 CRC)。
+  保存标签无效。managed 层无法修复(C# 改不了自身宿主 EXE 的 CRC)——这正是当初打补丁的原因。
 
-**补丁(已应用)**:在校验门的赋值处中和判定,使标志恒为 2。`musictag/MusicTag.dll` 内**唯一**匹配 9 字节模式
-`0F 94 C0 40 A3 68 5D 0F 10`(= `sete al; inc eax; mov ds:[0x100F5D68],eax`;其前 4 字节为比较常量 `EB 69 00 00`),
-位于**文件偏移 208497**。把前 3 字节 `0F 94 C0`(`sete al`)改为 `B0 01 90`(`mov al,1; nop`),`inc eax` 后即恒为 2、
-无条件放行,与宿主 EXE 校验和无关。单点 3 字节修改,**不触碰任何 `EntryPoint`/ABI**,git 可回滚
-(原始字节另备份于 gitignored `artifacts/MusicTag.dll.orig`)。
+**历史补丁(已移除,commit `a9907e2` 引入、阶段 A 收尾时回退)**:曾在校验门的赋值处中和判定使标志恒为 2。
+`musictag/MusicTag.dll` 内**唯一**匹配 9 字节模式 `0F 94 C0 40 A3 68 5D 0F 10`
+(= `sete al; inc eax; mov ds:[0x100F5D68],eax`;其前 4 字节为比较常量 `EB 69 00 00`),位于**文件偏移 208497**;
+补丁把前 3 字节 `0F 94 C0`(`sete al`)改为 `B0 01 90`(`mov al,1; nop`),使 `inc eax` 后恒为 2、无条件放行。
+**阶段 A 把标签 I/O 迁到 TagLibSharp 后,本项目不再调用任何被门 gate 的导出,补丁失去意义**,故已将
+`musictag/MusicTag.dll` 还原为未打补丁原版(原始字节亦备份于 gitignored `artifacts/MusicTag.dll.orig`)。
 
-**⚠️ 重打补丁提醒**:此补丁直接改的是二进制 DLL。**若将来重新提取/替换 `musictag/MusicTag.dll`,必须重打此补丁**,
-否则重编译的 EXE 会再次读不到标签。复现方法:搜唯一模式 `0F 94 C0 40 A3 68 5D 0F 10`,将起始 3 字节改为
-`B0 01 90`(偏移随 DLL 版本可能变,以模式搜索为准)。
+**⚠️ 仅在回退阶段 A 时才需重打**:只要标签读写继续走托管 TagLibSharp,就**不需要**这个补丁,重新提取/替换
+DLL 也无需再打。万一将来回退阶段 A、改回经 native 读写标签,复现方法:搜唯一模式
+`0F 94 C0 40 A3 68 5D 0F 10`,将起始 3 字节改为 `B0 01 90`(偏移随 DLL 版本可能变,以模式搜索为准),
+不触碰任何 `EntryPoint`/ABI。
 
-验证:`Verify-Build.ps1 -RunSmokeTests` 绿;x86 P/Invoke 探针(宿主为**非原版** EXE)对 `docs/测试歌曲/` 的
-测试 MP3 正确读出 title/artist/album/year。
+验证(还原原版 DLL 后):`Verify-Build.ps1 -RunSmokeTests` 绿;阶段 A 黄金对拍(TagLibSharp 读写 vs native
+oracle 回读)逐字段一致(见 `NATIVE_DEPENDENCY_REMOVAL_PLAN.md` §12)。
 
 ## 后续处理原则
 

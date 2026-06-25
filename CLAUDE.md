@@ -41,10 +41,18 @@ Single WinExe, `net481` (.NET Framework 4.8.1, migrated from 4.6.1 — see migra
 - **`StateFieldInstance`** (`MusicTagWinApp.Instances/StateFieldInstance.cs`, ~4500 lines) — the main
   form and de-facto god object: file list, tag editor, toolbar/menus, and dispatch of all batch
   operations (auto-match, rename, save/undo tags, extract covers, save LRC).
-- **Native tag I/O** — `MusicTag.States/ConfigDescriptorState.cs` reads/writes tags and embedded
-  pictures from audio files via P/Invoke into the bundled native `MusicTag.dll` (plus `MediaInfo.dll`).
-  The DLL exports are obfuscated single/double-letter `EntryPoint` strings (`"bb"`, `"zzz"`, `"d"`…) —
-  **never rename those `EntryPoint` values.**
+- **Tag I/O** — `MusicTag.States/ConfigDescriptorState.cs` reads/writes tags and embedded pictures.
+  As of **Stage A** of the native-dependency removal (see `docs/NATIVE_DEPENDENCY_REMOVAL_PLAN.md`)
+  this runs on managed **TagLibSharp** (referenced via HintPath `musictag/TagLibSharp.dll`); the class
+  keeps its original public API / field vocabulary so all ~30 `StateFieldInstance` call sites are
+  unchanged. The old P/Invoke into native `MusicTag.dll` for tags is gone — which is why the native
+  DLL's anti-tamper gate no longer matters and its 3-byte patch was **reverted** (DLL restored to the
+  original; see `docs/DECOMPILATION_NOTES.md`).
+- **Native `MusicTag.dll` (online only, Stage B pending)** — still P/Invoked for the online-search
+  subsystem (endpoint URL/header constants + NetEase crypto + encoding detection) and for one residual
+  string-free helper (`EntryPoint = "bb"`). Its exports are obfuscated single/double-letter `EntryPoint`
+  strings (`"bb"`, `"zzz"`, `"d"`…) — **never rename those `EntryPoint` values.** (Plus `MediaInfo.dll`,
+  the DLL's internal dependency.)
 - **`DatabaseMapper`** (`MusicTagWinApp.Instances/DatabaseMapper.cs`) — shared utility hub: DPI scaling,
   resource-bitmap loading, image resize/save, AES decrypt, URL encoding, temp/log cleanup, error
   dialogs, exception logging.
@@ -119,9 +127,10 @@ ranked candidate list shown to user → write-back to file tags.
   `Src`/`Seq`/`IsOther`/`WebSearchItemsLimit`) and be careful renaming types tied to `.resx` resource
   keys, so existing user config and resource lookups keep working.
 - **Two `musictag` locations, opposite meaning**: `src/MusicTag/musictag/` holds **required** runtime
-  assets copied to output (native `MusicTag.dll`, `MediaInfo.dll`, `SQLite.Interop.dll`, `MusicTag.db`,
-  `MusicTag.dat`, `en`/`zh-CHS`/`zh-CHT` resource DLLs, FontAwesome ttf) — keep it. Root `/musictag/` is
-  ignored loose extraction. `tools/` (de4dot, dnSpy, ILSpy, die) is an ignored local RE toolbox.
+  assets copied to output (native `MusicTag.dll`, `MediaInfo.dll`, `TagLibSharp.dll`, `SQLite.Interop.dll`,
+  `MusicTag.db`, `MusicTag.dat`, `en`/`zh-CHS`/`zh-CHT` resource DLLs, FontAwesome ttf) — keep it. Root
+  `/musictag/` is ignored loose extraction. `tools/` (de4dot, dnSpy, ILSpy, die) is an ignored local RE
+  toolbox.
 - Style (`.editorconfig`): **tabs** in `.cs` (size 4), 2-space in `csproj`/`sln`/`md`; CRLF; UTF-8;
   final newline. Build suppresses only `CS0649` via `NoWarn` (interop/deserialization/designer fields the
   compiler can't see assigned); `CS0162`/`CS0414` were dropped once cleanup reached zero of each.

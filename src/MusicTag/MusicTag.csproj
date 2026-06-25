@@ -33,6 +33,9 @@
     <Reference Include="Newtonsoft.Json">
       <HintPath>musictag/Newtonsoft.Json.dll</HintPath>
     </Reference>
+    <Reference Include="TagLibSharp">
+      <HintPath>musictag/TagLibSharp.dll</HintPath>
+    </Reference>
     <Reference Include="Fkosoft.FontAwesome4">
       <HintPath>musictag/Fkosoft.FontAwesome4.dll</HintPath>
     </Reference>

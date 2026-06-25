@@ -164,3 +164,32 @@ TagLibSharp 2.3.0(NuGet,引用 `lib/net462/TagLibSharp.dll`)支持其中 **15 �
 **③ 编码检测库候选**(阶段 B `de` 替代):**UTF.Unknown**(MIT,活跃,Mozilla 通用字符集检测移植)或 Ude.NetStandard;保留 `ISO8859-1`/空 → `Encoding.Default` 回退,阶段 B 对 `.lrc` 小样本对拍。
 
 **结论**:标签 I/O 可整体迁移到 TagLibSharp、**补丁可移除**;封面语义差异已查清(过滤 `NotAPicture` 即与 native 等价),**阶段 A 无已知阻塞**。冷门格式缺口收窄到三个边缘容器,推荐对其明确降级(§9 c)。
+
+## 12. 阶段 A 实测结果(2026-06-25,已完成)
+
+**做了什么**:`MusicTag.States/ConfigDescriptorState.cs` 的内部实现从 P/Invoke(native `MusicTag.dll`)整体改为托管 **TagLibSharp**,**公共 API / 字段词表 / 缓存键全部不变**(StateFieldInstance 的 ~30 处调用点零改动)。`MusicTag.csproj` 新增 `<Reference Include="TagLibSharp">`(HintPath `musictag/TagLibSharp.dll`,TagLibSharp 2.3.0 的 `lib/net462` 构建),运行时 DLL 落 `musictag/`。完成后**把 `musictag/MusicTag.dll` 还原为未打补丁原版**(覆盖自 `artifacts/MusicTag.dll.orig`),即 git 层面回退 commit `a9907e2` 的 3 字节反篡改补丁——标签不再走 native,门不再相关。
+
+**对拍回归(主要保障,无单测)**——探针留存于 gitignored `artifacts/`(`StageACompare.cs` 四模式:native oracle / 新实现读对拍 / 写自洽 / native 回读;`NativeWriteProbe.cs`;`OnlineProbe.cs`):
+- **读对拍(9 样本 mp3×3/flac×3/ogg×3,native 打补丁版当 oracle)**:全部 DIF 已逐条解释,**无一为封装 bug**——
+  - `trackstr`×4:native `ee` 原始返回 `"0"`,新实现按原软件逻辑 `((int)track > 0) ? str : ""` 给空串;查 git HEAD 证实原软件本就是此逻辑,**新实现与原软件一致**(oracle 取的是更底层的 `ee` 原值,非原软件展示值)。
+  - `_durms`×2 / `_bitrate`×3:MediaInfo(native)vs TagLibSharp 的测量口径差(时长 ±26–39ms;flac 码率 ±1 取整;ogg native 实测均值 vs taglib 标称 320),非逻辑差异。
+- **写圆环(写后自读)**:`WRITE DIFF=0`(mp3/flac/ogg 全字段,含多值 artist、year/track/disc、lyricist、lyrics、封面保留)。
+- **写回 native 交叉校验**(用**原版 oracle** 读回新实现写出的文件):`VERIFYWRITE DIFF=0`——证明新实现写出的标签,原生读取器逐字段读回一致。
+
+**两处行为保真决策(经 native 实测后对齐,非臆测)**:
+1. **多值字段按整串写一个标签字段**(`ToSingleValue`):原 native `m0` 契约对每个多值字段(如 artist=`"甲/乙"`)收到的是**一个字符串**并存入**单个**标签字段。新实现若按分隔符拆成多个 Xiph/ID3 字段会与原行为不符(verifywrite 表现为 `甲; 乙` vs `甲/乙`)。改为整串写单字段后 DIFF 归零。读路径的 `JoinMulti`(用 `Settings.Default.ConnectorsArtists`,默认 `/`)保持不变(读对拍已证等价)。
+2. **改写 comment 时清空所有 COMM 帧**:`NativeWriteProbe` 实测原 native `m0`+`m3` 写 comment 时**会清掉**网易云“163 key”COMM 帧(`163key RETAINED by native write: NO`)。为保真,新实现写 comment 前 `id3v2.RemoveFrames("COMM")`。这意味着新实现同样在编辑 comment 时丢弃 163key——**刻意复刻原行为**(反编译恢复项目的首要约束是行为等价,即便原行为可能不理想)。
+
+**在线导出未受门限制(实测复核)**:`OnlineProbe` 对**打补丁 vs 原版**两个 DLL 跑全部无参在线端点(na/nb/nc/naa/nab/rc/rc1/nd/ndd/ne/nf/pa/pb)+ `bb` free——14 个里 13 个**逐字节一致**,仅 `rc`(X-Real-IP 头值)不同,因其本就是 native 端运行时随机 `112.88.x.x`(非门、非常量)。证明还原原版 DLL 后,重编译的 EXE 仍能从原 DLL 取到全部在线端点字符串,**阶段 B 不受影响**。
+
+**残留的 native 依赖(本文件内,属阶段 B)**:仅保留 `[DllImport("MusicTag.dll", EntryPoint="bb")] FreeNativeString` 与 `ReadAndFreeNativeString`——它们服务在线路径的非托管字符串释放,不被门 gate,留待阶段 B 一并清理。
+
+**测试脚手架的一处坑(仅影响反射对拍,不影响真实 EXE)**:用 `Assembly.LoadFrom` 反射加载 `MusicTag.exe` 跑新实现时,CLR 的 LoadFrom 绑定上下文与默认上下文隔离;当被加载代码按名字解析 “MusicTag” 程序集,fusion 按 appbase 文件系统探测(`.dll` 先于 `.exe`),会先撞上 native `MusicTag.dll` 并以托管方式加载失败抛 `BadImageFormatException`。解法:新实现对拍在**移除了 native `MusicTag.dll` 的 bin/ 副本**里跑,native oracle 在原 bin/ 跑,经 `oracle.json` 交换数据。真实 `MusicTag.exe` 是默认上下文的入口程序集,**永不触发此问题**;仅反射探针需规避。
+
+**冷门格式**:`.dff` / `.tak` / `.aifc` 三个边缘容器 TagLibSharp 不支持,`TagLib.File.Create` 抛 `UnsupportedFormatException` → 映射回 `loadError`(等同 §9 c 的“明确降级”)。`.dsf`/`.aac` 等其余 15 个应用扩展名均支持。
+
+**验证**:`Verify-Build.ps1 -RunSmokeTests` 绿(Debug+Release 构建 + 3 冒烟:`FilenameRelatedBatchDialog`/`OptionsDialog` 反射构造 + EXE 存活);`git diff --check` 干净;`codegraph sync` 通过。**未自动化覆盖**:四源联网搜索与导入 .lrc 的端到端人工冒烟(无自动化测试,沿用既定可接受风险)。
+
+**提交**:PA1(迁移)+ PA2(还原原版 DLL)合并为一次提交落地(连同本文档与 `DECOMPILATION_NOTES.md` 同步)。
+
+**阶段 A 状态:完成,补丁已移除。** 阶段 B(在线去 native + 删除 `MusicTag.dll`/`MediaInfo.dll`)尚未授权开始。

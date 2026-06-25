@@ -43,7 +43,7 @@
 src/MusicTag/bin/Release/net481/MusicTag.exe
 ```
 
-构建时会自动复制必要运行文件，例如 `MusicTag.dll`、`MediaInfo.dll`、`SQLite.Interop.dll`、`MusicTag.db`、`MusicTag.dat`、多语言资源 DLL 和 FontAwesome 字体。构建日志会写入 `artifacts/` 目录。
+构建时会自动复制必要运行文件，例如 `MusicTag.dll`、`MediaInfo.dll`、`TagLibSharp.dll`、`SQLite.Interop.dll`、`MusicTag.db`、`MusicTag.dat`、多语言资源 DLL 和 FontAwesome 字体。构建日志会写入 `artifacts/` 目录。
 
 ## 运行方式
 

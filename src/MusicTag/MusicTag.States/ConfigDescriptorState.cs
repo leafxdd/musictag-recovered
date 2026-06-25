@@ -4,23 +4,22 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Text;
 using MusicTag.Serialization;
 using MusicTagWinApp.Instances;
 using MusicTagWinApp.Properties;
 
 namespace MusicTag.States;
 
+// Tag I/O is backed by TagLibSharp (managed). The only native MusicTag.dll
+// binding left here is FreeNativeString (bb), kept because the online subsystem
+// (NetEaseMusicTagProvider / Tokenizer / TrackSearchContext) still calls
+// ConfigDescriptorState.ReadAndFreeNativeString to read native-allocated strings.
+// All field/picture/audio-property reads and writes go through TagLib.File now;
+// the public API, the TagValues cache keys and their types are unchanged so
+// every caller (StateFieldInstance, AutoMatchTagsDialog, …) is untouched.
 internal class ConfigDescriptorState : IDisposable
 {
-	private struct NativePictureEntry
-	{
-		public IntPtr DataPointer;
-
-		public int DataLength;
-
-		public IntPtr PictureTypePointer;
-	}
-
 	public class PictureData
 	{
 		private byte[] imageBytes;
@@ -72,15 +71,15 @@ internal class ConfigDescriptorState : IDisposable
 		}
 	}
 
-	private IntPtr nativeTagHandle;
-
-	private static readonly string[] openErrorTemplates;
+	private TagLib.File tagFile;
 
 	private static readonly string[] supportedPictureMimeTypes;
 
-	private readonly Dictionary<string, object> tagValues;
-
 	private static readonly List<string> pictureTypeNames;
+
+	private static readonly Encoding Latin1Encoding = Encoding.GetEncoding("ISO-8859-1");
+
+	private readonly Dictionary<string, object> tagValues;
 
 	private string filePath;
 
@@ -96,11 +95,6 @@ internal class ConfigDescriptorState : IDisposable
 		{
 			TagValues[fieldName] = value;
 		}
-	}
-
-	private static string[] GetOpenErrorTemplates()
-	{
-		return openErrorTemplates;
 	}
 
 	public static string[] SupportedPictureMimeTypes()
@@ -149,42 +143,24 @@ internal class ConfigDescriptorState : IDisposable
 		SetFilePath(filePath);
 		try
 		{
-			nativeTagHandle = OpenTagFile(nativeTagHandle, filePath, verifyFileOnly: false, out var openResultPointer);
-			string openResult = ReadAndFreeNativeString(openResultPointer);
-			if (!openResult.StartsWith("false"))
-			{
-				return;
-			}
-			string[] resultParts = openResult.Split(',');
-			int errorIndex = -1;
-			if (resultParts.Length > 1)
-			{
-				errorIndex = int.Parse(resultParts[1]);
-			}
-			string errorArgument = null;
-			if (resultParts.Length > 2)
-			{
-				errorArgument = resultParts[2];
-			}
-			if (errorIndex >= 0 && errorIndex < GetOpenErrorTemplates().Length)
-			{
-				if (errorArgument != null)
-				{
-					loadError = string.Format(GetOpenErrorTemplates()[errorIndex], errorArgument);
-				}
-				else
-				{
-					loadError = GetOpenErrorTemplates()[errorIndex];
-				}
-			}
-			else if (!NativeFileExists(nativeTagHandle, filePath))
+			if (!System.IO.File.Exists(filePath))
 			{
 				loadError = Resources.Msg_FileNotFound;
+				return;
 			}
-			else
-			{
-				loadError = Resources.Msg_InvalidFile;
-			}
+			tagFile = TagLib.File.Create(filePath);
+		}
+		catch (TagLib.UnsupportedFormatException)
+		{
+			loadError = Resources.Msg_InvalidFile;
+		}
+		catch (TagLib.CorruptFileException)
+		{
+			loadError = Resources.Msg_InvalidFile;
+		}
+		catch (System.IO.FileNotFoundException)
+		{
+			loadError = Resources.Msg_FileNotFound;
 		}
 		catch (Exception)
 		{
@@ -194,24 +170,22 @@ internal class ConfigDescriptorState : IDisposable
 
 	public void Dispose()
 	{
-		if (nativeTagHandle == IntPtr.Zero)
+		if (tagFile != null)
 		{
-			return;
+			tagFile.Dispose();
+			tagFile = null;
 		}
-
-		CloseTagFile(nativeTagHandle);
-		nativeTagHandle = IntPtr.Zero;
 	}
 
 	public void LoadBasicTagFields()
 	{
 		if (!TagValues.ContainsKey("tagtypes"))
 		{
-			TagValues.Add("tagtypes", ReadAndFreeNativeString(ReadTagTypeSummary(nativeTagHandle, "", out var _, out var _)));
+			TagValues.Add("tagtypes", BuildTagTypesSummary());
 		}
 		if (!TagValues.ContainsKey("fileext"))
 		{
-			TagValues.Add("fileext", ReadAndFreeNativeString(GetFileExtension(nativeTagHandle)));
+			TagValues.Add("fileext", BuildFileExtension());
 		}
 		string[] tagFields = new string[13]
 		{
@@ -224,9 +198,7 @@ internal class ConfigDescriptorState : IDisposable
 			{
 				continue;
 			}
-			IntPtr tagType;
-			IntPtr stringType;
-			string tagValue = ReadAndFreeNativeString(ReadTagField(nativeTagHandle, tagField, out tagType, out stringType));
+			string tagValue = ReadFieldText(tagField);
 			switch (tagField)
 			{
 			case "trackstr":
@@ -259,31 +231,12 @@ internal class ConfigDescriptorState : IDisposable
 				continue;
 			}
 			List<byte[]> dataBlocks = new List<byte[]>();
-			IntPtr rawBlockListPointer = IntPtr.Zero;
-			IntPtr tagTypePointer = IntPtr.Zero;
-			IntPtr stringTypePointer = IntPtr.Zero;
-			int blockCount = ReadRawTextFieldData(nativeTagHandle, textField, out tagTypePointer, out stringTypePointer, out rawBlockListPointer);
-			if (rawBlockListPointer != IntPtr.Zero && blockCount > 0)
-			{
-				for (int blockIndex = 0; blockIndex < blockCount; blockIndex++)
-				{
-					IntPtr blockPointerAddress = IntPtr.Add(rawBlockListPointer, Marshal.SizeOf(typeof(IntPtr)) * blockIndex);
-					IntPtr blockPointer = (IntPtr)Marshal.PtrToStructure(blockPointerAddress, typeof(IntPtr));
-					if (blockPointer == IntPtr.Zero)
-					{
-						continue;
-					}
-					int blockLength = (int)Marshal.PtrToStructure(blockPointer, typeof(int));
-					IntPtr blockDataPointer = IntPtr.Add(blockPointer, Marshal.SizeOf(typeof(int)));
-					byte[] dataBlock = new byte[blockLength];
-					Marshal.Copy(blockDataPointer, dataBlock, 0, blockLength);
-					dataBlocks.Add(dataBlock);
-				}
-			}
-			FreeRawTextFieldData(rawBlockListPointer, blockCount);
+			string tagType = "";
+			string stringType = "";
+			FillRawFieldData(textField, dataBlocks, ref tagType, ref stringType);
 			TagValues.Add(dataKey, dataBlocks);
-			TagValues.Add(tagTypeKey, ReadAndFreeNativeString(tagTypePointer));
-			TagValues.Add(stringTypeKey, ReadAndFreeNativeString(stringTypePointer));
+			TagValues.Add(tagTypeKey, tagType);
+			TagValues.Add(stringTypeKey, stringType);
 		}
 	}
 
@@ -291,37 +244,40 @@ internal class ConfigDescriptorState : IDisposable
 	{
 		if (!TagValues.ContainsKey("lyrics"))
 		{
-			TagValues.Add("lyrics", ReadAndFreeNativeString(ReadTagField(nativeTagHandle, "lyrics", out var _, out var _)));
+			TagValues.Add("lyrics", tagFile.Tag.Lyrics ?? "");
 		}
 	}
 
 	public void LoadAudioProperties()
 	{
+		TagLib.Properties properties = tagFile.Properties;
 		if (!TagValues.ContainsKey("bitpersample"))
 		{
-			TagValues.Add("bitpersample", GetBitsPerSample(nativeTagHandle));
+			int bitsPerSample = (properties != null) ? properties.BitsPerSample : 0;
+			// Native reports 16 for lossy formats (where bit depth is meaningless and
+			// TagLibSharp returns 0); lossless formats carry a real value. Preserve that.
+			TagValues.Add("bitpersample", (bitsPerSample > 0) ? bitsPerSample : 16);
 		}
 		if (!TagValues.ContainsKey("channels"))
 		{
-			TagValues.Add("channels", GetChannelCount(nativeTagHandle));
+			TagValues.Add("channels", (properties != null) ? properties.AudioChannels : 0);
 		}
 		if (!TagValues.ContainsKey("samplerate"))
 		{
-			TagValues.Add("samplerate", GetSampleRate(nativeTagHandle));
+			TagValues.Add("samplerate", (properties != null) ? properties.AudioSampleRate : 0);
 		}
 		if (!TagValues.ContainsKey("bitrate"))
 		{
-			TagValues.Add("bitrate", GetBitrate(nativeTagHandle));
+			TagValues.Add("bitrate", (properties != null) ? properties.AudioBitrate : 0);
 		}
 		if (!TagValues.ContainsKey("durationinms"))
 		{
-			TagValues.Add("durationinms", GetDurationMilliseconds(nativeTagHandle));
+			TagValues.Add("durationinms", (properties != null) ? (int)properties.Duration.TotalMilliseconds : 0);
 		}
-		if (TagValues.ContainsKey("hasvideotrack"))
+		if (!TagValues.ContainsKey("hasvideotrack"))
 		{
-			return;
+			TagValues.Add("hasvideotrack", properties != null && (properties.MediaTypes & TagLib.MediaTypes.Video) != 0);
 		}
-		TagValues.Add("hasvideotrack", HasVideoTrack(nativeTagHandle));
 	}
 
 	public void LoadPictureSummary(bool flagOnly)
@@ -330,9 +286,8 @@ internal class ConfigDescriptorState : IDisposable
 		{
 			if (!TagValues.ContainsKey("haspicture"))
 			{
-				IntPtr picturePointer = IntPtr.Zero;
-				int pictureLength = ReadPrimaryPicture(nativeTagHandle, out picturePointer);
-				TagValues.Add("haspicture", pictureLength > 0 && picturePointer != IntPtr.Zero);
+				TagLib.IPicture picture = GetFirstValidPicture();
+				TagValues.Add("haspicture", picture != null && picture.Data != null && picture.Data.Count > 0);
 			}
 			return;
 		}
@@ -343,13 +298,10 @@ internal class ConfigDescriptorState : IDisposable
 		TagValues.Add("haspicture", false);
 		if (!TagValues.ContainsKey("picturedata"))
 		{
-			IntPtr pictureDataPointer = IntPtr.Zero;
-			int pictureDataLength = ReadPrimaryPicture(nativeTagHandle, out pictureDataPointer);
-			if (pictureDataLength > 0 && pictureDataPointer != IntPtr.Zero)
+			TagLib.IPicture picture = GetFirstValidPicture();
+			if (picture != null && picture.Data != null && picture.Data.Count > 0)
 			{
-				byte[] pictureData = new byte[pictureDataLength];
-				Marshal.Copy(pictureDataPointer, pictureData, 0, pictureDataLength);
-				TagValues.Add("picturedata", pictureData);
+				TagValues.Add("picturedata", picture.Data.Data);
 				TagValues["haspicture"] = true;
 			}
 		}
@@ -363,25 +315,27 @@ internal class ConfigDescriptorState : IDisposable
 			pictures = new List<PictureData>();
 			try
 			{
-				IntPtr nativePictureListPointer = IntPtr.Zero;
-				int pictureCount = ReadAllPictures(nativeTagHandle, out nativePictureListPointer);
-				if (nativePictureListPointer != IntPtr.Zero)
+				TagLib.IPicture[] nativePictures = tagFile.Tag.Pictures;
+				if (nativePictures != null)
 				{
-					for (int pictureIndex = 0; pictureIndex < pictureCount; pictureIndex++)
+					foreach (TagLib.IPicture nativePicture in nativePictures)
 					{
-						NativePictureEntry nativePicture = (NativePictureEntry)Marshal.PtrToStructure(IntPtr.Add(nativePictureListPointer, Marshal.SizeOf(typeof(NativePictureEntry)) * pictureIndex), typeof(NativePictureEntry));
-						if (nativePicture.DataLength > 0 && nativePicture.DataPointer != IntPtr.Zero)
+						// Filter non-image attachments (e.g. Serato DJ application/json blobs
+						// stored as APIC frames of type NotAPicture) exactly like native does.
+						if (nativePicture == null || nativePicture.Type == TagLib.PictureType.NotAPicture)
 						{
-							PictureData picture = new PictureData
-							{
-								ImageBytes = new byte[nativePicture.DataLength]
-							};
-							Marshal.Copy(nativePicture.DataPointer, picture.ImageBytes, 0, nativePicture.DataLength);
-							picture.PictureType = Marshal.PtrToStringUni(nativePicture.PictureTypePointer);
-							pictures.Add(picture);
+							continue;
 						}
+						if (nativePicture.Data == null || nativePicture.Data.Count == 0)
+						{
+							continue;
+						}
+						pictures.Add(new PictureData
+						{
+							ImageBytes = nativePicture.Data.Data,
+							PictureType = PictureTypeToName(nativePicture.Type)
+						});
 					}
-					FreePictureList(nativePictureListPointer, pictureCount);
 				}
 			}
 			catch (Exception ex)
@@ -411,23 +365,6 @@ internal class ConfigDescriptorState : IDisposable
 			pictures = TagValues["allpicturedata"] as List<PictureData>;
 		}
 		TagValues["haspicture"] = pictures.Count > 0;
-	}
-
-	private static List<string> LoadPictureTypeNames()
-	{
-		List<string> pictureTypes = new List<string>();
-		IntPtr nativePictureTypeListPointer = IntPtr.Zero;
-		int pictureTypeCount = ReadPictureTypeNames(out nativePictureTypeListPointer);
-		if (nativePictureTypeListPointer != IntPtr.Zero)
-		{
-			for (int pictureTypeIndex = 0; pictureTypeIndex < pictureTypeCount; pictureTypeIndex++)
-			{
-				IntPtr pointerAddress = IntPtr.Add(nativePictureTypeListPointer, Marshal.SizeOf(typeof(IntPtr)) * pictureTypeIndex);
-				string pictureType = Marshal.PtrToStringUni((IntPtr)Marshal.PtrToStructure(pointerAddress, typeof(IntPtr)));
-				pictureTypes.Add(pictureType);
-			}
-		}
-		return pictureTypes;
 	}
 
 	public static Image LoadPictureImage(PictureData pictureData)
@@ -461,7 +398,12 @@ internal class ConfigDescriptorState : IDisposable
 
 	public static string GetGenreNameByIndex(int genreIndex)
 	{
-		return ReadAndFreeNativeString(ReadGenreName(genreIndex));
+		string[] audioGenres = TagLib.Genres.Audio;
+		if (genreIndex >= 0 && genreIndex < audioGenres.Length)
+		{
+			return audioGenres[genreIndex];
+		}
+		return "";
 	}
 
 	public string DecodeFieldWithEncoding(string fieldName, string encodingName, string currentText)
@@ -488,26 +430,33 @@ internal class ConfigDescriptorState : IDisposable
 
 	public bool SaveTagFields()
 	{
-		string[] tagValues = new string[12]
+		TagLib.Tag tag = tagFile.Tag;
+		// Same fixed field order as the former native m0 string[12] contract.
+		tag.Title = TagValues["title"] as string;
+		tag.Performers = ToSingleValue(TagValues["artist"] as string);
+		tag.Album = TagValues["album"] as string;
+		SetYear(tag, TagValues["year"] as string);
+		SetTrack(tag, TagValues["trackstr"] as string);
+		SetDisc(tag, TagValues["discstr"] as string);
+		tag.Genres = ToSingleValue(TagValues["genre"] as string);
+		tag.AlbumArtists = ToSingleValue(TagValues["albumartist"] as string);
+		tag.Composers = ToSingleValue(TagValues["composer"] as string);
+		// Match the original native m0 behavior: it cleared ALL comment frames before
+		// writing the new value, so a netease "163 key" COMM (which carries a non-empty
+		// description) does NOT survive a comment edit. TagLib's Tag.Comment setter only
+		// replaces the default (empty-description) COMM, so clear the rest explicitly to
+		// stay behavior-equivalent (verified: original native write drops the 163 key).
+		if (tagFile.GetTag(TagLib.TagTypes.Id3v2, create: false) is TagLib.Id3v2.Tag id3v2ForComment)
 		{
-			TagValues["title"] as string,
-			TagValues["artist"] as string,
-			TagValues["album"] as string,
-			TagValues["year"] as string,
-			TagValues["trackstr"] as string,
-			TagValues["discstr"] as string,
-			TagValues["genre"] as string,
-			TagValues["albumartist"] as string,
-			TagValues["composer"] as string,
-			TagValues["comment"] as string,
-			TagValues["lyricist"] as string,
-			TagValues["lyrics"] as string
-		};
-		WriteTagFields(nativeTagHandle, tagValues, tagValues.Length);
+			id3v2ForComment.RemoveFrames("COMM");
+		}
+		tag.Comment = TagValues["comment"] as string;
+		WriteLyricist(TagValues["lyricist"] as string);
+		tag.Lyrics = TagValues["lyrics"] as string;
 		if (TagValues.TryGetValue("allpicturedata", out var value))
 		{
 			List<PictureData> pictures = value as List<PictureData>;
-			ClearPictures(nativeTagHandle);
+			List<TagLib.IPicture> tagLibPictures = new List<TagLib.IPicture>();
 			foreach (PictureData picture in pictures)
 			{
 				if (picture.MimeType == null || picture.Width == 0 || picture.Height == 0)
@@ -516,15 +465,26 @@ internal class ConfigDescriptorState : IDisposable
 					{
 					}
 				}
-				AddPicture(nativeTagHandle, picture.ImageBytes, picture.ImageBytes.Length, picture.PictureType, picture.MimeType, picture.Width, picture.Height);
+				TagLib.Picture tagLibPicture = new TagLib.Picture(new TagLib.ByteVector(picture.ImageBytes))
+				{
+					Type = NameToPictureType(picture.PictureType),
+					MimeType = picture.MimeType,
+					Description = ""
+				};
+				tagLibPictures.Add(tagLibPicture);
 			}
+			tag.Pictures = tagLibPictures.ToArray();
 		}
-		return SaveTagFieldsNative(nativeTagHandle, Settings.Default.ID3v2Version);
+		SetId3v2Version();
+		tagFile.Save();
+		return true;
 	}
 
 	public bool SaveCurrentTagFile()
 	{
-		return SaveTagFileNative(nativeTagHandle, Settings.Default.ID3v2Version);
+		SetId3v2Version();
+		tagFile.Save();
+		return true;
 	}
 
 	public bool TryGetRawValue(string key, out object value)
@@ -589,93 +549,538 @@ internal class ConfigDescriptorState : IDisposable
 		}
 	}
 
+	// --- field mapping helpers (native field vocabulary -> TagLib) ---
+
+	private string ReadFieldText(string field)
+	{
+		TagLib.Tag tag = tagFile.Tag;
+		switch (field)
+		{
+		case "title":
+			return tag.Title ?? "";
+		case "artist":
+			return JoinMulti(tag.Performers);
+		case "album":
+			return tag.Album ?? "";
+		case "year":
+			return (tag.Year == 0) ? "" : tag.Year.ToString();
+		case "track":
+			return (tag.Track == 0) ? "" : tag.Track.ToString();
+		case "disc":
+			return (tag.Disc == 0) ? "" : tag.Disc.ToString();
+		case "trackstr":
+			return tag.Track.ToString() + ((tag.TrackCount > 0) ? ("/" + tag.TrackCount) : "");
+		case "discstr":
+			return tag.Disc.ToString() + ((tag.DiscCount > 0) ? ("/" + tag.DiscCount) : "");
+		case "genre":
+			return JoinMulti(tag.Genres);
+		case "albumartist":
+			return JoinMulti(tag.AlbumArtists);
+		case "composer":
+			return JoinMulti(tag.Composers);
+		case "lyricist":
+			return ReadLyricist();
+		case "comment":
+			return tag.Comment ?? "";
+		case "lyrics":
+			return tag.Lyrics ?? "";
+		default:
+			return "";
+		}
+	}
+
+	private string ReadLyricist()
+	{
+		if (tagFile.GetTag(TagLib.TagTypes.Id3v2, false) is TagLib.Id3v2.Tag id3v2Tag)
+		{
+			foreach (TagLib.Id3v2.TextInformationFrame frame in id3v2Tag.GetFrames<TagLib.Id3v2.TextInformationFrame>("TEXT"))
+			{
+				string joined = JoinMulti(frame.Text);
+				if (!string.IsNullOrEmpty(joined))
+				{
+					return joined;
+				}
+			}
+		}
+		if (tagFile.GetTag(TagLib.TagTypes.Xiph, create: false) is TagLib.Ogg.XiphComment xiphComment)
+		{
+			string[] values = xiphComment.GetField("LYRICIST");
+			if (values != null && values.Length > 0)
+			{
+				return JoinMulti(values);
+			}
+		}
+		if (tagFile.GetTag(TagLib.TagTypes.Ape, create: false) is TagLib.Ape.Tag apeTag)
+		{
+			TagLib.Ape.Item item = apeTag.GetItem("Lyricist");
+			if (item != null)
+			{
+				return JoinMulti(item.ToStringArray());
+			}
+		}
+		return "";
+	}
+
+	// Native f(tagtypes) summary format, e.g. "ID3v2.3,ID3v1" / "FLAC" / "Vorbis Comment".
+	private string BuildTagTypesSummary()
+	{
+		List<string> parts = new List<string>();
+		TagLib.TagTypes types = tagFile.TagTypesOnDisk;
+		if (tagFile.GetTag(TagLib.TagTypes.Id3v2, create: false) is TagLib.Id3v2.Tag id3v2Tag)
+		{
+			parts.Add("ID3v2." + id3v2Tag.Version);
+		}
+		if ((types & TagLib.TagTypes.Id3v1) != 0)
+		{
+			parts.Add("ID3v1");
+		}
+		if ((types & TagLib.TagTypes.FlacMetadata) != 0)
+		{
+			parts.Add("FLAC");
+		}
+		else if ((types & TagLib.TagTypes.Xiph) != 0)
+		{
+			parts.Add("Vorbis Comment");
+		}
+		if ((types & TagLib.TagTypes.Apple) != 0)
+		{
+			parts.Add("MPEG-4");
+		}
+		if ((types & TagLib.TagTypes.Ape) != 0)
+		{
+			parts.Add("APE");
+		}
+		if ((types & TagLib.TagTypes.Asf) != 0)
+		{
+			parts.Add("ASF");
+		}
+		if ((types & TagLib.TagTypes.RiffInfo) != 0)
+		{
+			parts.Add("RIFF");
+		}
+		return string.Join(",", parts);
+	}
+
+	// Native p(fileext): uppercase, no leading dot (e.g. "MP3").
+	private string BuildFileExtension()
+	{
+		string extension = Path.GetExtension(filePath);
+		if (string.IsNullOrEmpty(extension))
+		{
+			return "";
+		}
+		return extension.TrimStart('.').ToUpperInvariant();
+	}
+
+	private static string JoinMulti(string[] values)
+	{
+		if (values == null || values.Length == 0)
+		{
+			return "";
+		}
+		string separator = Settings.Default.ConnectorsArtists;
+		if (string.IsNullOrEmpty(separator))
+		{
+			separator = "/";
+		}
+		return string.Join(separator, values);
+	}
+
+	// The original native m0 contract received each multi-value field as ONE string
+	// (e.g. "甲/乙") and stored it in a SINGLE tag field. Preserve that on write:
+	// emit the whole string as one field rather than splitting on ConnectorsArtists,
+	// so the on-disk frame structure matches the original (otherwise Xiph would get
+	// multiple ARTIST fields — confirmed divergent via native read-back). The read
+	// path still re-joins through JoinMulti, so the round-trip is unchanged.
+	private static string[] ToSingleValue(string value)
+	{
+		return string.IsNullOrEmpty(value) ? new string[0] : new string[1] { value };
+	}
+
+	// --- raw text field bytes for DecodeFieldWithEncoding (re-decode wrong CJK encoding) ---
+
+	private void FillRawFieldData(string field, List<byte[]> blocks, ref string tagType, ref string stringType)
+	{
+		if (tagFile.GetTag(TagLib.TagTypes.Id3v2, create: false) is TagLib.Id3v2.Tag id3v2Tag
+			&& FillRawFromId3v2(id3v2Tag, field, blocks, ref tagType, ref stringType))
+		{
+			return;
+		}
+		if (tagFile.GetTag(TagLib.TagTypes.Xiph, create: false) is TagLib.Ogg.XiphComment xiphComment)
+		{
+			FillRawFromXiph(xiphComment, field, blocks, ref tagType, ref stringType);
+			return;
+		}
+		if (tagFile.GetTag(TagLib.TagTypes.Ape, create: false) is TagLib.Ape.Tag apeTag)
+		{
+			FillRawFromApe(apeTag, field, blocks, ref tagType, ref stringType);
+		}
+	}
+
+	private static bool FillRawFromId3v2(TagLib.Id3v2.Tag tag, string field, List<byte[]> blocks, ref string tagType, ref string stringType)
+	{
+		if (field == "comment")
+		{
+			foreach (TagLib.Id3v2.CommentsFrame frame in tag.GetFrames<TagLib.Id3v2.CommentsFrame>())
+			{
+				tagType = "ID3v2";
+				stringType = StringTypeName(frame.TextEncoding);
+				if (!string.IsNullOrEmpty(frame.Text))
+				{
+					blocks.Add(EncodeByStringType(frame.Text, frame.TextEncoding));
+				}
+				return true;
+			}
+			return false;
+		}
+		if (field == "lyrics")
+		{
+			foreach (TagLib.Id3v2.UnsynchronisedLyricsFrame frame in tag.GetFrames<TagLib.Id3v2.UnsynchronisedLyricsFrame>())
+			{
+				tagType = "ID3v2";
+				stringType = StringTypeName(frame.TextEncoding);
+				if (!string.IsNullOrEmpty(frame.Text))
+				{
+					blocks.Add(EncodeByStringType(frame.Text, frame.TextEncoding));
+				}
+				return true;
+			}
+			return false;
+		}
+		string frameId = Id3v2FrameId(field);
+		if (frameId == null)
+		{
+			return false;
+		}
+		bool found = false;
+		foreach (TagLib.Id3v2.TextInformationFrame frame in tag.GetFrames<TagLib.Id3v2.TextInformationFrame>(frameId))
+		{
+			found = true;
+			tagType = "ID3v2";
+			stringType = StringTypeName(frame.TextEncoding);
+			foreach (string value in frame.Text)
+			{
+				if (!string.IsNullOrEmpty(value))
+				{
+					blocks.Add(EncodeByStringType(value, frame.TextEncoding));
+				}
+			}
+		}
+		return found;
+	}
+
+	private static void FillRawFromXiph(TagLib.Ogg.XiphComment tag, string field, List<byte[]> blocks, ref string tagType, ref string stringType)
+	{
+		string fieldId = XiphFieldId(field);
+		if (fieldId == null)
+		{
+			return;
+		}
+		string[] values = tag.GetField(fieldId);
+		if (values == null || values.Length == 0)
+		{
+			return;
+		}
+		tagType = "Vorbis Comment";
+		stringType = "UTF8";
+		foreach (string value in values)
+		{
+			if (!string.IsNullOrEmpty(value))
+			{
+				blocks.Add(Encoding.UTF8.GetBytes(value));
+			}
+		}
+	}
+
+	private static void FillRawFromApe(TagLib.Ape.Tag tag, string field, List<byte[]> blocks, ref string tagType, ref string stringType)
+	{
+		string fieldId = ApeFieldId(field);
+		if (fieldId == null)
+		{
+			return;
+		}
+		TagLib.Ape.Item item = tag.GetItem(fieldId);
+		if (item == null)
+		{
+			return;
+		}
+		string[] values = item.ToStringArray();
+		if (values == null || values.Length == 0)
+		{
+			return;
+		}
+		tagType = "APE";
+		stringType = "UTF8";
+		foreach (string value in values)
+		{
+			if (!string.IsNullOrEmpty(value))
+			{
+				blocks.Add(Encoding.UTF8.GetBytes(value));
+			}
+		}
+	}
+
+	private static string Id3v2FrameId(string field)
+	{
+		switch (field)
+		{
+		case "title":
+			return "TIT2";
+		case "artist":
+			return "TPE1";
+		case "album":
+			return "TALB";
+		case "year":
+			return "TDRC";
+		case "genre":
+			return "TCON";
+		case "albumartist":
+			return "TPE2";
+		case "composer":
+			return "TCOM";
+		case "lyricist":
+			return "TEXT";
+		default:
+			return null;
+		}
+	}
+
+	private static string XiphFieldId(string field)
+	{
+		switch (field)
+		{
+		case "title":
+			return "TITLE";
+		case "artist":
+			return "ARTIST";
+		case "album":
+			return "ALBUM";
+		case "year":
+			return "DATE";
+		case "genre":
+			return "GENRE";
+		case "albumartist":
+			return "ALBUMARTIST";
+		case "composer":
+			return "COMPOSER";
+		case "lyricist":
+			return "LYRICIST";
+		case "comment":
+			return "COMMENT";
+		case "lyrics":
+			return "LYRICS";
+		default:
+			return null;
+		}
+	}
+
+	private static string ApeFieldId(string field)
+	{
+		switch (field)
+		{
+		case "title":
+			return "Title";
+		case "artist":
+			return "Artist";
+		case "album":
+			return "Album";
+		case "year":
+			return "Year";
+		case "genre":
+			return "Genre";
+		case "albumartist":
+			return "Album Artist";
+		case "composer":
+			return "Composer";
+		case "lyricist":
+			return "Lyricist";
+		case "comment":
+			return "Comment";
+		case "lyrics":
+			return "Lyrics";
+		default:
+			return null;
+		}
+	}
+
+	private static string StringTypeName(TagLib.StringType stringType)
+	{
+		switch (stringType)
+		{
+		case TagLib.StringType.Latin1:
+			return "Latin1";
+		case TagLib.StringType.UTF16:
+			return "UTF16";
+		case TagLib.StringType.UTF16BE:
+			return "UTF16BE";
+		case TagLib.StringType.UTF16LE:
+			return "UTF16LE";
+		default:
+			return "UTF8";
+		}
+	}
+
+	private static byte[] EncodeByStringType(string value, TagLib.StringType stringType)
+	{
+		if (value == null)
+		{
+			value = "";
+		}
+		switch (stringType)
+		{
+		case TagLib.StringType.Latin1:
+			return Latin1Encoding.GetBytes(value);
+		case TagLib.StringType.UTF16BE:
+			return Encoding.BigEndianUnicode.GetBytes(value);
+		case TagLib.StringType.UTF8:
+			return Encoding.UTF8.GetBytes(value);
+		default:
+			return Encoding.Unicode.GetBytes(value);
+		}
+	}
+
+	// --- picture type name <-> code (native 20-entry list; index = ID3v2 APIC type code) ---
+
+	private static string PictureTypeToName(TagLib.PictureType pictureType)
+	{
+		int code = (int)pictureType;
+		if (code >= 0 && code < pictureTypeNames.Count)
+		{
+			return pictureTypeNames[code];
+		}
+		return pictureTypeNames[0];
+	}
+
+	private static TagLib.PictureType NameToPictureType(string name)
+	{
+		if (name != null)
+		{
+			int index = pictureTypeNames.IndexOf(name);
+			if (index >= 0)
+			{
+				return (TagLib.PictureType)index;
+			}
+		}
+		return TagLib.PictureType.Other;
+	}
+
+	private TagLib.IPicture GetFirstValidPicture()
+	{
+		TagLib.IPicture[] pictures = tagFile.Tag.Pictures;
+		if (pictures == null)
+		{
+			return null;
+		}
+		foreach (TagLib.IPicture picture in pictures)
+		{
+			if (picture != null && picture.Type != TagLib.PictureType.NotAPicture)
+			{
+				return picture;
+			}
+		}
+		return null;
+	}
+
+	// --- write helpers ---
+
+	private void WriteLyricist(string value)
+	{
+		if (tagFile.GetTag(TagLib.TagTypes.Id3v2, create: false) is TagLib.Id3v2.Tag id3v2Tag)
+		{
+			id3v2Tag.RemoveFrames("TEXT");
+			if (!string.IsNullOrEmpty(value))
+			{
+				TagLib.Id3v2.TextInformationFrame frame = new TagLib.Id3v2.TextInformationFrame("TEXT")
+				{
+					Text = ToSingleValue(value)
+				};
+				id3v2Tag.AddFrame(frame);
+			}
+		}
+		if (tagFile.GetTag(TagLib.TagTypes.Xiph, create: false) is TagLib.Ogg.XiphComment xiphComment)
+		{
+			if (string.IsNullOrEmpty(value))
+			{
+				xiphComment.RemoveField("LYRICIST");
+			}
+			else
+			{
+				xiphComment.SetField("LYRICIST", ToSingleValue(value));
+			}
+		}
+		if (tagFile.GetTag(TagLib.TagTypes.Ape, create: false) is TagLib.Ape.Tag apeTag)
+		{
+			if (string.IsNullOrEmpty(value))
+			{
+				apeTag.RemoveItem("Lyricist");
+			}
+			else
+			{
+				apeTag.SetValue("Lyricist", ToSingleValue(value));
+			}
+		}
+	}
+
+	private static void SetYear(TagLib.Tag tag, string yearValue)
+	{
+		uint.TryParse(yearValue, out uint year);
+		tag.Year = year;
+	}
+
+	private static void SetTrack(TagLib.Tag tag, string trackValue)
+	{
+		ParseNumberAndCount(trackValue, out uint number, out uint count);
+		tag.Track = number;
+		tag.TrackCount = count;
+	}
+
+	private static void SetDisc(TagLib.Tag tag, string discValue)
+	{
+		ParseNumberAndCount(discValue, out uint number, out uint count);
+		tag.Disc = number;
+		tag.DiscCount = count;
+	}
+
+	private static void ParseNumberAndCount(string value, out uint number, out uint count)
+	{
+		number = 0u;
+		count = 0u;
+		if (string.IsNullOrEmpty(value))
+		{
+			return;
+		}
+		string[] parts = value.Split('/');
+		uint.TryParse(parts[0].Trim(), out number);
+		if (parts.Length > 1)
+		{
+			uint.TryParse(parts[1].Trim(), out count);
+		}
+	}
+
+	private static void SetId3v2Version()
+	{
+		int version = Settings.Default.ID3v2Version;
+		if (version == 3 || version == 4)
+		{
+			TagLib.Id3v2.Tag.DefaultVersion = (byte)version;
+			TagLib.Id3v2.Tag.ForceDefaultVersion = true;
+		}
+	}
+
 	[DllImport("MusicTag.dll", EntryPoint = "bb")]
 	private static extern void FreeNativeString(IntPtr nativeStringPointer);
 
-	[DllImport("MusicTag.dll", EntryPoint = "zzz")]
-	private static extern void FreePictureList(IntPtr pictureListPointer, int pictureCount);
-
-	[DllImport("MusicTag.dll", EntryPoint = "zz1")]
-	private static extern void FreeRawTextFieldData(IntPtr rawFieldDataPointer, int fieldValueCount);
-
-	[DllImport("MusicTag.dll", EntryPoint = "dd")]
-	private static extern void CloseTagFile(IntPtr tagHandle);
-
-	[DllImport("MusicTag.dll", EntryPoint = "cc")]
-	private static extern IntPtr ReadGenreName(int genreId);
-
-	[DllImport("MusicTag.dll", CharSet = CharSet.Unicode, EntryPoint = "d")]
-	private static extern int ReadRawTextFieldData(IntPtr tagHandle, string fieldName, out IntPtr tagTypePointer, out IntPtr stringTypePointer, out IntPtr rawBlockListPointer);
-
-	[DllImport("MusicTag.dll", CharSet = CharSet.Unicode, EntryPoint = "ee")]
-	private static extern IntPtr ReadTagField(IntPtr tagHandle, string fieldName, out IntPtr tagTypePointer, out IntPtr stringTypePointer);
-
-	[DllImport("MusicTag.dll", EntryPoint = "f")]
-	private static extern IntPtr ReadTagTypeSummary(IntPtr tagHandle, string fieldName, out IntPtr tagTypePointer, out IntPtr stringTypePointer);
-
-	[DllImport("MusicTag.dll", EntryPoint = "g")]
-	private static extern int ReadPrimaryPicture(IntPtr tagHandle, out IntPtr picturePointer);
-
-	[DllImport("MusicTag.dll", EntryPoint = "gg")]
-	private static extern int ReadAllPictures(IntPtr tagHandle, out IntPtr pictureListPointer);
-
-	[DllImport("MusicTag.dll", CharSet = CharSet.Unicode, EntryPoint = "e")]
-	private static extern IntPtr OpenTagFile(IntPtr existingTagHandle, string filePath, bool verifyFileOnly, out IntPtr openResultPointer);
-
-	[DllImport("MusicTag.dll", EntryPoint = "ggg")]
-	private static extern int ReadPictureTypeNames(out IntPtr pictureTypeListPointer);
-
-	[DllImport("MusicTag.dll", EntryPoint = "p")]
-	private static extern IntPtr GetFileExtension(IntPtr tagHandle);
-
-	[DllImport("MusicTag.dll", EntryPoint = "h")]
-	private static extern int GetBitsPerSample(IntPtr tagHandle);
-
-	[DllImport("MusicTag.dll", EntryPoint = "i")]
-	private static extern int GetChannelCount(IntPtr tagHandle);
-
-	[DllImport("MusicTag.dll", EntryPoint = "j")]
-	private static extern int GetSampleRate(IntPtr tagHandle);
-
-	[DllImport("MusicTag.dll", EntryPoint = "k")]
-	private static extern int GetBitrate(IntPtr tagHandle);
-
-	[DllImport("MusicTag.dll", EntryPoint = "l")]
-	private static extern int GetDurationMilliseconds(IntPtr tagHandle);
-
-	[DllImport("MusicTag.dll", EntryPoint = "o")]
-	[return: MarshalAs(UnmanagedType.I1)]
-	private static extern bool HasVideoTrack(IntPtr tagHandle);
-
-	[DllImport("MusicTag.dll", CharSet = CharSet.Unicode, EntryPoint = "m0")]
-	private static extern void WriteTagFields(IntPtr tagHandle, string[] fieldValues, int fieldValueCount);
-
-	[DllImport("MusicTag.dll", CharSet = CharSet.Unicode, EntryPoint = "m1")]
-	private static extern void ClearPictures(IntPtr tagHandle);
-
-	[DllImport("MusicTag.dll", CharSet = CharSet.Unicode, EntryPoint = "m2")]
-	private static extern void AddPicture(IntPtr tagHandle, byte[] pictureBytes, int pictureByteCount, string pictureType, string mimeType, int width, int height);
-
-	[DllImport("MusicTag.dll", CharSet = CharSet.Unicode, EntryPoint = "m3")]
-	[return: MarshalAs(UnmanagedType.I1)]
-	private static extern bool SaveTagFieldsNative(IntPtr tagHandle, int id3v2Version);
-
-	[DllImport("MusicTag.dll", EntryPoint = "q")]
-	private static extern bool SaveTagFileNative(IntPtr tagHandle, int id3v2Version);
-
-	[DllImport("MusicTag.dll", CharSet = CharSet.Unicode)]
-	[return: MarshalAs(UnmanagedType.I1)]
-	private static extern bool NativeFileExists(IntPtr tagHandle, string filePath);
-
 	static ConfigDescriptorState()
 	{
-		openErrorTemplates = new string[2]
-		{
-			Resources.Msg_InvalidFileWithPossiableExt,
-			Resources.Msg_InvalidFileWithNoSupportMultiTrackAudioFile
-		};
 		supportedPictureMimeTypes = new string[3] { "image/jpeg", "image/png", "image/gif" };
-		pictureTypeNames = LoadPictureTypeNames();
+		// Verbatim native ggg picture-type list (20 entries, index = ID3v2 APIC type
+		// code). British spelling "Coloured Fish"; native has no "Publisher Logo" (code 20).
+		pictureTypeNames = new List<string>
+		{
+			"Other", "File Icon", "Other File Icon", "Front Cover", "Back Cover",
+			"Leaflet Page", "Media", "Lead Artist", "Artist", "Conductor",
+			"Band", "Composer", "Lyricist", "Recording Location", "During Recording",
+			"During Performance", "Movie Screen Capture", "Coloured Fish", "Illustration", "Band Logo"
+		};
 	}
 }
-
