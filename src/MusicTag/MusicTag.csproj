@@ -37,6 +37,9 @@
     <Reference Include="TagLibSharp">
       <HintPath>musictag/TagLibSharp.dll</HintPath>
     </Reference>
+    <Reference Include="UtfUnknown">
+      <HintPath>musictag/UtfUnknown.dll</HintPath>
+    </Reference>
     <Reference Include="Fkosoft.FontAwesome4">
       <HintPath>musictag/Fkosoft.FontAwesome4.dll</HintPath>
     </Reference>
@@ -55,6 +58,7 @@
     <None Include="musictag\MusicTag.db" Link="MusicTag.db" CopyToOutputDirectory="PreserveNewest" />
     <None Include="musictag\MusicTag.dll" Link="MusicTag.dll" CopyToOutputDirectory="PreserveNewest" />
     <None Include="musictag\SQLite.Interop.dll" Link="SQLite.Interop.dll" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="musictag\UtfUnknown.dll" Link="UtfUnknown.dll" CopyToOutputDirectory="PreserveNewest" />
     <None Include="musictag\en\MusicTag.resources.dll" Link="en\MusicTag.resources.dll" CopyToOutputDirectory="PreserveNewest" />
     <None Include="musictag\font\fontawesome-webfont.ttf" Link="font\fontawesome-webfont.ttf" CopyToOutputDirectory="PreserveNewest" />
     <None Include="musictag\zh-CHS\MusicTag.resources.dll" Link="zh-CHS\MusicTag.resources.dll" CopyToOutputDirectory="PreserveNewest" />
