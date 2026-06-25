@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Resources;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -157,7 +158,12 @@ internal class LyricEditorDialog : Form
 
 	private void InitializeLocalizedText()
 	{
-		ComponentResourceManager resources = new ComponentResourceManager(typeof(LyricEditorDialog));
+		// 这 6 个右键菜单项的本地化文本只存在于卫星资源 DLL 的 BaseFieldInstance 资源集中
+		// (BaseFieldInstance 是本类在反编译恢复前的原始类型名)。恢复时类型改名为
+		// LyricEditorDialog,若按新类型名(typeof(LyricEditorDialog))推导资源基名,主程序集与
+		// en/zh-CHS/zh-CHT 卫星都没有对应资源集 → MissingManifestResourceException。因此显式按
+		// 原始基名读取;配套补回的中性(英文)资源集见 MusicTagWinApp.Instances.BaseFieldInstance.resx。
+		ResourceManager resources = new ResourceManager("MusicTagWinApp.Instances.BaseFieldInstance", typeof(LyricEditorDialog).Assembly);
 		Text = Resources.lyrics;
 		searchButton.Text = Resources.search;
 		saveAsLrcButton.Text = Resources.SaveAsLrc;

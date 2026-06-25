@@ -35,3 +35,6 @@ artifacts/
 HANDOFF_REVIEW.md
 docs/测试歌曲/
 docs/汉化/
+# Original (pre-recovery) program kept locally as a reverse-engineering reference:
+# copyrighted binaries incl. the native MusicTag.dll the project removed from history.
+docs/old/

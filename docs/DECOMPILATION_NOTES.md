@@ -24,6 +24,18 @@
 作为 fallback 终点,否则对附属程序集中**缺失**的键（恢复期新增的 `Network`/`gbNetworkOptions`/QQ-Cookie/UA 等控件）
 `ResourceManager.GetString` 会抛 `MissingManifestResourceException`;有了它,缺失键返回 null,代码内中文 fallback 生效。
 
+同理:`LyricEditorDialog`（原 `BaseFieldInstance`）歌词编辑器右键菜单 6 个菜单项的本地化文案,
+存放在附属程序集的 `MusicTagWinApp.Instances.BaseFieldInstance.<culture>.resources` 资源集中,故
+`InitializeLocalizedText` 通过 `new ResourceManager("MusicTagWinApp.Instances.BaseFieldInstance", ...)`
+读取(**此字符串保持原样,不要随类型/文件名改写成 LyricEditorDialog**)。此前恢复代码误用
+`new ComponentResourceManager(typeof(LyricEditorDialog))` 推导基名,主程序集与各附属程序集都无该资源集
+→ 一打开歌词编辑器就 `MissingManifestResourceException` 闪退,已修正基名。配套新增中性 resx
+`src/MusicTag/MusicTagWinApp.Instances.BaseFieldInstance.resx`——与上面 OptionsDialog 那个**有意为空**的
+不同,这里**填入 6 个键的英文中性值**:因为这 6 句是 `menuItem.Text = GetString(key)` 直接赋值、代码内
+无 fallback,中性集若为空,在缺少对应附属程序集的区域性(invariant 等)下 `GetString` 返回 null 会使菜单
+文字变空白;填入英文后 zh-CHS/zh-CHT/en 走附属翻译、其余区域性回退英文,均不再崩溃。这 6 句原始文案系从
+随附附属资源 DLL 中读回。
+
 ## 已删除的空壳/生成类
 
 以下两个反编译空壳/生成类经确认无活动引用后已删除（详见 `MAINTENANCE.md`，commit `5964fa9`）：
