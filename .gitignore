@@ -30,3 +30,8 @@ decompiled/
 recovered-src/
 artifacts/
 .codegraph/
+
+# Working notes + copyrighted/localization assets: kept local, never published.
+HANDOFF_REVIEW.md
+docs/测试歌曲/
+docs/汉化/
