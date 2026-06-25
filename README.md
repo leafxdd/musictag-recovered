@@ -9,7 +9,7 @@
 - `src/MusicTag/`：当前可编译的源码目录。
 - `src/MusicTag/MusicTag.csproj`：SDK 风格的 WinForms 项目文件。
 - `MusicTag.sln`：可用 Visual Studio 或 MSBuild 打开的解决方案。
-- `src/MusicTag/musictag/`：从原程序保留的运行时依赖，例如原生 DLL、数据库、资源和字体文件。
+- `src/MusicTag/musictag/`：运行时依赖文件，例如托管库（`TagLibSharp`、`UtfUnknown` 等）、SQLite 互操作库、数据库、多语言资源和字体文件。原版自带的原生 `MusicTag.dll`/`MediaInfo.dll` 已被托管实现取代并移除（见 `docs/NATIVE_DEPENDENCY_REMOVAL_PLAN.md`）。
 - `scripts/Verify-Build.ps1`：本地和 CI 共用的构建验证脚本。
 - `docs/MAINTENANCE.md`：维护策略、清理记录和常用命令。
 - `docs/DECOMPILATION_NOTES.md`：暂不强行重命名或重构的反编译残留清单。
@@ -43,7 +43,7 @@
 src/MusicTag/bin/Release/net481/MusicTag.exe
 ```
 
-构建时会自动复制必要运行文件，例如 `MusicTag.dll`、`MediaInfo.dll`、`TagLibSharp.dll`、`SQLite.Interop.dll`、`MusicTag.db`、`MusicTag.dat`、多语言资源 DLL 和 FontAwesome 字体。构建日志会写入 `artifacts/` 目录。
+构建时会自动复制必要运行文件，例如 `TagLibSharp.dll`、`UtfUnknown.dll`、`SQLite.Interop.dll`、`System.Data.SQLite.dll`、`Newtonsoft.Json.dll`、`MusicTag.db`、`MusicTag.dat`、多语言资源 DLL 和 FontAwesome 字体。构建日志会写入 `artifacts/` 目录。
 
 ## 运行方式
 

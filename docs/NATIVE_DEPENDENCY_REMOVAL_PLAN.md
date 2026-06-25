@@ -2,7 +2,8 @@
 
 > 目标:把项目对**原版二进制 `MusicTag.dll`** 的全部依赖替换为可维护的托管代码,最终**删除该 DLL**,
 > 从而根除当前为标签读写打的反篡改补丁(见 `DECOMPILATION_NOTES.md` 的“反篡改自校验门”一节)。
-> 本文是路线图与事实底稿,不是已完成的改动。
+> 本文是路线图与事实底稿。**阶段 A、B 均已完成**(见 §12、§13),原生 `MusicTag.dll`/`MediaInfo.dll`
+> 已从仓库删除,补丁不复存在;下文的“规划/将来时”叙述保留作设计底稿。
 
 ## 1. 为什么做这件事
 
@@ -161,7 +162,7 @@ TagLibSharp 2.3.0(NuGet,引用 `lib/net462/TagLibSharp.dll`)支持其中 **15 �
   6. **mp3/ogg 时长、码率**:估算口径差极小(时长 <40ms;ogg 码率 native 实测平均 vs taglib 标称);flac 时长完全一致。
 - ✅ **封面语义差异已查清**:`半壶纱.mp3` 的“6 张图”实为 Serato DJ 写入的 6 个 `PictureType.NotAPicture` / `application/json` 元数据对象(CuePoints、Serato Markers、Key、Energy、BeatGrid),**非真实封面**;native 正确过滤(返回 0),TagLibSharp 把它们计入 `Tag.Pictures`。**阶段 A 规则**:封面读写一律过滤 `Type == PictureType.NotAPicture`(或只取 `image/*` mime),即与 native 等价。其余样本的真实封面两边均 =1。
 
-**③ 编码检测库候选**(阶段 B `de` 替代):**UTF.Unknown**(MIT,活跃,Mozilla 通用字符集检测移植)或 Ude.NetStandard;保留 `ISO8859-1`/空 → `Encoding.Default` 回退,阶段 B 对 `.lrc` 小样本对拍。
+**③ 编码检测库候选**(阶段 B `de` 替代):**UTF.Unknown**(MPL-1.1——本规划早期此处误记为 MIT,已更正;活跃,Mozilla 通用字符集检测移植)或 Ude.NetStandard;保留 `ISO8859-1`/空 → `Encoding.Default` 回退,阶段 B 对 `.lrc` 小样本对拍。
 
 **结论**:标签 I/O 可整体迁移到 TagLibSharp、**补丁可移除**;封面语义差异已查清(过滤 `NotAPicture` 即与 native 等价),**阶段 A 无已知阻塞**。冷门格式缺口收窄到三个边缘容器,推荐对其明确降级(§9 c)。
 
@@ -192,4 +193,20 @@ TagLibSharp 2.3.0(NuGet,引用 `lib/net462/TagLibSharp.dll`)支持其中 **15 �
 
 **提交**:PA1(迁移)+ PA2(还原原版 DLL)合并为一次提交落地(连同本文档与 `DECOMPILATION_NOTES.md` 同步)。
 
-**阶段 A 状态:完成,补丁已移除。** 阶段 B(在线去 native + 删除 `MusicTag.dll`/`MediaInfo.dll`)尚未授权开始。
+**阶段 A 状态:完成,补丁已移除。** **阶段 B 状态:完成,`MusicTag.dll`/`MediaInfo.dll` 已删除(见 §13)。**
+
+## 13. 阶段 B 实测结果(2026-06-25,已完成)
+
+**做了什么**:把在线搜索子系统对原生 `MusicTag.dll` 的全部依赖(§3.4 的 URL/头常量 + §3.5 的网易云 `rc2`/`rc3`/`rc4` 加解密 + `de` 编码检测)迁到托管实现,清掉该 DLL 最后一处 P/Invoke,并把 `MusicTag.dll` 及其内部依赖 `MediaInfo.dll` 一并从仓库删除。四个阶段各一次提交(PB1 `5ce2a03` / PB2 `8b7f4b5` / PB3 `b04f89c` / PB4 `ba3844e`)。
+
+- **PB1 — 在线 URL/头常量去 native(`5ce2a03`)**:把 §3.4 全部端点模板硬编进各 provider(网易 `na`/`nb`/`nc`/`naa`/`nab`、QQ `nd`/`ndd`/`ne`/`nf`、酷我 `pa`/`pb`、酷狗 `nh`/`ni`),替掉对应 P/Invoke 与静态初始化;`rc`/`rc1`(`X-Real-IP` 头)改为托管随机 `112.88.x.x` 生成器。常量取自 PB0 基线对原始 DLL 的明文 dump。
+
+- **PB2 — 网易云 weapi/163key 托管化(`8b7f4b5`)**:新增 `MusicTag.Serialization/NetEaseCrypto.cs`,以公开方案重写 `rc2`(weapi:双层 AES-128-CBC,固定 key1 `0CoJUm6Qyw8W8jud` + IV `0102030405060708` + 随机 16 字节二层 key,外加无填充 RSA 包裹 secKey,**返回与 native 同形的 `{a,b}` JObject** 使三处调用点零改动)与 `rc4`/`rc3`(“163 key” 编/解码:AES-128-ECB + base64 + `163 key(Don't modify):` 前缀,互逆)。为 RSA 的 `BigInteger.ModPow` 新增 `System.Numerics` 引用。**对拍**:163key 编码对原始 DLL **逐字节一致**;weapi 因 native 端本就每次随机,只能验 `{a,b}` 形状 + 自洽 + 往返。迁移点:`NetEaseMusicTagProvider` 三处 `rc2` + 一处 `rc4`(写 comment)、`TrackSearchContext` 一处 `rc3`(解 comment)。
+
+- **PB3 — 编码检测改 UtfUnknown(`b04f89c`)**:`Tokenizer.DetectFileEncoding` 由 native `de`(`ResolveToken`)改走托管 **UtfUnknown**(NuGet UTF.Unknown 2.5.1,**许可证 MPL-1.1**——更正 §11 早期“MIT”误记;net40 单 DLL 自包含,HintPath `musictag/UtfUnknown.dll` + 输出拷贝)。`CharsetDetector.DetectFromBytes(...).Detected?.Encoding` 给出编码;新增 `IsSystemDefaultFallback` 忠实复刻 native 把 ASCII/`iso-8859-1`/`windows-1252` 路由到 `Encoding.Default` 的行为(`us-ascii` 必须回退,否则 2000 字节采样之外的 CJK 会被破坏)。`ReadFileSampleBytes` 改为返回精确长度的 `byte[]`(去掉尾部零字节以免干扰检测)。**对拍**:`DeCompare` 探针对 8 种样本编码与 native 解码结果 **8/8 一致**。
+
+- **PB4 — 删除 native import 与 DLL(`ba3844e`)**:`ConfigDescriptorState` 中已无调用方的 `EntryPoint = "bb"` `FreeNativeString` 绑定与 `ReadAndFreeNativeString` 死方法一并移除;从 csproj 删除 `MusicTag.dll`、`MediaInfo.dll` 两个 `<None>` 输出拷贝项,并删除两份源 DLL。构建输出目录经核实**不含任何 native `MusicTag.dll`/`MediaInfo.dll`**(仅余 `TagLibSharp`/`UtfUnknown`/`SQLite.Interop`/`System.Data.SQLite`/`Newtonsoft.Json` 等托管件),app 无需它们即可启动运行。
+
+**净结果**:全仓库 `DllImport("MusicTag.dll")` 归零——仅余标准 Win32 `user32`/`shell32`/`uxtheme` 的 P/Invoke(操作系统 API,非原版依赖)。tag 读写走 TagLibSharp(阶段 A),在线加解密走 `NetEaseCrypto`、编码检测走 UtfUnknown(阶段 B);原始 `MusicTag.dll` 仅存于 git 历史与 gitignored `artifacts/MusicTag.dll.orig`。反篡改 gate 及其 3 字节补丁永久失去意义。
+
+**验证**:每阶段 `Verify-Build.ps1 -RunSmokeTests` 绿(Debug+Release + 三冒烟:`FilenameRelatedBatchDialog`/`OptionsDialog` 反射构造 + EXE 存活);`git diff --check` 干净;`codegraph sync` 通过。**未自动化覆盖**(沿用既定可接受风险,无自动化测试):四源联网搜索与导入 `.lrc` 的端到端人工冒烟;weapi 每次随机故无法逐字节对拍(只验 `{a,b}` 形状 + 自洽 + 163key 逐字节)。

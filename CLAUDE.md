@@ -46,13 +46,16 @@ Single WinExe, `net481` (.NET Framework 4.8.1, migrated from 4.6.1 — see migra
   this runs on managed **TagLibSharp** (referenced via HintPath `musictag/TagLibSharp.dll`); the class
   keeps its original public API / field vocabulary so all ~30 `StateFieldInstance` call sites are
   unchanged. The old P/Invoke into native `MusicTag.dll` for tags is gone — which is why the native
-  DLL's anti-tamper gate no longer matters and its 3-byte patch was **reverted** (DLL restored to the
-  original; see `docs/DECOMPILATION_NOTES.md`).
-- **Native `MusicTag.dll` (online only, Stage B pending)** — still P/Invoked for the online-search
-  subsystem (endpoint URL/header constants + NetEase crypto + encoding detection) and for one residual
-  string-free helper (`EntryPoint = "bb"`). Its exports are obfuscated single/double-letter `EntryPoint`
-  strings (`"bb"`, `"zzz"`, `"d"`…) — **never rename those `EntryPoint` values.** (Plus `MediaInfo.dll`,
-  the DLL's internal dependency.)
+  DLL's anti-tamper gate no longer matters and its 3-byte patch was **reverted**. Stage B then removed
+  the DLL entirely (see the next bullet and `docs/DECOMPILATION_NOTES.md`).
+- **Native `MusicTag.dll` — fully removed (Stage A + B complete).** The app no longer P/Invokes any
+  `MusicTag.dll` export: tag I/O runs on TagLibSharp (Stage A), and the online subsystem's former native
+  pieces are managed too (Stage B) — endpoint URL/header constants hardcoded into the providers, NetEase
+  weapi/163-key crypto re-implemented in `NetEaseCrypto` (`MusicTag.Serialization/`), and encoding
+  detection on the managed **UtfUnknown** charset library. `MusicTag.dll` and its internal dependency
+  `MediaInfo.dll` were deleted from `musictag/` (commit `ba3844e`; original preserved in git history +
+  `artifacts/MusicTag.dll.orig`). The only `DllImport`s left are standard Win32
+  (`user32`/`shell32`/`uxtheme`). See `docs/NATIVE_DEPENDENCY_REMOVAL_PLAN.md` §13.
 - **`DatabaseMapper`** (`MusicTagWinApp.Instances/DatabaseMapper.cs`) — shared utility hub: DPI scaling,
   resource-bitmap loading, image resize/save, AES decrypt, URL encoding, temp/log cleanup, error
   dialogs, exception logging.
@@ -118,17 +121,20 @@ ranked candidate list shown to user → write-back to file tags.
   table init (whose unused `EncodingDetector` scorer was then removed entirely). Treat the rule as a
   standing policy for any artifact that resurfaces: prefer the smallest equivalent form, and when a change
   can live in hand-written code, add it there rather than reshaping a generated block.
-- **The obfuscated native `EntryPoint` strings are NOT obfuscation to undo** — they are the P/Invoke binding
-  to real `MusicTag.dll` exports, so renaming them breaks behavior-equivalence. Never change them (same
-  spirit as the persisted JSON keys and `.resx` keys below).
+- **P/Invoke `EntryPoint` strings are real export names, not obfuscation to undo** — renaming one breaks
+  the binding. The obfuscated single/double-letter exports of native `MusicTag.dll` (`"bb"`, `"zzz"`,
+  `"d"`…) this once warned about are **gone** (Stage B deleted the DLL); the only `DllImport`s left are
+  standard Win32 (`user32`/`shell32`/`uxtheme`), whose `EntryPoint`s are OS API names — likewise never
+  change them (same spirit as the persisted JSON keys and `.resx` keys below).
 - When a decompiled name's meaning is unclear, **keep it** (or use a neutral name) and record it in
   `docs/DECOMPILATION_NOTES.md` — don't guess a rename.
 - **Persisted names must stay stable**: keep old JSON keys via `[JsonProperty]` (e.g. `SourceItem`'s
   `Src`/`Seq`/`IsOther`/`WebSearchItemsLimit`) and be careful renaming types tied to `.resx` resource
   keys, so existing user config and resource lookups keep working.
 - **Two `musictag` locations, opposite meaning**: `src/MusicTag/musictag/` holds **required** runtime
-  assets copied to output (native `MusicTag.dll`, `MediaInfo.dll`, `TagLibSharp.dll`, `SQLite.Interop.dll`,
-  `MusicTag.db`, `MusicTag.dat`, `en`/`zh-CHS`/`zh-CHT` resource DLLs, FontAwesome ttf) — keep it. Root
+  assets copied to output (`TagLibSharp.dll`, `UtfUnknown.dll`, `SQLite.Interop.dll`, `MusicTag.db`,
+  `MusicTag.dat`, `en`/`zh-CHS`/`zh-CHT` resource DLLs, FontAwesome ttf) — keep it. (The original native
+  `MusicTag.dll`/`MediaInfo.dll` were removed in Stage B — see Architecture.) Root
   `/musictag/` is ignored loose extraction. `tools/` (de4dot, dnSpy, ILSpy, die) is an ignored local RE
   toolbox.
 - Style (`.editorconfig`): **tabs** in `.cs` (size 4), 2-space in `csproj`/`sln`/`md`; CRLF; UTF-8;
