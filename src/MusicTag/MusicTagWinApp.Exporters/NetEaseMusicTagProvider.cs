@@ -2,12 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
-using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading;
 using MusicTag.Readers;
 using MusicTag.Serialization;
-using MusicTag.States;
 using MusicTagWinApp.Adapter;
 using MusicTagWinApp.Instances;
 using MusicTagWinApp.Listeners;
@@ -98,14 +96,14 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase
 		}
 		try
 		{
-			JObject encryptedRequest = JObject.Parse(ConfigDescriptorState.ReadAndFreeNativeString(BuildEncryptedRequestPointer(new JObject
+			JObject encryptedRequest = NetEaseCrypto.BuildEncryptedRequest(new JObject
 			{
 				{ "s", query },
 				{ "type", 1 },
 				{ "limit", resultLimit },
 				{ "total", "true" },
 				{ "offset", 0 }
-			}.ToString(Formatting.None))));
+			}.ToString(Formatting.None));
 			string responseBody = PostString(songSearchEndpoint, string.Format(encryptedPostDataFormat, DatabaseMapper.UrlEncodeUtf8(encryptedRequest["a"].ToString()), DatabaseMapper.UrlEncodeUtf8(encryptedRequest["b"].ToString())));
 			return (!cancellationSource.IsCancellationRequested) ? ParseSongSearchResponse(responseBody) : new List<NetEaseSongInfo>();
 		}
@@ -124,7 +122,7 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase
 		}
 		try
 		{
-			JObject encryptedRequest = JObject.Parse(ConfigDescriptorState.ReadAndFreeNativeString(BuildEncryptedRequestPointer(new JObject
+			JObject encryptedRequest = NetEaseCrypto.BuildEncryptedRequest(new JObject
 			{
 				{
 					"c",
@@ -134,7 +132,7 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase
 						{ "v", 0 }
 					}).ToString(Formatting.None)
 				}
-			}.ToString(Formatting.None))));
+			}.ToString(Formatting.None));
 			string responseBody = PostString(songDetailsEndpoint, string.Format(encryptedPostDataFormat, DatabaseMapper.UrlEncodeUtf8(encryptedRequest["a"].ToString()), DatabaseMapper.UrlEncodeUtf8(encryptedRequest["b"].ToString())));
 			return (!cancellationSource.IsCancellationRequested) ? ParseSongSearchResponse(responseBody) : new List<NetEaseSongInfo>();
 		}
@@ -153,7 +151,7 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase
 		}
 		try
 		{
-			JObject encryptedRequest = JObject.Parse(ConfigDescriptorState.ReadAndFreeNativeString(BuildEncryptedRequestPointer(new JObject
+			JObject encryptedRequest = NetEaseCrypto.BuildEncryptedRequest(new JObject
 			{
 				{ "total", "true" },
 				{ "offset", "0" },
@@ -161,7 +159,7 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase
 				{ "limit", "1000" },
 				{ "ext", "true" },
 				{ "private_cloud", "true" }
-			}.ToString(Formatting.None))));
+			}.ToString(Formatting.None));
 			string albumResponse = PostString(
 				string.Format(albumDetailsEndpointFormat, albumId),
 				string.Format(
@@ -406,7 +404,7 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase
 			{
 				if (Settings.Default.CommentTagWrite163Key && !string.IsNullOrWhiteSpace(track.Comment))
 				{
-					track.Comment = ConfigDescriptorState.ReadAndFreeNativeString(BuildNetEaseCommentTagPointer(track.Comment));
+					track.Comment = NetEaseCrypto.EncodeMusicComment(track.Comment);
 				}
 				track.ResultOrder = resultOrder++;
 				track.SearchPass = searchPass;
@@ -732,12 +730,6 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase
 		}
 		return (lyricText, translatedLyricText);
 	}
-
-	[DllImport("MusicTag.dll", CharSet = CharSet.Unicode, EntryPoint = "rc2")]
-	private static extern IntPtr BuildEncryptedRequestPointer(string value);
-
-	[DllImport("MusicTag.dll", CharSet = CharSet.Unicode, EntryPoint = "rc4")]
-	private static extern IntPtr BuildNetEaseCommentTagPointer(string first);
 
 	private static string BuildClientHeaderValue()
 	{

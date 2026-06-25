@@ -1,7 +1,7 @@
 using System;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
+using MusicTag.Serialization;
 using MusicTag.States;
 using MusicTagWinApp.Instances;
 using MusicTagWinApp.Properties;
@@ -57,7 +57,7 @@ internal class TrackSearchContext
 			return;
 		}
 
-		string decodedComment = ConfigDescriptorState.ReadAndFreeNativeString(DecodeMusicComment(comment));
+		string decodedComment = NetEaseCrypto.DecodeMusicComment(comment);
 		if (string.IsNullOrWhiteSpace(decodedComment))
 		{
 			return;
@@ -119,7 +119,4 @@ internal class TrackSearchContext
 		UsedFileNameForTitle = true;
 		return title;
 	}
-
-	[DllImport("MusicTag.dll", CharSet = CharSet.Unicode, EntryPoint = "rc3")]
-	private static extern IntPtr DecodeMusicComment(string info);
 }
