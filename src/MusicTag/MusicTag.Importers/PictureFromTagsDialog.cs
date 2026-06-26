@@ -144,19 +144,26 @@ internal class PictureFromTagsDialog : Form
 		int imageIndex = 0;
 		foreach (var (audioFilePath, image, imageHash) in candidates)
 		{
-			if (!GetLoadedImageHashes().Contains(imageHash))
+			try
 			{
-				string imageKey = audioFilePath + "_" + imageIndex;
-				pictureImageList.Images.Add(imageKey, image);
-				ListViewItem listViewItem = new ListViewItem
+				if (!GetLoadedImageHashes().Contains(imageHash))
 				{
-					Text = image.Width + "x" + image.Height,
-					ImageKey = imageKey,
-					Tag = (audioFilePath, imageIndex)
-				};
-				pictureListView.Items.Add(listViewItem);
-				GetLoadedImageHashes().Add(imageHash);
-				imageIndex++;
+					string imageKey = audioFilePath + "_" + imageIndex;
+					pictureImageList.Images.Add(imageKey, image);
+					ListViewItem listViewItem = new ListViewItem
+					{
+						Text = image.Width + "x" + image.Height,
+						ImageKey = imageKey,
+						Tag = (audioFilePath, imageIndex)
+					};
+					pictureListView.Items.Add(listViewItem);
+					GetLoadedImageHashes().Add(imageHash);
+					imageIndex++;
+				}
+			}
+			finally
+			{
+				image?.Dispose();
 			}
 		}
 	}
@@ -190,6 +197,11 @@ internal class PictureFromTagsDialog : Form
 		if (!GetSearchCancellation().IsCancellationRequested)
 		{
 			AddPictureCandidates(candidates);
+			return;
+		}
+		foreach (var (_, image, _) in candidates)
+		{
+			image?.Dispose();
 		}
 	}
 

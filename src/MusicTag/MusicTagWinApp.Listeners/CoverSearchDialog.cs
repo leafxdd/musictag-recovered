@@ -597,17 +597,27 @@ internal class CoverSearchDialog : Form
 		candidateItem.ImageKey = candidate.LocalCoverPath;
 		if (image != null)
 		{
-			candidateImageList.Images.Add(candidate.LocalCoverPath, image);
-			foreach (ListViewItem listViewItem in candidateListView.Items)
+			try
 			{
-				if (listViewItem.ImageKey != candidateItem.ImageKey)
+				candidateImageList.Images.Add(candidate.LocalCoverPath, image);
+				foreach (ListViewItem listViewItem in candidateListView.Items)
 				{
-					continue;
+					if (listViewItem.ImageKey != candidateItem.ImageKey)
+					{
+						continue;
+					}
+					listViewItem.Text = candidate.SearchSource.GetDisplayName();
+					if (originalSize.HasValue)
+					{
+						listViewItem.Text = listViewItem.Text + "|" + originalSize.Value.Width + "x" + originalSize.Value.Height;
+					}
 				}
-				listViewItem.Text = candidate.SearchSource.GetDisplayName();
-				if (originalSize.HasValue)
+			}
+			finally
+			{
+				if (image != candidateImageList.Images["image_not_found"] && image != candidateImageList.Images["download_failed"])
 				{
-					listViewItem.Text = listViewItem.Text + "|" + originalSize.Value.Width + "x" + originalSize.Value.Height;
+					image.Dispose();
 				}
 			}
 			return;
