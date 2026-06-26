@@ -216,6 +216,7 @@ internal class AutoMatchTagsDialog : Form
 				}
 				finally
 				{
+					loadedTagContext.Dispose();
 					FinishSearch();
 				}
 			}
@@ -338,11 +339,16 @@ internal class AutoMatchTagsDialog : Form
 			}
 		}
 
-		private sealed class LoadedTagContext
+		private sealed class LoadedTagContext : IDisposable
 		{
 			public ConfigDescriptorState tagFile;
 
 			public AutoMatchFileSearchTask searchTask;
+
+			public void Dispose()
+			{
+				tagFile?.Dispose();
+			}
 
 			internal bool MarkTextTagNeededIfMissing(string fieldName)
 			{
@@ -834,7 +840,7 @@ internal class AutoMatchTagsDialog : Form
 			try
 			{
 				Monitor.Enter(owner, ref lockTaken);
-				using ConfigDescriptorState configDescriptorState = new ConfigDescriptorState(GetCurrentFilePath());
+				ConfigDescriptorState configDescriptorState = new ConfigDescriptorState(GetCurrentFilePath());
 				if (configDescriptorState.IsLoadedSuccessfully())
 				{
 					CaptureLyricFileNameParts(configDescriptorState);
