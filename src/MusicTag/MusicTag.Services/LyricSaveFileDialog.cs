@@ -19,8 +19,6 @@ internal class LyricSaveFileDialog
 
 	private readonly List<string> encodingOptions;
 
-	private IFileDialogCustomize dialogCustomizer;
-
 	public string InitialDirectory { get; set; }
 
 	public string FileName { get; set; }
@@ -49,47 +47,50 @@ internal class LyricSaveFileDialog
 
 	private DialogResult ShowVistaDialog(IWin32Window owner)
 	{
-		IFileDialog fileDialog = new FileSaveDialogRCW() as IFileDialog;
-		dialogCustomizer = fileDialog as IFileDialogCustomize;
-		dialogCustomizer.StartVisualGroup(EncodingGroupId, Resources.EncodingLabel);
-		dialogCustomizer.AddComboBox(EncodingComboBoxId);
-		dialogCustomizer.EndVisualGroup();
-
-		for (int index = 0; index < encodingOptions.Count; index++)
-		{
-			dialogCustomizer.AddControlItem(EncodingComboBoxId, index, encodingOptions[index]);
-		}
-
-		int defaultEncodingIndex = encodingOptions.IndexOf(Settings.Default.SaveLrcFileDefaultEncoding);
-		if (defaultEncodingIndex < 0)
-		{
-			defaultEncodingIndex = 0;
-		}
-		dialogCustomizer.SetSelectedControlItem(EncodingComboBoxId, defaultEncodingIndex);
-		dialogCustomizer.MakeProminent(EncodingGroupId);
-		fileDialog.SetFileTypes(1u, new FileDialogFilterSpec[1]
-		{
-			new FileDialogFilterSpec
-			{
-				DisplayName = "Lrc file (*.lrc)",
-				Pattern = "*.lrc"
-			}
-		});
-
-		SetInitialFolder(fileDialog);
-		if (FileName != null)
-		{
-			fileDialog.SetFileName(FileName);
-		}
-
-		IntPtr ownerHandle = owner?.Handle ?? IntPtr.Zero;
-		if (fileDialog.Show(ownerHandle) != 0 || fileDialog.GetResult(out var shellItem) != 0 || shellItem.GetDisplayName(SIGDN.SIGDN_FILESYSPATH, out var pathPointer) != 0 || pathPointer == IntPtr.Zero)
-		{
-			return DialogResult.Cancel;
-		}
-
+		IFileDialog fileDialog = null;
+		IShellItem resultShellItem = null;
+		IntPtr pathPointer = IntPtr.Zero;
 		try
 		{
+			fileDialog = new FileSaveDialogRCW() as IFileDialog;
+			IFileDialogCustomize dialogCustomizer = fileDialog as IFileDialogCustomize;
+			dialogCustomizer.StartVisualGroup(EncodingGroupId, Resources.EncodingLabel);
+			dialogCustomizer.AddComboBox(EncodingComboBoxId);
+			dialogCustomizer.EndVisualGroup();
+
+			for (int index = 0; index < encodingOptions.Count; index++)
+			{
+				dialogCustomizer.AddControlItem(EncodingComboBoxId, index, encodingOptions[index]);
+			}
+
+			int defaultEncodingIndex = encodingOptions.IndexOf(Settings.Default.SaveLrcFileDefaultEncoding);
+			if (defaultEncodingIndex < 0)
+			{
+				defaultEncodingIndex = 0;
+			}
+			dialogCustomizer.SetSelectedControlItem(EncodingComboBoxId, defaultEncodingIndex);
+			dialogCustomizer.MakeProminent(EncodingGroupId);
+			fileDialog.SetFileTypes(1u, new FileDialogFilterSpec[1]
+			{
+				new FileDialogFilterSpec
+				{
+					DisplayName = "Lrc file (*.lrc)",
+					Pattern = "*.lrc"
+				}
+			});
+
+			SetInitialFolder(fileDialog);
+			if (FileName != null)
+			{
+				fileDialog.SetFileName(FileName);
+			}
+
+			IntPtr ownerHandle = owner?.Handle ?? IntPtr.Zero;
+			if (fileDialog.Show(ownerHandle) != 0 || fileDialog.GetResult(out resultShellItem) != 0 || resultShellItem.GetDisplayName(SIGDN.SIGDN_FILESYSPATH, out pathPointer) != 0 || pathPointer == IntPtr.Zero)
+			{
+				return DialogResult.Cancel;
+			}
+
 			FileName = Marshal.PtrToStringAuto(pathPointer);
 			dialogCustomizer.GetSelectedControlItem(EncodingComboBoxId, out int selectedEncodingIndex);
 			SelectedEncoding = (selectedEncodingIndex >= 0 && selectedEncodingIndex < encodingOptions.Count) ? encodingOptions[selectedEncodingIndex] : encodingOptions[defaultEncodingIndex];
@@ -97,7 +98,12 @@ internal class LyricSaveFileDialog
 		}
 		finally
 		{
-			Marshal.FreeCoTaskMem(pathPointer);
+			if (pathPointer != IntPtr.Zero)
+			{
+				Marshal.FreeCoTaskMem(pathPointer);
+			}
+			ReleaseComObject(resultShellItem);
+			ReleaseComObject(fileDialog);
 		}
 	}
 
@@ -109,9 +115,25 @@ internal class LyricSaveFileDialog
 		}
 
 		Guid shellItemGuid = typeof(IShellItem).GUID;
-		if (NativeMethods.CreateShellItemFromPath(InitialDirectory, IntPtr.Zero, ref shellItemGuid, out var shellItem) == 0L)
+		IShellItem shellItem = null;
+		try
 		{
-			fileDialog.SetFolder(shellItem);
+			if (NativeMethods.CreateShellItemFromPath(InitialDirectory, IntPtr.Zero, ref shellItemGuid, out shellItem) == 0L)
+			{
+				fileDialog.SetFolder(shellItem);
+			}
+		}
+		finally
+		{
+			ReleaseComObject(shellItem);
+		}
+	}
+
+	private static void ReleaseComObject(object comObject)
+	{
+		if (comObject != null && Marshal.IsComObject(comObject))
+		{
+			Marshal.FinalReleaseComObject(comObject);
 		}
 	}
 

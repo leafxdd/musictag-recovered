@@ -17,8 +17,6 @@ internal class FolderSelectionDialog
 
 	private const FOS BaseFolderDialogOptions = FOS.FOS_DONTADDTORECENT | FOS.FOS_NOTESTFILECREATE | FOS.FOS_NOVALIDATE | FOS.FOS_FORCEFILESYSTEM | FOS.FOS_PICKFOLDERS;
 
-	private IFileDialogCustomize fileDialogCustomize;
-
 	public FolderSelectionDialog()
 	{
 		SelectedPaths = new List<string>();
@@ -48,59 +46,103 @@ internal class FolderSelectionDialog
 
 	private DialogResult ShowVistaFolderDialog(IWin32Window owner, bool allowMultiSelect, bool showIncludeSubdirectories)
 	{
-		IFileOpenDialog fileOpenDialog = new FileOpenDialogRCW() as IFileOpenDialog;
-		fileOpenDialog.GetOptions(out FOS options);
-		options |= BaseFolderDialogOptions;
-		if (allowMultiSelect)
+		IFileOpenDialog fileOpenDialog = null;
+		IShellItemArray results = null;
+		try
 		{
-			options |= FOS.FOS_ALLOWMULTISELECT;
-		}
-		fileOpenDialog.SetOptions(options);
-
-		if (showIncludeSubdirectories)
-		{
-			fileDialogCustomize = fileOpenDialog as IFileDialogCustomize;
-			fileDialogCustomize.AddCheckButton(IncludeSubdirectoriesCheckBoxId, Resources.subdirectories, IncludeSubdirectories);
-		}
-
-		Guid shellItemGuid = typeof(IShellItem).GUID;
-		if (InitialFolder != null && NativeMethods.CreateShellItemFromPath(InitialFolder, IntPtr.Zero, ref shellItemGuid, out IShellItem initialFolderShellItem) == 0L)
-		{
-			fileOpenDialog.SetFolder(initialFolderShellItem);
-		}
-
-		if (DefaultFolder != null && NativeMethods.CreateShellItemFromPath(DefaultFolder, IntPtr.Zero, ref shellItemGuid, out IShellItem defaultFolderShellItem) == 0L)
-		{
-			fileOpenDialog.SetDefaultFolder(defaultFolderShellItem);
-		}
-
-		if (fileOpenDialog.Show(owner.Handle) == 0 && fileOpenDialog.GetResults(out IShellItemArray results) == 0 && results.GetCount(out uint selectedCount) == 0L && selectedCount != 0)
-		{
-			for (uint index = 0; index < selectedCount; index++)
+			fileOpenDialog = new FileOpenDialogRCW() as IFileOpenDialog;
+			IFileDialogCustomize fileDialogCustomize = null;
+			fileOpenDialog.GetOptions(out FOS options);
+			options |= BaseFolderDialogOptions;
+			if (allowMultiSelect)
 			{
-					if (results.GetItemAt(index, out IShellItem item) == 0L && item.GetDisplayName(SIGDN.SIGDN_FILESYSPATH, out IntPtr pathPointer) == 0 && pathPointer != IntPtr.Zero)
+				options |= FOS.FOS_ALLOWMULTISELECT;
+			}
+			fileOpenDialog.SetOptions(options);
+
+			if (showIncludeSubdirectories)
+			{
+				fileDialogCustomize = fileOpenDialog as IFileDialogCustomize;
+				fileDialogCustomize.AddCheckButton(IncludeSubdirectoriesCheckBoxId, Resources.subdirectories, IncludeSubdirectories);
+			}
+
+			SetShellFolder(InitialFolder, shellItem => fileOpenDialog.SetFolder(shellItem));
+			SetShellFolder(DefaultFolder, shellItem => fileOpenDialog.SetDefaultFolder(shellItem));
+
+			if (fileOpenDialog.Show(owner.Handle) == 0 && fileOpenDialog.GetResults(out results) == 0 && results.GetCount(out uint selectedCount) == 0L && selectedCount != 0)
+			{
+				for (uint index = 0; index < selectedCount; index++)
 				{
-					try
-					{
-						SelectedPaths.Add(Marshal.PtrToStringAuto(pathPointer));
-					}
-					finally
-					{
-						Marshal.FreeCoTaskMem(pathPointer);
-					}
+					AddSelectedPath(results, index);
+				}
+
+				if (SelectedPaths.Any())
+				{
+					bool includeSubdirectories = false;
+					fileDialogCustomize?.GetCheckButtonState(IncludeSubdirectoriesCheckBoxId, out includeSubdirectories);
+					IncludeSubdirectories = includeSubdirectories;
+					return DialogResult.OK;
 				}
 			}
 
-			if (SelectedPaths.Any())
-			{
-				bool includeSubdirectories = false;
-				fileDialogCustomize?.GetCheckButtonState(IncludeSubdirectoriesCheckBoxId, out includeSubdirectories);
-				IncludeSubdirectories = includeSubdirectories;
-				return DialogResult.OK;
-			}
+			return DialogResult.Cancel;
+		}
+		finally
+		{
+			ReleaseComObject(results);
+			ReleaseComObject(fileOpenDialog);
+		}
+	}
+
+	private static void SetShellFolder(string folderPath, Action<IShellItem> setFolderAction)
+	{
+		if (folderPath == null)
+		{
+			return;
 		}
 
-		return DialogResult.Cancel;
+		Guid shellItemGuid = typeof(IShellItem).GUID;
+		IShellItem shellItem = null;
+		try
+		{
+			if (NativeMethods.CreateShellItemFromPath(folderPath, IntPtr.Zero, ref shellItemGuid, out shellItem) == 0L)
+			{
+				setFolderAction(shellItem);
+			}
+		}
+		finally
+		{
+			ReleaseComObject(shellItem);
+		}
+	}
+
+	private void AddSelectedPath(IShellItemArray results, uint index)
+	{
+		IShellItem item = null;
+		IntPtr pathPointer = IntPtr.Zero;
+		try
+		{
+			if (results.GetItemAt(index, out item) == 0L && item.GetDisplayName(SIGDN.SIGDN_FILESYSPATH, out pathPointer) == 0 && pathPointer != IntPtr.Zero)
+			{
+				SelectedPaths.Add(Marshal.PtrToStringAuto(pathPointer));
+			}
+		}
+		finally
+		{
+			if (pathPointer != IntPtr.Zero)
+			{
+				Marshal.FreeCoTaskMem(pathPointer);
+			}
+			ReleaseComObject(item);
+		}
+	}
+
+	private static void ReleaseComObject(object comObject)
+	{
+		if (comObject != null && Marshal.IsComObject(comObject))
+		{
+			Marshal.FinalReleaseComObject(comObject);
+		}
 	}
 
 	private DialogResult ShowLegacyFolderDialog(IWin32Window owner)
