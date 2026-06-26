@@ -2257,7 +2257,9 @@ internal class StateFieldInstance : Form
 								{
 									ImageBytes = array
 								};
-								ConfigDescriptorState.LoadPictureImage(pictureData);
+								using (ConfigDescriptorState.LoadPictureImage(pictureData))
+								{
+								}
 								if (pictureData.MimeType != null && pictureData.Width > 0 && pictureData.Height > 0)
 								{
 									string imageExtension = DatabaseMapper.GetImageExtensionForMimeType(pictureData.MimeType, ".jpg");
@@ -4713,7 +4715,7 @@ internal class StateFieldInstance : Form
 	{
 		if (coverPictureBox.SizeMode != PictureBoxSizeMode.CenterImage)
 		{
-			coverPictureBox.Image = DatabaseMapper.LoadCachedResourceBitmap("no_cover", new Size(DatabaseMapper.ScaleByDpi(96f), DatabaseMapper.ScaleByDpi(96f)));
+			SetCoverPreviewImage(GetNoCoverPreviewImage());
 			coverPictureBox.SizeMode = PictureBoxSizeMode.CenterImage;
 			coverDimensionsLabel.Text = "";
 			coverFileSizeLabel.Text = "";
@@ -4756,7 +4758,7 @@ internal class StateFieldInstance : Form
 			Image image = ConfigDescriptorState.LoadPictureImage(selectedCover);
 			if (image != null)
 			{
-				coverPictureBox.Image = image;
+				SetCoverPreviewImage(image);
 				coverPictureBox.SizeMode = PictureBoxSizeMode.Zoom;
 				coverMimeTypeLabel.Text = selectedCover.MimeType;
 				coverDimensionsLabel.Text = image.Width + "x" + image.Height;
@@ -4773,6 +4775,21 @@ internal class StateFieldInstance : Form
 		else
 		{
 			ClearCoverPreview();
+		}
+	}
+
+	private Image GetNoCoverPreviewImage()
+	{
+		return DatabaseMapper.LoadCachedResourceBitmap("no_cover", new Size(DatabaseMapper.ScaleByDpi(96f), DatabaseMapper.ScaleByDpi(96f)));
+	}
+
+	private void SetCoverPreviewImage(Image image)
+	{
+		Image oldImage = coverPictureBox.Image;
+		coverPictureBox.Image = image;
+		if (oldImage != null && oldImage != image && oldImage != GetNoCoverPreviewImage())
+		{
+			oldImage.Dispose();
 		}
 	}
 
