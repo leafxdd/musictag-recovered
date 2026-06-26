@@ -58,24 +58,33 @@ internal class StateFieldInstance : Form
 		public string FilePath;
 	}
 
-	// 文件列表的一行数据。迁移 ListView→DataGridView 期间逐步取代"用 ListViewItem 当数据容器"。
+	// 文件列表的一行数据 —— DataGridView VirtualMode 下的唯一数据真源(取代原先"用 ListViewItem 当数据容器")。
 	private sealed class FileRow
 	{
-		// 迁移期脚手架:显示与选中暂仍由 ListView 承担,该引用在阶段2(换控件)后移除,
-		// 届时 FileRow 成为唯一数据真源。
-		public ListViewItem ListViewItem;
-
-		public bool IsHidden;
-
 		public string FilePath;
 
-		// 按 configuredColumnHeaders 的逻辑列序存各列显示文本(lyrics/comment 已按 20 字截断,
-		// 与 ListViewItem.SubItems[i].Text 一致),供过滤/排序消费。
+		// 按 configuredColumnHeaders 的逻辑列序存各列显示文本(lyrics/comment 已按 20 字截断),
+		// CellValueNeeded 据此向 DGV 供值,过滤/排序也消费它。
 		public string[] CellTexts;
 
+		// 时长(毫秒),状态栏汇总用;无有效值为 null。
+		public int? DurationMs;
+
+		// 备注(comment)完整长度,过滤长备注分组用。
+		public int CommentFullLength;
+
+		// 加载失败 —— CellFormatting 据此标红。
 		public bool LoadFailed;
 
+		// 文件类型图标键(扩展名),第一列 CellPainting 据此取图标。
 		public string IconKey;
+
+		// 过滤隐藏位:true 表示当前过滤条件下不进 visibleRows(不显示)。
+		public bool IsHidden;
+
+		// 选中态(模型真源)。DGV VirtualMode 的行选区会随过滤/排序重建而失效,
+		// 故选中态以此字段为准,过滤/排序后据它恢复 DGV 行选区。
+		public bool Selected;
 	}
 
 	private class ListViewItemNaturalComparer : IComparer
@@ -99,11 +108,11 @@ internal class StateFieldInstance : Form
 
 		public int Compare(object left, object right)
 		{
-			ListViewItem leftItem = left as ListViewItem;
-			ListViewItem rightItem = right as ListViewItem;
+			FileRow leftItem = left as FileRow;
+			FileRow rightItem = right as FileRow;
 			int columnIndex = sortSetting.Column.Value;
-			string leftText = leftItem.SubItems[columnIndex].Text;
-			string rightText = rightItem.SubItems[columnIndex].Text;
+			string leftText = leftItem.CellTexts[columnIndex];
+			string rightText = rightItem.CellTexts[columnIndex];
 			string columnName = configuredColumnHeaders[columnIndex].Name;
 			bool useNaturalSort = columnName == "trackstr" || columnName == "discstr";
 			return sortSetting.SortOrder switch
@@ -354,8 +363,9 @@ internal class StateFieldInstance : Form
 				ConfigDescriptorState tagFile = loadedFile.TagFile;
 				Dictionary<string, string> displayValues = loadedFile.DisplayValues;
 				string filePath = loadedFile.FilePath;
-				ListViewItem listViewItem = null;
 				string[] cellTexts = new string[columns.Count];
+				int? durationMs = null;
+				int commentFullLength = 0;
 				int columnIndex = 0;
 				foreach (CustomColumnsDialog.ColumnHeaderInfo column in columns)
 				{
@@ -373,51 +383,34 @@ internal class StateFieldInstance : Form
 						value = value.Substring(0, 20).Trim();
 					}
 					cellTexts[columnIndex] = value;
-					if (column.Name == columns[0].Name)
+					if (column.Name == "durationinms" && value != "" && tagFile[column.Name] is int duration)
 					{
-						listViewItem = new ListViewItem(value)
-						{
-							Tag = filePath,
-							ImageKey = Path.GetExtension(filePath).ToLower()
-						};
+						durationMs = duration;
 					}
-					else if (listViewItem != null)
+					if (column.Name == "comment")
 					{
-						ListViewItem.ListViewSubItem subItem = listViewItem.SubItems.Add(value);
-						if (column.Name == "durationinms" && value != "")
-						{
-							subItem.Tag = tagFile[column.Name];
-						}
-						if (column.Name == "comment")
-						{
-							subItem.Tag = fullValueLength;
-						}
+						commentFullLength = fullValueLength;
 					}
 					columnIndex++;
 				}
-				if (listViewItem != null)
+				bool loadFailed = tagFile == null || !tagFile.IsLoadedSuccessfully();
+				Owner.cachedFileListItems.Add(new FileRow
 				{
-					bool loadFailed = tagFile == null || !tagFile.IsLoadedSuccessfully();
-					if (loadFailed)
-					{
-						listViewItem.ForeColor = Color.Red;
-					}
-					Owner.fileListView.Items.Add(listViewItem);
-					Owner.cachedFileListItems.Add(new FileRow
-					{
-						ListViewItem = listViewItem,
-						IsHidden = false,
-						FilePath = filePath,
-						CellTexts = cellTexts,
-						LoadFailed = loadFailed,
-						IconKey = Path.GetExtension(filePath).ToLower()
-					});
-					if (anyFileMode)
-					{
-						Owner.FileSettings.AddForAnyFile(filePath);
-					}
+					IsHidden = false,
+					Selected = false,
+					FilePath = filePath,
+					CellTexts = cellTexts,
+					DurationMs = durationMs,
+					CommentFullLength = commentFullLength,
+					LoadFailed = loadFailed,
+					IconKey = Path.GetExtension(filePath).ToLower()
+				});
+				if (anyFileMode)
+				{
+					Owner.FileSettings.AddForAnyFile(filePath);
 				}
 			}
+			Owner.RebuildVisibleRows();
 		}
 
 		public void LoadFiles()
@@ -535,15 +528,11 @@ internal class StateFieldInstance : Form
 
 		public SelectedListViewItemInfo[] itemInfos;
 
-		public bool updateCachedListItems;
-
 		public StateFieldInstance owner;
 
 		public Page loadErrors;
 
 		public IProgress<List<(SelectedListViewItemInfo ItemInfo, ConfigDescriptorState TagState, Dictionary<string, string> DisplayValues)>> progressReporter;
-
-		public IComparer originalListViewSorter;
 
 		public (string msg, bool isErr)? previousMessage;
 
@@ -571,8 +560,9 @@ internal class StateFieldInstance : Form
 
 		internal void UpdateSingleListViewItem((SelectedListViewItemInfo ItemInfo, ConfigDescriptorState TagState, Dictionary<string, string> DisplayValues) info)
 		{
-			ListViewItem listViewItem = updateCachedListItems ? owner.cachedFileListItems[info.ItemInfo.Index].ListViewItem : owner.fileListView.Items[info.ItemInfo.Index];
-			owner.UpdateListViewItemValues(listViewItem, info.TagState, info.DisplayValues);
+			// Index 统一为 cachedFileListItems(主表)下标 —— 刷新选中项与撤销镜像两条路径共用同一寻址。
+			FileRow fileRow = owner.cachedFileListItems[info.ItemInfo.Index];
+			owner.UpdateListViewItemValues(fileRow, info.TagState, info.DisplayValues);
 		}
 
 		internal void RefreshItems()
@@ -619,7 +609,6 @@ internal class StateFieldInstance : Form
 
 		internal void ShowCompletionMessages()
 		{
-			owner.fileListView.ListViewItemSorter = originalListViewSorter;
 			if (previousMessage.HasValue)
 			{
 				if (previousMessage.Value.isErr)
@@ -659,7 +648,7 @@ internal class StateFieldInstance : Form
 
 	private sealed class FilterValueCollector
 	{
-		public ListViewItem listViewItem;
+		public FileRow fileRow;
 
 		public FileListFilterContext filterContext;
 
@@ -667,7 +656,7 @@ internal class StateFieldInstance : Form
 		{
 			string key = filterState.Key;
 			var (valueCounts, filterOptions) = filterState.Value;
-			string filterValue = filterContext.owner.GetSelectedFilterValue(listViewItem, key);
+			string filterValue = filterContext.owner.GetSelectedFilterValue(fileRow, key);
 			if (valueCounts.TryGetValue(filterValue, out var count))
 			{
 				count++;
@@ -683,20 +672,20 @@ internal class StateFieldInstance : Form
 
 	private sealed class FileListFilterItemContext
 	{
-		public ListViewItem listViewItem;
+		public FileRow fileRow;
 
 		public FileListFilterContext filterContext;
 
 		internal bool MatchesFilterText(int columnIndex)
 		{
-			return listViewItem.SubItems[columnIndex].Text.IndexOf(filterContext.filterText, StringComparison.OrdinalIgnoreCase) >= 0;
+			return fileRow.CellTexts[columnIndex].IndexOf(filterContext.filterText, StringComparison.OrdinalIgnoreCase) >= 0;
 		}
 
 		internal void CountSelectedFilterValue(KeyValuePair<string, (Dictionary<string, int>, List<(string, bool)>)> filterState)
 		{
 			string key = filterState.Key;
 			var (valueCounts, filterOptions) = filterState.Value;
-			string filterValue = filterContext.owner.GetSelectedFilterValue(listViewItem, key);
+			string filterValue = filterContext.owner.GetSelectedFilterValue(fileRow, key);
 			if (valueCounts.TryGetValue(filterValue, out var count))
 			{
 				count++;
@@ -837,7 +826,7 @@ internal class StateFieldInstance : Form
 
 	private sealed class SelectedItemFilterValueCounter
 	{
-		public ListViewItem listViewItem;
+		public FileRow fileRow;
 
 		public StateFieldInstance owner;
 
@@ -845,7 +834,7 @@ internal class StateFieldInstance : Form
 		{
 			string key = filterState.Key;
 			var (valueCounts, filterOptions) = filterState.Value;
-			string filterValue = owner.GetSelectedFilterValue(listViewItem, key);
+			string filterValue = owner.GetSelectedFilterValue(fileRow, key);
 			if (valueCounts.TryGetValue(filterValue, out var count))
 			{
 				count++;
@@ -1713,11 +1702,13 @@ internal class StateFieldInstance : Form
 
 	private sealed class UndoSaveTagsListItemMatcher
 	{
-		public ListViewItem listViewItem;
+		public FileRow fileRow;
 
 		internal bool MatchesSnapshotPath(ConfigDescriptorState reference)
 		{
-			return reference["filepath"] == listViewItem.Tag;
+			// 保持原行为:原 `reference["filepath"] == listViewItem.Tag` 为 object==object 引用比较,
+			// 这里对 (object) 显式比较以维持完全相同的运行时语义(FilePath 与旧 Tag 是同一 string 实例)。
+			return reference["filepath"] == (object)fileRow.FilePath;
 		}
 	}
 
@@ -1821,11 +1812,11 @@ internal class StateFieldInstance : Form
 
 	private sealed class RenameUndoListItemMatcher
 	{
-		public ListViewItem ListViewItem;
+		public FileRow fileRow;
 
 		internal bool MatchesCurrentPath((string oldPath, string newPath, bool failed) operation)
 		{
-			return operation.newPath == ListViewItem.Tag as string;
+			return operation.newPath == fileRow.FilePath;
 		}
 	}
 
@@ -2330,7 +2321,9 @@ internal class StateFieldInstance : Form
 			{
 				if (renameItem.NewPath != null)
 				{
-					owner.fileListView.Items[renameItem.Index].Tag = renameItem.NewPath;
+					FileRow fileRow = owner.cachedFileListItems[renameItem.Index];
+					fileRow.FilePath = renameItem.NewPath;
+					owner.InvalidateFileRow(fileRow);
 				}
 			}
 			owner.RefreshSelectedItems(showErrorMessageBox: false, showProgressDialog: true, refreshStatusAllInfo: true, previousMessage: message);
@@ -2749,7 +2742,7 @@ internal class StateFieldInstance : Form
 
 	private ToolStripSeparator fileSummaryStatusSeparator;
 
-	private HeaderAwareListView fileListView;
+	private BufferedDataGridView fileListView;
 
 	private ToolStripMenuItem characterSetMenuItem;
 
@@ -2910,6 +2903,20 @@ internal class StateFieldInstance : Form
 	private ToolStripMenuItem changeCoverResolutionMenuItem;
 
 	private List<FileRow> cachedFileListItems { get; }
+
+	// DataGridView VirtualMode 的 RowCount 数据源:cachedFileListItems 中未被过滤隐藏的子集(保持主表顺序)。
+	private List<FileRow> visibleRows = new List<FileRow>();
+
+	// visibleRows 的 行 → 下标 反查(InvalidateRow / 恢复选区 用),随 visibleRows 重建。
+	private readonly Dictionary<FileRow, int> visibleRowIndex = new Dictionary<FileRow, int>();
+
+	// 抑制 DGV SelectionChanged 处理(过滤/排序/全选反选等程序化改选区时置 true,避免重入)。
+	private bool suppressFileListSelectionEvents;
+
+	// 就地重命名状态:正在编辑的行 + CellValuePushed 捕获的新文件名(VirtualMode 下编辑值不入模型,需自存)。
+	private FileRow renamingRow;
+
+	private string renameEditedValue;
 
 	private FormPosSizeInfo MainFormPosSizeInfo { get; set; }
 
@@ -3256,7 +3263,7 @@ internal class StateFieldInstance : Form
 		EventHandler textChangedHandler = (sender, e) =>
 		{
 			string displayName = Resources.ResourceManager.GetString(fieldName);
-			if (selectedTagState != null && fileListView.SelectedItems.Count == 1 && selectedTagState[fieldName] is string currentValue && currentValue != comboBox.Text)
+			if (selectedTagState != null && SelectedFileCount == 1 && selectedTagState[fieldName] is string currentValue && currentValue != comboBox.Text)
 			{
 				label.Text = displayName + "(" + Resources.Changed + ")";
 			}
@@ -3436,9 +3443,9 @@ internal class StateFieldInstance : Form
 		{
 			tagField.Value.Item1.Text = Resources.ResourceManager.GetString(tagField.Key);
 		}
-		foreach (ColumnHeader columnHeader in fileListView.Columns)
+		foreach (DataGridViewColumn columnHeader in fileListView.Columns)
 		{
-			columnHeader.Text = Resources.ResourceManager.GetString(columnHeader.Name);
+			columnHeader.HeaderText = Resources.ResourceManager.GetString(columnHeader.Name);
 		}
 		foreach (Button button in tagEncodingButtons)
 		{
@@ -3453,39 +3460,162 @@ internal class StateFieldInstance : Form
 
 	private void InitializeFileListColumnsAndIcons()
 	{
-		ListView.ColumnHeaderCollection columns = fileListView.Columns;
+		fileListView.Columns.Clear();
 		foreach (CustomColumnsDialog.ColumnHeaderInfo columnInfo in configuredColumnHeaders)
 		{
-			ColumnHeader columnHeader = new ColumnHeader
+			DataGridViewTextBoxColumn column = new DataGridViewTextBoxColumn
 			{
 				Name = columnInfo.Name,
-				Width = (columnInfo.isShow ? columnInfo.width : 0),
-				TextAlign = columnInfo.textAlign,
+				HeaderText = columnInfo.Name,
+				Width = columnInfo.width,
+				Visible = columnInfo.isShow,
+				SortMode = DataGridViewColumnSortMode.NotSortable,
+				ReadOnly = true,
+				Resizable = DataGridViewTriState.True,
 				Tag = columnInfo
 			};
-			columns.Add(columnHeader);
+			column.DefaultCellStyle.Alignment = MapColumnAlignment(columnInfo.textAlign);
+			fileListView.Columns.Add(column);
 		}
-		foreach (CustomColumnsDialog.ColumnHeaderInfo columnInfo in configuredColumnHeaders)
+		// DisplayIndex 必须是 0..N-1 的排列;按存储的 displayIndex 升序依次赋值,既忠实顺序又避免 DGV 重排冲突。
+		int order = 0;
+		foreach (CustomColumnsDialog.ColumnHeaderInfo columnInfo in configuredColumnHeaders.OrderBy(c => c.displayIndex))
 		{
-			columns[columnInfo.Name].DisplayIndex = columnInfo.displayIndex;
+			fileListView.Columns[columnInfo.Name].DisplayIndex = order++;
 		}
 		fileTypeImageList.ColorDepth = ColorDepth.Depth32Bit;
 		fileTypeImageList.ImageSize = new Size(DatabaseMapper.ScaleByDpi(20f), DatabaseMapper.ScaleByDpi(20f));
-		fileListView.SmallImageList = fileTypeImageList;
+	}
+
+	private static DataGridViewContentAlignment MapColumnAlignment(HorizontalAlignment textAlign)
+	{
+		switch (textAlign)
+		{
+		case HorizontalAlignment.Center:
+			return DataGridViewContentAlignment.MiddleCenter;
+		case HorizontalAlignment.Right:
+			return DataGridViewContentAlignment.MiddleRight;
+		default:
+			return DataGridViewContentAlignment.MiddleLeft;
+		}
+	}
+
+	// 依 cachedFileListItems(主表 = 显示顺序)的 IsHidden 重建可见行集合与下标反查,并把 RowCount 同步给 DGV。
+	private void RebuildVisibleRows()
+	{
+		visibleRows = cachedFileListItems.Where((FileRow r) => !r.IsHidden).ToList();
+		visibleRowIndex.Clear();
+		for (int i = 0; i < visibleRows.Count; i++)
+		{
+			visibleRowIndex[visibleRows[i]] = i;
+		}
+		bool previous = suppressFileListSelectionEvents;
+		suppressFileListSelectionEvents = true;
+		try
+		{
+			fileListView.RowCount = visibleRows.Count;
+		}
+		finally
+		{
+			suppressFileListSelectionEvents = previous;
+		}
+		fileListView.Invalidate();
+	}
+
+	// 据 FileRow.Selected 把 DGV 行选区恢复成与模型一致(VirtualMode 行选区随 RowCount 重建而失效)。
+	private void RestoreDgvSelectionFromModel()
+	{
+		bool previous = suppressFileListSelectionEvents;
+		suppressFileListSelectionEvents = true;
+		try
+		{
+			for (int i = 0; i < visibleRows.Count; i++)
+			{
+				DataGridViewRow row = fileListView.Rows[i];
+				bool selected = visibleRows[i].Selected;
+				if (row.Selected != selected)
+				{
+					row.Selected = selected;
+				}
+			}
+		}
+		finally
+		{
+			suppressFileListSelectionEvents = previous;
+		}
+	}
+
+	// 该 FileRow 若在可见集合内则只重绘其行(不可见则跳过)。
+	private void InvalidateFileRow(FileRow fileRow)
+	{
+		if (visibleRowIndex.TryGetValue(fileRow, out int visibleIndex) && visibleIndex < fileListView.RowCount)
+		{
+			fileListView.InvalidateRow(visibleIndex);
+		}
+	}
+
+	private void FileList_CellValueNeeded(object sender, DataGridViewCellValueEventArgs e)
+	{
+		if (e.RowIndex < 0 || e.RowIndex >= visibleRows.Count)
+		{
+			return;
+		}
+		string[] cellTexts = visibleRows[e.RowIndex].CellTexts;
+		e.Value = (e.ColumnIndex >= 0 && e.ColumnIndex < cellTexts.Length) ? cellTexts[e.ColumnIndex] : "";
+	}
+
+	private void FileList_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
+	{
+		if (e.RowIndex >= 0 && e.RowIndex < visibleRows.Count && visibleRows[e.RowIndex].LoadFailed)
+		{
+			e.CellStyle.ForeColor = Color.Red;
+		}
+	}
+
+	// 首列自绘"图标 + 文字"(DGV 无内建图文同格);其余列/表头不接管,走默认绘制。
+	private void FileList_CellPainting(object sender, DataGridViewCellPaintingEventArgs e)
+	{
+		if (e.ColumnIndex != 0 || e.RowIndex < 0 || e.RowIndex >= visibleRows.Count)
+		{
+			return;
+		}
+		FileRow fileRow = visibleRows[e.RowIndex];
+		bool isSelected = (e.State & DataGridViewElementStates.Selected) != 0;
+		e.PaintBackground(e.CellBounds, isSelected);
+		int iconSize = fileTypeImageList.ImageSize.Width;
+		int padding = DatabaseMapper.ScaleByDpi(2f);
+		int iconX = e.CellBounds.Left + padding;
+		int iconY = e.CellBounds.Top + (e.CellBounds.Height - iconSize) / 2;
+		if (fileRow.IconKey != null && fileTypeImageList.Images.ContainsKey(fileRow.IconKey))
+		{
+			e.Graphics.DrawImage(fileTypeImageList.Images[fileRow.IconKey], iconX, iconY, iconSize, iconSize);
+		}
+		int textLeft = iconX + iconSize + padding;
+		Rectangle textBounds = new Rectangle(textLeft, e.CellBounds.Top, Math.Max(0, e.CellBounds.Right - textLeft), e.CellBounds.Height);
+		Color foreColor = isSelected ? e.CellStyle.SelectionForeColor : e.CellStyle.ForeColor;
+		TextFormatFlags flags = TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix;
+		string text = e.FormattedValue as string ?? fileRow.CellTexts[0];
+		TextRenderer.DrawText(e.Graphics, text, e.CellStyle.Font, textBounds, foreColor, flags);
+		e.Handled = true;
 	}
 
 	private SelectedListViewItemInfo[] CollectSelectedListViewItemInfos()
 	{
-		return fileListView.SelectedItems.Cast<ListViewItem>().Select(CreateSelectedListViewItemInfo).ToArray();
-	}
-
-	private static SelectedListViewItemInfo CreateSelectedListViewItemInfo(ListViewItem listViewItem)
-	{
-		return new SelectedListViewItemInfo
+		// 按主表(= 显示)顺序收集选中行,Index 统一为 cachedFileListItems 下标。
+		List<SelectedListViewItemInfo> selected = new List<SelectedListViewItemInfo>();
+		for (int index = 0; index < cachedFileListItems.Count; index++)
 		{
-			Index = listViewItem.Index,
-			FilePath = listViewItem.Tag as string
-		};
+			FileRow row = cachedFileListItems[index];
+			if (row.Selected)
+			{
+				selected.Add(new SelectedListViewItemInfo
+				{
+					Index = index,
+					FilePath = row.FilePath
+				});
+			}
+		}
+		return selected.ToArray();
 	}
 
 	private static string GetSelectedItemFilePath(SelectedListViewItemInfo itemInfo)
@@ -3600,17 +3730,16 @@ internal class StateFieldInstance : Form
 		HashSet<string> filePaths = new HashSet<string>();
 		foreach (var cachedItem in cachedFileListItems)
 		{
-			ListViewItem listViewItem = cachedItem.ListViewItem;
-			filePaths.Add(listViewItem.Tag as string);
+			filePaths.Add(cachedItem.FilePath);
 		}
 		return filePaths;
 	}
 
 	private void ClearLoadedFileList()
 	{
-		fileListView.Items.Clear();
 		cachedFileListItems.Clear();
-		FileList_ItemSelectionChanged(null, null);
+		RebuildVisibleRows();
+		OnFileSelectionSettled();
 		LoadTagEditorState(null);
 	}
 
@@ -3745,12 +3874,17 @@ internal class StateFieldInstance : Form
 		}
 	}
 
+	// 选中态以 FileRow.Selected 为模型真源(隐藏行恒为 false),按 visibleRows 顺序读取与显示顺序一致。
+	private int SelectedFileCount => visibleRows.Count(r => r.Selected);
+
+	private IEnumerable<FileRow> SelectedFileRows => visibleRows.Where(r => r.Selected);
+
 	private void RefreshStatusLabelsFromCachedTotals()
 	{
 		(long selectedDurationMs, long selectedFileSizeBytes) = GetCachedDurationAndFileSize(selectedFilesStatusLabel.Tag);
-		selectedFilesStatusLabel.Text = $"{fileListView.SelectedItems.Count} ({ConfigDescriptorState.FormatDurationHms(selectedDurationMs)} | {DatabaseMapper.FormatFileSize(selectedFileSizeBytes)})";
+		selectedFilesStatusLabel.Text = $"{SelectedFileCount} ({ConfigDescriptorState.FormatDurationHms(selectedDurationMs)} | {DatabaseMapper.FormatFileSize(selectedFileSizeBytes)})";
 		(long allDurationMs, long allFileSizeBytes) = GetCachedDurationAndFileSize(totalFilesStatusLabel.Tag);
-		totalFilesStatusLabel.Text = $"{fileListView.Items.Count} ({ConfigDescriptorState.FormatDurationHms(allDurationMs)} | {DatabaseMapper.FormatFileSize(allFileSizeBytes)})";
+		totalFilesStatusLabel.Text = $"{visibleRows.Count} ({ConfigDescriptorState.FormatDurationHms(allDurationMs)} | {DatabaseMapper.FormatFileSize(allFileSizeBytes)})";
 	}
 
 	private static (long DurationMs, long FileSizeBytes) GetCachedDurationAndFileSize(object cachedValue)
@@ -3758,12 +3892,11 @@ internal class StateFieldInstance : Form
 		return cachedValue is ValueTuple<long, long> totals ? totals : (0L, 0L);
 	}
 
-	private void GetListViewItemDurationAndFileSize(ListViewItem listViewItem, out long durationMs, out long fileSizeBytes)
+	private void GetListViewItemDurationAndFileSize(FileRow fileRow, out long durationMs, out long fileSizeBytes)
 	{
-		int durationColumnIndex = fileListView.Columns["durationinms"].Index;
-		FileInfo fileInfo = new FileInfo(listViewItem.Tag as string);
+		FileInfo fileInfo = new FileInfo(fileRow.FilePath);
 		fileSizeBytes = fileInfo.Exists ? fileInfo.Length : 0L;
-		durationMs = listViewItem.SubItems[durationColumnIndex].Tag is int duration ? duration : 0L;
+		durationMs = fileRow.DurationMs ?? 0L;
 	}
 
 	private void UpdateFileListStatusSummary(bool selectedItemsOnly)
@@ -3774,7 +3907,7 @@ internal class StateFieldInstance : Form
 		long selectedFileSizeBytes = 0L;
 		if (selectedItemsOnly)
 		{
-			foreach (ListViewItem selectedItem in fileListView.SelectedItems)
+			foreach (FileRow selectedItem in SelectedFileRows)
 			{
 				GetListViewItemDurationAndFileSize(selectedItem, out long itemDurationMs, out long itemFileSizeBytes);
 				selectedDurationMs += itemDurationMs;
@@ -3783,21 +3916,21 @@ internal class StateFieldInstance : Form
 		}
 		else
 		{
-			foreach (ListViewItem listViewItem in fileListView.Items)
+			foreach (FileRow fileRow in visibleRows)
 			{
-				GetListViewItemDurationAndFileSize(listViewItem, out long itemDurationMs, out long itemFileSizeBytes);
+				GetListViewItemDurationAndFileSize(fileRow, out long itemDurationMs, out long itemFileSizeBytes);
 				allDurationMs += itemDurationMs;
 				allFileSizeBytes += itemFileSizeBytes;
-				if (listViewItem.Selected)
+				if (fileRow.Selected)
 				{
 					selectedDurationMs += itemDurationMs;
 					selectedFileSizeBytes += itemFileSizeBytes;
 				}
 			}
-			totalFilesStatusLabel.Text = $"{fileListView.Items.Count} ({ConfigDescriptorState.FormatDurationHms(allDurationMs)} | {DatabaseMapper.FormatFileSize(allFileSizeBytes)})";
+			totalFilesStatusLabel.Text = $"{visibleRows.Count} ({ConfigDescriptorState.FormatDurationHms(allDurationMs)} | {DatabaseMapper.FormatFileSize(allFileSizeBytes)})";
 			totalFilesStatusLabel.Tag = (allDurationMs, allFileSizeBytes);
 		}
-		selectedFilesStatusLabel.Text = $"{fileListView.SelectedItems.Count} ({ConfigDescriptorState.FormatDurationHms(selectedDurationMs)} | {DatabaseMapper.FormatFileSize(selectedFileSizeBytes)})";
+		selectedFilesStatusLabel.Text = $"{SelectedFileCount} ({ConfigDescriptorState.FormatDurationHms(selectedDurationMs)} | {DatabaseMapper.FormatFileSize(selectedFileSizeBytes)})";
 		selectedFilesStatusLabel.Tag = (selectedDurationMs, selectedFileSizeBytes);
 	}
 
@@ -3818,13 +3951,9 @@ internal class StateFieldInstance : Form
 		progressDialog.AddCancelRequestedHandler(addFilesWorker.Cancel);
 		progressDialog.AddProgressUpdateHandler(addFilesWorker.UpdateProgress);
 		addFilesWorker.LoadedFilesProgress = new Progress<List<(ConfigDescriptorState TagFile, Dictionary<string, string> DisplayValues, string FilePath)>>(addFilesWorker.AddLoadedFilesToListView);
-		IComparer savedSorter = fileListView.ListViewItemSorter;
-		fileListView.ListViewItemSorter = null;
-		fileListView.BeginUpdate();
 		await Task.Run((Action)addFilesWorker.LoadFiles, addFilesWorker.CancellationTokenSource.Token);
+		ApplyFileListSort();
 		ApplyFileListFilter(requireFilterText: true, suspendListSorting: false);
-		fileListView.EndUpdate();
-		fileListView.ListViewItemSorter = savedSorter;
 		progressDialog.CloseAfterCompletion();
 		UpdateFileListStatusSummary(selectedItemsOnly: false);
 		if (addFilesWorker.LoadErrors.LineCount > 0)
@@ -3833,7 +3962,7 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	private void UpdateListViewItemValues(ListViewItem listViewItem, ConfigDescriptorState tagFile, Dictionary<string, string> displayValues)
+	private void UpdateListViewItemValues(FileRow fileRow, ConfigDescriptorState tagFile, Dictionary<string, string> displayValues)
 	{
 		int columnIndex = 0;
 		foreach (CustomColumnsDialog.ColumnHeaderInfo column in configuredColumnHeaders)
@@ -3851,37 +3980,27 @@ internal class StateFieldInstance : Form
 			{
 				value = value.Substring(0, 20).Trim();
 			}
-			ListViewItem.ListViewSubItem listViewSubItem = listViewItem.SubItems[columnIndex];
-			if (listViewSubItem.Text != value)
+			if (fileRow.CellTexts[columnIndex] != value)
 			{
-				listViewSubItem.Text = value;
+				fileRow.CellTexts[columnIndex] = value;
 				if (column.Name == "durationinms" && value != "")
 				{
-					listViewSubItem.Tag = tagFile[column.Name];
+					fileRow.DurationMs = tagFile[column.Name] is int duration ? duration : (int?)null;
 				}
 				if (column.Name == "comment")
 				{
-					listViewSubItem.Tag = length;
+					fileRow.CommentFullLength = length;
 				}
 			}
 			columnIndex++;
 		}
-		if (tagFile != null && tagFile.IsLoadedSuccessfully())
-		{
-			if (listViewItem.ForeColor == Color.Red)
-			{
-				listViewItem.ForeColor = SystemColors.WindowText;
-			}
-		}
-		else if (listViewItem.ForeColor != Color.Red)
-		{
-			listViewItem.ForeColor = Color.Red;
-		}
+		fileRow.LoadFailed = tagFile == null || !tagFile.IsLoadedSuccessfully();
+		InvalidateFileRow(fileRow);
 	}
 
-	private void RefreshListViewItemFromFile(ListViewItem listViewItem, ConfigDescriptorState tagFile)
+	private void RefreshListViewItemFromFile(FileRow fileRow, ConfigDescriptorState tagFile)
 	{
-		UpdateListViewItemValues(listViewItem, tagFile, BuildBasicFileDisplayValues(new FileInfo(tagFile.GetFilePath())));
+		UpdateListViewItemValues(fileRow, tagFile, BuildBasicFileDisplayValues(new FileInfo(tagFile.GetFilePath())));
 	}
 
 	private Dictionary<string, string> BuildBasicFileDisplayValues(FileInfo fileInfo)
@@ -3911,7 +4030,6 @@ internal class StateFieldInstance : Form
 		RefreshItemsTaskContext refreshContext = new RefreshItemsTaskContext();
 		refreshContext.progressDialog = progressDialog;
 		refreshContext.itemInfos = itemInfos;
-		refreshContext.updateCachedListItems = listForMirror;
 		refreshContext.owner = this;
 		refreshContext.previousMessage = previousMessage;
 		refreshContext.showLoadErrors = showErrorMessageBox;
@@ -3925,9 +4043,6 @@ internal class StateFieldInstance : Form
 		}
 		refreshContext.progressReporter = new Progress<List<(SelectedListViewItemInfo, ConfigDescriptorState, Dictionary<string, string>)>>(refreshContext.ApplyRefreshedItems);
 		refreshContext.loadErrors = new Page();
-		refreshContext.originalListViewSorter = fileListView.ListViewItemSorter;
-		fileListView.ListViewItemSorter = null;
-		fileListView.BeginUpdate();
 		Task task = Task.Run(new Action(refreshContext.RefreshItems), refreshContext.cancellationSource.Token);
 		if (refreshContext.progressDialog == null)
 		{
@@ -3938,48 +4053,100 @@ internal class StateFieldInstance : Form
 			await task;
 		}
 		ApplyFileSelectionMode(FileSelectionMode.RefreshOnly, refreshStatusAllInfo);
-		fileListView.EndUpdate();
 		refreshContext.progressDialog?.CloseAfterCompletion();
 		BeginInvoke(new Action(refreshContext.ShowCompletionMessages));
 	}
 
-	private void FileList_ItemSelectionChanged(object sender, ListViewItemSelectionChangedEventArgs e)
+	// DGV 选区变化(用户驱动):与模型(FileRow.Selected)做差分,复刻原 ListView 的 per-item 增量语义,
+	// 再按最终选中数走 1/0/多 三分支(多次中间态被 DGV 合并为一次事件;最终 count==1/0 时按原逻辑重算
+	// 而非增量,故合并无损)。
+	private void FileList_SelectionChanged(object sender, EventArgs e)
 	{
-		int selectedItemCount = fileListView.SelectedItems.Count;
-		if (selectedItemCount == 1)
+		if (suppressFileListSelectionEvents)
 		{
-			selectionStatusUpdateTimer.Stop();
-			ClearSelectedFilterSummaries();
-			ListViewItem selectedItem = fileListView.SelectedItems[0];
-			using (ConfigDescriptorState tagFile = new ConfigDescriptorState(selectedItem.Tag as string))
+			return;
+		}
+		List<(FileRow row, bool nowSelected)> toggles = new List<(FileRow, bool)>();
+		int selectedCount = 0;
+		for (int i = 0; i < visibleRows.Count; i++)
+		{
+			bool nowSelected = fileListView.Rows[i].Selected;
+			if (nowSelected)
 			{
-				if (tagFile.IsLoadedSuccessfully())
-				{
-					tagFile.LoadBasicTagFields();
-					tagFile.LoadAudioProperties();
-					tagFile.LoadRawTextFieldData();
-					tagFile.LoadAllPictures();
-					tagFile.LoadLyrics();
-				}
-				RefreshListViewItemFromFile(selectedItem, tagFile);
-				AddSelectedFilterValues(selectedItem);
-				LoadTagEditorState(tagFile);
-				UpdateFileListStatusSummary(selectedItemsOnly: true);
+				selectedCount++;
+			}
+			if (nowSelected != visibleRows[i].Selected)
+			{
+				toggles.Add((visibleRows[i], nowSelected));
 			}
 		}
-		else if (selectedItemCount <= 0)
+		if (toggles.Count == 0)
+		{
+			return;
+		}
+		foreach (var toggle in toggles)
+		{
+			toggle.row.Selected = toggle.nowSelected;
+		}
+		if (selectedCount == 1)
+		{
+			LoadSingleSelectedFile(visibleRows.First((FileRow r) => r.Selected));
+		}
+		else if (selectedCount <= 0)
 		{
 			ClearSelectedFilterSummaries();
 			selectedFilesStatusLabel.Tag = (0L, 0L);
 			StartSelectionStatusUpdateTimer();
 		}
-		else if (e != null)
+		else
 		{
-			UpdateSelectedFilterValues(e.Item, e.IsSelected);
-			UpdateSelectedDurationAndSize(e.Item, e.IsSelected);
+			foreach (var toggle in toggles)
+			{
+				UpdateSelectedFilterValues(toggle.row, toggle.nowSelected);
+				UpdateSelectedDurationAndSize(toggle.row, toggle.nowSelected);
+			}
 			StartSelectionStatusUpdateTimer();
 		}
 		UpdateSelectionCommandState();
+	}
+
+	// 选区"settled"(过滤/全选反选/清空后程序化定型)——对应原 FileList_ItemSelectionChanged(null, null):
+	// 只走 count==1/0 分支(原 else 分支需 e!=null,这里不触发)。
+	private void OnFileSelectionSettled()
+	{
+		int selectedCount = SelectedFileCount;
+		if (selectedCount == 1)
+		{
+			LoadSingleSelectedFile(SelectedFileRows.First());
+		}
+		else if (selectedCount <= 0)
+		{
+			ClearSelectedFilterSummaries();
+			selectedFilesStatusLabel.Tag = (0L, 0L);
+			StartSelectionStatusUpdateTimer();
+		}
+		UpdateSelectionCommandState();
+	}
+
+	private void LoadSingleSelectedFile(FileRow row)
+	{
+		selectionStatusUpdateTimer.Stop();
+		ClearSelectedFilterSummaries();
+		using (ConfigDescriptorState tagFile = new ConfigDescriptorState(row.FilePath))
+		{
+			if (tagFile.IsLoadedSuccessfully())
+			{
+				tagFile.LoadBasicTagFields();
+				tagFile.LoadAudioProperties();
+				tagFile.LoadRawTextFieldData();
+				tagFile.LoadAllPictures();
+				tagFile.LoadLyrics();
+			}
+			RefreshListViewItemFromFile(row, tagFile);
+			AddSelectedFilterValues(row);
+			LoadTagEditorState(tagFile);
+			UpdateFileListStatusSummary(selectedItemsOnly: true);
+		}
 	}
 
 	private void ClearSelectedFilterSummaries()
@@ -3991,21 +4158,21 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	private void AddSelectedFilterValues(ListViewItem listViewItem)
+	private void AddSelectedFilterValues(FileRow fileRow)
 	{
 		foreach (var selectedFilter in selectedFilterValueStates)
 		{
-			AddSelectedFilterValue(selectedFilter.Value.Item1, selectedFilter.Value.Item2, GetSelectedFilterValue(listViewItem, selectedFilter.Key));
+			AddSelectedFilterValue(selectedFilter.Value.Item1, selectedFilter.Value.Item2, GetSelectedFilterValue(fileRow, selectedFilter.Key));
 		}
 	}
 
-	private void UpdateSelectedFilterValues(ListViewItem listViewItem, bool isSelected)
+	private void UpdateSelectedFilterValues(FileRow fileRow, bool isSelected)
 	{
 		foreach (var selectedFilter in selectedFilterValueStates)
 		{
 			Dictionary<string, int> valueCounts = selectedFilter.Value.Item1;
 			List<(string, bool)> changedValues = selectedFilter.Value.Item2;
-			string value = GetSelectedFilterValue(listViewItem, selectedFilter.Key);
+			string value = GetSelectedFilterValue(fileRow, selectedFilter.Key);
 			if (string.IsNullOrWhiteSpace(value))
 			{
 				value = "";
@@ -4048,10 +4215,10 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	private void UpdateSelectedDurationAndSize(ListViewItem listViewItem, bool isSelected)
+	private void UpdateSelectedDurationAndSize(FileRow fileRow, bool isSelected)
 	{
 		(long selectedDurationMs, long selectedFileSizeBytes) = selectedFilesStatusLabel.Tag is ValueTuple<long, long> cachedTotals ? cachedTotals : (0L, 0L);
-		GetListViewItemDurationAndFileSize(listViewItem, out var itemDurationMs, out var itemFileSizeBytes);
+		GetListViewItemDurationAndFileSize(fileRow, out var itemDurationMs, out var itemFileSizeBytes);
 		if (isSelected)
 		{
 			selectedDurationMs += itemDurationMs;
@@ -4075,7 +4242,7 @@ internal class StateFieldInstance : Form
 
 	private void UpdateSelectionCommandState()
 	{
-		int selectedItemCount = fileListView.SelectedItems.Count;
+		int selectedItemCount = SelectedFileCount;
 		SetCommandsRequiringAnySelection(selectedItemCount > 0);
 		SetCommandsRequiringSingleSelection(selectedItemCount == 1);
 		undoMenuItem.Enabled = TagHistoryRepository.HasPendingUndoActions();
@@ -4151,7 +4318,6 @@ internal class StateFieldInstance : Form
 
 	private void ApplyFileListFilter(bool requireFilterText, bool suspendListSorting)
 	{
-		IComparer listViewItemSorter = default(IComparer);
 		FileListFilterContext activeFilterContext = new FileListFilterContext
 		{
 			owner = this
@@ -4173,13 +4339,6 @@ internal class StateFieldInstance : Form
 		tagComboBoxes.Values.ForEachItem(BeginComboBoxUpdate);
 		try
 		{
-			if (suspendListSorting)
-			{
-				fileListView.BeginUpdate();
-				listViewItemSorter = fileListView.ListViewItemSorter;
-				fileListView.ListViewItemSorter = null;
-			}
-			fileListView.ItemSelectionChanged -= FileList_ItemSelectionChanged;
 			foreach (KeyValuePair<string, (Label, EventHandler)> handlerEntry in tagFieldTextHandlers)
 			{
 				tagComboBoxes[handlerEntry.Key].TextChanged -= handlerEntry.Value.Item2;
@@ -4191,16 +4350,16 @@ internal class StateFieldInstance : Form
 				IEnumerable<int> filterColumnIndexes = filterColumnNames.Select(FindColumnHeaderIndexByName);
 				for (int index = 0; index < cachedFileListItems.Count; index++)
 				{
+					FileRow fileRow = cachedFileListItems[index];
 					FileListFilterItemContext filterMatcher = new FileListFilterItemContext
 					{
-						filterContext = activeFilterContext
+						filterContext = activeFilterContext,
+						fileRow = fileRow
 					};
-					FileRow fileRow = cachedFileListItems[index];
-					filterMatcher.listViewItem = fileRow.ListViewItem;
 					if (filterColumnIndexes.Any(filterMatcher.MatchesFilterText))
 					{
 						fileRow.IsHidden = false;
-						if (filterMatcher.listViewItem.Selected)
+						if (fileRow.Selected)
 						{
 							selectedFilterValueStates.ForEachItem(filterMatcher.CountSelectedFilterValue);
 						}
@@ -4208,47 +4367,45 @@ internal class StateFieldInstance : Form
 					else
 					{
 						fileRow.IsHidden = true;
-						if (filterMatcher.listViewItem.Selected)
+						if (fileRow.Selected)
 						{
-							filterMatcher.listViewItem.Selected = false;
+							fileRow.Selected = false;
 						}
 					}
 				}
-				fileListView.Items.Clear();
-				fileListView.Items.AddRange(cachedFileListItems.Where(IsVisibleCachedListViewItem).Select(GetCachedListViewItem).ToArray());
 			}
 			else
 			{
-				fileListView.Items.AddRange(cachedFileListItems.Where(IsHiddenCachedListViewItem).Select(GetCachedListViewItem).ToArray());
 				for (int index = 0; index < cachedFileListItems.Count; index++)
 				{
+					FileRow fileRow = cachedFileListItems[index];
 					FilterValueCollector selectedFilterRestorer = new FilterValueCollector
 					{
-						filterContext = activeFilterContext
+						filterContext = activeFilterContext,
+						fileRow = fileRow
 					};
-					FileRow fileRow = cachedFileListItems[index];
-					selectedFilterRestorer.listViewItem = fileRow.ListViewItem;
 					if (fileRow.IsHidden)
 					{
 						fileRow.IsHidden = false;
 					}
-					else if (selectedFilterRestorer.listViewItem.Selected)
+					else if (fileRow.Selected)
 					{
 						selectedFilterValueStates.ForEachItem(selectedFilterRestorer.CountFilterValue);
 					}
 				}
 			}
 
+			RebuildVisibleRows();
+			RestoreDgvSelectionFromModel();
 			lastFileListFilterText = activeFilterContext.filterText;
-			fileListView.ItemSelectionChanged += FileList_ItemSelectionChanged;
 			foreach (KeyValuePair<string, (Label, EventHandler)> handlerEntry in tagFieldTextHandlers)
 			{
 				tagComboBoxes[handlerEntry.Key].TextChanged += handlerEntry.Value.Item2;
 			}
 			ScheduleSelectionStatusUpdate(refreshStatusAllInfo: false);
-			if (fileListView.SelectedItems.Count == 1)
+			if (SelectedFileCount == 1)
 			{
-				FileList_ItemSelectionChanged(null, null);
+				LoadSingleSelectedFile(SelectedFileRows.First());
 			}
 			else
 			{
@@ -4258,11 +4415,6 @@ internal class StateFieldInstance : Form
 		}
 		finally
 		{
-			if (suspendListSorting)
-			{
-				fileListView.EndUpdate();
-				fileListView.ListViewItemSorter = listViewItemSorter;
-			}
 			tagComboBoxes.Values.ForEachItem(EndComboBoxUpdate);
 		}
 	}
@@ -4307,7 +4459,7 @@ internal class StateFieldInstance : Form
 		}
 		selectedTagState = null;
 		currentCoverIndex = 0;
-		if (fileListView.SelectedItems.Count <= 1)
+		if (SelectedFileCount <= 1)
 		{
 			tagComboBoxes.ForEachItem(tagEditorState.ClearTagField);
 			ClearCoverPreview();
@@ -4501,29 +4653,28 @@ internal class StateFieldInstance : Form
 	{
 		tagComboBoxes.Values.ForEachItem(BeginComboBoxUpdate);
 		fileListView.Focus();
-		fileListView.ItemSelectionChanged -= FileList_ItemSelectionChanged;
 		foreach (KeyValuePair<string, (Label, EventHandler)> handlerEntry in tagFieldTextHandlers)
 		{
 			tagComboBoxes[handlerEntry.Key].TextChanged -= handlerEntry.Value.Item2;
 		}
 		tagComboBoxes.ForEachItem(ClearTagFieldSelectionState);
 
-		foreach (ListViewItem listViewItem in fileListView.Items)
+		foreach (FileRow fileRow in visibleRows)
 		{
 			switch (selectionMode)
 			{
 			case FileSelectionMode.SelectAll:
-				listViewItem.Selected = true;
+				fileRow.Selected = true;
 				break;
 			case FileSelectionMode.UnselectAll:
-				listViewItem.Selected = false;
+				fileRow.Selected = false;
 				break;
 			case FileSelectionMode.Invert:
-				listViewItem.Selected = !listViewItem.Selected;
+				fileRow.Selected = !fileRow.Selected;
 				break;
 			}
 
-			if (!listViewItem.Selected)
+			if (!fileRow.Selected)
 			{
 				continue;
 			}
@@ -4531,23 +4682,23 @@ internal class StateFieldInstance : Form
 			SelectedItemFilterValueCounter selectedItemCounter = new SelectedItemFilterValueCounter
 			{
 				owner = this,
-				listViewItem = listViewItem
+				fileRow = fileRow
 			};
 			selectedFilterValueStates.ForEachItem(selectedItemCounter.CountFilterValue);
 		}
+		RestoreDgvSelectionFromModel();
 
-		fileListView.ItemSelectionChanged += FileList_ItemSelectionChanged;
 		foreach (KeyValuePair<string, (Label, EventHandler)> handlerEntry in tagFieldTextHandlers)
 		{
 			tagComboBoxes[handlerEntry.Key].TextChanged += handlerEntry.Value.Item2;
 		}
-		if (fileListView.SelectedItems.Count == 1)
+		if (SelectedFileCount == 1)
 		{
 			if (refreshStatusAllInfo)
 			{
 				ScheduleSelectionStatusUpdate(refreshStatusAllInfo: true);
 			}
-			FileList_ItemSelectionChanged(null, null);
+			LoadSingleSelectedFile(SelectedFileRows.First());
 		}
 		else
 		{
@@ -4568,21 +4719,6 @@ internal class StateFieldInstance : Form
 		comboBox.EndUpdate();
 	}
 
-	private static bool IsHiddenCachedListViewItem(FileRow cachedItem)
-	{
-		return cachedItem.IsHidden;
-	}
-
-	private static bool IsVisibleCachedListViewItem(FileRow cachedItem)
-	{
-		return !cachedItem.IsHidden;
-	}
-
-	private static ListViewItem GetCachedListViewItem(FileRow cachedItem)
-	{
-		return cachedItem.ListViewItem;
-	}
-
 	private static int FindColumnHeaderIndexByName(string columnName)
 	{
 		List<CustomColumnsDialog.ColumnHeaderInfo> columnHeaderSettings = configuredColumnHeaders;
@@ -4596,12 +4732,11 @@ internal class StateFieldInstance : Form
 		return -1;
 	}
 
-	private string GetSelectedFilterValue(ListViewItem listViewItem, string columnName)
+	private string GetSelectedFilterValue(FileRow fileRow, string columnName)
 	{
-		int index = fileListView.Columns[columnName].Index;
-		ListViewItem.ListViewSubItem subItem = listViewItem.SubItems[index];
-		string value = subItem.Text;
-		if (columnName == "comment" && subItem.Tag is int fullLength && fullLength != value.Length)
+		int index = FindColumnHeaderIndexByName(columnName);
+		string value = fileRow.CellTexts[index];
+		if (columnName == "comment" && fileRow.CommentFullLength != value.Length)
 		{
 			value = "Y\tT";
 		}
@@ -4618,35 +4753,32 @@ internal class StateFieldInstance : Form
 
 	private void SelectAllFiles_Click(object sender, EventArgs e)
 	{
-		fileListView.BeginUpdate();
-		if (fileListView.Items.Count > 1)
+		if (visibleRows.Count > 1)
 		{
 			ApplyFileSelectionMode(FileSelectionMode.SelectAll, refreshStatusAllInfo: false);
 		}
-		else if (fileListView.Items.Count == 1)
+		else if (visibleRows.Count == 1)
 		{
-			fileListView.Items[0].Selected = true;
+			visibleRows[0].Selected = true;
+			RestoreDgvSelectionFromModel();
+			OnFileSelectionSettled();
 		}
-		fileListView.EndUpdate();
 	}
 
 	private void UnselectAllFiles_Click(object sender, EventArgs e)
 	{
-		fileListView.BeginUpdate();
 		ApplyFileSelectionMode(FileSelectionMode.UnselectAll, refreshStatusAllInfo: false);
-		fileListView.EndUpdate();
 	}
 
 	private void InvertFileSelection_Click(object sender, EventArgs e)
 	{
-		fileListView.BeginUpdate();
 		int unselectedItemCount = 0;
-		ListViewItem singleUnselectedItem = null;
-		foreach (ListViewItem listViewItem in fileListView.Items)
+		FileRow singleUnselectedItem = null;
+		foreach (FileRow fileRow in visibleRows)
 		{
-			if (!listViewItem.Selected)
+			if (!fileRow.Selected)
 			{
-				singleUnselectedItem = listViewItem;
+				singleUnselectedItem = fileRow;
 				if (++unselectedItemCount > 1)
 				{
 					break;
@@ -4656,12 +4788,13 @@ internal class StateFieldInstance : Form
 		if (unselectedItemCount == 1)
 		{
 			singleUnselectedItem.Selected = true;
+			RestoreDgvSelectionFromModel();
+			OnFileSelectionSettled();
 		}
 		else
 		{
 			ApplyFileSelectionMode(FileSelectionMode.Invert, refreshStatusAllInfo: false);
 		}
-		fileListView.EndUpdate();
 	}
 
 	private void RemoveSelectedItemsFromList_Click(object sender, EventArgs e)
@@ -4669,32 +4802,30 @@ internal class StateFieldInstance : Form
 		(long selectedDurationMs, long selectedFileSizeBytes) = GetCachedDurationAndFileSize(selectedFilesStatusLabel.Tag);
 		(long allDurationMs, long allFileSizeBytes) = GetCachedDurationAndFileSize(totalFilesStatusLabel.Tag);
 		bool anyFileMode = FileSettings.IsAnyFileMode();
-		ListViewItem[] selectedItems = fileListView.SelectedItems.Cast<ListViewItem>().ToArray();
-		var selectedItemSet = new HashSet<ListViewItem>(selectedItems);
-		fileListView.BeginUpdate();
-		foreach (ListViewItem selectedItem in selectedItems)
+		FileRow[] selectedItems = SelectedFileRows.ToArray();
+		var selectedItemSet = new HashSet<FileRow>(selectedItems);
+		foreach (FileRow selectedItem in selectedItems)
 		{
 			GetListViewItemDurationAndFileSize(selectedItem, out var itemDurationMs, out var itemFileSizeBytes);
 			selectedDurationMs -= itemDurationMs;
 			selectedFileSizeBytes -= itemFileSizeBytes;
 			allDurationMs -= itemDurationMs;
 			allFileSizeBytes -= itemFileSizeBytes;
-			selectedItem.Remove();
 			if (anyFileMode)
 			{
-				FileSettings.RemoveForAnyFile(selectedItem.Tag as string);
+				FileSettings.RemoveForAnyFile(selectedItem.FilePath);
 			}
 		}
-		cachedFileListItems.RemoveAll(itemState => selectedItemSet.Contains(itemState.ListViewItem));
+		cachedFileListItems.RemoveAll(itemState => selectedItemSet.Contains(itemState));
+		RebuildVisibleRows();
 		selectedFilesStatusLabel.Tag = (Math.Max(0L, selectedDurationMs), Math.Max(0L, selectedFileSizeBytes));
 		totalFilesStatusLabel.Tag = (Math.Max(0L, allDurationMs), Math.Max(0L, allFileSizeBytes));
 		RefreshStatusLabelsFromCachedTotals();
-		fileListView.EndUpdate();
 	}
 
 	private void DeleteSelectedFiles_Click(object sender, EventArgs e)
 	{
-		if (!DatabaseMapper.ConfirmYesNo(string.Format(Resources.Msg_ConfirmRemoveFiles, fileListView.SelectedItems.Count) + "\n" + BuildSelectedFilePreview()))
+		if (!DatabaseMapper.ConfirmYesNo(string.Format(Resources.Msg_ConfirmRemoveFiles, SelectedFileCount) + "\n" + BuildSelectedFilePreview()))
 		{
 			return;
 		}
@@ -4736,10 +4867,24 @@ internal class StateFieldInstance : Form
 	{
 	}
 
-	private void FileList_ColumnClick(object sender, ColumnClickEventArgs e)
+	private void FileList_ColumnHeaderMouseClick(object sender, DataGridViewCellMouseEventArgs e)
 	{
-		int? column = default(int?);
-		if (e.Column == SortSetting.Column && SortSetting.SortOrder != SortOrder.None && SortSetting.SortOrder != SortOrder.Descending)
+		if (e.ColumnIndex < 0)
+		{
+			return;
+		}
+		if (e.Button == MouseButtons.Right)
+		{
+			customizeColumnsContextMenuItem.Text = Resources.customcolumns;
+			fileListHeaderContextMenu.Show(fileListView, fileListView.PointToClient(Cursor.Position));
+			return;
+		}
+		if (e.Button != MouseButtons.Left)
+		{
+			return;
+		}
+		// ColumnIndex 是建列顺序(逻辑列序),与 FileRow.CellTexts / SortSetting.Column 同序。
+		if (e.ColumnIndex == SortSetting.Column && SortSetting.SortOrder != SortOrder.None && SortSetting.SortOrder != SortOrder.Descending)
 		{
 			SortSetting.SortOrder = SortOrder.Descending;
 		}
@@ -4747,42 +4892,37 @@ internal class StateFieldInstance : Form
 		{
 			SortSetting.SortOrder = SortOrder.Ascending;
 		}
-		UpdateFileListSortGlyph(e.Column, SortSetting.SortOrder);
-		column = SortSetting.Column;
-		if (column.HasValue && SortSetting.Column != e.Column)
+		UpdateFileListSortGlyph(e.ColumnIndex, SortSetting.SortOrder);
+		int? previousColumn = SortSetting.Column;
+		if (previousColumn.HasValue && SortSetting.Column != e.ColumnIndex)
 		{
 			UpdateFileListSortGlyph(SortSetting.Column, SortOrder.None);
 		}
-		SortSetting.Column = e.Column;
-		fileListView.ListViewItemSorter = new ListViewItemNaturalComparer(SortSetting);
-		fileListView.Sort();
+		SortSetting.Column = e.ColumnIndex;
+		ApplyFileListSort();
+	}
+
+	// 对主表 cachedFileListItems 手动排序(复用 ListViewItemNaturalComparer,改读 FileRow.CellTexts),
+	// 再重建 visibleRows 并据模型恢复选区。duration 列仍按显示文本排序(comparer 读 CellTexts 即满足)。
+	private void ApplyFileListSort()
+	{
+		if (!SortSetting.Column.HasValue)
+		{
+			return;
+		}
+		ListViewItemNaturalComparer comparer = new ListViewItemNaturalComparer(SortSetting);
+		cachedFileListItems.Sort((FileRow left, FileRow right) => comparer.Compare(left, right));
+		RebuildVisibleRows();
+		RestoreDgvSelectionFromModel();
 	}
 
 	private void UpdateFileListSortGlyph(int? columnIndex, SortOrder sortOrder)
 	{
-		if (columnIndex.HasValue)
+		if (!columnIndex.HasValue || columnIndex.Value < 0 || columnIndex.Value >= fileListView.Columns.Count)
 		{
-			IntPtr headerHandle = NativeMethods.SendMessage(fileListView.Handle, 4127, IntPtr.Zero, IntPtr.Zero);
-			NativeMethods.ListViewColumnInfo columnInfo = default(NativeMethods.ListViewColumnInfo);
-			IntPtr columnPointer = new IntPtr(columnIndex.Value);
-			columnInfo.Mask = 4;
-			NativeMethods.SendListViewColumnMessage(headerHandle, 4619, columnPointer, ref columnInfo);
-			switch (sortOrder)
-			{
-			default:
-				columnInfo.Format &= -1537;
-				break;
-			case SortOrder.Descending:
-				columnInfo.Format &= -1025;
-				columnInfo.Format |= 512;
-				break;
-			case SortOrder.Ascending:
-				columnInfo.Format &= -513;
-				columnInfo.Format |= 1024;
-				break;
-			}
-			NativeMethods.SendListViewColumnMessage(headerHandle, 4620, columnPointer, ref columnInfo);
+			return;
 		}
+		fileListView.Columns[columnIndex.Value].HeaderCell.SortGlyphDirection = sortOrder;
 	}
 
 	private void ExitApplication_Click(object sender, EventArgs e)
@@ -4790,18 +4930,17 @@ internal class StateFieldInstance : Form
 		Close();
 	}
 
-	private void FileList_MouseUp(object sender, MouseEventArgs e)
+	private void FileList_CellMouseDown(object sender, DataGridViewCellMouseEventArgs e)
 	{
-		if (e.Button == MouseButtons.Right)
+		if (e.Button == MouseButtons.Right && e.RowIndex >= 0 && e.RowIndex < visibleRows.Count)
 		{
-			fileListItemContextMenu.Show(fileListView, e.Location);
+			if (!visibleRows[e.RowIndex].Selected)
+			{
+				fileListView.ClearSelection();
+				fileListView.Rows[e.RowIndex].Selected = true;
+			}
+			fileListItemContextMenu.Show(fileListView, fileListView.PointToClient(Cursor.Position));
 		}
-	}
-
-	private void FileListHeader_RightClick(object sender, ColumnClickEventArgs e)
-	{
-		customizeColumnsContextMenuItem.Text = Resources.customcolumns;
-		fileListHeaderContextMenu.Show(fileListView, fileListView.PointToClient(Cursor.Position));
 	}
 
 	private void CoverPicture_MouseUp(object sender, MouseEventArgs e)
@@ -4819,7 +4958,7 @@ internal class StateFieldInstance : Form
 		chooseLocalCoverMenuItem.Text = localizedResources.GetString("panel1.AddCover.ChooseLocalFile");
 		searchCoverFromNetworkMenuItem.Text = localizedResources.GetString("panel1.AddCover.SearchFromNetwork");
 		chooseCoverFromTagsMenuItem.Text = Resources.ChooseFromFileTags;
-		addCoverMenuItem.Enabled = fileListView.SelectedItems.Count > 0;
+		addCoverMenuItem.Enabled = SelectedFileCount > 0;
 		changeCoverResolutionMenuItem.Enabled = false;
 		removeCoverMenuItem.Enabled = false;
 		extractCoverMenuItem.Enabled = false;
@@ -4832,7 +4971,7 @@ internal class StateFieldInstance : Form
 		List<ConfigDescriptorState.PictureData> coverList = null;
 		if (selectedTagState == null && multiSelectionCoverList == null)
 		{
-			if (fileListView.SelectedItems.Count > 1)
+			if (SelectedFileCount > 1)
 			{
 				chooseCoverFromTagsMenuItem.Enabled = true;
 			}
@@ -4873,11 +5012,11 @@ internal class StateFieldInstance : Form
 			removeCoverMenuItem.Enabled = true;
 		}
 
-		if (fileListView.SelectedItems.Count == 1)
+		if (SelectedFileCount == 1)
 		{
 			searchCoverFromNetworkMenuItem.Enabled = true;
 		}
-		if (fileListView.SelectedItems.Count > 1)
+		if (SelectedFileCount > 1)
 		{
 			chooseCoverFromTagsMenuItem.Enabled = true;
 			if (!coverList.Any() && Settings.Default.PictureResolutionLimits > 0)
@@ -4893,7 +5032,7 @@ internal class StateFieldInstance : Form
 		try
 		{
 			List<ConfigDescriptorState.PictureData> coverList = GetCurrentCoverList();
-			if (coverList == null && fileListView.SelectedItems.Count > 1)
+			if (coverList == null && SelectedFileCount > 1)
 			{
 				multiSelectionCoverList = new List<ConfigDescriptorState.PictureData>();
 				coverList = multiSelectionCoverList;
@@ -4948,14 +5087,14 @@ internal class StateFieldInstance : Form
 
 	private void ChooseCoverFromFileTags_Click(object sender, EventArgs e)
 	{
-		if (fileListView.SelectedItems.Count <= 1)
+		if (SelectedFileCount <= 1)
 		{
 			return;
 		}
 		List<string> list = new List<string>();
-		foreach (ListViewItem listViewItem in fileListView.SelectedItems)
+		foreach (FileRow fileRow in SelectedFileRows)
 		{
-			list.Add(listViewItem.Tag as string);
+			list.Add(fileRow.FilePath);
 		}
 		PictureFromTagsDialog pictureFromTagsDialog = new PictureFromTagsDialog();
 		pictureFromTagsDialog.SetAudioFilePaths(list);
@@ -5145,7 +5284,7 @@ internal class StateFieldInstance : Form
 
 	private void SaveCurrentFileListColumnWidths()
 	{
-		foreach (ColumnHeader columnHeader in fileListView.Columns)
+		foreach (DataGridViewColumn columnHeader in fileListView.Columns)
 		{
 			CustomColumnsDialog.ColumnHeaderInfo columnHeaderInfo = columnHeader.Tag as CustomColumnsDialog.ColumnHeaderInfo;
 			if (columnHeader.Width > 0)
@@ -5191,11 +5330,20 @@ internal class StateFieldInstance : Form
 			}
 		}
 
-		foreach (ColumnHeader columnHeader in fileListView.Columns)
+		foreach (DataGridViewColumn columnHeader in fileListView.Columns)
 		{
 			CustomColumnsDialog.ColumnHeaderInfo columnHeaderInfo = columnHeader.Tag as CustomColumnsDialog.ColumnHeaderInfo;
-			columnHeader.Width = columnHeaderInfo.isShow ? columnHeaderInfo.tempWidth : 0;
-			columnHeader.DisplayIndex = columnHeaderInfo.displayIndex;
+			columnHeader.Visible = columnHeaderInfo.isShow;
+			if (columnHeaderInfo.isShow)
+			{
+				columnHeader.Width = columnHeaderInfo.tempWidth;
+			}
+		}
+		// DisplayIndex 必须是 0..N-1 排列;按目标 displayIndex 升序顺次赋值,避免 DGV 中途重排冲突。
+		int columnDisplayOrder = 0;
+		foreach (DataGridViewColumn columnHeader in fileListView.Columns.Cast<DataGridViewColumn>().OrderBy((DataGridViewColumn c) => ((CustomColumnsDialog.ColumnHeaderInfo)c.Tag).displayIndex).ToList())
+		{
+			columnHeader.DisplayIndex = columnDisplayOrder++;
 		}
 		CustomColumnsDialog.SaveColumnHeaderSettings();
 		Settings.Default.Save();
@@ -5285,7 +5433,7 @@ internal class StateFieldInstance : Form
 		{
 			return;
 		}
-		if (fileListView.SelectedItems.Count > 1 && !DatabaseMapper.ConfirmYesNo(string.Format(Resources.Msg_ConfirmSaveTags, fileListView.SelectedItems.Count) + "\n" + BuildSelectedFilePreview()))
+		if (SelectedFileCount > 1 && !DatabaseMapper.ConfirmYesNo(string.Format(Resources.Msg_ConfirmSaveTags, SelectedFileCount) + "\n" + BuildSelectedFilePreview()))
 		{
 			return;
 		}
@@ -5388,7 +5536,7 @@ internal class StateFieldInstance : Form
 
 	private void ClearTags_Click(object sender, EventArgs e)
 	{
-		if (!DatabaseMapper.ConfirmYesNo(string.Format(Resources.Msg_ConfirmClearTags, fileListView.SelectedItems.Count) + "\n" + BuildSelectedFilePreview()))
+		if (!DatabaseMapper.ConfirmYesNo(string.Format(Resources.Msg_ConfirmClearTags, SelectedFileCount) + "\n" + BuildSelectedFilePreview()))
 		{
 			return;
 		}
@@ -5407,11 +5555,11 @@ internal class StateFieldInstance : Form
 	{
 		StringBuilder stringBuilder = new StringBuilder();
 		int lineCount = 0;
-		foreach (ListViewItem listViewItem in fileListView.SelectedItems)
+		foreach (FileRow fileRow in SelectedFileRows)
 		{
 			if (lineCount < 10)
 			{
-				stringBuilder.Append(listViewItem.Text + "\n");
+				stringBuilder.Append(fileRow.CellTexts[0] + "\n");
 				lineCount++;
 				continue;
 			}
@@ -5444,7 +5592,9 @@ internal class StateFieldInstance : Form
 			(string Path, string NewPath, int ListViewIndex) renameItem = completedRenameItems[i];
 			if (renameItem.NewPath != null)
 			{
-				fileListView.Items[renameItem.ListViewIndex].Tag = renameItem.NewPath;
+				FileRow fileRow = cachedFileListItems[renameItem.ListViewIndex];
+				fileRow.FilePath = renameItem.NewPath;
+				InvalidateFileRow(fileRow);
 			}
 		}
 		(string, bool) value = default((string, bool));
@@ -5531,13 +5681,13 @@ internal class StateFieldInstance : Form
 		while (undoSaveTagsContext.processedCount < cachedFileListItems.Count)
 		{
 			UndoSaveTagsListItemMatcher listItemMatcher = new UndoSaveTagsListItemMatcher();
-			listItemMatcher.listViewItem = cachedFileListItems[undoSaveTagsContext.processedCount].ListViewItem;
+			listItemMatcher.fileRow = cachedFileListItems[undoSaveTagsContext.processedCount];
 			if (undoSaveTagsContext.undoTagSnapshots.Find(listItemMatcher.MatchesSnapshotPath) != null)
 			{
 				refreshedItems.Add(new SelectedListViewItemInfo
 				{
 					Index = undoSaveTagsContext.processedCount,
-					FilePath = (listItemMatcher.listViewItem.Tag as string)
+					FilePath = listItemMatcher.fileRow.FilePath
 				});
 			}
 			undoSaveTagsContext.processedCount++;
@@ -5582,18 +5732,19 @@ internal class StateFieldInstance : Form
 		while (undoRenameContext.processedCount < cachedFileListItems.Count)
 		{
 			RenameUndoListItemMatcher listItemMatcher = new RenameUndoListItemMatcher();
-			listItemMatcher.ListViewItem = cachedFileListItems[undoRenameContext.processedCount].ListViewItem;
+			listItemMatcher.fileRow = cachedFileListItems[undoRenameContext.processedCount];
 			(string oldPath, string newPath, bool failed) operation = undoRenameContext.renameUndoOperations.Find(listItemMatcher.MatchesCurrentPath);
 			if (!string.IsNullOrWhiteSpace(operation.oldPath))
 			{
 				if (!operation.failed)
 				{
-					listItemMatcher.ListViewItem.Tag = operation.oldPath;
+					listItemMatcher.fileRow.FilePath = operation.oldPath;
+					InvalidateFileRow(listItemMatcher.fileRow);
 				}
 				list.Add(new SelectedListViewItemInfo
 				{
 					Index = undoRenameContext.processedCount,
-					FilePath = (listItemMatcher.ListViewItem.Tag as string)
+					FilePath = listItemMatcher.fileRow.FilePath
 				});
 			}
 			undoRenameContext.processedCount++;
@@ -5653,7 +5804,7 @@ internal class StateFieldInstance : Form
 
 	private void StartBatchLyricsOperation(string lyricsOperationResourceKey)
 	{
-		int count = fileListView.SelectedItems.Count;
+		int count = SelectedFileCount;
 		if (count != 0 && DatabaseMapper.ConfirmYesNo(string.Format(Resources.Msg_ConfirmSaveTags, count) + "(" + localizedResources.GetString(lyricsOperationResourceKey) + ")\n" + BuildSelectedFilePreview()))
 		{
 			Dictionary<string, object> comp = new Dictionary<string, object> { { "lyrics_handle", lyricsOperationResourceKey } };
@@ -5819,7 +5970,7 @@ internal class StateFieldInstance : Form
 
 	private void SaveLyrics_Click(object sender, EventArgs e)
 	{
-		if (fileListView.SelectedItems.Count == 1)
+		if (SelectedFileCount == 1)
 		{
 			if (selectedTagState == null || !selectedTagState.IsLoadedSuccessfully() || !File.Exists(selectedTagState.GetFilePath()) || string.IsNullOrWhiteSpace(lyricsComboBox.Text))
 			{
@@ -5850,7 +6001,7 @@ internal class StateFieldInstance : Form
 			}
 			return;
 		}
-		if (fileListView.SelectedItems.Count > 1 && DatabaseMapper.ConfirmYesNo(string.Format(Resources.Msg_ConfirmSaveLrcFiles, fileListView.SelectedItems.Count) + "\n" + BuildSelectedFilePreview()))
+		if (SelectedFileCount > 1 && DatabaseMapper.ConfirmYesNo(string.Format(Resources.Msg_ConfirmSaveLrcFiles, SelectedFileCount) + "\n" + BuildSelectedFilePreview()))
 		{
 			SelectedListViewItemInfo[] selectedItems = CollectSelectedListViewItemInfos();
 			ProgressDialog progressDialog = new ProgressDialog(taskbarProgress);
@@ -5861,14 +6012,14 @@ internal class StateFieldInstance : Form
 
 	private void ExtractCovers_Click(object sender, EventArgs e)
 	{
-		if (fileListView.SelectedItems.Count <= 1)
+		if (SelectedFileCount <= 1)
 		{
-			if (fileListView.SelectedItems.Count == 1)
+			if (SelectedFileCount == 1)
 			{
 				SaveCurrentCover(showSaveDialog: true);
 			}
 		}
-		else if (DatabaseMapper.ConfirmYesNo(string.Format(Resources.Msg_ConfirmExtractCovers, fileListView.SelectedItems.Count) + "\n" + BuildSelectedFilePreview()))
+		else if (DatabaseMapper.ConfirmYesNo(string.Format(Resources.Msg_ConfirmExtractCovers, SelectedFileCount) + "\n" + BuildSelectedFilePreview()))
 		{
 			SelectedListViewItemInfo[] selectedItems = CollectSelectedListViewItemInfos();
 			ProgressDialog progressDialog = new ProgressDialog(taskbarProgress);
@@ -5981,7 +6132,7 @@ internal class StateFieldInstance : Form
 
 	private void ConvertSelectedTagsTraditionalToSimplified_Click(object sender, EventArgs e)
 	{
-		int count = fileListView.SelectedItems.Count;
+		int count = SelectedFileCount;
 		if (count != 0 && DatabaseMapper.ConfirmYesNo(string.Format(Resources.Msg_ConfirmSaveTags, count) + "(" + localizedResources.GetString("menuStrip1.Batch.TagsChtToChs") + ")\n" + BuildSelectedFilePreview()))
 		{
 			Dictionary<string, object> comp = new Dictionary<string, object> { { "chscht_handle", false } };
@@ -5999,7 +6150,7 @@ internal class StateFieldInstance : Form
 
 	private void ConvertSelectedTagsSimplifiedToTraditional_Click(object sender, EventArgs e)
 	{
-		int count = fileListView.SelectedItems.Count;
+		int count = SelectedFileCount;
 		if (count == 0)
 		{
 			return;
@@ -6021,7 +6172,7 @@ internal class StateFieldInstance : Form
 
 	private void ConvertSelectedFilenamesTraditionalToSimplified_Click(object sender, EventArgs e)
 	{
-		int count = fileListView.SelectedItems.Count;
+		int count = SelectedFileCount;
 		if (count != 0 && DatabaseMapper.ConfirmYesNo(string.Format(Resources.Msg_ConfirmRenameFiles, count) + "(" + localizedResources.GetString("menuStrip1.Batch.FilenameChtToChs") + ")\n" + BuildSelectedFilePreview()))
 		{
 			ProgressDialog progressDialog = new ProgressDialog(taskbarProgress);
@@ -6033,7 +6184,7 @@ internal class StateFieldInstance : Form
 
 	private void ConvertSelectedFilenamesSimplifiedToTraditional_Click(object sender, EventArgs e)
 	{
-		int count = fileListView.SelectedItems.Count;
+		int count = SelectedFileCount;
 		if (count != 0 && DatabaseMapper.ConfirmYesNo(string.Format(Resources.Msg_ConfirmRenameFiles, count) + "(" + localizedResources.GetString("menuStrip1.Batch.FilenameChsToCht") + ")\n" + BuildSelectedFilePreview()))
 		{
 			ProgressDialog progressDialog = new ProgressDialog(taskbarProgress);
@@ -6138,8 +6289,7 @@ internal class StateFieldInstance : Form
 				SortSetting.SortOrder = SortOrder.Ascending;
 			}
 			UpdateFileListSortGlyph(SortSetting.Column, SortSetting.SortOrder);
-			fileListView.ListViewItemSorter = new ListViewItemNaturalComparer(SortSetting);
-			fileListView.Sort();
+			ApplyFileListSort();
 			if (FileSettings == null)
 			{
 				FileSettings = new ListViewFileSetting();
@@ -6260,37 +6410,98 @@ internal class StateFieldInstance : Form
 
 	private void BeginRenameSelectedFile_Click(object sender, EventArgs e)
 	{
-		if (fileListView.SelectedItems.Count > 0)
+		if (SelectedFileCount <= 0)
 		{
-			fileListView.SelectedItems[0].BeginEdit();
+			return;
 		}
+		FileRow row = SelectedFileRows.First();
+		if (!visibleRowIndex.TryGetValue(row, out int visIndex) || !fileListView.Columns[0].Visible)
+		{
+			return;
+		}
+		renamingRow = row;
+		renameEditedValue = null;
+		fileListView.Columns[0].ReadOnly = false;
+		fileListView.CurrentCell = fileListView.Rows[visIndex].Cells[0];
+		fileListView.BeginEdit(selectAll: true);
 	}
 
 	private void RevealSelectedFileInExplorer_Click(object sender, EventArgs e)
 	{
-		if (fileListView.SelectedItems.Count > 0)
+		if (SelectedFileCount > 0)
 		{
-			DatabaseMapper.ShowInExplorer(fileListView.SelectedItems[0].Tag as string);
+			DatabaseMapper.ShowInExplorer(SelectedFileRows.First().FilePath);
 		}
 	}
 
-	private void FileList_BeforeLabelEdit(object sender, LabelEditEventArgs e)
+	private void FileList_CellBeginEdit(object sender, DataGridViewCellCancelEventArgs e)
 	{
-		NativeMethods.SendMessage(NativeMethods.SendMessage(fileListView.Handle, 4120, IntPtr.Zero, IntPtr.Zero), 177, IntPtr.Zero, (IntPtr)Path.GetFileNameWithoutExtension(fileListView.Items[e.Item].Text).Length);
+		// 仅允许程序化发起的重命名(EditMode=EditProgrammatically + 仅首列临时可写),其余一律拦下。
+		if (renamingRow == null)
+		{
+			e.Cancel = true;
+		}
 	}
 
-	private void FileList_AfterLabelEdit(object sender, LabelEditEventArgs e)
+	private void FileList_EditingControlShowing(object sender, DataGridViewEditingControlShowingEventArgs e)
 	{
-		ListViewItem listViewItem = fileListView.Items[e.Item];
+		if (renamingRow != null && e.Control is TextBox textBox)
+		{
+			int selectionLength = Path.GetFileNameWithoutExtension(textBox.Text).Length;
+			BeginInvoke((Action)delegate
+			{
+				try
+				{
+					textBox.Select(0, selectionLength);
+				}
+				catch
+				{
+				}
+			});
+		}
+	}
+
+	private void FileList_CellValuePushed(object sender, DataGridViewCellValueEventArgs e)
+	{
+		// VirtualMode 提交编辑时回灌新值 —— 这里只暂存,真正的改名/落盘在 CellEndEdit 做。
+		if (renamingRow != null && e.ColumnIndex == 0)
+		{
+			renameEditedValue = e.Value as string;
+		}
+	}
+
+	private void FileList_CellValidating(object sender, DataGridViewCellValidatingEventArgs e)
+	{
+	}
+
+	private void FileList_CellEndEdit(object sender, DataGridViewCellEventArgs e)
+	{
+		if (renamingRow == null)
+		{
+			return;
+		}
+		FileRow row = renamingRow;
+		string requestedFileName = renameEditedValue;
+		renamingRow = null;
+		renameEditedValue = null;
+		fileListView.Columns[0].ReadOnly = true;
+		if (requestedFileName == null)
+		{
+			return;
+		}
+		PerformInPlaceRename(row, requestedFileName);
+	}
+
+	private void PerformInPlaceRename(FileRow row, string requestedFileName)
+	{
 		FileListLabelEditContext editContext = new FileListLabelEditContext
 		{
-			OriginalPath = listViewItem.Tag as string,
-			RequestedFileName = e.Label
+			OriginalPath = row.FilePath,
+			RequestedFileName = requestedFileName
 		};
 		FileInfo fileInfo = new FileInfo(editContext.OriginalPath);
 		if (!fileInfo.Exists)
 		{
-			e.CancelEdit = true;
 			BeginInvoke(new Action(editContext.ShowFileNotFoundMessage));
 			return;
 		}
@@ -6301,13 +6512,13 @@ internal class StateFieldInstance : Form
 				|| string.IsNullOrWhiteSpace(Path.GetFileNameWithoutExtension(editContext.RequestedFileName))
 				|| fileInfo.Name == editContext.RequestedFileName)
 			{
-				e.CancelEdit = true;
 				return;
 			}
 
 			editContext.NewPath = fileInfo.DirectoryName + "\\" + editContext.RequestedFileName;
 			fileInfo.MoveTo(editContext.NewPath);
-			listViewItem.Tag = editContext.NewPath;
+			row.FilePath = editContext.NewPath;
+			InvalidateFileRow(row);
 			FileSettings.UpdateForAnyFile(editContext.OriginalPath, editContext.NewPath);
 			TagHistoryRepository.ClearUndoState();
 			BeginInvoke(new Action(editContext.UpdateHistoryFilePath));
@@ -6321,7 +6532,6 @@ internal class StateFieldInstance : Form
 		catch (System.Exception ex)
 		{
 			editContext.RenameError = ex;
-			e.CancelEdit = true;
 			BeginInvoke(new Action(editContext.ShowRenameError));
 		}
 	}
@@ -6385,11 +6595,9 @@ internal class StateFieldInstance : Form
 			return;
 		}
 
-		fileListView.SetDoubleBuffered(enabled: false);
 		fileFilterStatusStrip.Location = new Point(0, fileListHeight);
 		fileSummaryStatusStrip.Location = new Point(0, fileListHeight + fileFilterStatusStrip.Height);
 		fileListView.Height = fileListHeight;
-		fileListView.SetDoubleBuffered(enabled: true);
 	}
 
 	private void FilterBar_SizeChanged(object sender, EventArgs e)
@@ -6694,7 +6902,7 @@ internal class StateFieldInstance : Form
 		coverIndexLabel = new Label();
 		nextCoverButton = new Button();
 		tagEditorBottomSpacerPanel = new Panel();
-		fileListView = new HeaderAwareListView();
+		fileListView = new BufferedDataGridView();
 		fileFilterStatusStrip = new StatusStrip();
 		filterStatusLabel = new ToolStripStatusLabel();
 		filterTextBox = new ToolStripTextBox();
@@ -7920,25 +8128,36 @@ internal class StateFieldInstance : Form
 		tagEditorBottomSpacerPanel.TabIndex = 38;
 		fileListView.AllowDrop = true;
 		fileListView.Dock = DockStyle.Fill;
-		fileListView.FullRowSelect = true;
-		fileListView.HideSelection = false;
-		fileListView.LabelEdit = true;
+		fileListView.VirtualMode = true;
+		fileListView.AllowUserToAddRows = false;
+		fileListView.AllowUserToDeleteRows = false;
+		fileListView.AllowUserToResizeRows = false;
+		fileListView.RowHeadersVisible = false;
+		fileListView.MultiSelect = true;
+		fileListView.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+		fileListView.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
+		fileListView.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None;
+		fileListView.EditMode = DataGridViewEditMode.EditProgrammatically;
+		fileListView.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
 		fileListView.Location = new Point(0, 0);
 		fileListView.Margin = new Padding(0);
 		fileListView.Name = "listView1";
 		fileListView.Size = new Size(1263, 806);
 		fileListView.TabIndex = 31;
-		fileListView.UseCompatibleStateImageBehavior = false;
-		fileListView.View = View.Details;
-		fileListView.HeaderRightClick += FileListHeader_RightClick;
-		fileListView.AfterLabelEdit += FileList_AfterLabelEdit;
-		fileListView.BeforeLabelEdit += FileList_BeforeLabelEdit;
-		fileListView.ColumnClick += FileList_ColumnClick;
-		fileListView.ItemSelectionChanged += FileList_ItemSelectionChanged;
+		fileListView.CellValueNeeded += FileList_CellValueNeeded;
+		fileListView.CellFormatting += FileList_CellFormatting;
+		fileListView.CellPainting += FileList_CellPainting;
+		fileListView.SelectionChanged += FileList_SelectionChanged;
+		fileListView.ColumnHeaderMouseClick += FileList_ColumnHeaderMouseClick;
+		fileListView.CellMouseDown += FileList_CellMouseDown;
+		fileListView.CellBeginEdit += FileList_CellBeginEdit;
+		fileListView.CellEndEdit += FileList_CellEndEdit;
+		fileListView.CellValidating += FileList_CellValidating;
+		fileListView.CellValuePushed += FileList_CellValuePushed;
+		fileListView.EditingControlShowing += FileList_EditingControlShowing;
 		fileListView.DragDrop += FileList_DragDrop;
 		fileListView.DragEnter += FileList_DragEnter;
 		fileListView.DragLeave += FileList_DragLeave;
-		fileListView.MouseUp += FileList_MouseUp;
 		fileFilterStatusStrip.Items.AddRange(new ToolStripItem[3] { filterStatusLabel, filterTextBox, filterTypeDropDownButton });
 		fileFilterStatusStrip.Location = new Point(0, 806);
 		fileFilterStatusStrip.Name = "statusStrip2";
