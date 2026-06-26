@@ -103,7 +103,6 @@
 |---|---|---|
 | `statefield-3` / `xcut-resources-1` | 封面预览每次换图不释放旧 `Bitmap`，浏览多文件热路径泄漏 → OOM | `StateFieldInstance.cs:4689` |
 | `xcut-resources-2/3` / `config` | `LoadPictureImage` 双重职责：返回值在 3+ 处循环被丢弃（泄漏）、且返回基于**已释放 `MemoryStream`** 的 Image（GDI+ 隐患）| `ConfigDescriptorState.cs:367`；`StateFieldInstance.cs:1342/1355/2231`；`TagHistoryRepository.cs:305` |
-| `config-medium` | `LoadCurrentTagFile` 返回 `using` 已 Dispose 的 `ConfigDescriptorState`（**use-after-dispose**，目前靠"Dispose 只置空 tagFile、缓存还在"巧合不崩）| `AutoMatchTagsDialog.cs:826` |
 | `listview-controls-1` / `services-misc-3` | 静态初始化器里无保护 `JsonConvert.Deserialize`，损坏配置 → `TypeInitializationException` → 核心列设置/合并搜索路径**永久崩溃无法自愈** | `CustomColumnsDialog.cs:45,290`；`CombinedTagOverwriteOptionsDialog.cs:45` |
 | `data-history-1` | `TagHistoryRepository` 事务无回滚 + `ExecuteReader` 失败把 static 共享连接置 null → 级联失败 + 原始异常被掩盖（验证后 high→medium）| `TagHistoryRepository.cs:76-171` |
 | `data-history-2` | static 共享连接/序列号/`UndoTags` 无任何同步，仅靠"UI 串行 await"这一**未强制**的不变量 | `TagHistoryRepository.cs:55,173,345` |
@@ -221,4 +220,5 @@
 | P2-21 设置读取缺失节点处理 | 已实现 | `XmlSettingsProvider.ReadSettingValue` 显式处理缺失 XML 节点，避免用空引用异常作为默认值路径 |
 | P2-22 设置保存失败可见性 | 已实现 | `Settings.Default.Save()` 统一经 `DatabaseMapper.TrySaveApplicationSettings`，只读安装目录等保存失败不再走全局崩溃链；确认型对话框保存失败时停留原窗口 |
 | P2-23 进度框计时器竞态 | 已实现 | `ProgressDialog` 只在窗口显示后启动计时器，并用带句柄/关闭检查的 `BeginInvoke` 投递进度刷新，避免关闭释放竞态 |
+| P2-24 自动匹配标签生命周期 | 已实现 | `LoadCurrentTagFile` 不再返回已 `Dispose` 的 `ConfigDescriptorState`，搜索任务在 `finally` 中统一释放加载的标签状态 |
 | P2 后续 | 待办 | 更零散的 Low 级资源释放问题 |
