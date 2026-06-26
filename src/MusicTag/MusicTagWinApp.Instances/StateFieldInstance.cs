@@ -2376,7 +2376,7 @@ internal class StateFieldInstance : Form
 			Settings.Default.FilterListViewKeyword = owner.filterTextBox.Text;
 			Settings.Default.LastVersionCode = 17;
 			CustomColumnsDialog.SaveColumnHeaderSettings();
-			Settings.Default.Save();
+			DatabaseMapper.TrySaveApplicationSettings();
 			TagHistoryRepository.ClearUndoState();
 			TagHistoryRepository.CloseSharedConnection();
 		}
@@ -3405,7 +3405,7 @@ internal class StateFieldInstance : Form
 		else
 		{
 			Settings.Default.Language = languageCode;
-			Settings.Default.Save();
+			DatabaseMapper.TrySaveApplicationSettings();
 		}
 		if (string.IsNullOrEmpty(languageCode))
 		{
@@ -5596,7 +5596,7 @@ internal class StateFieldInstance : Form
 			columnHeader.DisplayIndex = columnDisplayOrder++;
 		}
 		CustomColumnsDialog.SaveColumnHeaderSettings();
-		Settings.Default.Save();
+		DatabaseMapper.TrySaveApplicationSettings();
 		fileListView.Refresh();
 	}
 
@@ -6481,7 +6481,7 @@ internal class StateFieldInstance : Form
 	private void SaveOverwriteCoverSetting_Click(object sender, EventArgs e)
 	{
 		Settings.Default.OverwritePictureboxPicture = overwriteCoverCheckBox.Checked;
-		Settings.Default.Save();
+		DatabaseMapper.TrySaveApplicationSettings();
 	}
 
 	protected override void OnLoad(EventArgs e)

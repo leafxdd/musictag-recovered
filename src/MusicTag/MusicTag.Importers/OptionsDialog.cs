@@ -776,7 +776,10 @@ internal class OptionsDialog : Form
 		Settings.Default.ConnectorsArtists = artistConnectorComboBox.Text;
 		Settings.Default.QQMusic_Cookie = qqCookieTextBox.Text.Trim();
 		Settings.Default.WebSearch_CustomUserAgent = customUserAgentTextBox.Text.Trim();
-		Settings.Default.Save();
+		if (!DatabaseMapper.TrySaveApplicationSettings())
+		{
+			return;
+		}
 		CoverSearchDialog.ClearCachedCandidates();
 		LyricSearchDialog.ClearCachedLyrics();
 		CombinedTagSearchDialog.ClearCachedSearchResults();

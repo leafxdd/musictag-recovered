@@ -1736,7 +1736,10 @@ internal class AutoMatchTagsDialog : Form
 		Settings.Default.AutoMatchTagsWebSearchThreadCount = webSearchThreadCountTrackBar.Value;
 		Settings.Default.DontDownloadLyricWithInstrumentInTitle = skipInstrumentalLyricsCheckBox.Checked;
 		Settings.Default.AutoMatchTagsCondition = JsonConvert.SerializeObject(SelectedMatchConditions);
-		Settings.Default.Save();
+		if (!DatabaseMapper.TrySaveApplicationSettings())
+		{
+			return;
+		}
 		base.DialogResult = DialogResult.OK;
 		Close();
 	}

@@ -331,6 +331,23 @@ internal static class DatabaseMapper
 		MessageBox.Show(message, Resources.PolicyTokenExporter, MessageBoxButtons.OK, MessageBoxIcon.Hand);
 	}
 
+	public static bool TrySaveApplicationSettings(bool showErrorMessage = true)
+	{
+		try
+		{
+			Settings.Default.Save();
+			return true;
+		}
+		catch (Exception exception)
+		{
+			if (showErrorMessage)
+			{
+				ShowErrorMessage(exception.GetMessageChain());
+			}
+			return false;
+		}
+	}
+
 	public static bool ConfirmYesNo(string message)
 	{
 		return MessageBox.Show(message, Resources.Confirmation, MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes;

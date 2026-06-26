@@ -1017,7 +1017,10 @@ internal class FilenameRelatedBatchDialog : Form
 		Settings.Default.FilenameRelCondition = JsonConvert.SerializeObject(value);
 		Settings.Default.FilenameCustomPattern = customPatternTextBox.Text;
 		Settings.Default.FilenameRelSelectedTab = tabControl.SelectedTab.Name;
-		Settings.Default.Save();
+		if (!DatabaseMapper.TrySaveApplicationSettings())
+		{
+			return;
+		}
 		base.DialogResult = DialogResult.OK;
 		Close();
 	}
@@ -1073,7 +1076,10 @@ internal class FilenameRelatedBatchDialog : Form
 			IsChangeTagsModeSelected = true;
 			Settings.Default.FilenameRelRegexCondition = JsonConvert.SerializeObject(regexCondition);
 			Settings.Default.FilenameRelSelectedTab = tabControl.SelectedTab.Name;
-			Settings.Default.Save();
+			if (!DatabaseMapper.TrySaveApplicationSettings())
+			{
+				return;
+			}
 			base.DialogResult = DialogResult.OK;
 			Close();
 		}

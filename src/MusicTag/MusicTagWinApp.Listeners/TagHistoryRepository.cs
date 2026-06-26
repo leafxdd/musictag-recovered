@@ -164,7 +164,10 @@ internal class TagHistoryRepository : IDisposable
 			if (Settings.Default.DatabaseVersion < CurrentDatabaseVersion)
 			{
 				Settings.Default.DatabaseVersion = CurrentDatabaseVersion;
-				Settings.Default.Save();
+				if (!DatabaseMapper.TrySaveApplicationSettings(showErrorMessage: false))
+				{
+					throw new InvalidOperationException("Failed to save database version setting.");
+				}
 			}
 		}
 		catch (Exception ex)
