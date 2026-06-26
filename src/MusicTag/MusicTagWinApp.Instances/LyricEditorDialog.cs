@@ -256,7 +256,7 @@ internal class LyricEditorDialog : Form
 
 	private void SearchLyric_Click(object sender, EventArgs e)
 	{
-		LyricSearchDialog searchDialog = new LyricSearchDialog();
+		using LyricSearchDialog searchDialog = new LyricSearchDialog();
 		searchDialog.SetTrackInfo(GetSearchContext());
 		if (sender is ToolStripItem toolStripItem)
 		{
@@ -445,6 +445,10 @@ internal class LyricEditorDialog : Form
 	{
 		if (disposing && components != null)
 		{
+			searchButton.Image?.Dispose();
+			searchButton.Image = null;
+			saveAsLrcButton.Image?.Dispose();
+			saveAsLrcButton.Image = null;
 			components.Dispose();
 		}
 
