@@ -99,6 +99,12 @@ internal class PictureFromTagsDialog : Form
 		cancelButton.Text = Resources.Cancel;
 		Text = Resources.ChooseFromFileTags;
 		UpdateLayout();
+		UpdateOkButtonState();
+	}
+
+	private void UpdateOkButtonState()
+	{
+		okButton.Enabled = pictureListView.SelectedItems.Count > 0;
 	}
 
 	private void InitializeImageList()
@@ -256,6 +262,10 @@ internal class PictureFromTagsDialog : Form
 
 	private void OkButton_Click(object sender, EventArgs e)
 	{
+		if (pictureListView.SelectedItems.Count <= 0)
+		{
+			return;
+		}
 		UseSelectedPictureData(SelectPicture);
 		base.DialogResult = DialogResult.OK;
 		Close();
@@ -292,6 +302,11 @@ internal class PictureFromTagsDialog : Form
 		openCoverMenuItem.Enabled = !string.IsNullOrWhiteSpace(selectedItem.ImageKey);
 		extractCoverMenuItem.Enabled = openCoverMenuItem.Enabled;
 		pictureContextMenu.Show(pictureListView, e.Location);
+	}
+
+	private void PictureList_ItemSelectionChanged(object sender, ListViewItemSelectionChangedEventArgs e)
+	{
+		UpdateOkButtonState();
 	}
 
 	private void UseSelectedPictureData(Action<ConfigDescriptorState.PictureData> action)
@@ -388,6 +403,7 @@ internal class PictureFromTagsDialog : Form
 		pictureListView.TabIndex = 0;
 		pictureListView.UseCompatibleStateImageBehavior = false;
 		pictureListView.DoubleClick += PictureList_DoubleClick;
+		pictureListView.ItemSelectionChanged += PictureList_ItemSelectionChanged;
 		pictureListView.MouseUp += PictureList_MouseUp;
 
 		pictureImageList.ColorDepth = ColorDepth.Depth32Bit;

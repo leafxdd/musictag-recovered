@@ -277,17 +277,17 @@ internal class FilenameRelatedBatchDialog : Form
 									newFilename = Path.GetFileName(destinationAudioPath);
 									if (newFilename != Path.GetFileName(originalPath))
 									{
-										try
+									try
+									{
+										DatabaseMapper.MoveFileAllowingCaseOnlyRename(originalPath, destinationAudioPath);
+										if (sourceLrcPath != null && destinationLrcPath != null)
 										{
-											File.Move(originalPath, destinationAudioPath);
-											if (sourceLrcPath != null && destinationLrcPath != null)
-											{
-												File.Move(sourceLrcPath, destinationLrcPath);
-											}
-											if (sourceImagePath != null && destinationImagePath != null)
-											{
-												File.Move(sourceImagePath, destinationImagePath);
-											}
+											DatabaseMapper.MoveFileAllowingCaseOnlyRename(sourceLrcPath, destinationLrcPath);
+										}
+										if (sourceImagePath != null && destinationImagePath != null)
+										{
+											DatabaseMapper.MoveFileAllowingCaseOnlyRename(sourceImagePath, destinationImagePath);
+										}
 											RenameItems[index] = (path: originalPath, _: destinationAudioPath, lvIndex: listViewIndex);
 											FileSettings.UpdateForAnyFile(originalPath, destinationAudioPath);
 											TagHistoryRepository.UpdateHistoryFilePath(originalPath, destinationAudioPath, Owner.historyTransaction);

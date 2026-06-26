@@ -76,6 +76,8 @@ internal class ConfigDescriptorState : IDisposable
 
 	private static readonly Encoding Latin1Encoding = Encoding.GetEncoding("ISO-8859-1");
 
+	private static readonly object id3v2VersionLock = new object();
+
 	private readonly Dictionary<string, object> tagValues;
 
 	private string filePath;
@@ -424,78 +426,98 @@ internal class ConfigDescriptorState : IDisposable
 
 	public bool SaveTagFields()
 	{
-		try
+		lock (id3v2VersionLock)
 		{
-			loadError = null;
-			TagLib.Tag tag = tagFile.Tag;
-			// Same fixed field order as the former native m0 string[12] contract.
-			tag.Title = TagValues["title"] as string;
-			tag.Performers = ToSingleValue(TagValues["artist"] as string);
-			tag.Album = TagValues["album"] as string;
-			SetYear(tag, TagValues["year"] as string);
-			SetTrack(tag, TagValues["trackstr"] as string);
-			SetDisc(tag, TagValues["discstr"] as string);
-			tag.Genres = ToSingleValue(TagValues["genre"] as string);
-			tag.AlbumArtists = ToSingleValue(TagValues["albumartist"] as string);
-			tag.Composers = ToSingleValue(TagValues["composer"] as string);
-			// Match the original native m0 behavior: it cleared ALL comment frames before
-			// writing the new value, so a netease "163 key" COMM (which carries a non-empty
-			// description) does NOT survive a comment edit. TagLib's Tag.Comment setter only
-			// replaces the default (empty-description) COMM, so clear the rest explicitly to
-			// stay behavior-equivalent (verified: original native write drops the 163 key).
-			if (tagFile.GetTag(TagLib.TagTypes.Id3v2, create: false) is TagLib.Id3v2.Tag id3v2ForComment)
+			byte previousDefaultVersion = TagLib.Id3v2.Tag.DefaultVersion;
+			bool previousForceDefaultVersion = TagLib.Id3v2.Tag.ForceDefaultVersion;
+			try
 			{
-				id3v2ForComment.RemoveFrames("COMM");
-			}
-			tag.Comment = TagValues["comment"] as string;
-			WriteLyricist(TagValues["lyricist"] as string);
-			tag.Lyrics = TagValues["lyrics"] as string;
-			if (TagValues.TryGetValue("allpicturedata", out var value))
-			{
-				List<PictureData> pictures = value as List<PictureData>;
-				List<TagLib.IPicture> tagLibPictures = new List<TagLib.IPicture>();
-				foreach (PictureData picture in pictures)
+				loadError = null;
+				TagLib.Tag tag = tagFile.Tag;
+				// Same fixed field order as the former native m0 string[12] contract.
+				tag.Title = TagValues["title"] as string;
+				tag.Performers = ToSingleValue(TagValues["artist"] as string);
+				tag.Album = TagValues["album"] as string;
+				SetYear(tag, TagValues["year"] as string);
+				SetTrack(tag, TagValues["trackstr"] as string);
+				SetDisc(tag, TagValues["discstr"] as string);
+				tag.Genres = ToSingleValue(TagValues["genre"] as string);
+				tag.AlbumArtists = ToSingleValue(TagValues["albumartist"] as string);
+				tag.Composers = ToSingleValue(TagValues["composer"] as string);
+				// Match the original native m0 behavior: it cleared ALL comment frames before
+				// writing the new value, so a netease "163 key" COMM (which carries a non-empty
+				// description) does NOT survive a comment edit. TagLib's Tag.Comment setter only
+				// replaces the default (empty-description) COMM, so clear the rest explicitly to
+				// stay behavior-equivalent (verified: original native write drops the 163 key).
+				if (tagFile.GetTag(TagLib.TagTypes.Id3v2, create: false) is TagLib.Id3v2.Tag id3v2ForComment)
 				{
-					if (picture.MimeType == null || picture.Width == 0 || picture.Height == 0)
-					{
-						using (LoadPictureImage(picture))
-						{
-						}
-					}
-					TagLib.Picture tagLibPicture = new TagLib.Picture(new TagLib.ByteVector(picture.ImageBytes))
-					{
-						Type = NameToPictureType(picture.PictureType),
-						MimeType = picture.MimeType,
-						Description = ""
-					};
-					tagLibPictures.Add(tagLibPicture);
+					id3v2ForComment.RemoveFrames("COMM");
 				}
-				tag.Pictures = tagLibPictures.ToArray();
+				tag.Comment = TagValues["comment"] as string;
+				WriteLyricist(TagValues["lyricist"] as string);
+				tag.Lyrics = TagValues["lyrics"] as string;
+				if (TagValues.TryGetValue("allpicturedata", out var value))
+				{
+					List<PictureData> pictures = value as List<PictureData>;
+					List<TagLib.IPicture> tagLibPictures = new List<TagLib.IPicture>();
+					foreach (PictureData picture in pictures)
+					{
+						if (picture.MimeType == null || picture.Width == 0 || picture.Height == 0)
+						{
+							using (LoadPictureImage(picture))
+							{
+							}
+						}
+						TagLib.Picture tagLibPicture = new TagLib.Picture(new TagLib.ByteVector(picture.ImageBytes))
+						{
+							Type = NameToPictureType(picture.PictureType),
+							MimeType = picture.MimeType,
+							Description = ""
+						};
+						tagLibPictures.Add(tagLibPicture);
+					}
+					tag.Pictures = tagLibPictures.ToArray();
+				}
+				SetId3v2Version();
+				tagFile.Save();
+				return true;
 			}
-			SetId3v2Version();
-			tagFile.Save();
-			return true;
-		}
-		catch (Exception ex)
-		{
-			loadError = string.IsNullOrWhiteSpace(ex.Message) ? Resources.Msg_SaveFail : ex.Message;
-			return false;
+			catch (Exception ex)
+			{
+				loadError = string.IsNullOrWhiteSpace(ex.Message) ? Resources.Msg_SaveFail : ex.Message;
+				return false;
+			}
+			finally
+			{
+				TagLib.Id3v2.Tag.DefaultVersion = previousDefaultVersion;
+				TagLib.Id3v2.Tag.ForceDefaultVersion = previousForceDefaultVersion;
+			}
 		}
 	}
 
 	public bool SaveCurrentTagFile()
 	{
-		try
+		lock (id3v2VersionLock)
 		{
-			loadError = null;
-			SetId3v2Version();
-			tagFile.Save();
-			return true;
-		}
-		catch (Exception ex)
-		{
-			loadError = string.IsNullOrWhiteSpace(ex.Message) ? Resources.Msg_SaveFail : ex.Message;
-			return false;
+			byte previousDefaultVersion = TagLib.Id3v2.Tag.DefaultVersion;
+			bool previousForceDefaultVersion = TagLib.Id3v2.Tag.ForceDefaultVersion;
+			try
+			{
+				loadError = null;
+				SetId3v2Version();
+				tagFile.Save();
+				return true;
+			}
+			catch (Exception ex)
+			{
+				loadError = string.IsNullOrWhiteSpace(ex.Message) ? Resources.Msg_SaveFail : ex.Message;
+				return false;
+			}
+			finally
+			{
+				TagLib.Id3v2.Tag.DefaultVersion = previousDefaultVersion;
+				TagLib.Id3v2.Tag.ForceDefaultVersion = previousForceDefaultVersion;
+			}
 		}
 	}
 

@@ -478,16 +478,15 @@ internal class EditableListView : HeaderAwareListView
 				e.Graphics.FillRectangle((base.HideSelection || Focused) ? selectedRowBackBrush : inactiveSelectedRowBackBrush, e.Bounds);
 			}
 		}
-		int textY = e.Bounds.Y + e.Bounds.Height / 2 - e.SubItem.Font.Height / 2;
-			int textX = e.Bounds.X + 2;
-			if (e.ColumnIndex == 0)
+		int textX = e.Bounds.X + 2;
+		if (e.ColumnIndex == 0)
+		{
+			if (e.Item is CoverImageListViewItem coverImageListViewItem && coverImageListViewItem.CoverImage != null)
 			{
-				if (e.Item is CoverImageListViewItem coverImageListViewItem && coverImageListViewItem.CoverImage != null)
-				{
-					Image coverImage = coverImageListViewItem.CoverImage;
-					int imageY = e.Bounds.Y + e.Bounds.Height / 2 - coverImage.Height / 2;
-					e.Graphics.DrawImage(coverImage, textX, imageY, coverImage.Width, coverImage.Height);
-					textX += coverImage.Width + 2;
+				Image coverImage = coverImageListViewItem.CoverImage;
+				int imageY = e.Bounds.Y + e.Bounds.Height / 2 - coverImage.Height / 2;
+				e.Graphics.DrawImage(coverImage, textX, imageY, coverImage.Width, coverImage.Height);
+				textX += coverImage.Width + 2;
 			}
 		}
 		else if (e.SubItem is DrawableListViewSubItem drawableSubItem)
@@ -499,10 +498,14 @@ internal class EditableListView : HeaderAwareListView
 			e.DrawDefault = true;
 			return;
 		}
-		using (SolidBrush textBrush = new SolidBrush(e.SubItem.ForeColor))
+
+		int textWidth = e.Bounds.Right - textX;
+		if (textWidth <= 0)
 		{
-			e.Graphics.DrawString(e.SubItem.Text, e.SubItem.Font, textBrush, textX, textY);
+			return;
 		}
+
+		TextRenderer.DrawText(e.Graphics, e.SubItem.Text, e.SubItem.Font, new Rectangle(textX, e.Bounds.Y, textWidth, e.Bounds.Height), e.SubItem.ForeColor, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
 	}
 
 	private void OnColumnHeaderClick(object sender, ColumnClickEventArgs e)
@@ -571,4 +574,3 @@ internal class EditableListView : HeaderAwareListView
 	}
 
 }
-

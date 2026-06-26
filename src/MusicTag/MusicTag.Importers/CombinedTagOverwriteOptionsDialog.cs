@@ -130,8 +130,13 @@ internal class CombinedTagOverwriteOptionsDialog : Form
 		bool isChecked = itemColumn.Tag is bool checkedValue && checkedValue;
 		Point checkBoxLocation = new Point(e.Bounds.Left + 4, e.Bounds.Top + DatabaseMapper.ScaleByDpi(4f));
 		CheckBoxRenderer.DrawCheckBox(e.Graphics, checkBoxLocation, isChecked ? CheckBoxState.CheckedNormal : CheckBoxState.UncheckedNormal);
-		using SolidBrush textBrush = new SolidBrush(e.ForeColor);
-		e.Graphics.DrawString(e.Header.Text, e.Font, textBrush, e.Bounds.Left + DatabaseMapper.ScaleByDpi(16f) + 4, e.Bounds.Top + 4);
+		int textX = e.Bounds.Left + DatabaseMapper.ScaleByDpi(16f) + 4;
+		int textWidth = e.Bounds.Right - textX;
+		if (textWidth <= 0)
+		{
+			return;
+		}
+		TextRenderer.DrawText(e.Graphics, e.Header.Text, e.Font, new Rectangle(textX, e.Bounds.Top, textWidth, e.Bounds.Height), e.ForeColor, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
 	}
 
 	private void DrawSubItem(object sender, DrawListViewSubItemEventArgs e)

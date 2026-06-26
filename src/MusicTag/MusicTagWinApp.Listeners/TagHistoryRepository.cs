@@ -65,7 +65,7 @@ internal class TagHistoryRepository : IDisposable
 
 	private bool transactionFailed;
 
-	private long undoPayloadByteCount;
+	private static long undoPayloadByteCount;
 
 	private bool syncLockHeld;
 
@@ -466,14 +466,14 @@ internal class TagHistoryRepository : IDisposable
 			string lyrics;
 			if ((lyrics = tags.GetDisplayValue("lyrics")) != null && !string.IsNullOrWhiteSpace(lyrics))
 			{
-				if (undoStore.undoPayloadByteCount + lyrics.Length * 2 > MaxInMemoryUndoPayloadBytes)
+				if (undoPayloadByteCount + lyrics.Length * 2 > MaxInMemoryUndoPayloadBytes)
 				{
 					string lyricsPath = $"{DatabaseMapper.GetUndoTempDirectory()}{count}.lrc";
 					File.WriteAllText(lyricsPath, lyrics);
 					tags.RemoveRawValue("lyrics");
 					tags["lyrics_path"] = lyricsPath;
 				}
-				undoStore.undoPayloadByteCount += lyrics.Length * 2;
+				undoPayloadByteCount += lyrics.Length * 2;
 			}
 			if (tags.TryGetRawValue("allpicturedata", out var pictureValue) && pictureValue is List<ConfigDescriptorState.PictureData> pictures)
 			{
@@ -482,7 +482,7 @@ internal class TagHistoryRepository : IDisposable
 				{
 					pictureByteCount += picture.ImageBytes.Length;
 				}
-				if (undoStore.undoPayloadByteCount + pictureByteCount > MaxInMemoryUndoPayloadBytes)
+				if (undoPayloadByteCount + pictureByteCount > MaxInMemoryUndoPayloadBytes)
 				{
 					List<string> picturePaths = new List<string>();
 					for (int i = 0; i < pictures.Count; i++)
@@ -495,7 +495,7 @@ internal class TagHistoryRepository : IDisposable
 					}
 					tags["allpicturedata_path"] = picturePaths;
 				}
-				undoStore.undoPayloadByteCount += pictureByteCount;
+				undoPayloadByteCount += pictureByteCount;
 			}
 			tags["tags_history_serial"] = historySerial;
 			undoTags.Add(tags);
@@ -548,6 +548,7 @@ internal class TagHistoryRepository : IDisposable
 				Directory.GetFiles(DatabaseMapper.GetUndoTempDirectoryPath()).ForEachItem(DeleteUndoTempFile);
 			}
 			renameUndoOperations.Clear();
+			undoPayloadByteCount = 0L;
 			if (shouldCollectGarbage)
 			{
 				GC.Collect();

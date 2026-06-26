@@ -1703,10 +1703,13 @@ internal class AutoMatchTagsDialog : Form
 		args.DrawBackground();
 		bool isChecked = args.Header.Tag is bool value && value;
 		CheckBoxRenderer.DrawCheckBox(args.Graphics, new Point(args.Bounds.Left + 4, args.Bounds.Top + DatabaseMapper.ScaleByDpi(4f)), isChecked ? CheckBoxState.CheckedNormal : CheckBoxState.UncheckedNormal);
-		using (SolidBrush textBrush = new SolidBrush(args.ForeColor))
+		int textX = args.Bounds.Left + DatabaseMapper.ScaleByDpi(16f) + 4;
+		int textWidth = args.Bounds.Right - textX;
+		if (textWidth <= 0)
 		{
-			args.Graphics.DrawString(args.Header.Text, args.Font, textBrush, args.Bounds.Left + DatabaseMapper.ScaleByDpi(16f) + 4, args.Bounds.Top + 4);
+			return;
 		}
+		TextRenderer.DrawText(args.Graphics, args.Header.Text, args.Font, new Rectangle(textX, args.Bounds.Top, textWidth, args.Bounds.Height), args.ForeColor, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
 	}
 
 	private void ToggleOverwriteColumnForAllRows(object sender, ColumnClickEventArgs args)

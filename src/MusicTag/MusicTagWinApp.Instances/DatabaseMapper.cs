@@ -444,6 +444,26 @@ internal static class DatabaseMapper
 	{
 		return Path.GetDirectoryName(filePath) + "\\" + Path.GetFileNameWithoutExtension(filePath) + extension;
 	}
+
+	public static void MoveFileAllowingCaseOnlyRename(string sourcePath, string destinationPath)
+	{
+		if (string.Equals(sourcePath, destinationPath, StringComparison.OrdinalIgnoreCase) && !string.Equals(sourcePath, destinationPath, StringComparison.Ordinal))
+		{
+			string destinationDirectory = Path.GetDirectoryName(destinationPath);
+			string tempPath;
+			do
+			{
+				tempPath = string.IsNullOrWhiteSpace(destinationDirectory) ? Path.GetRandomFileName() : Path.Combine(destinationDirectory, Path.GetRandomFileName());
+			}
+			while (File.Exists(tempPath));
+
+			File.Move(sourcePath, tempPath);
+			File.Move(tempPath, destinationPath);
+			return;
+		}
+
+		File.Move(sourcePath, destinationPath);
+	}
 	
 	public static string FindExistingSiblingImageFile(string filePath)
 	{

@@ -1194,15 +1194,15 @@ internal class StateFieldInstance : Form
 				Action<string> reportFailure = renameFailureRecorder.ReportFailure;
 				string name = currentFile.Name;
 				string text = (convertSimplifiedToTraditional ? ChineseTextConverter.SimplifiedToTraditional().ConvertText(name) : ChineseTextConverter.TraditionalToSimplified().ConvertText(name));
-				if (name != text)
-				{
-					string destinationPath = Path.Combine(directoryName, text);
-					try
+					if (name != text)
 					{
-						File.Move(renameFailureRecorder.CurrentPath, destinationPath);
-						TagHistoryRepository.UpdateHistoryFilePath(renameFailureRecorder.CurrentPath, destinationPath, tagHistoryRepository);
-						TagHistoryRepository.AddRenameUndoRecord(renameFailureRecorder.CurrentPath, destinationPath);
-						renameItems[processedCount].NewPath = destinationPath;
+						string destinationPath = Path.Combine(directoryName, text);
+						try
+						{
+							DatabaseMapper.MoveFileAllowingCaseOnlyRename(renameFailureRecorder.CurrentPath, destinationPath);
+							TagHistoryRepository.UpdateHistoryFilePath(renameFailureRecorder.CurrentPath, destinationPath, tagHistoryRepository);
+							TagHistoryRepository.AddRenameUndoRecord(renameFailureRecorder.CurrentPath, destinationPath);
+							renameItems[processedCount].NewPath = destinationPath;
 						renamedCount++;
 					}
 					catch (System.Exception ex)
@@ -1817,14 +1817,14 @@ internal class StateFieldInstance : Form
 				string originalPath = operation.oldPath;
 				currentFile = new FileInfo(errorRecorder.CurrentPath);
 				Action<string> action = errorRecorder.RecordError;
-				if (currentFile.Exists)
-				{
-					try
+					if (currentFile.Exists)
 					{
-						currentFile.MoveTo(originalPath);
-						owner.FileSettings.UpdateForAnyFile(errorRecorder.CurrentPath, originalPath);
-						TagHistoryRepository.UpdateHistoryFilePath(errorRecorder.CurrentPath, originalPath, tagHistoryRepository);
-						successCount++;
+						try
+						{
+							DatabaseMapper.MoveFileAllowingCaseOnlyRename(errorRecorder.CurrentPath, originalPath);
+							owner.FileSettings.UpdateForAnyFile(errorRecorder.CurrentPath, originalPath);
+							TagHistoryRepository.UpdateHistoryFilePath(errorRecorder.CurrentPath, originalPath, tagHistoryRepository);
+							successCount++;
 					}
 					catch (System.Exception ex)
 					{
@@ -6988,8 +6988,16 @@ internal class StateFieldInstance : Form
 				return;
 			}
 
-			editContext.NewPath = fileInfo.DirectoryName + "\\" + editContext.RequestedFileName;
-			fileInfo.MoveTo(editContext.NewPath);
+			if (!string.Equals(Path.GetFileName(editContext.RequestedFileName), editContext.RequestedFileName, StringComparison.Ordinal)
+				|| editContext.RequestedFileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+			{
+				editContext.RenameError = new ArgumentException(Resources.Msg_InvalidFile);
+				BeginInvoke(new Action(editContext.ShowRenameError));
+				return;
+			}
+
+			editContext.NewPath = Path.Combine(fileInfo.DirectoryName, editContext.RequestedFileName);
+			DatabaseMapper.MoveFileAllowingCaseOnlyRename(editContext.OriginalPath, editContext.NewPath);
 			row.FilePath = editContext.NewPath;
 			InvalidateFileRow(row);
 			FileSettings.UpdateForAnyFile(editContext.OriginalPath, editContext.NewPath);

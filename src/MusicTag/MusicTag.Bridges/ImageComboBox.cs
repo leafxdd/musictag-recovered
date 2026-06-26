@@ -143,9 +143,11 @@ internal class ImageComboBox : ComboBox
 			}
 		}
 
-		int textY = e.Bounds.Y + e.Bounds.Height / 2 - e.Font.Height / 2;
-		using Brush textBrush = new SolidBrush(e.ForeColor);
-		e.Graphics.DrawString(item.DisplayText, e.Font, textBrush, nextX, textY);
+		int textWidth = e.Bounds.Right - nextX;
+		if (textWidth > 0)
+		{
+			TextRenderer.DrawText(e.Graphics, item.DisplayText, e.Font, new Rectangle(nextX, e.Bounds.Y, textWidth, e.Bounds.Height), e.ForeColor, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
+		}
 		e.DrawFocusRectangle();
 	}
 
