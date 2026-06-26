@@ -36,7 +36,7 @@ internal class TrackSearchContext
 
 		Artist = Settings.Default.SearchCondition_UseArtist ? artist.Trim() : "";
 		Album = Settings.Default.SearchCondition_UseAlbum ? album.Trim() : "";
-		DurationMillisecondsText = tagState["durationinms"].ToString();
+		DurationMillisecondsText = tagState.GetDisplayValue("durationinms");
 		Title = ResolveSearchTitle(title);
 	}
 
