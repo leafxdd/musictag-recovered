@@ -122,7 +122,6 @@
 | `win32-shell-2` | `WM_COPYDATA` 的 `cbData` 少 1 字节（`len*2+1` 应为 `+2`）→ 跨进程传参尾部可能读到垃圾 | `Program.cs:127`（已修：按 UTF-16 字节数包含终止符） |
 | `win32-shell-3` | `ITaskbarList` 从未 `HrInit()` → 部分系统任务栏进度静默不显示 | `TaskbarProgressController.cs:14`（已修：构造时调用 `HrInit()`） |
 | `win32-shell-1` / `xcut-concurrency-4` | `AppDomain.UnhandledException` 处理器 `async void` + `await Task.Yield` 与进程终止竞争 → 崩溃日志/提示可能丢失 | `Program.cs:147` |
-| `services-misc-1` / `xcut-concurrency-5` | `ProgressDialog` 计时器后台线程 check-then-Invoke 竞态 + 构造期即 Start（句柄未建）| `ProgressDialog.cs:45,193` |
 
 > 标 `/` 的条目为工作流横切扫描与模块审查**独立两次命中**的同一问题，可信度更高。
 
@@ -221,4 +220,5 @@
 | P2-20 LRC 导入失败可见性 | 已实现 | 显式导入 LRC 时不再在 `ImportLrcText` 吞异常，点击处理器捕获后用错误框展示失败原因 |
 | P2-21 设置读取缺失节点处理 | 已实现 | `XmlSettingsProvider.ReadSettingValue` 显式处理缺失 XML 节点，避免用空引用异常作为默认值路径 |
 | P2-22 设置保存失败可见性 | 已实现 | `Settings.Default.Save()` 统一经 `DatabaseMapper.TrySaveApplicationSettings`，只读安装目录等保存失败不再走全局崩溃链；确认型对话框保存失败时停留原窗口 |
+| P2-23 进度框计时器竞态 | 已实现 | `ProgressDialog` 只在窗口显示后启动计时器，并用带句柄/关闭检查的 `BeginInvoke` 投递进度刷新，避免关闭释放竞态 |
 | P2 后续 | 待办 | 更零散的 Low 级资源释放问题 |
