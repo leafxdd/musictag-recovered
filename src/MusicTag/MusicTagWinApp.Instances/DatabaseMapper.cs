@@ -682,7 +682,7 @@ internal static class DatabaseMapper
 		}
 		Size size = new Size(ScaleByDpi(16f), ScaleByDpi(16f));
 		Bitmap scaledBitmap = new Bitmap(size.Width, size.Height, PixelFormat.Format32bppArgb);
-		Graphics graphics = Graphics.FromImage(scaledBitmap);
+		using Graphics graphics = Graphics.FromImage(scaledBitmap);
 		graphics.InterpolationMode = InterpolationMode.Bicubic;
 		graphics.CompositingQuality = CompositingQuality.HighQuality;
 		graphics.SmoothingMode = SmoothingMode.AntiAlias;
