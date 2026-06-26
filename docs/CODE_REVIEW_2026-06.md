@@ -185,9 +185,9 @@
 
 ## 10. 建议修复路线图
 
-- **P0（核心功能稳健性，已开始）**：第 1 节崩溃链三处 —— `SaveTagFields` 契约 + `RunSearch` catch + `StartXxx` try/catch/finally。一组改动消除"批量操作遇坏文件就崩"的整类问题。
-- **P1（数据安全）**：`text-lyric-2`（歌词乱码）、`text-lyric-3`（歌词损坏）、`xcut-exceptions-1`（配置覆盖，改原子写）、静态反序列化崩溃、事务回滚。
-- **P2（资源/体验）**：封面与图片热路径泄漏、选项对话框越界崩溃、非中文区时间轴、各 Low GDI 句柄泄漏。
+- **P0（核心功能稳健性，已完成）**：第 1 节崩溃链三处 —— `SaveTagFields` 契约 + `RunSearch` catch + `StartXxx` try/catch/finally。一组改动消除"批量操作遇坏文件就崩"的整类问题。
+- **P1（数据安全，已推进）**：歌词编码/offset、配置覆盖原子写、静态反序列化崩溃、选项边界已修；仍剩事务回滚 / 历史数据写入类问题。
+- **P2（资源/体验）**：封面与图片热路径泄漏、非中文区时间轴、各 Low GDI 句柄泄漏。
 
 > 每步修复后运行：`scripts\Verify-Build.ps1 -RunSmokeTests`，并人工回归对应流程（批量改标签 / 自动匹配 / 歌词下载 / 配置保存）。
 
@@ -199,4 +199,7 @@
 | P0-2 自动匹配异常边界 | 已实现 | `RunSearch` 捕获单文件异常；`StartAutoMatchTags` 用 `try/catch/finally` 收尾进度框和回调 |
 | P0-3 批处理异常边界 | 已实现 | `StateFieldInstance.SaveTags/ClearTags`、`FilenameRelatedBatchDialog.ChangeTags/StartChangeTags` 补 per-file catch 和事务 finally |
 | P0-4 搜索 UI 补漏 | 已实现 | `CombinedTagSearchDialog.SearchCombinedTagsAsync/DownloadCoverAsync`、`PictureFromTagsDialog.StartPictureSearchAsync` 补 catch/finally |
-| P1/P2 后续 | 待办 | 歌词编码/offset、配置原子写、图片/GDI 泄漏、静态反序列化防护等仍未修 |
+| P1-1 歌词/配置数据安全 | 已实现 | `Tokenizer` 共享只读读取 LRC 样本；`LyricTextProcessor` offset 夹到 0；`XmlSettingsProvider` 仅 XML 损坏时重建并用临时文件替换保存 |
+| P1-2 配置反序列化和选项边界 | 已实现 | 列设置/合并覆盖选项 JSON 损坏时回退；搜索限制 trackbar 夹值；受限扩展名 trim/小写/去重 |
+| P1 后续 | 待办 | `AppSettingData` / 历史记录等事务回滚与可恢复写入 |
+| P2 后续 | 待办 | 图片/GDI 泄漏、非中文区时间轴、Low 级资源释放问题 |
