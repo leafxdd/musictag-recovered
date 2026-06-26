@@ -161,13 +161,14 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase
 				{ "ext", "true" },
 				{ "private_cloud", "true" }
 			}.ToString(Formatting.None));
+			using HttpClient albumClient = CreateAlbumHttpClient();
 			string albumResponse = PostString(
 				string.Format(albumDetailsEndpointFormat, albumId),
 				string.Format(
 					encryptedPostDataFormat,
 					DatabaseMapper.UrlEncodeUtf8(encryptedRequest["a"].ToString()),
 					DatabaseMapper.UrlEncodeUtf8(encryptedRequest["b"].ToString())),
-				CreateAlbumHttpClient());
+				albumClient);
 			return (!cancellationSource.IsCancellationRequested) ? ParseAlbumResponse(albumResponse) : null;
 		}
 		catch (Exception ex)
