@@ -109,7 +109,6 @@
 | `config-medium` | `AppSettingData` 用 `BinaryFormatter` + `FileMode.Create` 非原子保存，`SaveSettings` 整体无 try/catch | `StateFieldInstance.cs:2338` |
 | `options-1` | 持久化整数直接赋给有界 `TrackBar.Value`，越界（0/负/>100）→ **选项对话框打不开** | `OptionsDialog.cs:459,649` |
 | `options-2` | 受限扩展名含重复项 → `Dictionary.Add` 抛 `ArgumentException` → 保存崩溃（输入 `.mp3;.mp3` 即触发）| `OptionsDialog.cs:719` |
-| `automatch-medium-2` | `UpdateProgress` 对 `activeFilePaths` 的 TOCTOU → `.First()` 抛 `InvalidOperationException` | `AutoMatchTagsDialog.cs:1436` |
 | `statefield-4` | 14 个 `async void StartXxx` 在 await 后收尾无 finally，异常时进度框残留、列表不刷新 | `StateFieldInstance.cs:4796,5360,5785…` |
 | `statefield-2` | 后台线程读 `filterTextBox.Text`（跨线程控件访问）| `StateFieldInstance.cs:2348` |
 | `dialogs-search-1` | `CombinedTagSearchDialog.SearchCombinedTagsAsync` 外层 `async void` 无 catch/finally；普通网络/解析失败多由 provider 内部吞吐，但仍存在未覆盖异常导致全局退出、进度图标/任务栏状态不复位的风险 | `CombinedTagSearchDialog.cs:801` |
@@ -221,4 +220,5 @@
 | P2-23 进度框计时器竞态 | 已实现 | `ProgressDialog` 只在窗口显示后启动计时器，并用带句柄/关闭检查的 `BeginInvoke` 投递进度刷新，避免关闭释放竞态 |
 | P2-24 自动匹配标签生命周期 | 已实现 | `LoadCurrentTagFile` 不再返回已 `Dispose` 的 `ConfigDescriptorState`，搜索任务在 `finally` 中统一释放加载的标签状态 |
 | P2-25 自动匹配封面临时租约 | 已实现 | 封面候选下载失败时立即释放临时文件租约；成功候选被后续候选替换时释放旧租约，避免引用计数泄漏 |
+| P2-26 自动匹配进度路径快照 | 已实现 | `UpdateProgress` 对 `activeFilePaths` 使用快照式 `FirstOrDefault()`，避免并发清空集合时 `.First()` 抛异常 |
 | P2 后续 | 待办 | 更零散的 Low 级资源释放问题 |
