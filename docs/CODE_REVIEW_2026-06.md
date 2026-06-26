@@ -106,9 +106,6 @@
 | `data-history-2` | static 共享连接/序列号/`UndoTags` 无任何同步，仅靠"UI 串行 await"这一**未强制**的不变量 | `TagHistoryRepository.cs:55,173,345` |
 | `config-medium` | `AppSettingData` 仍使用 `BinaryFormatter` 反序列化退出状态，长期兼容/安全性差（非原子保存、后台 UI 读取和保存异常收尾已修） | `StateFieldInstance.cs:2338` |
 | `statefield-4` | 14 个 `async void StartXxx` 在 await 后收尾无 finally，异常时进度框残留、列表不刷新 | `StateFieldInstance.cs:4796,5360,5785…` |
-| `dialogs-search-1` | `CombinedTagSearchDialog.SearchCombinedTagsAsync` 外层 `async void` 无 catch/finally；普通网络/解析失败多由 provider 内部吞吐，但仍存在未覆盖异常导致全局退出、进度图标/任务栏状态不复位的风险 | `CombinedTagSearchDialog.cs:801` |
-| `dialogs-search-7` | `CombinedTagSearchDialog.DownloadCoverAsync` 在 `searchResultsListView.BeginUpdate()` 后才进入复杂 UI 更新，异常路径不调用 `EndUpdate()` → ListView 刷新状态可能被永久挂住 | `CombinedTagSearchDialog.cs:634` |
-| `dialogs-search-8` | `PictureFromTagsDialog.StartPictureSearchAsync` 只捕获 `OperationCanceledException`；嵌入封面读取/解码的非取消异常会逃出 `async void` 进入全局退出路径 | `PictureFromTagsDialog.cs:164` |
 | `dialogs-search-4` | `PictureFromTagsDialog` 列表索引与重新取图计数口径不一致 → **选/导出到错误封面** | `PictureFromTagsDialog.cs:142`（已修：列表项保留原始封面索引） |
 | `dialogs-search-2` | `LyricSearchDialog.StartLyricSearch` 同为 async void 无 catch + 缺 `IsDisposed` 判断 | `LyricSearchDialog.cs:454`（已修：捕获取消/异常并在 `finally` 收尾 UI） |
 | `win32-shell-2` | `WM_COPYDATA` 的 `cbData` 少 1 字节（`len*2+1` 应为 `+2`）→ 跨进程传参尾部可能读到垃圾 | `Program.cs:127`（已修：按 UTF-16 字节数包含终止符） |
@@ -218,4 +215,5 @@
 | P2-26 自动匹配进度路径快照 | 已实现 | `UpdateProgress` 对 `activeFilePaths` 使用快照式 `FirstOrDefault()`，避免并发清空集合时 `.First()` 抛异常 |
 | P2-27 封面图片加载生命周期 | 已实现 | `LoadPictureImage` 返回脱离输入 `MemoryStream` 的 `Bitmap`，保存快照中只读取图片元数据的调用统一 `using`；封面预览旧图释放已由 `SetCoverPreviewImage` 处理 |
 | P2-28 退出设置保存快照 | 已实现 | `StartSaveAppSettingData` 在 UI 线程快照排序、窗口、筛选条件后再进后台保存；保存异常写日志并在 `finally` 关闭进度框 |
+| P2-29 搜索对话框异常收尾 | 已实现 | `CombinedTagSearchDialog.SearchCombinedTagsAsync/DownloadCoverAsync` 和 `PictureFromTagsDialog.StartPictureSearchAsync` 均已补 catch/finally，搜索进度、任务栏状态和 `BeginUpdate/EndUpdate` 可收尾 |
 | P2 后续 | 待办 | 更零散的 Low 级资源释放问题 |
