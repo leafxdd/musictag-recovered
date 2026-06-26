@@ -372,10 +372,17 @@ internal class LyricEditorDialog : Form
 
 	private void ImportLrcFile_Click(object sender, EventArgs e)
 	{
-		string text;
-		if ((text = ImportLrcText(GetSearchContext().FilePath, GetSearchContext().TagState, importLrcOpenFileDialog)) != null)
+		try
 		{
-			SetLyricText(lastLoadedLyricText = text);
+			string text;
+			if ((text = ImportLrcText(GetSearchContext().FilePath, GetSearchContext().TagState, importLrcOpenFileDialog)) != null)
+			{
+				SetLyricText(lastLoadedLyricText = text);
+			}
+		}
+		catch (System.Exception ex)
+		{
+			DatabaseMapper.ShowErrorMessage(ex.Message);
 		}
 	}
 
@@ -410,25 +417,18 @@ internal class LyricEditorDialog : Form
 
 	public static string ImportLrcText(string audioFilePath, ConfigDescriptorState tagState, OpenFileDialog openFileDialog)
 	{
-		try
+		string lrcFilePath = DatabaseMapper.FindExistingLyricFile(audioFilePath, tagState, allowLocalFallback: true);
+		if ((lrcFilePath == null || !File.Exists(lrcFilePath)) && openFileDialog != null)
 		{
-			string lrcFilePath = DatabaseMapper.FindExistingLyricFile(audioFilePath, tagState, allowLocalFallback: true);
-			if ((lrcFilePath == null || !File.Exists(lrcFilePath)) && openFileDialog != null)
-			{
-				openFileDialog.Filter = "lrc file (*.lrc)|*.lrc";
-				openFileDialog.InitialDirectory = Path.GetDirectoryName(lrcFilePath ?? audioFilePath);
-				openFileDialog.FileName = "";
-				lrcFilePath = openFileDialog.ShowDialog() == DialogResult.OK ? openFileDialog.FileName : null;
-			}
-			if (lrcFilePath != null)
-			{
-				string encodingName = Tokenizer.DetectFileEncoding(lrcFilePath);
-				return File.ReadAllText(lrcFilePath, Encoding.GetEncoding(encodingName));
-			}
+			openFileDialog.Filter = "lrc file (*.lrc)|*.lrc";
+			openFileDialog.InitialDirectory = Path.GetDirectoryName(lrcFilePath ?? audioFilePath);
+			openFileDialog.FileName = "";
+			lrcFilePath = openFileDialog.ShowDialog() == DialogResult.OK ? openFileDialog.FileName : null;
 		}
-		catch (System.Exception ex)
+		if (lrcFilePath != null)
 		{
-			Console.WriteLine("ImportLrcFile error:" + ex.Message);
+			string encodingName = Tokenizer.DetectFileEncoding(lrcFilePath);
+			return File.ReadAllText(lrcFilePath, Encoding.GetEncoding(encodingName));
 		}
 		return null;
 	}
