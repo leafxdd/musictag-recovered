@@ -91,7 +91,7 @@ internal abstract class RemoteTagProviderBase : IDisposable
 			}
 			else
 			{
-				requestContent = new ByteArrayContent(Encoding.ASCII.GetBytes(body));
+				requestContent = new ByteArrayContent(Encoding.UTF8.GetBytes(body));
 				requestContent.Headers.Add("Content-Type", "application/x-www-form-urlencoded");
 			}
 
