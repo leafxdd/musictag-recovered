@@ -118,7 +118,7 @@
 | `dialogs-search-7` | `CombinedTagSearchDialog.DownloadCoverAsync` 在 `searchResultsListView.BeginUpdate()` 后才进入复杂 UI 更新，异常路径不调用 `EndUpdate()` → ListView 刷新状态可能被永久挂住 | `CombinedTagSearchDialog.cs:634` |
 | `dialogs-search-8` | `PictureFromTagsDialog.StartPictureSearchAsync` 只捕获 `OperationCanceledException`；嵌入封面读取/解码的非取消异常会逃出 `async void` 进入全局退出路径 | `PictureFromTagsDialog.cs:164` |
 | `dialogs-search-4` | `PictureFromTagsDialog` 列表索引与重新取图计数口径不一致 → **选/导出到错误封面** | `PictureFromTagsDialog.cs:142`（已修：列表项保留原始封面索引） |
-| `dialogs-search-2` | `LyricSearchDialog.StartLyricSearch` 同为 async void 无 catch + 缺 `IsDisposed` 判断 | `LyricSearchDialog.cs:454` |
+| `dialogs-search-2` | `LyricSearchDialog.StartLyricSearch` 同为 async void 无 catch + 缺 `IsDisposed` 判断 | `LyricSearchDialog.cs:454`（已修：捕获取消/异常并在 `finally` 收尾 UI） |
 | `win32-shell-2` | `WM_COPYDATA` 的 `cbData` 少 1 字节（`len*2+1` 应为 `+2`）→ 跨进程传参尾部可能读到垃圾 | `Program.cs:127`（已修：按 UTF-16 字节数包含终止符） |
 | `win32-shell-3` | `ITaskbarList` 从未 `HrInit()` → 部分系统任务栏进度静默不显示 | `TaskbarProgressController.cs:14`（已修：构造时调用 `HrInit()`） |
 | `win32-shell-1` / `xcut-concurrency-4` | `AppDomain.UnhandledException` 处理器 `async void` + `await Task.Yield` 与进程终止竞争 → 崩溃日志/提示可能丢失 | `Program.cs:147` |
@@ -211,4 +211,5 @@
 | P2-6 编码名文化无关规范化 | 已实现 | 默认编码名使用 `ToUpperInvariant()`，避免土耳其语等区域设置下生成非法编码名 |
 | P2-7 跨进程参数转发长度 | 已实现 | `WM_COPYDATA` 的 `cbData` 使用包含 `\0` 的 UTF-16 字节数，避免尾部截断/垃圾 |
 | P2-8 任务栏进度初始化 | 已实现 | `TaskbarProgressController` 创建 `ITaskbarList4` 后调用 `HrInit()` |
+| P2-9 歌词搜索异常边界 | 已实现 | `LyricSearchDialog.StartLyricSearch` 捕获取消/异常并保证进度图和任务栏状态复位 |
 | P2 后续 | 待办 | 更零散的 Low 级资源释放问题 |
