@@ -87,7 +87,7 @@ internal class CustomColumnsDialog : Form
 		resetButton.Text = GetDialogText(resources, "btnReset", resetButton.Text);
 		okButton.Text = Resources.OK;
 		cancelButton.Text = Resources.Cancel;
-		columnListView.SmallImageList = new ImageList
+		columnListView.SmallImageList = new ImageList(components)
 		{
 			ImageSize = new Size(1, DatabaseMapper.ScaleByDpi(32f))
 		};

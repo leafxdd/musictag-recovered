@@ -43,7 +43,7 @@ internal class DirectoryManagerDialog : Form
 		okButton.Text = Resources.OK;
 		cancelButton.Text = Resources.Cancel;
 		deleteMenuItem.Text = Resources.DeleteItems;
-		directoryListView.SmallImageList = new ImageList
+		directoryListView.SmallImageList = new ImageList(components)
 		{
 			ImageSize = new Size(1, DatabaseMapper.ScaleByDpi(32f))
 		};

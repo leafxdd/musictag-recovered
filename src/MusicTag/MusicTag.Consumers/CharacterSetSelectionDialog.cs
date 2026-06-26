@@ -43,7 +43,7 @@ internal class CharacterSetSelectionDialog : Form
 		previewColumn.Text = Resources.content;
 		okButton.Text = Resources.OK;
 		cancelButton.Text = Resources.Cancel;
-		encodingListView.SmallImageList = new ImageList
+		encodingListView.SmallImageList = new ImageList(components)
 		{
 			ImageSize = new Size(1, DatabaseMapper.ScaleByDpi(32f))
 		};
