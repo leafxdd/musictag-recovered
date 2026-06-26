@@ -454,20 +454,37 @@ internal class LyricSearchDialog : Form
 	private async void StartLyricSearch()
 	{
 		LyricSearchSession searchSession = new LyricSearchSession(this);
+		CancellationToken cancellationToken = cancellationSource.Token;
 		taskbarProgress.SetProgressState(TaskbarProgressBarStatus.Indeterminate);
-		candidateLyrics = null;
-		knownIdLyrics = await Task.Run(searchSession.SearchLyricsByKnownMusicId, cancellationSource.Token);
-		if (knownIdLyrics != null)
+		try
 		{
-			AddLyricsToList(knownIdLyrics);
+			candidateLyrics = null;
+			knownIdLyrics = await Task.Run(searchSession.SearchLyricsByKnownMusicId, cancellationToken);
+			if (knownIdLyrics != null)
+			{
+				AddLyricsToList(knownIdLyrics);
+			}
+			searchSession.ResetSourceOrder();
+			candidateLyrics = await Task.Run(searchSession.SearchLyricsByCandidateTracks, cancellationToken);
+			if (candidateLyrics != null)
+			{
+				AddLyricsToList(candidateLyrics);
+			}
 		}
-		searchSession.ResetSourceOrder();
-		candidateLyrics = await Task.Run(searchSession.SearchLyricsByCandidateTracks, cancellationSource.Token);
-		progressImage.Hide();
-		taskbarProgress.SetProgressState(TaskbarProgressBarStatus.NoProgress);
-		if (candidateLyrics != null)
+		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 		{
-			AddLyricsToList(candidateLyrics);
+		}
+		catch (Exception ex)
+		{
+			Console.WriteLine("StartLyricSearch error:" + ex.GetMessageChain());
+		}
+		finally
+		{
+			if (!IsDisposed)
+			{
+				progressImage.Hide();
+				taskbarProgress.SetProgressState(TaskbarProgressBarStatus.NoProgress);
+			}
 		}
 	}
 
