@@ -490,7 +490,6 @@ internal class AutoMatchTagsDialog : Form
 			internal bool DownloadCoverToTempFile(TrackSearchResult searchResult)
 			{
 				var (tempCoverPath, coverLease) = worker.coverTempFileCache.Reserve(searchResult.Cover.CoverUrl);
-				worker.tempCoverFilePath = tempCoverPath;
 				bool lockTaken = default(bool);
 				try
 				{
@@ -498,16 +497,16 @@ internal class AutoMatchTagsDialog : Form
 					RemoteTagProviderBase.DownloadStatus currentStatus = coverLease.DownloadStatus;
 					if (currentStatus == RemoteTagProviderBase.DownloadStatus.Success)
 					{
-						resultValues.Add("coverFile", worker.tempCoverFilePath);
+						SetCoverFileResult(tempCoverPath);
 						return true;
 					}
 					if (currentStatus == RemoteTagProviderBase.DownloadStatus.NotStarted)
 					{
-						(RemoteTagProviderBase.DownloadStatus downloadedStatus, long downloadedByteCount) = searchResult.Cover.CoverDownloader(worker.GetCancellationSource(), worker.tempCoverFilePath, 100000);
+						(RemoteTagProviderBase.DownloadStatus downloadedStatus, long downloadedByteCount) = searchResult.Cover.CoverDownloader(worker.GetCancellationSource(), tempCoverPath, 100000);
 						coverLease.DownloadStatus = downloadedStatus;
 						if (coverLease.DownloadStatus == RemoteTagProviderBase.DownloadStatus.Success && downloadedByteCount > 0L)
 						{
-							resultValues.Add("coverFile", worker.tempCoverFilePath);
+							SetCoverFileResult(tempCoverPath);
 							return true;
 						}
 					}
@@ -519,9 +518,20 @@ internal class AutoMatchTagsDialog : Form
 						Monitor.Exit(coverLease);
 					}
 				}
+				worker.coverTempFileCache.Release(tempCoverPath);
 				return false;
 			}
-		}
+
+			private void SetCoverFileResult(string tempCoverPath)
+			{
+				if (resultValues.TryGetValue("coverFile", out object previousCoverPath))
+				{
+					worker.coverTempFileCache.Release(previousCoverPath as string);
+				}
+				worker.tempCoverFilePath = tempCoverPath;
+				resultValues["coverFile"] = tempCoverPath;
+			}
+			}
 
 		private sealed class TrackResultLimiter
 		{
