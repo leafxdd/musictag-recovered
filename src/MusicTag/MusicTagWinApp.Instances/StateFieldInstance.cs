@@ -2435,6 +2435,9 @@ internal class StateFieldInstance : Form
 
 	private readonly object fileTypeIconCacheLock = new object();
 
+	// 文件列表字体 —— 由字段持有,避免 ApplyFileListVisualStyle 每次 new 出的 Font 句柄无人释放。
+	private readonly Font fileListFont = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+
 	private readonly Dictionary<string, ComboBox> tagComboBoxes;
 
 	private readonly Dictionary<string, (Label label, EventHandler cbTextChangedEvent)> tagFieldTextHandlers;
@@ -3549,7 +3552,7 @@ internal class StateFieldInstance : Form
 
 	private void ApplyFileListVisualStyle()
 	{
-		Font listFont = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+		Font listFont = fileListFont;
 		fileListView.Font = listFont;
 		fileListView.BackgroundColor = Color.White;
 		fileListView.GridColor = SystemColors.ControlLight;
@@ -5081,12 +5084,8 @@ internal class StateFieldInstance : Form
 		{
 			return;
 		}
-		DataGridViewColumn column = fileListView.Columns[columnIndex.Value];
-		if (column.SortMode == DataGridViewColumnSortMode.NotSortable)
-		{
-			column.SortMode = DataGridViewColumnSortMode.Programmatic;
-		}
-		column.HeaderCell.SortGlyphDirection = sortOrder;
+		// 建列已统一为 Programmatic,可直接设排序三角(NotSortable 列设 SortGlyphDirection 会抛异常)。
+		fileListView.Columns[columnIndex.Value].HeaderCell.SortGlyphDirection = sortOrder;
 	}
 
 	private void ExitApplication_Click(object sender, EventArgs e)
