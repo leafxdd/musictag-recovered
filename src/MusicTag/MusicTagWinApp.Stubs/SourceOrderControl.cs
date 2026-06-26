@@ -27,8 +27,6 @@ internal class SourceOrderControl : UserControl
 
 	private ColumnHeader sourceColumn;
 
-	private Timer buttonStateTimer;
-
 	private List<SourceItem> sources;
 
 	public string Title { get; set; }
@@ -104,6 +102,7 @@ internal class SourceOrderControl : UserControl
 		}
 
 		sourceListView.Columns[0].Width = sourceListView.ClientSize.Width;
+		UpdateButtonState();
 	}
 
 	private void SourceOrderControl_SizeChanged(object sender, EventArgs e)
@@ -148,6 +147,7 @@ internal class SourceOrderControl : UserControl
 		{
 			sourceListView.EnsureVisible(newIndex);
 		}
+		UpdateButtonState();
 	}
 
 	private void MoveDownButton_Click(object sender, EventArgs e)
@@ -178,9 +178,15 @@ internal class SourceOrderControl : UserControl
 		{
 			sourceListView.EnsureVisible(newIndex);
 		}
+		UpdateButtonState();
 	}
 
-	private void ButtonStateTimer_Tick(object sender, EventArgs e)
+	private void SourceListView_ItemSelectionChanged(object sender, ListViewItemSelectionChangedEventArgs e)
+	{
+		UpdateButtonState();
+	}
+
+	private void UpdateButtonState()
 	{
 		bool canMoveUp = false;
 		bool canMoveDown = false;
@@ -229,7 +235,6 @@ internal class SourceOrderControl : UserControl
 		buttonPanel = new FlowLayoutPanel();
 		moveUpButton = new Button();
 		moveDownButton = new Button();
-		buttonStateTimer = new Timer(components);
 		sourceGroupBox.SuspendLayout();
 		mainPanel.SuspendLayout();
 		buttonPanel.SuspendLayout();
@@ -266,6 +271,7 @@ internal class SourceOrderControl : UserControl
 		sourceListView.TabIndex = 0;
 		sourceListView.UseCompatibleStateImageBehavior = false;
 		sourceListView.View = View.Details;
+		sourceListView.ItemSelectionChanged += SourceListView_ItemSelectionChanged;
 		sourceColumn.Width = 250;
 		buttonPanel.Controls.Add(moveUpButton);
 		buttonPanel.Controls.Add(moveDownButton);
@@ -290,9 +296,6 @@ internal class SourceOrderControl : UserControl
 		moveDownButton.TabIndex = 1;
 		moveDownButton.UseVisualStyleBackColor = true;
 		moveDownButton.Click += MoveDownButton_Click;
-		buttonStateTimer.Enabled = true;
-		buttonStateTimer.Interval = 500;
-		buttonStateTimer.Tick += ButtonStateTimer_Tick;
 		AutoScaleDimensions = new SizeF(7f, 14f);
 		AutoScaleMode = AutoScaleMode.Font;
 		Controls.Add(sourceGroupBox);

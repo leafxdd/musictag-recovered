@@ -4317,31 +4317,22 @@ internal class StateFieldInstance : Form
 		refreshContext.progressReporter = new Progress<List<(SelectedListViewItemInfo, ConfigDescriptorState, Dictionary<string, string>)>>(refreshContext.ApplyRefreshedItems);
 		refreshContext.loadErrors = new Page();
 		Task task = Task.Run(new Action(refreshContext.RefreshItems), refreshContext.cancellationSource.Token);
-		if (refreshContext.progressDialog == null)
+		try
 		{
-			task.Wait();
+			await task;
 			ApplyFileSelectionMode(FileSelectionMode.RefreshOnly, refreshStatusAllInfo);
 			BeginInvoke(new Action(refreshContext.ShowCompletionMessages));
 		}
-		else
+		catch (System.Exception ex)
 		{
-			try
+			if (!IsCancellationException(ex, refreshContext.cancellationSource))
 			{
-				await task;
-				ApplyFileSelectionMode(FileSelectionMode.RefreshOnly, refreshStatusAllInfo);
-				BeginInvoke(new Action(refreshContext.ShowCompletionMessages));
+				ReportAsyncOperationError(ex, nameof(StartRefreshItems));
 			}
-			catch (System.Exception ex)
-			{
-				if (!IsCancellationException(ex, refreshContext.cancellationSource))
-				{
-					ReportAsyncOperationError(ex, nameof(StartRefreshItems));
-				}
-			}
-			finally
-			{
-				refreshContext.progressDialog.CloseAfterCompletion();
-			}
+		}
+		finally
+		{
+			refreshContext.progressDialog?.CloseAfterCompletion();
 		}
 	}
 
