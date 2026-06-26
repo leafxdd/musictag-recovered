@@ -60,6 +60,8 @@ internal class TagHistoryRepository : IDisposable
 
 	private readonly SQLiteTransaction currentTransaction;
 
+	private bool transactionFailed;
+
 	private long undoPayloadByteCount;
 
 	public static List<(string oldPath, string newPath, bool failed)> RenameUndoOperations { get; } = new List<(string, string, bool)>();
@@ -75,8 +77,43 @@ internal class TagHistoryRepository : IDisposable
 
 	public void Dispose()
 	{
-		currentTransaction?.Commit();
-		currentTransaction?.Dispose();
+		try
+		{
+			if (currentTransaction == null)
+			{
+				return;
+			}
+			if (transactionFailed)
+			{
+				RollbackFailedTransaction();
+			}
+			else
+			{
+				currentTransaction.Commit();
+			}
+		}
+		catch
+		{
+			CloseSharedConnection();
+			throw;
+		}
+		finally
+		{
+			currentTransaction?.Dispose();
+		}
+	}
+
+	private void RollbackFailedTransaction()
+	{
+		try
+		{
+			currentTransaction.Rollback();
+		}
+		catch (Exception ex)
+		{
+			Console.WriteLine("RollbackTagsHistory fail:" + ex.Message);
+			CloseSharedConnection();
+		}
 	}
 
 	private static void EnsureConnectionOpen()
@@ -141,6 +178,7 @@ internal class TagHistoryRepository : IDisposable
 	{
 		command.Parameters.Clear();
 		command.Connection = sharedConnection;
+		command.Transaction = currentTransaction;
 		command.CommandText = commandText;
 		command.CommandType = CommandType.Text;
 		foreach (object value in commandParameterValues)
@@ -151,9 +189,17 @@ internal class TagHistoryRepository : IDisposable
 
 	private int ExecuteNonQuery(string commandText, params object[] commandParameterValues)
 	{
-		using SQLiteCommand sQLiteCommand = new SQLiteCommand();
-		PrepareCommand(sQLiteCommand, commandText, commandParameterValues);
-		return sQLiteCommand.ExecuteNonQuery();
+		try
+		{
+			using SQLiteCommand sQLiteCommand = new SQLiteCommand();
+			PrepareCommand(sQLiteCommand, commandText, commandParameterValues);
+			return sQLiteCommand.ExecuteNonQuery();
+		}
+		catch
+		{
+			transactionFailed = currentTransaction != null;
+			throw;
+		}
 	}
 
 	private SQLiteDataReader ExecuteReader(SQLiteCommand command, string commandText, params object[] commandParameterValues)
@@ -165,9 +211,15 @@ internal class TagHistoryRepository : IDisposable
 		}
 		catch
 		{
+			transactionFailed = currentTransaction != null;
 			CloseSharedConnection();
 			throw;
 		}
+	}
+
+	private void MarkTransactionFailed()
+	{
+		transactionFailed = currentTransaction != null;
 	}
 
 	private string InsertHistoryRecord(string filePath, ConfigDescriptorState tags)
@@ -278,9 +330,15 @@ internal class TagHistoryRepository : IDisposable
 	{
 		try
 		{
-			using TagHistoryRepository tagHistory = new TagHistoryRepository(useTransaction: false);
-			int result = tagHistory.ExecuteNonQuery("delete from tagshistory;update config set thserial_prefix = 1");
-			tagHistory.ExecuteNonQuery("VACUUM");
+			int result;
+			using (TagHistoryRepository tagHistory = new TagHistoryRepository(useTransaction: true))
+			{
+				result = tagHistory.ExecuteNonQuery("delete from tagshistory;update config set thserial_prefix = 1");
+			}
+			using (TagHistoryRepository tagHistory = new TagHistoryRepository(useTransaction: false))
+			{
+				tagHistory.TryVacuum();
+			}
 			historySerialPrefix = 1L;
 			historySerialSequence = 0L;
 			CloseSharedConnection();
@@ -291,6 +349,18 @@ internal class TagHistoryRepository : IDisposable
 			Console.WriteLine("DeleteAllTagsHistory fail:" + ex.Message);
 		}
 		return -1;
+	}
+
+	private void TryVacuum()
+	{
+		try
+		{
+			ExecuteNonQuery("VACUUM");
+		}
+		catch (Exception ex)
+		{
+			Console.WriteLine("VacuumTagsHistory fail:" + ex.Message);
+		}
 	}
 
 	public static ConfigDescriptorState CreateTagSnapshot(ConfigDescriptorState sourceTags, bool includePictures)
@@ -337,6 +407,7 @@ internal class TagHistoryRepository : IDisposable
 		catch (Exception ex)
 		{
 			Console.WriteLine("AddTagsHistory fail:" + ex.Message);
+			tagHistory.MarkTransactionFailed();
 			return (errMsg: Resources.Msg_AddTagsHistoryFail, serial: null);
 		}
 		return (errMsg: null, serial: null);
@@ -387,6 +458,7 @@ internal class TagHistoryRepository : IDisposable
 		catch (Exception ex)
 		{
 			Console.WriteLine("AddUndoTags fail:" + ex.Message);
+			undoStore.MarkTransactionFailed();
 			return Resources.Msg_AddUndoRecordFail;
 		}
 		return null;
