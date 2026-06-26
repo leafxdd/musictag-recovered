@@ -86,7 +86,7 @@ internal static class DatabaseMapper
 		}
 		catch
 		{
-			return encodedText;
+			return "";
 		}
 	}
 
