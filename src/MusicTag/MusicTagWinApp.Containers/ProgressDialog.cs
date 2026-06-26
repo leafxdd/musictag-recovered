@@ -42,7 +42,6 @@ internal class ProgressDialog : Form
 		cancelButton.Text = Resources.Cancel;
 		updateTimer.AutoReset = true;
 		updateTimer.Elapsed += UpdateTimer_Elapsed;
-		updateTimer.Start();
 	}
 
 	public void AddCancelRequestedHandler(ProgressDialogCallback handler)
@@ -132,7 +131,7 @@ internal class ProgressDialog : Form
 		base.OnShown(e);
 		taskbarProgress?.SetProgressState(TaskbarProgressBarStatus.Normal);
 		updateTimer.Start();
-		BeginInvoke(new Action(RaiseProgressUpdate));
+		PostProgressUpdate();
 	}
 
 	protected override void OnClosed(EventArgs e)
@@ -192,9 +191,21 @@ internal class ProgressDialog : Form
 
 	private void UpdateTimer_Elapsed(object sender, ElapsedEventArgs e)
 	{
-		if (!isClosing && !IsDisposed && updateTimer.Enabled)
+		PostProgressUpdate();
+	}
+
+	private void PostProgressUpdate()
+	{
+		if (isClosing || IsDisposed || !IsHandleCreated)
 		{
-			Invoke(new Action(RaiseProgressUpdate));
+			return;
+		}
+		try
+		{
+			BeginInvoke(new Action(RaiseProgressUpdate));
+		}
+		catch (InvalidOperationException)
+		{
 		}
 	}
 
