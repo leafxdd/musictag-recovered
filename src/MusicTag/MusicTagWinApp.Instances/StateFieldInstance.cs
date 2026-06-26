@@ -471,14 +471,14 @@ internal class StateFieldInstance : Form
 						if (addToList)
 						{
 							pendingFiles.Add((TagFile: tagFile, DisplayValues: displayValues, FilePath: fullPath));
-								if (stopwatch.ElapsedMilliseconds >= 500L)
-								{
-									LoadedFilesProgress.Report(pendingFiles);
-									stopwatch.Restart();
-									pendingFiles = new List<(ConfigDescriptorState, Dictionary<string, string>, string)>();
-								}
+							if (stopwatch.ElapsedMilliseconds >= 500L)
+							{
+								LoadedFilesProgress.Report(pendingFiles);
+								stopwatch.Restart();
+								pendingFiles = new List<(ConfigDescriptorState, Dictionary<string, string>, string)>();
 							}
 						}
+					}
 				}
 				CurrentIndex++;
 			}
@@ -1266,131 +1266,140 @@ internal class StateFieldInstance : Form
 			Func<ConfigDescriptorState, string, bool> applyLyrics = applyLyricsAction ?? (applyLyricsAction = ApplyLyricsBatchAction);
 			Func<ConfigDescriptorState, bool, bool> convertChineseText = convertChineseTextAction ?? (convertChineseTextAction = ConvertChineseTextFields);
 			TagHistoryRepository tagHistoryRepository = new TagHistoryRepository(useTransaction: true);
-			TagHistoryRepository.ClearUndoState();
-			while (processedCount < itemsToSave.Length)
+			try
 			{
-				if (cancellationSource.IsCancellationRequested)
+				TagHistoryRepository.ClearUndoState();
+				while (processedCount < itemsToSave.Length)
 				{
-					break;
-				}
-				SaveTagsFileContext fileContext = new SaveTagsFileContext();
-				fileContext.batchContext = this;
-				fileContext.filePath = Path.GetFullPath(itemsToSave[processedCount].FilePath);
-				currentFile = new FileInfo(fileContext.filePath);
-				DatabaseMapper.ClearReadOnlyIfAllowed(currentFile, canCancelReadOnly);
-				DateTime lastWriteTime = currentFile.LastWriteTime;
-				bool tagFileLoaded = false;
-				SaveTagFailureReporter failureReporter = new SaveTagFailureReporter();
-				failureReporter.fileContext = fileContext;
-				failureReporter.tagState = new ConfigDescriptorState(failureReporter.fileContext.filePath);
-				try
-				{
-					Action<string> action = failureReporter.ReportFailure;
-					if (failureReporter.tagState.IsLoadedSuccessfully())
+					if (cancellationSource.IsCancellationRequested)
 					{
-						tagFileLoaded = true;
-						failureReporter.tagState.LoadBasicTagFields();
-						failureReporter.tagState.LoadLyrics();
-						ConfigDescriptorState originalTagSnapshot = TagHistoryRepository.CreateTagSnapshot(failureReporter.tagState, includePictures: false);
-						object lyricsImportValue;
-						if (tagValues.TryGetValue("chscht_handle", out var convertToTraditionalValue))
+						break;
+					}
+					SaveTagsFileContext fileContext = new SaveTagsFileContext();
+					fileContext.batchContext = this;
+					fileContext.filePath = Path.GetFullPath(itemsToSave[processedCount].FilePath);
+					currentFile = new FileInfo(fileContext.filePath);
+					DateTime lastWriteTime = default(DateTime);
+					bool tagFileLoaded = false;
+					SaveTagFailureReporter failureReporter = new SaveTagFailureReporter();
+					failureReporter.fileContext = fileContext;
+					try
+					{
+						DatabaseMapper.ClearReadOnlyIfAllowed(currentFile, canCancelReadOnly);
+						lastWriteTime = currentFile.LastWriteTime;
+						failureReporter.tagState = new ConfigDescriptorState(failureReporter.fileContext.filePath);
+						Action<string> action = failureReporter.ReportFailure;
+						if (failureReporter.tagState.IsLoadedSuccessfully())
 						{
-							if (!convertChineseText(failureReporter.tagState, (bool)convertToTraditionalValue))
+							tagFileLoaded = true;
+							failureReporter.tagState.LoadBasicTagFields();
+							failureReporter.tagState.LoadLyrics();
+							ConfigDescriptorState originalTagSnapshot = TagHistoryRepository.CreateTagSnapshot(failureReporter.tagState, includePictures: false);
+							object lyricsImportValue;
+							if (tagValues.TryGetValue("chscht_handle", out var convertToTraditionalValue))
 							{
-								processedCount++;
-								continue;
-							}
-						}
-						else if (tagValues.TryGetValue("lyrics_handle", out lyricsImportValue))
-						{
-							if (!applyLyrics(failureReporter.tagState, lyricsImportValue as string))
-							{
-								processedCount++;
-								continue;
-							}
-						}
-						else
-						{
-							foreach (KeyValuePair<string, object> tagValueEntry in tagValues)
-							{
-								if (tagValueEntry.Value is string text)
+								if (!convertChineseText(failureReporter.tagState, (bool)convertToTraditionalValue))
 								{
-									if (text == "<blank>")
-									{
-										failureReporter.tagState[tagValueEntry.Key] = "";
-									}
-									else if (text != "<keep>")
-									{
-										if (text.Contains("<keep>"))
-										{
-											string newValue = ((failureReporter.tagState[tagValueEntry.Key] != null) ? failureReporter.tagState[tagValueEntry.Key].ToString() : "");
-											failureReporter.tagState[tagValueEntry.Key] = text.Replace("<keep>", newValue);
-										}
-										else
-										{
-											failureReporter.tagState[tagValueEntry.Key] = text;
-										}
-									}
+									processedCount++;
 									continue;
 								}
-								if (tagValueEntry.Key == "allpicturedata")
+							}
+							else if (tagValues.TryGetValue("lyrics_handle", out lyricsImportValue))
+							{
+								if (!applyLyrics(failureReporter.tagState, lyricsImportValue as string))
+								{
+									processedCount++;
+									continue;
+								}
+							}
+							else
+							{
+								foreach (KeyValuePair<string, object> tagValueEntry in tagValues)
+								{
+									if (tagValueEntry.Value is string text)
+									{
+										if (text == "<blank>")
+										{
+											failureReporter.tagState[tagValueEntry.Key] = "";
+										}
+										else if (text != "<keep>")
+										{
+											if (text.Contains("<keep>"))
+											{
+												string newValue = ((failureReporter.tagState[tagValueEntry.Key] != null) ? failureReporter.tagState[tagValueEntry.Key].ToString() : "");
+												failureReporter.tagState[tagValueEntry.Key] = text.Replace("<keep>", newValue);
+											}
+											else
+											{
+												failureReporter.tagState[tagValueEntry.Key] = text;
+											}
+										}
+										continue;
+									}
+									if (tagValueEntry.Key == "allpicturedata")
+									{
+										failureReporter.tagState.LoadAllPictures();
+										List<ConfigDescriptorState.PictureData> newPictures = failureReporter.tagState["allpicturedata"] as List<ConfigDescriptorState.PictureData>;
+										foreach (ConfigDescriptorState.PictureData picture in newPictures)
+										{
+											ConfigDescriptorState.LoadPictureImage(picture);
+										}
+										originalTagSnapshot["allpicturedata"] = newPictures;
+									}
+									failureReporter.tagState[tagValueEntry.Key] = tagValueEntry.Value;
+								}
+								if (!compressedInputPictures && shouldRefreshPictureResolution)
 								{
 									failureReporter.tagState.LoadAllPictures();
-									List<ConfigDescriptorState.PictureData> newPictures = failureReporter.tagState["allpicturedata"] as List<ConfigDescriptorState.PictureData>;
-									foreach (ConfigDescriptorState.PictureData picture in newPictures)
+									List<ConfigDescriptorState.PictureData> currentPictures = failureReporter.tagState["allpicturedata"] as List<ConfigDescriptorState.PictureData>;
+									List<ConfigDescriptorState.PictureData> originalPictureCopies = new List<ConfigDescriptorState.PictureData>();
+									foreach (ConfigDescriptorState.PictureData picture in currentPictures)
 									{
 										ConfigDescriptorState.LoadPictureImage(picture);
+										originalPictureCopies.Add(new ConfigDescriptorState.PictureData
+										{
+											ImageBytes = (byte[])picture.ImageBytes.Clone(),
+											PictureType = picture.PictureType,
+											MimeType = picture.MimeType,
+											Width = picture.Width,
+											Height = picture.Height
+										});
 									}
-									originalTagSnapshot["allpicturedata"] = newPictures;
+									originalTagSnapshot["allpicturedata"] = originalPictureCopies;
+									CompressPictures(currentPictures, useRestoreLimits: false);
 								}
-								failureReporter.tagState[tagValueEntry.Key] = tagValueEntry.Value;
 							}
-							if (!compressedInputPictures && shouldRefreshPictureResolution)
+							if (failureReporter.tagState.SaveTagFields())
 							{
-								failureReporter.tagState.LoadAllPictures();
-								List<ConfigDescriptorState.PictureData> currentPictures = failureReporter.tagState["allpicturedata"] as List<ConfigDescriptorState.PictureData>;
-								List<ConfigDescriptorState.PictureData> originalPictureCopies = new List<ConfigDescriptorState.PictureData>();
-								foreach (ConfigDescriptorState.PictureData picture in currentPictures)
+								if (Settings.Default.SaveLrcWhileSaveTags && failureReporter.tagState["lyrics"] is string lyricsText && !string.IsNullOrWhiteSpace(lyricsText))
 								{
-									ConfigDescriptorState.LoadPictureImage(picture);
-									originalPictureCopies.Add(new ConfigDescriptorState.PictureData
+									try
 									{
-										ImageBytes = (byte[])picture.ImageBytes.Clone(),
-										PictureType = picture.PictureType,
-										MimeType = picture.MimeType,
-										Width = picture.Width,
-										Height = picture.Height
-									});
+										string saveLrcFileDefaultEncoding = Settings.Default.SaveLrcFileDefaultEncoding;
+										File.WriteAllText(DatabaseMapper.BuildLyricSavePath(failureReporter.fileContext.filePath, failureReporter.tagState), lyricsText, Encoding.GetEncoding(saveLrcFileDefaultEncoding));
+									}
+									catch (System.Exception ex)
+									{
+										action(Resources.Msg_WriteLrcFileFail + ", " + ex.Message);
+									}
 								}
-								originalTagSnapshot["allpicturedata"] = originalPictureCopies;
-								CompressPictures(currentPictures, useRestoreLimits: false);
-							}
-						}
-						if (failureReporter.tagState.SaveTagFields())
-						{
-							if (Settings.Default.SaveLrcWhileSaveTags && failureReporter.tagState["lyrics"] is string lyricsText && !string.IsNullOrWhiteSpace(lyricsText))
-							{
-								try
+								var (historyError, selection) = TagHistoryRepository.AddHistoryRecordIfChanged(failureReporter.fileContext.filePath, originalTagSnapshot, failureReporter.tagState, tagHistoryRepository);
+								if (historyError != null)
 								{
-									string saveLrcFileDefaultEncoding = Settings.Default.SaveLrcFileDefaultEncoding;
-									File.WriteAllText(DatabaseMapper.BuildLyricSavePath(failureReporter.fileContext.filePath, failureReporter.tagState), lyricsText, Encoding.GetEncoding(saveLrcFileDefaultEncoding));
+									action(historyError);
 								}
-								catch (System.Exception ex)
+								string undoError = TagHistoryRepository.AddUndoRecord(originalTagSnapshot, selection, tagHistoryRepository);
+								if (undoError != null)
 								{
-									action(Resources.Msg_WriteLrcFileFail + ", " + ex.Message);
+									action(undoError);
 								}
+								savedCount++;
 							}
-							var (historyError, selection) = TagHistoryRepository.AddHistoryRecordIfChanged(failureReporter.fileContext.filePath, originalTagSnapshot, failureReporter.tagState, tagHistoryRepository);
-							if (historyError != null)
+							else
 							{
-								action(historyError);
+								action(null);
+								failedCount++;
 							}
-							string undoError = TagHistoryRepository.AddUndoRecord(originalTagSnapshot, selection, tagHistoryRepository);
-							if (undoError != null)
-							{
-								action(undoError);
-							}
-							savedCount++;
 						}
 						else
 						{
@@ -1398,35 +1407,40 @@ internal class StateFieldInstance : Form
 							failedCount++;
 						}
 					}
-					else
+					catch (System.Exception ex)
 					{
-						action(null);
+						DatabaseMapper.WriteSaveTagsLog(fileContext.filePath + ": " + ex.Message);
+						messageLog.AddLine(currentFile.Name);
+						messageLog.AddLine(ex.Message);
 						failedCount++;
 					}
-				}
-				finally
-				{
-					if (failureReporter.tagState != null)
+					finally
 					{
-						((IDisposable)failureReporter.tagState).Dispose();
+						if (failureReporter.tagState != null)
+						{
+							((IDisposable)failureReporter.tagState).Dispose();
+						}
 					}
-				}
-				if (tagFileLoaded && Settings.Default.SaveTagsKeepUpdateTime)
-				{
-					try
+					if (tagFileLoaded && Settings.Default.SaveTagsKeepUpdateTime)
 					{
-						currentFile.LastWriteTime = lastWriteTime;
+						try
+						{
+							currentFile.LastWriteTime = lastWriteTime;
+						}
+						catch (System.Exception ex2)
+						{
+							DatabaseMapper.WriteSaveTagsLog(fileContext.filePath + ": " + ex2.Message);
+							messageLog.AddLine(currentFile.Name);
+							messageLog.AddLine(ex2.Message);
+						}
 					}
-					catch (System.Exception ex2)
-					{
-						DatabaseMapper.WriteSaveTagsLog(fileContext.filePath + ": " + ex2.Message);
-						messageLog.AddLine(currentFile.Name);
-						messageLog.AddLine(ex2.Message);
-					}
+					processedCount++;
 				}
-				processedCount++;
 			}
-			tagHistoryRepository.Dispose();
+			finally
+			{
+				tagHistoryRepository.Dispose();
+			}
 		}
 
 		internal bool ApplyLyricsBatchAction(ConfigDescriptorState i, string counter)
@@ -1453,21 +1467,21 @@ internal class StateFieldInstance : Form
 
 			switch (counter)
 			{
-			case "menuStrip1.Batch.DeleteHeadTags":
-				i["lyrics"] = LyricTextProcessor.ReformatLyric(lyrics, removeBlankLines: false, removeHeaderTags: true);
-				return true;
-			case "menuStrip1.Batch.DeleteLinesOfBlankText":
-				i["lyrics"] = LyricTextProcessor.ReformatLyric(lyrics, removeBlankLines: true, removeHeaderTags: false);
-				return true;
-			case "menuStrip1.Batch.RemoveTimetag":
-				i["lyrics"] = LyricTextProcessor.RemoveTimestamps(lyrics);
-				return true;
-			case "menuStrip1.Batch.ReformatTimetag":
-				i["lyrics"] = LyricTextProcessor.ReformatLyric(lyrics, removeBlankLines: false, removeHeaderTags: false);
-				return true;
-			default:
-				skippedCount++;
-				return false;
+				case "menuStrip1.Batch.DeleteHeadTags":
+					i["lyrics"] = LyricTextProcessor.ReformatLyric(lyrics, removeBlankLines: false, removeHeaderTags: true);
+					return true;
+				case "menuStrip1.Batch.DeleteLinesOfBlankText":
+					i["lyrics"] = LyricTextProcessor.ReformatLyric(lyrics, removeBlankLines: true, removeHeaderTags: false);
+					return true;
+				case "menuStrip1.Batch.RemoveTimetag":
+					i["lyrics"] = LyricTextProcessor.RemoveTimestamps(lyrics);
+					return true;
+				case "menuStrip1.Batch.ReformatTimetag":
+					i["lyrics"] = LyricTextProcessor.ReformatLyric(lyrics, removeBlankLines: false, removeHeaderTags: false);
+					return true;
+				default:
+					skippedCount++;
+					return false;
 			}
 		}
 
@@ -1858,47 +1872,56 @@ internal class StateFieldInstance : Form
 		internal void ClearTags()
 		{
 			TagHistoryRepository tagHistoryRepository = new TagHistoryRepository(useTransaction: true);
-			TagHistoryRepository.ClearUndoState();
-			while (processedCount < itemsToClear.Length)
+			try
 			{
-				if (cancellationSource.IsCancellationRequested)
+				TagHistoryRepository.ClearUndoState();
+				while (processedCount < itemsToClear.Length)
 				{
-					break;
-				}
-
-				TagSaveFileContext tagSaveFileContext = new TagSaveFileContext();
-				tagSaveFileContext.Owner = this;
-				tagSaveFileContext.FilePath = Path.GetFullPath(itemsToClear[processedCount].FilePath);
-				currentFile = new FileInfo(tagSaveFileContext.FilePath);
-				DatabaseMapper.ClearReadOnlyIfAllowed(currentFile, canCancelFileReadonly);
-				DateTime lastWriteTime = currentFile.LastWriteTime;
-				bool savedTags = false;
-				TagSaveFailureReporter failureReporter = new TagSaveFailureReporter();
-				failureReporter.FileContext = tagSaveFileContext;
-				failureReporter.TagFile = new ConfigDescriptorState(failureReporter.FileContext.FilePath);
-				try
-				{
-					Action<string> action = failureReporter.ReportFailure;
-					if (failureReporter.TagFile.IsLoadedSuccessfully())
+					if (cancellationSource.IsCancellationRequested)
 					{
-						savedTags = true;
-						failureReporter.TagFile.LoadBasicTagFields();
-						failureReporter.TagFile.LoadLyrics();
-						failureReporter.TagFile.LoadAllPictures();
-						ConfigDescriptorState configDescriptorState = TagHistoryRepository.CreateTagSnapshot(failureReporter.TagFile, includePictures: true);
-						if (failureReporter.TagFile.SaveCurrentTagFile())
+						break;
+					}
+
+					TagSaveFileContext tagSaveFileContext = new TagSaveFileContext();
+					tagSaveFileContext.Owner = this;
+					tagSaveFileContext.FilePath = Path.GetFullPath(itemsToClear[processedCount].FilePath);
+					currentFile = new FileInfo(tagSaveFileContext.FilePath);
+					DateTime lastWriteTime = default(DateTime);
+					bool savedTags = false;
+					TagSaveFailureReporter failureReporter = new TagSaveFailureReporter();
+					failureReporter.FileContext = tagSaveFileContext;
+					try
+					{
+						DatabaseMapper.ClearReadOnlyIfAllowed(currentFile, canCancelFileReadonly);
+						lastWriteTime = currentFile.LastWriteTime;
+						failureReporter.TagFile = new ConfigDescriptorState(failureReporter.FileContext.FilePath);
+						Action<string> action = failureReporter.ReportFailure;
+						if (failureReporter.TagFile.IsLoadedSuccessfully())
 						{
-							var (historyMessage, selection) = TagHistoryRepository.AddHistoryRecordIfChanged(failureReporter.FileContext.FilePath, configDescriptorState, null, tagHistoryRepository);
-							if (historyMessage != null)
+							savedTags = true;
+							failureReporter.TagFile.LoadBasicTagFields();
+							failureReporter.TagFile.LoadLyrics();
+							failureReporter.TagFile.LoadAllPictures();
+							ConfigDescriptorState configDescriptorState = TagHistoryRepository.CreateTagSnapshot(failureReporter.TagFile, includePictures: true);
+							if (failureReporter.TagFile.SaveCurrentTagFile())
 							{
-								action(historyMessage);
+								var (historyMessage, selection) = TagHistoryRepository.AddHistoryRecordIfChanged(failureReporter.FileContext.FilePath, configDescriptorState, null, tagHistoryRepository);
+								if (historyMessage != null)
+								{
+									action(historyMessage);
+								}
+								string undoMessage = TagHistoryRepository.AddUndoRecord(configDescriptorState, selection, tagHistoryRepository);
+								if (undoMessage != null)
+								{
+									action(undoMessage);
+								}
+								successCount++;
 							}
-							string undoMessage = TagHistoryRepository.AddUndoRecord(configDescriptorState, selection, tagHistoryRepository);
-							if (undoMessage != null)
+							else
 							{
-								action(undoMessage);
+								action(null);
+								failedCount++;
 							}
-							successCount++;
 						}
 						else
 						{
@@ -1906,37 +1929,42 @@ internal class StateFieldInstance : Form
 							failedCount++;
 						}
 					}
-					else
-					{
-						action(null);
-						failedCount++;
-					}
-				}
-				finally
-				{
-					if (failureReporter.TagFile != null)
-					{
-						((IDisposable)failureReporter.TagFile).Dispose();
-					}
-				}
-
-				if (savedTags && Settings.Default.SaveTagsKeepUpdateTime)
-				{
-					try
-					{
-						currentFile.LastWriteTime = lastWriteTime;
-					}
 					catch (System.Exception ex)
 					{
 						DatabaseMapper.WriteClearTagsLog(tagSaveFileContext.FilePath + ": " + ex.Message);
 						errorLog.AddLine(currentFile.Name);
 						errorLog.AddLine(ex.Message);
+						failedCount++;
 					}
-				}
+					finally
+					{
+						if (failureReporter.TagFile != null)
+						{
+							((IDisposable)failureReporter.TagFile).Dispose();
+						}
+					}
 
-				processedCount++;
+					if (savedTags && Settings.Default.SaveTagsKeepUpdateTime)
+					{
+						try
+						{
+							currentFile.LastWriteTime = lastWriteTime;
+						}
+						catch (System.Exception ex)
+						{
+							DatabaseMapper.WriteClearTagsLog(tagSaveFileContext.FilePath + ": " + ex.Message);
+							errorLog.AddLine(currentFile.Name);
+							errorLog.AddLine(ex.Message);
+						}
+					}
+
+					processedCount++;
+				}
 			}
-			tagHistoryRepository.Dispose();
+			finally
+			{
+				tagHistoryRepository.Dispose();
+			}
 		}
 	}
 
@@ -3101,49 +3129,49 @@ internal class StateFieldInstance : Form
 		{
 			return;
 		}
-			Image image = (changeDirectoryToolStripButton.Image = DatabaseMapper.LoadResourceBitmap("chgDirToolStripMenuItem_Image", scaleSmallIconForDpi: true));
-			changeDirectoryMenuItem.Image = image;
-			addDirectoriesToolStripButton.Image = image = DatabaseMapper.LoadResourceBitmap("addDirsToolStripMenuItem_Image", scaleSmallIconForDpi: true);
-			addDirectoryMenuItem.Image = image;
-			image = (manageDirectoriesToolStripButton.Image = DatabaseMapper.LoadResourceBitmap("manageDirsToolStripMenuItem_Image", scaleSmallIconForDpi: true));
-			manageDirectoriesMenuItem.Image = image;
-			image = (saveTagsToolStripButton.Image = DatabaseMapper.LoadResourceBitmap("saveToolStripMenuItem_Image", scaleSmallIconForDpi: true));
-			saveTagsMenuItem.Image = image;
-			removeTagsToolStripButton.Image = image = DatabaseMapper.LoadResourceBitmap("removeTagToolStripMenuItem_Image", scaleSmallIconForDpi: true);
-			removeTagsMenuItem.Image = image;
-			image = (undoToolStripButton.Image = DatabaseMapper.LoadResourceBitmap("undoToolStripMenuItem_Image", scaleSmallIconForDpi: true));
-			undoMenuItem.Image = image;
-			readTagsToolStripButton.Image = image = DatabaseMapper.LoadResourceBitmap("readTagsToolStripMenuItem_Image", scaleSmallIconForDpi: true);
-			readTagsMenuItem.Image = image;
-			image = (characterSetToolStripButton.Image = DatabaseMapper.LoadResourceBitmap("characterSetToolStripMenuItem_Image", scaleSmallIconForDpi: true));
-			characterSetMenuItem.Image = image;
-			image = (chineseConversionToolStripDropDownButton.Image = DatabaseMapper.LoadResourceBitmap("chschtToolStripMenuItem_Image", scaleSmallIconForDpi: true));
-			chineseConversionMenuItem.Image = image;
-			image = (tagHistoryToolStripButton.Image = DatabaseMapper.LoadResourceBitmap("tagsHistoryToolStripMenuItem_Image", scaleSmallIconForDpi: true));
-			tagHistoryMenuItem.Image = image;
-			exitMenuItem.Image = DatabaseMapper.LoadResourceBitmap("exitToolStripMenuItem_Image", scaleSmallIconForDpi: true);
-			image = (selectAllFilesToolStripButton.Image = DatabaseMapper.LoadResourceBitmap("selallfilesToolStripMenuItem_Image", scaleSmallIconForDpi: true));
-			selectAllFilesMenuItem.Image = image;
-			image = (unselectAllFilesToolStripButton.Image = DatabaseMapper.LoadResourceBitmap("unselectAllToolStripMenuItem_Image", scaleSmallIconForDpi: true));
-			unselectAllFilesMenuItem.Image = image;
-			refreshToolStripButton.Image = image = DatabaseMapper.LoadResourceBitmap("refreshToolStripMenuItem_Image", scaleSmallIconForDpi: true);
-			refreshMenuItem.Image = image;
-			image = (coverSourceToolStripSplitButton.Image = DatabaseMapper.LoadResourceBitmap("picSrcToolStripMenuItem_Image", scaleSmallIconForDpi: true));
-			coverSourceMenuItem.Image = image;
-			image = (lyricSourceToolStripSplitButton.Image = DatabaseMapper.LoadResourceBitmap("lyricSrcToolStripMenuItem_Image", scaleSmallIconForDpi: true));
-			lyricSourceMenuItem.Image = image;
-			image = (combinedTagSourceToolStripSplitButton.Image = DatabaseMapper.LoadResourceBitmap("combTagsSrcToolStripMenuItem_Image", scaleSmallIconForDpi: true));
-			combinedTagSourceMenuItem.Image = image;
-			image = (batchAutoMatchTagsToolStripButton.Image = DatabaseMapper.LoadResourceBitmap("batchAutoMatchTagsToolStripButton_Image", scaleSmallIconForDpi: true));
-			batchAutoMatchTagsMenuItem.Image = image;
-			image = (batchExtractCoverToolStripButton.Image = DatabaseMapper.LoadResourceBitmap("batchExtractCoverToolStripButton_Image", scaleSmallIconForDpi: true));
-			batchExtractCoverMenuItem.Image = image;
-			image = (batchSaveAsLrcToolStripSplitButton.Image = DatabaseMapper.LoadResourceBitmap("batchSaveAsLrcFileToolStripSplitButton_Image", scaleSmallIconForDpi: true));
-			saveLyricsMenuItem.Image = image;
-			image = (batchChineseConversionToolStripDropDownButton.Image = DatabaseMapper.LoadResourceBitmap("chschtToolStripMenuItem_Image", scaleSmallIconForDpi: true));
-			batchChineseConversionMenuItem.Image = image;
-			image = (batchFilenameRelatedToolStripButton.Image = DatabaseMapper.LoadResourceBitmap("batchFilenameRelToolStripButton_Image", scaleSmallIconForDpi: true));
-			batchFilenameRelatedMenuItem.Image = image;
+		Image image = (changeDirectoryToolStripButton.Image = DatabaseMapper.LoadResourceBitmap("chgDirToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		changeDirectoryMenuItem.Image = image;
+		addDirectoriesToolStripButton.Image = image = DatabaseMapper.LoadResourceBitmap("addDirsToolStripMenuItem_Image", scaleSmallIconForDpi: true);
+		addDirectoryMenuItem.Image = image;
+		image = (manageDirectoriesToolStripButton.Image = DatabaseMapper.LoadResourceBitmap("manageDirsToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		manageDirectoriesMenuItem.Image = image;
+		image = (saveTagsToolStripButton.Image = DatabaseMapper.LoadResourceBitmap("saveToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		saveTagsMenuItem.Image = image;
+		removeTagsToolStripButton.Image = image = DatabaseMapper.LoadResourceBitmap("removeTagToolStripMenuItem_Image", scaleSmallIconForDpi: true);
+		removeTagsMenuItem.Image = image;
+		image = (undoToolStripButton.Image = DatabaseMapper.LoadResourceBitmap("undoToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		undoMenuItem.Image = image;
+		readTagsToolStripButton.Image = image = DatabaseMapper.LoadResourceBitmap("readTagsToolStripMenuItem_Image", scaleSmallIconForDpi: true);
+		readTagsMenuItem.Image = image;
+		image = (characterSetToolStripButton.Image = DatabaseMapper.LoadResourceBitmap("characterSetToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		characterSetMenuItem.Image = image;
+		image = (chineseConversionToolStripDropDownButton.Image = DatabaseMapper.LoadResourceBitmap("chschtToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		chineseConversionMenuItem.Image = image;
+		image = (tagHistoryToolStripButton.Image = DatabaseMapper.LoadResourceBitmap("tagsHistoryToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		tagHistoryMenuItem.Image = image;
+		exitMenuItem.Image = DatabaseMapper.LoadResourceBitmap("exitToolStripMenuItem_Image", scaleSmallIconForDpi: true);
+		image = (selectAllFilesToolStripButton.Image = DatabaseMapper.LoadResourceBitmap("selallfilesToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		selectAllFilesMenuItem.Image = image;
+		image = (unselectAllFilesToolStripButton.Image = DatabaseMapper.LoadResourceBitmap("unselectAllToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		unselectAllFilesMenuItem.Image = image;
+		refreshToolStripButton.Image = image = DatabaseMapper.LoadResourceBitmap("refreshToolStripMenuItem_Image", scaleSmallIconForDpi: true);
+		refreshMenuItem.Image = image;
+		image = (coverSourceToolStripSplitButton.Image = DatabaseMapper.LoadResourceBitmap("picSrcToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		coverSourceMenuItem.Image = image;
+		image = (lyricSourceToolStripSplitButton.Image = DatabaseMapper.LoadResourceBitmap("lyricSrcToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		lyricSourceMenuItem.Image = image;
+		image = (combinedTagSourceToolStripSplitButton.Image = DatabaseMapper.LoadResourceBitmap("combTagsSrcToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		combinedTagSourceMenuItem.Image = image;
+		image = (batchAutoMatchTagsToolStripButton.Image = DatabaseMapper.LoadResourceBitmap("batchAutoMatchTagsToolStripButton_Image", scaleSmallIconForDpi: true));
+		batchAutoMatchTagsMenuItem.Image = image;
+		image = (batchExtractCoverToolStripButton.Image = DatabaseMapper.LoadResourceBitmap("batchExtractCoverToolStripButton_Image", scaleSmallIconForDpi: true));
+		batchExtractCoverMenuItem.Image = image;
+		image = (batchSaveAsLrcToolStripSplitButton.Image = DatabaseMapper.LoadResourceBitmap("batchSaveAsLrcFileToolStripSplitButton_Image", scaleSmallIconForDpi: true));
+		saveLyricsMenuItem.Image = image;
+		image = (batchChineseConversionToolStripDropDownButton.Image = DatabaseMapper.LoadResourceBitmap("chschtToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		batchChineseConversionMenuItem.Image = image;
+		image = (batchFilenameRelatedToolStripButton.Image = DatabaseMapper.LoadResourceBitmap("batchFilenameRelToolStripButton_Image", scaleSmallIconForDpi: true));
+		batchFilenameRelatedMenuItem.Image = image;
 		image = (optionsToolStripButton.Image = DatabaseMapper.LoadResourceBitmap("optionsToolStripMenuItem_Image", scaleSmallIconForDpi: true));
 		optionsMenuItem.Image = image;
 		Size scaledImageSize = new Size(DatabaseMapper.ScaleByDpi(16f), DatabaseMapper.ScaleByDpi(16f));
@@ -3324,21 +3352,21 @@ internal class StateFieldInstance : Form
 		comboBox.TextChanged += textChangedHandler;
 	}
 
-		private void ApplyLanguageResources(string languageCode = null)
+	private void ApplyLanguageResources(string languageCode = null)
+	{
+		if (languageCode == null)
 		{
-			if (languageCode == null)
+			languageCode = Settings.Default.Language;
+		}
+		else
+		{
+			Settings.Default.Language = languageCode;
+			Settings.Default.Save();
+		}
+		if (string.IsNullOrEmpty(languageCode))
+		{
+			switch (CultureInfo.InstalledUICulture.Name)
 			{
-				languageCode = Settings.Default.Language;
-			}
-			else
-			{
-				Settings.Default.Language = languageCode;
-				Settings.Default.Save();
-			}
-			if (string.IsNullOrEmpty(languageCode))
-			{
-				switch (CultureInfo.InstalledUICulture.Name)
-				{
 				case "zh-TW":
 				case "zh-HK":
 				case "zh-MO":
@@ -3347,28 +3375,28 @@ internal class StateFieldInstance : Form
 				default:
 					languageCode = CultureInfo.InstalledUICulture.Name.StartsWith("zh") ? "zh-CHS" : "en";
 					break;
-				}
 			}
+		}
 
-			currentLanguageCode = languageCode;
-			englishLanguageMenuItem.Checked = false;
-			simplifiedChineseLanguageMenuItem.Checked = false;
-			traditionalChineseLanguageMenuItem.Checked = false;
-			if (languageCode == "zh-CHS")
-			{
-				simplifiedChineseLanguageMenuItem.Checked = true;
-			}
-			else if (languageCode == "zh-CHT")
-			{
-				traditionalChineseLanguageMenuItem.Checked = true;
-			}
+		currentLanguageCode = languageCode;
+		englishLanguageMenuItem.Checked = false;
+		simplifiedChineseLanguageMenuItem.Checked = false;
+		traditionalChineseLanguageMenuItem.Checked = false;
+		if (languageCode == "zh-CHS")
+		{
+			simplifiedChineseLanguageMenuItem.Checked = true;
+		}
+		else if (languageCode == "zh-CHT")
+		{
+			traditionalChineseLanguageMenuItem.Checked = true;
+		}
 		else
 		{
 			englishLanguageMenuItem.Checked = true;
 		}
 
-			Thread.CurrentThread.CurrentUICulture = CultureInfo.CreateSpecificCulture(languageCode);
-			Thread.CurrentThread.CurrentCulture = CultureInfo.CreateSpecificCulture(languageCode);
+		Thread.CurrentThread.CurrentUICulture = CultureInfo.CreateSpecificCulture(languageCode);
+		Thread.CurrentThread.CurrentCulture = CultureInfo.CreateSpecificCulture(languageCode);
 		Text = Resources.AppName;
 		notifyIcon.Text = Resources.AppName;
 		fileMenuItem.Text = localizedResources.GetString("menuStrip1.File");
@@ -3541,12 +3569,12 @@ internal class StateFieldInstance : Form
 	{
 		switch (textAlign)
 		{
-		case HorizontalAlignment.Center:
-			return DataGridViewContentAlignment.MiddleCenter;
-		case HorizontalAlignment.Right:
-			return DataGridViewContentAlignment.MiddleRight;
-		default:
-			return DataGridViewContentAlignment.MiddleLeft;
+			case HorizontalAlignment.Center:
+				return DataGridViewContentAlignment.MiddleCenter;
+			case HorizontalAlignment.Right:
+				return DataGridViewContentAlignment.MiddleRight;
+			default:
+				return DataGridViewContentAlignment.MiddleLeft;
 		}
 	}
 
@@ -3778,9 +3806,9 @@ internal class StateFieldInstance : Form
 		{
 			return DatabaseMapper.ConfirmYesNoCancel(string.Format(Resources.Msg_WantAllowRemoveReadonlyAttribute, readOnlyFilePath)) switch
 			{
-				DialogResult.No => false, 
-				DialogResult.Yes => true, 
-				_ => null, 
+				DialogResult.No => false,
+				DialogResult.Yes => true,
+				_ => null,
 			};
 		}
 		return false;
@@ -3932,20 +3960,20 @@ internal class StateFieldInstance : Form
 		return selectedDirectories;
 	}
 
-		private void ManageDirectoriesButton_Click(object sender, EventArgs e)
+	private void ManageDirectoriesButton_Click(object sender, EventArgs e)
+	{
+		DirectoryManagerDialog directoryManagerDialog = new DirectoryManagerDialog();
+		directoryManagerDialog.SetFileSetting(FileSettings);
+		if (directoryManagerDialog.ShowDialog() != DialogResult.OK)
 		{
-			DirectoryManagerDialog directoryManagerDialog = new DirectoryManagerDialog();
-			directoryManagerDialog.SetFileSetting(FileSettings);
-			if (directoryManagerDialog.ShowDialog() != DialogResult.OK)
-			{
-				return;
-			}
-
-			if (directoryManagerDialog.HasChanges && !FileSettings.IsAnyFileMode())
-			{
-				refreshMenuItem.PerformClick();
-			}
+			return;
 		}
+
+		if (directoryManagerDialog.HasChanges && !FileSettings.IsAnyFileMode())
+		{
+			refreshMenuItem.PerformClick();
+		}
+	}
 
 	private async void StartAddAnyFiles(IEnumerable<object> fileInfos, ProgressDialog progressDialog)
 	{
@@ -4727,20 +4755,20 @@ internal class StateFieldInstance : Form
 		RefreshCoverPreview();
 	}
 
-		private void SetLanguageEnglish_Click(object sender, EventArgs e)
-		{
-			ApplyLanguageResources("en");
-		}
+	private void SetLanguageEnglish_Click(object sender, EventArgs e)
+	{
+		ApplyLanguageResources("en");
+	}
 
-		private void SetLanguageSimplifiedChinese_Click(object sender, EventArgs e)
-		{
-			ApplyLanguageResources("zh-CHS");
-		}
+	private void SetLanguageSimplifiedChinese_Click(object sender, EventArgs e)
+	{
+		ApplyLanguageResources("zh-CHS");
+	}
 
-		private void SetLanguageTraditionalChinese_Click(object sender, EventArgs e)
-		{
-			ApplyLanguageResources("zh-CHT");
-		}
+	private void SetLanguageTraditionalChinese_Click(object sender, EventArgs e)
+	{
+		ApplyLanguageResources("zh-CHT");
+	}
 
 	private TrackSearchContext BuildTrackSearchContext()
 	{
@@ -6339,7 +6367,7 @@ internal class StateFieldInstance : Form
 		if (count != 0 && DatabaseMapper.ConfirmYesNo(string.Format(Resources.Msg_ConfirmRenameFiles, count) + "(" + localizedResources.GetString("menuStrip1.Batch.FilenameChtToChs") + ")\n" + BuildSelectedFilePreview()))
 		{
 			ProgressDialog progressDialog = new ProgressDialog(taskbarProgress);
-				(string Path, string NewPath, int ListViewIndex)[] itemInfos = CollectSelectedListViewItemInfos().Select(CreateRenameItemInfo).ToArray();
+			(string Path, string NewPath, int ListViewIndex)[] itemInfos = CollectSelectedListViewItemInfos().Select(CreateRenameItemInfo).ToArray();
 			StartRenameFiles(itemInfos, progressDialog, isChsToCht: false);
 			progressDialog.ShowDialogIfNotDisposed();
 		}
@@ -6351,7 +6379,7 @@ internal class StateFieldInstance : Form
 		if (count != 0 && DatabaseMapper.ConfirmYesNo(string.Format(Resources.Msg_ConfirmRenameFiles, count) + "(" + localizedResources.GetString("menuStrip1.Batch.FilenameChsToCht") + ")\n" + BuildSelectedFilePreview()))
 		{
 			ProgressDialog progressDialog = new ProgressDialog(taskbarProgress);
-				(string Path, string NewPath, int ListViewIndex)[] itemInfos = CollectSelectedListViewItemInfos().Select(CreateRenameItemInfo).ToArray();
+			(string Path, string NewPath, int ListViewIndex)[] itemInfos = CollectSelectedListViewItemInfos().Select(CreateRenameItemInfo).ToArray();
 			StartRenameFiles(itemInfos, progressDialog, isChsToCht: true);
 			progressDialog.ShowDialogIfNotDisposed();
 		}
@@ -6711,11 +6739,11 @@ internal class StateFieldInstance : Form
 		{
 			switch (keyData)
 			{
-			case Keys.Delete:
-			case Keys.A | Keys.Control:
-			case Keys.U | Keys.Control:
-			case Keys.A | Keys.Shift | Keys.Control:
-				return false;
+				case Keys.Delete:
+				case Keys.A | Keys.Control:
+				case Keys.U | Keys.Control:
+				case Keys.A | Keys.Shift | Keys.Control:
+					return false;
 			}
 		}
 		return base.ProcessCmdKey(ref message, keyData);

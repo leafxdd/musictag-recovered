@@ -116,9 +116,9 @@ internal class FilenameRelatedBatchDialog : Form
 		}
 	}
 
-		private static bool IsCheckedRadioButton(Control control)
-		{
-			return control is RadioButton radioButton && radioButton.Checked;
+	private static bool IsCheckedRadioButton(Control control)
+	{
+		return control is RadioButton radioButton && radioButton.Checked;
 	}
 
 	private static ComboBox GetCaptureGroupComboBox(AssociatedValueListViewItem item)
@@ -141,51 +141,51 @@ internal class FilenameRelatedBatchDialog : Form
 		return item.SelectedIndex > 0;
 	}
 
-		private static bool IsDigitCharacter(char character)
+	private static bool IsDigitCharacter(char character)
+	{
+		return char.IsDigit(character);
+	}
+
+	private sealed class RenameFilesBatchWorker
+	{
+		public CancellationTokenSource CancellationTokenSource;
+
+		public string CurrentFileName;
+
+		public ProgressDialog ProgressDialog;
+
+		public FilenameRelatedBatchDialog Owner;
+
+		public (string path, string _, int lvIndex)[] RenameItems;
+
+		public ListViewFileSetting FileSettings;
+
+		public Action<string, string> ReportFailure;
+
+		internal void Cancel()
 		{
-			return char.IsDigit(character);
+			if (!CancellationTokenSource.IsCancellationRequested)
+			{
+				CancellationTokenSource.Cancel();
+			}
 		}
 
-		private sealed class RenameFilesBatchWorker
+		internal void UpdateProgress()
 		{
-			public CancellationTokenSource CancellationTokenSource;
-	
-			public string CurrentFileName;
-	
-			public ProgressDialog ProgressDialog;
-	
-			public FilenameRelatedBatchDialog Owner;
-	
-			public (string path, string _, int lvIndex)[] RenameItems;
-	
-			public ListViewFileSetting FileSettings;
-	
-			public Action<string, string> ReportFailure;
-	
-			internal void Cancel()
+			if (CurrentFileName != null)
 			{
-				if (!CancellationTokenSource.IsCancellationRequested)
-				{
-					CancellationTokenSource.Cancel();
-				}
+				ProgressDialog.UpdateStatisticsProgress(Resources.Msg_Rename + CurrentFileName, Owner.processedCount, RenameItems.Length, Owner.successCount, Owner.failureCount, Owner.skippedCount, RenameItems.Length);
 			}
-	
-			internal void UpdateProgress()
-			{
-				if (CurrentFileName != null)
-				{
-					ProgressDialog.UpdateStatisticsProgress(Resources.Msg_Rename + CurrentFileName, Owner.processedCount, RenameItems.Length, Owner.successCount, Owner.failureCount, Owner.skippedCount, RenameItems.Length);
-				}
-			}
-	
-			internal void ReportRenameFailure(string path, string message)
-			{
-				string failureMessage = string.IsNullOrWhiteSpace(message) ? Resources.Msg_SaveFail : message;
-				DatabaseMapper.WriteRenameLog(path + ": " + failureMessage);
-				Owner.batchMessages.AddLine(Path.GetFileName(path));
-				Owner.batchMessages.AddLine(failureMessage);
-			}
-	
+		}
+
+		internal void ReportRenameFailure(string path, string message)
+		{
+			string failureMessage = string.IsNullOrWhiteSpace(message) ? Resources.Msg_SaveFail : message;
+			DatabaseMapper.WriteRenameLog(path + ": " + failureMessage);
+			Owner.batchMessages.AddLine(Path.GetFileName(path));
+			Owner.batchMessages.AddLine(failureMessage);
+		}
+
 		internal void RenameFiles()
 		{
 			Owner.historyTransaction = new TagHistoryRepository(useTransaction: true);
@@ -332,49 +332,51 @@ internal class FilenameRelatedBatchDialog : Form
 		}
 	}
 
-		private sealed class ChangeTagsBatchWorker
-		{
-			public CancellationTokenSource CancellationTokenSource;
-	
-			public string CurrentFileName;
-	
-			public ProgressDialog ProgressDialog;
-	
-			public FilenameRelatedBatchDialog Owner;
-	
-			public string[] FilePaths;
-	
-			public bool CanCancelReadOnly;
-	
-			public Action<string, string> ReportFailure;
-	
-			internal void Cancel()
-			{
-				if (!CancellationTokenSource.IsCancellationRequested)
-				{
-					CancellationTokenSource.Cancel();
-				}
-			}
-	
-			internal void UpdateProgress()
-			{
-				if (CurrentFileName != null)
-				{
-					ProgressDialog.UpdateStatisticsProgress(Resources.Msg_Savetag + CurrentFileName, Owner.processedCount, FilePaths.Length, Owner.successCount, Owner.failureCount, Owner.skippedCount, FilePaths.Length);
-				}
-			}
-	
-			internal void ReportTagSaveFailure(string path, string message)
-			{
-				string failureMessage = string.IsNullOrWhiteSpace(message) ? Resources.Msg_SaveFail : message;
-				DatabaseMapper.WriteSaveTagsLog(path + ": " + failureMessage);
-				Owner.batchMessages.AddLine(Path.GetFileName(path));
-				Owner.batchMessages.AddLine(failureMessage);
-			}
+	private sealed class ChangeTagsBatchWorker
+	{
+		public CancellationTokenSource CancellationTokenSource;
 
-			internal void ChangeTags()
+		public string CurrentFileName;
+
+		public ProgressDialog ProgressDialog;
+
+		public FilenameRelatedBatchDialog Owner;
+
+		public string[] FilePaths;
+
+		public bool CanCancelReadOnly;
+
+		public Action<string, string> ReportFailure;
+
+		internal void Cancel()
+		{
+			if (!CancellationTokenSource.IsCancellationRequested)
 			{
-				Owner.historyTransaction = new TagHistoryRepository(useTransaction: true);
+				CancellationTokenSource.Cancel();
+			}
+		}
+
+		internal void UpdateProgress()
+		{
+			if (CurrentFileName != null)
+			{
+				ProgressDialog.UpdateStatisticsProgress(Resources.Msg_Savetag + CurrentFileName, Owner.processedCount, FilePaths.Length, Owner.successCount, Owner.failureCount, Owner.skippedCount, FilePaths.Length);
+			}
+		}
+
+		internal void ReportTagSaveFailure(string path, string message)
+		{
+			string failureMessage = string.IsNullOrWhiteSpace(message) ? Resources.Msg_SaveFail : message;
+			DatabaseMapper.WriteSaveTagsLog(path + ": " + failureMessage);
+			Owner.batchMessages.AddLine(Path.GetFileName(path));
+			Owner.batchMessages.AddLine(failureMessage);
+		}
+
+		internal void ChangeTags()
+		{
+			Owner.historyTransaction = new TagHistoryRepository(useTransaction: true);
+			try
+			{
 				TagHistoryRepository.ClearUndoState();
 				foreach (string filePath in FilePaths)
 				{
@@ -383,12 +385,14 @@ internal class FilenameRelatedBatchDialog : Form
 						break;
 					}
 					FileInfo fileInfo = new FileInfo(filePath);
-					DatabaseMapper.ClearReadOnlyIfAllowed(fileInfo, CanCancelReadOnly);
-					DateTime lastWriteTime = fileInfo.LastWriteTime;
+					DateTime lastWriteTime = default(DateTime);
 					bool savedTags = false;
-					ConfigDescriptorState tagState = new ConfigDescriptorState(filePath);
+					ConfigDescriptorState tagState = null;
 					try
 					{
+						DatabaseMapper.ClearReadOnlyIfAllowed(fileInfo, CanCancelReadOnly);
+						lastWriteTime = fileInfo.LastWriteTime;
+						tagState = new ConfigDescriptorState(filePath);
 						if (tagState.IsLoadedSuccessfully())
 						{
 							PendingTagUpdate tagUpdate = new PendingTagUpdate(tagState);
@@ -410,30 +414,30 @@ internal class FilenameRelatedBatchDialog : Form
 											string capturedValue = match.Groups[groupIndex].Value.Trim();
 											switch (selectedTagIndex)
 											{
-											case 1:
-												tagUpdate.Changes["title"] = capturedValue;
-												break;
-											case 2:
-												tagUpdate.Changes["artist"] = capturedValue;
-												break;
-											case 3:
-												tagUpdate.Changes["album"] = capturedValue;
-												break;
-											case 4:
-												tagUpdate.SetNumberedTag("discstr", capturedValue);
-												break;
-											case 5:
-												tagUpdate.SetNumberedTag("trackstr", capturedValue);
-												break;
-											case 6:
-												tagUpdate.Changes["year"] = capturedValue;
-												break;
-											case 7:
-												tagUpdate.Changes["comment"] = capturedValue;
-												break;
-											case 8:
-												tagUpdate.Changes["albumartist"] = capturedValue;
-												break;
+												case 1:
+													tagUpdate.Changes["title"] = capturedValue;
+													break;
+												case 2:
+													tagUpdate.Changes["artist"] = capturedValue;
+													break;
+												case 3:
+													tagUpdate.Changes["album"] = capturedValue;
+													break;
+												case 4:
+													tagUpdate.SetNumberedTag("discstr", capturedValue);
+													break;
+												case 5:
+													tagUpdate.SetNumberedTag("trackstr", capturedValue);
+													break;
+												case 6:
+													tagUpdate.Changes["year"] = capturedValue;
+													break;
+												case 7:
+													tagUpdate.Changes["comment"] = capturedValue;
+													break;
+												case 8:
+													tagUpdate.Changes["albumartist"] = capturedValue;
+													break;
 											}
 										}
 									}
@@ -520,6 +524,11 @@ internal class FilenameRelatedBatchDialog : Form
 							Owner.failureCount++;
 						}
 					}
+					catch (Exception ex)
+					{
+						ReportFailure(filePath, ex.Message);
+						Owner.failureCount++;
+					}
 					finally
 					{
 						if (tagState != null)
@@ -540,9 +549,13 @@ internal class FilenameRelatedBatchDialog : Form
 					}
 					Owner.processedCount++;
 				}
+			}
+			finally
+			{
 				Owner.historyTransaction.Dispose();
 			}
 		}
+	}
 
 	private sealed class PendingTagUpdate
 	{
@@ -571,43 +584,43 @@ internal class FilenameRelatedBatchDialog : Form
 		{
 			switch (parameter)
 			{
-			case "@1":
-				SetTextTagIfChanged("title", value);
-				break;
-			case "@2":
-				SetTextTagIfChanged("artist", value);
-				break;
-			case "@3":
-				SetTextTagIfChanged("album", value);
-				break;
-			case "@4":
-				if (int.TryParse(value, out var discNumber))
-				{
-					Changes["discstr"] = discNumber.ToString();
-				}
-				break;
-			case "@5":
-				if (int.TryParse(value, out var trackNumber))
-				{
-					Changes["trackstr"] = trackNumber.ToString();
-				}
-				break;
-			case "@6":
-				SetTextTagIfChanged("year", value);
-				break;
-			case "@7":
-				SetTextTagIfChanged("comment", value);
-				break;
-			case "@8":
-				SetTextTagIfChanged("albumartist", value);
-				break;
-			case "@4@5":
-				if (int.TryParse(value, out var discAndTrack))
-				{
-					Changes["discstr"] = (discAndTrack / 100).ToString();
-					Changes["trackstr"] = (discAndTrack % 100).ToString();
-				}
-				break;
+				case "@1":
+					SetTextTagIfChanged("title", value);
+					break;
+				case "@2":
+					SetTextTagIfChanged("artist", value);
+					break;
+				case "@3":
+					SetTextTagIfChanged("album", value);
+					break;
+				case "@4":
+					if (int.TryParse(value, out var discNumber))
+					{
+						Changes["discstr"] = discNumber.ToString();
+					}
+					break;
+				case "@5":
+					if (int.TryParse(value, out var trackNumber))
+					{
+						Changes["trackstr"] = trackNumber.ToString();
+					}
+					break;
+				case "@6":
+					SetTextTagIfChanged("year", value);
+					break;
+				case "@7":
+					SetTextTagIfChanged("comment", value);
+					break;
+				case "@8":
+					SetTextTagIfChanged("albumartist", value);
+					break;
+				case "@4@5":
+					if (int.TryParse(value, out var discAndTrack))
+					{
+						Changes["discstr"] = (discAndTrack / 100).ToString();
+						Changes["trackstr"] = (discAndTrack % 100).ToString();
+					}
+					break;
 			}
 		}
 
@@ -993,7 +1006,7 @@ internal class FilenameRelatedBatchDialog : Form
 		{
 			return;
 		}
-			IsChangeTagsModeSelected = changeTagsModeRadioButton.Checked;
+		IsChangeTagsModeSelected = changeTagsModeRadioButton.Checked;
 		renameRelatedFiles = renameRelatedFilesCheckBox.Checked;
 		Dictionary<string, object> value = new Dictionary<string, object>
 		{
@@ -1024,6 +1037,15 @@ internal class FilenameRelatedBatchDialog : Form
 	{
 		if (!string.IsNullOrWhiteSpace(regexPatternTextBox.Text))
 		{
+			try
+			{
+				_ = new Regex(regexPatternTextBox.Text);
+			}
+			catch (ArgumentException ex)
+			{
+				DatabaseMapper.ShowErrorMessage(ex.Message);
+				return;
+			}
 			List<(int CaptureGroup, int SelectedIndex)> selectedCaptureGroups = captureGroupListView.Items.Cast<AssociatedValueListViewItem>().Select(CreateCaptureGroupSelection).Where(HasSelectedCaptureGroup)
 				.ToList();
 			if (!selectedCaptureGroups.Any())
@@ -1047,8 +1069,8 @@ internal class FilenameRelatedBatchDialog : Form
 				["regex"] = filenameRegexPattern,
 				["match_group_map"] = regexCaptureGroupMap
 			};
-				usesRegexCaptureGroups = true;
-				IsChangeTagsModeSelected = true;
+			usesRegexCaptureGroups = true;
+			IsChangeTagsModeSelected = true;
 			Settings.Default.FilenameRelRegexCondition = JsonConvert.SerializeObject(regexCondition);
 			Settings.Default.FilenameRelSelectedTab = tabControl.SelectedTab.Name;
 			Settings.Default.Save();
@@ -1166,11 +1188,23 @@ internal class FilenameRelatedBatchDialog : Form
 		progressDialog.AddCancelRequestedHandler(worker.Cancel);
 		progressDialog.AddProgressUpdateHandler(worker.UpdateProgress);
 		worker.ReportFailure = worker.ReportTagSaveFailure;
-		await Task.Run((Action)worker.ChangeTags, worker.CancellationTokenSource.Token);
-		progressDialog.CloseAfterCompletion();
-		(string msg, bool isErr) result = BuildBatchCompletionResult(paths.Length);
-		GC.Collect();
-		finallyCallback(result);
+		(string msg, bool isErr) result = default((string, bool));
+		try
+		{
+			await Task.Run((Action)worker.ChangeTags, worker.CancellationTokenSource.Token);
+			result = BuildBatchCompletionResult(paths.Length);
+		}
+		catch (Exception ex)
+		{
+			batchMessages.AddLine(ex.Message);
+			result = (batchMessages.ToString(), true);
+		}
+		finally
+		{
+			progressDialog.CloseAfterCompletion();
+			GC.Collect();
+			finallyCallback(result);
+		}
 	}
 
 	private (string msg, bool isErr) BuildBatchCompletionResult(int totalCount)
@@ -1737,4 +1771,3 @@ internal class FilenameRelatedBatchDialog : Form
 	}
 
 }
-
