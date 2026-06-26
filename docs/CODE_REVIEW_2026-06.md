@@ -124,7 +124,6 @@
 | `win32-shell-1` / `xcut-concurrency-4` | `AppDomain.UnhandledException` 处理器 `async void` + `await Task.Yield` 与进程终止竞争 → 崩溃日志/提示可能丢失 | `Program.cs:147` |
 | `net-providers-1` / `xcut-resources-4` | 网易 `CreateAlbumHttpClient` 每次新建 `HttpClient` 从不释放 | `NetEaseMusicTagProvider.cs:169` |
 | `net-providers-2` / `xcut-parsing-1` | 酷我歌词 `double.Parse` 未用 `InvariantCulture` → 逗号小数区域时间轴整体放大百倍（非中文区用户）| `KuwoTagProvider.cs:449` |
-| `services-misc-2` | 查找替换 `Ctrl+Z` 连调两次 `Undo()` 互相抵消 + 未 `SuppressKeyPress` | `TextBoxFindReplaceController.cs:138` |
 | `config-medium` | `XmlSettingsProvider.Save` 在只读安装目录（Program Files）抛 `UnauthorizedAccessException` 未处理 | `XmlSettingsProvider.cs:64` |
 | `services-misc-1` / `xcut-concurrency-5` | `ProgressDialog` 计时器后台线程 check-then-Invoke 竞态 + 构造期即 Start（句柄未建）| `ProgressDialog.cs:45,193` |
 
@@ -219,4 +218,5 @@
 | P2-14 歌词小数秒解析 | 已实现 | 1/2/3 位小数秒按毫秒位数补齐，避免 `[00:01.5]` 被解析成 50ms |
 | P2-15 HTML 实体解码 | 已实现 | `TextEncodingService` 使用 `HttpUtility.HtmlDecode`，支持数字实体和完整命名实体 |
 | P2-16 酷狗歌词关键词空值防御 | 已实现 | `KugouTagProvider` 构造歌词关键词时先处理空 artist/title，避免 `Trim()` 空引用 |
+| P2-17 查找替换快捷键处理 | 已实现 | `Ctrl+Z` 只执行一次 `Undo()`，并对已处理的 `Ctrl+A`/`Ctrl+Z`/`F2`/`F3` 设置 `SuppressKeyPress` |
 | P2 后续 | 待办 | 更零散的 Low 级资源释放问题 |
