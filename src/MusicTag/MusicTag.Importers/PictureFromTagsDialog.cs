@@ -139,26 +139,24 @@ internal class PictureFromTagsDialog : Form
 		UpdateLayout();
 	}
 
-	private void AddPictureCandidates(List<(string AudioFilePath, Image Image, string ImageHash)> candidates)
+	private void AddPictureCandidates(List<(string AudioFilePath, Image Image, string ImageHash, int PictureIndex)> candidates)
 	{
-		int imageIndex = 0;
-		foreach (var (audioFilePath, image, imageHash) in candidates)
+		foreach (var (audioFilePath, image, imageHash, pictureIndex) in candidates)
 		{
 			try
 			{
 				if (!GetLoadedImageHashes().Contains(imageHash))
 				{
-					string imageKey = audioFilePath + "_" + imageIndex;
+					string imageKey = audioFilePath + "_" + pictureIndex;
 					pictureImageList.Images.Add(imageKey, image);
 					ListViewItem listViewItem = new ListViewItem
 					{
 						Text = image.Width + "x" + image.Height,
 						ImageKey = imageKey,
-						Tag = (audioFilePath, imageIndex)
+						Tag = (audioFilePath, pictureIndex)
 					};
 					pictureListView.Items.Add(listViewItem);
 					GetLoadedImageHashes().Add(imageHash);
-					imageIndex++;
 				}
 			}
 			finally
@@ -171,7 +169,7 @@ internal class PictureFromTagsDialog : Form
 	private async void StartPictureSearchAsync()
 	{
 		CancellationToken cancellationToken = GetSearchCancellation().Token;
-		IProgress<List<(string, Image, string)>> progress = new Progress<List<(string, Image, string)>>(AddPictureCandidatesIfSearchActive);
+		IProgress<List<(string, Image, string, int)>> progress = new Progress<List<(string, Image, string, int)>>(AddPictureCandidatesIfSearchActive);
 
 		GetTaskbarProgress().SetProgressState(TaskbarProgressBarStatus.Indeterminate);
 		try
@@ -192,20 +190,20 @@ internal class PictureFromTagsDialog : Form
 		}
 	}
 
-	private void AddPictureCandidatesIfSearchActive(List<(string, Image, string)> candidates)
+	private void AddPictureCandidatesIfSearchActive(List<(string, Image, string, int)> candidates)
 	{
 		if (!GetSearchCancellation().IsCancellationRequested)
 		{
 			AddPictureCandidates(candidates);
 			return;
 		}
-		foreach (var (_, image, _) in candidates)
+		foreach (var (_, image, _, _) in candidates)
 		{
 			image?.Dispose();
 		}
 	}
 
-	private void CollectEmbeddedPictures(IProgress<List<(string, Image, string)>> progress, CancellationToken cancellationToken)
+	private void CollectEmbeddedPictures(IProgress<List<(string, Image, string, int)>> progress, CancellationToken cancellationToken)
 	{
 		foreach (string audioFilePath in GetAudioFilePaths() ?? new List<string>())
 		{
@@ -232,7 +230,8 @@ internal class PictureFromTagsDialog : Form
 				continue;
 			}
 
-			List<(string, Image, string)> candidates = new List<(string, Image, string)>();
+			List<(string, Image, string, int)> candidates = new List<(string, Image, string, int)>();
+			int pictureIndex = 0;
 			foreach (ConfigDescriptorState.PictureData picture in pictureData)
 			{
 				if (cancellationToken.IsCancellationRequested)
@@ -247,7 +246,8 @@ internal class PictureFromTagsDialog : Form
 				}
 
 				string imageHash = DatabaseMapper.ComputeMd5HashString(picture.ImageBytes);
-				candidates.Add((audioFilePath, image, imageHash));
+				candidates.Add((audioFilePath, image, imageHash, pictureIndex));
+				pictureIndex++;
 			}
 
 			progress.Report(candidates);
