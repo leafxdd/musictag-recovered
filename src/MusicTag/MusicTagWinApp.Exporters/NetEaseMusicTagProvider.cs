@@ -426,9 +426,14 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase
 
 	public LyricSearchResult LoadLyricsForTrack(TrackSearchResult track)
 	{
+		if (!long.TryParse(track.SourceTrackId, out var sourceTrackId))
+		{
+			return null;
+		}
+
 		NetEaseSongInfo song = new NetEaseSongInfo
 		{
-			Id = long.Parse(track.SourceTrackId),
+			Id = sourceTrackId,
 			Title = track.Title
 		};
 		song.ArtistNames.Add(track.Artist);

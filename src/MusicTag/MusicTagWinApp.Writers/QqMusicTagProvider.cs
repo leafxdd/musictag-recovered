@@ -295,9 +295,14 @@ internal class QqMusicTagProvider : RemoteTagProviderBase
 
 	public LyricSearchResult LoadLyricsForTrack(TrackSearchResult track)
 	{
+		if (!long.TryParse(track.SourceTrackId, out var sourceTrackId))
+		{
+			return null;
+		}
+
 		QqSongInfo songInfo = new QqSongInfo
 		{
-			Id = long.Parse(track.SourceTrackId),
+			Id = sourceTrackId,
 			Mid = track.QqMusicMid,
 			Title = track.Title,
 			Name = track.OriginalTitle
