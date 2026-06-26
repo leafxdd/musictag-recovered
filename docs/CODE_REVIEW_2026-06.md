@@ -26,7 +26,7 @@
 > ⚠️ 本项目**无任何自动化测试**，等价性/正确性历来靠 `scripts\Verify-Build.ps1 -RunSmokeTests` 冒烟验证。
 > 因此**任何按本报告所做的修复，都应至少跑一次 `Verify-Build.ps1 -RunSmokeTests` 并人工回归相关流程**。
 
-发现规模：原始约 98 条，去重后约 **62 个独立问题**（Codex 复核后口径：Critical 1 / High 6 / Medium 26 / Low ~30）。
+发现规模：原始约 98 条，去重后约 **62 个独立问题**（Codex 复核后口径：Critical 1 / High 6 / Medium 26 / Low ~30，Low 已全部修复）。
 
 ### Codex 复核修订（2026-06-26）
 
@@ -109,12 +109,12 @@
 
 ## 5. Low（约 30 条，按类别汇总）
 
-- **GDI / 句柄泄漏（确定但量小/低频）**：`GetSmallFileIcon` 的 HICON 永不 `DestroyIcon`（`DatabaseMapper.cs:456`，三处命中）、`LoadResourceBitmap` 的 `Graphics` 未释放（`DatabaseMapper.cs:664`）、多处对话框 `ImageList`（`CustomColumnsDialog.cs:90`、`CharacterSetSelectionDialog.cs:46`、`DirectoryManagerDialog.cs:46`）、`Icon`（`AboutDialog.cs:191`）、按钮位图（`SourceOrderControl.cs:75`、`LyricEditorDialog.cs:142/145`）、歌词搜索对话框（`LyricEditorDialog.cs:259`）、Shell COM 从不 `ReleaseComObject`（`FolderSelectionDialog.cs`、`LyricSaveFileDialog.cs`）、`PictureFromTagsDialog` 重复哈希图未释放（`:145`）。
+- **GDI / 句柄泄漏（确定但量小/低频）**：已清空。原先列出的 `DestroyIcon` / `Graphics` / `ImageList` / `Icon` / 按钮位图 / Shell COM / 图片去重资源都已收尾。
 - **文化相关（非中文区）**：年份 `ToString("yyyy")` → 佛历/回历错年份（`NetEaseMusicTagProvider.cs:337`、`QqMusicTagProvider.cs:232`，已修为 invariant culture）、`ToUpper()` → 土耳其语非法编码名（`TagTextEncoding.cs:109`，已修为 `ToUpperInvariant()`）、查找替换用 `CurrentCulture` 比较（`TextBoxFindReplaceController.cs:30`，已修为 ordinal 比较）。
 - **解析强转**：`long.Parse(SourceTrackId)`（`QqMusicTagProvider.cs:300`、`NetEaseMusicTagProvider.cs:430`，已修为 `TryParse`）、`tagState["durationinms"]` 缺键 `KeyNotFoundException`（`TrackSearchContext.cs:39`，已修为 `GetDisplayValue`）、单位数小数秒偏小 10 倍（`LyricTextProcessor.cs:228`，已修为按位数补齐到毫秒）、HTML 实体只解码 5 个、数字引用 `&#39;` 残留（`TextEncodingService.cs:7`，已改用 `HttpUtility.HtmlDecode`）、酷狗 `?? ""` 死防御兼潜在 NRE（`KugouTagProvider.cs:322`，已修空值防御）。
 - **异常静默（WinForms 无控制台，`Console.WriteLine` 日志全不可见）**：`DecodeBase64String` 失败返回原文污染歌词（`DatabaseMapper.cs:82`，已修为返回空字符串并跳过无效歌词字段）、`ImportLrcText` 显式导入失败静默 null（`LyricEditorDialog.cs:413`，已修为 UI 层捕获并弹出错误框）、`ReadSettingValue` 用 NRE 当控制流（`XmlSettingsProvider.cs:115`，已修为显式判空后回默认值）。
-- **并发 / 性能小问题**：每单元格 `new SolidBrush`（`EditableListView.cs:502`）。
-- **正确性小问题**：仅大小写改名被误判为冲突（`FilenameRelatedBatchDialog.cs:243`）、`PictureFromTagsDialog` 未选中点 OK 返回 null（`:241`）、内联重命名把用户输入直拼路径可越目录（`StateFieldInstance.cs:6681`）、`SetId3v2Version` 全局静态不复位（`ConfigDescriptorState.cs:1045`）、撤销字节计数在卸载后仍累加（`TagHistoryRepository.cs:351`）。
+- **并发 / 性能小问题**：已清空。原先列出的 `new SolidBrush` 热路径已改为 `TextRenderer` 直绘或缓存。
+- **正确性小问题**：已清空。原先列出的大小写重命名、图片选择空选中、内联重命名路径、`SetId3v2Version` 静态污染、撤销字节计数都已修复。
 
 ---
 
@@ -219,4 +219,9 @@
 | P2-39 歌词时间戳分隔复用 | 已实现 | `LyricTextProcessor.ParseTimestampMilliseconds` 改用静态 `TimestampSeparatorRegex`，避免每次拆时间串都构造新 `Regex` |
 | P2-40 相似度文本替换复用 | 已实现 | `TrackSearchResult.NormalizeSimilarityTextCandidates` 改为复用静态 `Regex` 实例，去掉每个 pattern 的重复构造 |
 | P2-41 文件名批处理 regex 缓存 | 已实现 | `FilenameRegexCaptureExtractor` 对相同 pattern 复用 `Regex`，减少批量文件名解析时的重复编译/分配 |
-| P2 后续 | 待办 | 更零散的 Low 级资源释放问题 |
+| P2-42 case-only 重命名支持 | 已实现 | `DatabaseMapper.MoveFileAllowingCaseOnlyRename` 处理仅大小写变化的音频 / LRC / 图片文件移动，批量重命名、简繁转换重命名、撤销重命名和内联重命名都不再把它误判成冲突 |
+| P2-43 图片选择空选中保护 | 已实现 | `PictureFromTagsDialog` 只有在选中图片时才允许 OK，避免空选中时返回 `null` |
+| P2-44 ID3v2 保存静态恢复 | 已实现 | `ConfigDescriptorState` 保存前后快照并恢复 `TagLib.Id3v2.Tag.DefaultVersion` / `ForceDefaultVersion`，防止全局静态污染后续写入 |
+| P2-45 撤销字节计数重置 | 已实现 | `TagHistoryRepository.ClearUndoState` 同步重置共享撤销字节计数，避免清空后继续沿用旧阈值 |
+| P2-46 热路径刷对象去分配 | 已实现 | `EditableListView`、`ImageComboBox`、`CombinedTagOverwriteOptionsDialog`、`AutoMatchTagsDialog` 改用 `TextRenderer` 直绘文本，去掉每次绘制新建 `SolidBrush` |
+| P2 后续 | 已完成 | Low 级问题已清空 |
