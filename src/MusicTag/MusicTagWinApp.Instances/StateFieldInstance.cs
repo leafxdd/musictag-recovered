@@ -2368,16 +2368,22 @@ internal class StateFieldInstance : Form
 	{
 		public AppSettingData appSettingsData;
 
-		public StateFieldInstance owner;
+		public string sortSettingJson;
+
+		public string mainFormPosSizeInfoJson;
+
+		public string filterListViewType;
+
+		public string filterListViewKeyword;
 
 		internal void SaveSettings()
 		{
 			SaveAppSettingData();
 
-			Settings.Default.SortSetting = JsonConvert.SerializeObject(owner.SortSetting);
-			Settings.Default.MainFormPosSizeInfo = JsonConvert.SerializeObject(owner.MainFormPosSizeInfo);
-			Settings.Default.FilterListViewType = owner.filterTypeDropDownButton.Tag as string;
-			Settings.Default.FilterListViewKeyword = owner.filterTextBox.Text;
+			Settings.Default.SortSetting = sortSettingJson;
+			Settings.Default.MainFormPosSizeInfo = mainFormPosSizeInfoJson;
+			Settings.Default.FilterListViewType = filterListViewType;
+			Settings.Default.FilterListViewKeyword = filterListViewKeyword;
 			Settings.Default.LastVersionCode = 17;
 			CustomColumnsDialog.SaveColumnHeaderSettings();
 			DatabaseMapper.TrySaveApplicationSettings();
@@ -6630,7 +6636,6 @@ internal class StateFieldInstance : Form
 	private async void StartSaveAppSettingData(SimpleProgressDialog progressDialog)
 	{
 		AppSettingsSaveTask appSettingsSaveTask = new AppSettingsSaveTask();
-		appSettingsSaveTask.owner = this;
 		SaveCurrentFileListColumnWidths();
 		appSettingsSaveTask.appSettingsData = new AppSettingData
 		{
@@ -6642,8 +6647,22 @@ internal class StateFieldInstance : Form
 			MainFormPosSizeInfo.Size = Size;
 			MainFormPosSizeInfo.Maximized = WindowState == FormWindowState.Maximized;
 		}
-		await Task.Run((Action)appSettingsSaveTask.SaveSettings);
-		progressDialog.CloseProgressDialog();
+		appSettingsSaveTask.sortSettingJson = JsonConvert.SerializeObject(SortSetting);
+		appSettingsSaveTask.mainFormPosSizeInfoJson = JsonConvert.SerializeObject(MainFormPosSizeInfo);
+		appSettingsSaveTask.filterListViewType = filterTypeDropDownButton.Tag as string;
+		appSettingsSaveTask.filterListViewKeyword = filterTextBox.Text;
+		try
+		{
+			await Task.Run((Action)appSettingsSaveTask.SaveSettings);
+		}
+		catch (System.Exception ex)
+		{
+			DatabaseMapper.WriteExceptionDetails(ex, "StateFieldInstance.StartSaveAppSettingData");
+		}
+		finally
+		{
+			progressDialog.CloseProgressDialog();
+		}
 	}
 
 	private void UpdateWindowTitle()
