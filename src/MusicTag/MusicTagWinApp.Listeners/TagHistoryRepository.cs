@@ -379,7 +379,9 @@ internal class TagHistoryRepository : IDisposable
 			List<ConfigDescriptorState.PictureData> pictureData = sourceTags["allpicturedata"] as List<ConfigDescriptorState.PictureData>;
 			foreach (ConfigDescriptorState.PictureData picture in pictureData)
 			{
-				ConfigDescriptorState.LoadPictureImage(picture);
+				using (ConfigDescriptorState.LoadPictureImage(picture))
+				{
+				}
 			}
 			snapshot["allpicturedata"] = pictureData;
 		}
