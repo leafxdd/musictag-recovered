@@ -107,8 +107,6 @@
 | `data-history-1` | `TagHistoryRepository` 事务无回滚 + `ExecuteReader` 失败把 static 共享连接置 null → 级联失败 + 原始异常被掩盖（验证后 high→medium）| `TagHistoryRepository.cs:76-171` |
 | `data-history-2` | static 共享连接/序列号/`UndoTags` 无任何同步，仅靠"UI 串行 await"这一**未强制**的不变量 | `TagHistoryRepository.cs:55,173,345` |
 | `config-medium` | `AppSettingData` 用 `BinaryFormatter` + `FileMode.Create` 非原子保存，`SaveSettings` 整体无 try/catch | `StateFieldInstance.cs:2338` |
-| `options-1` | 持久化整数直接赋给有界 `TrackBar.Value`，越界（0/负/>100）→ **选项对话框打不开** | `OptionsDialog.cs:459,649` |
-| `options-2` | 受限扩展名含重复项 → `Dictionary.Add` 抛 `ArgumentException` → 保存崩溃（输入 `.mp3;.mp3` 即触发）| `OptionsDialog.cs:719` |
 | `statefield-4` | 14 个 `async void StartXxx` 在 await 后收尾无 finally，异常时进度框残留、列表不刷新 | `StateFieldInstance.cs:4796,5360,5785…` |
 | `statefield-2` | 后台线程读 `filterTextBox.Text`（跨线程控件访问）| `StateFieldInstance.cs:2348` |
 | `dialogs-search-1` | `CombinedTagSearchDialog.SearchCombinedTagsAsync` 外层 `async void` 无 catch/finally；普通网络/解析失败多由 provider 内部吞吐，但仍存在未覆盖异常导致全局退出、进度图标/任务栏状态不复位的风险 | `CombinedTagSearchDialog.cs:801` |
