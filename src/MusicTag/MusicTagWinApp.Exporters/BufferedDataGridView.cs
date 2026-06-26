@@ -8,8 +8,32 @@ namespace MusicTagWinApp.Exporters;
 // 根治 —— 实测可跑满显示器刷新率。
 internal sealed class BufferedDataGridView : DataGridView
 {
+	private bool suppressLeftDragSelection;
+
 	public BufferedDataGridView()
 	{
 		DoubleBuffered = true;
+	}
+
+	protected override void OnMouseDown(MouseEventArgs e)
+	{
+		DataGridView.HitTestInfo hitInfo = HitTest(e.X, e.Y);
+		suppressLeftDragSelection = e.Button == MouseButtons.Left && hitInfo.RowIndex >= 0;
+		base.OnMouseDown(e);
+	}
+
+	protected override void OnMouseMove(MouseEventArgs e)
+	{
+		if (suppressLeftDragSelection && e.Button == MouseButtons.Left)
+		{
+			return;
+		}
+		base.OnMouseMove(e);
+	}
+
+	protected override void OnMouseUp(MouseEventArgs e)
+	{
+		suppressLeftDragSelection = false;
+		base.OnMouseUp(e);
 	}
 }
