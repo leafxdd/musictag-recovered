@@ -134,7 +134,7 @@
 - **GDI / 句柄泄漏（确定但量小/低频）**：`GetSmallFileIcon` 的 HICON 永不 `DestroyIcon`（`DatabaseMapper.cs:456`，三处命中）、`LoadResourceBitmap` 的 `Graphics` 未释放（`DatabaseMapper.cs:664`）、多处对话框 `ImageList`（`CustomColumnsDialog.cs:90`、`CharacterSetSelectionDialog.cs:46`、`DirectoryManagerDialog.cs:46`）、`Icon`（`AboutDialog.cs:191`）、按钮位图（`SourceOrderControl.cs:75`、`LyricEditorDialog.cs:142/145`）、歌词搜索对话框（`LyricEditorDialog.cs:259`）、Shell COM 从不 `ReleaseComObject`（`FolderSelectionDialog.cs`、`LyricSaveFileDialog.cs`）、`PictureFromTagsDialog` 重复哈希图未释放（`:145`）。
 - **文化相关（非中文区）**：年份 `ToString("yyyy")` → 佛历/回历错年份（`NetEaseMusicTagProvider.cs:337`、`QqMusicTagProvider.cs:232`，已修为 invariant culture）、`ToUpper()` → 土耳其语非法编码名（`TagTextEncoding.cs:109`，已修为 `ToUpperInvariant()`）、查找替换用 `CurrentCulture` 比较（`TextBoxFindReplaceController.cs:30`，已修为 ordinal 比较）。
 - **解析强转**：`long.Parse(SourceTrackId)`（`QqMusicTagProvider.cs:300`、`NetEaseMusicTagProvider.cs:430`，已修为 `TryParse`）、`tagState["durationinms"]` 缺键 `KeyNotFoundException`（`TrackSearchContext.cs:39`，已修为 `GetDisplayValue`）、单位数小数秒偏小 10 倍（`LyricTextProcessor.cs:228`，已修为按位数补齐到毫秒）、HTML 实体只解码 5 个、数字引用 `&#39;` 残留（`TextEncodingService.cs:7`，已改用 `HttpUtility.HtmlDecode`）、酷狗 `?? ""` 死防御兼潜在 NRE（`KugouTagProvider.cs:322`，已修空值防御）。
-- **异常静默（WinForms 无控制台，`Console.WriteLine` 日志全不可见）**：`DecodeBase64String` 失败返回原文污染歌词（`DatabaseMapper.cs:82`，已修为返回空字符串并跳过无效歌词字段）、`ImportLrcText` 显式导入失败静默 null（`LyricEditorDialog.cs:413`）、`ReadSettingValue` 用 NRE 当控制流（`XmlSettingsProvider.cs:115`）。
+- **异常静默（WinForms 无控制台，`Console.WriteLine` 日志全不可见）**：`DecodeBase64String` 失败返回原文污染歌词（`DatabaseMapper.cs:82`，已修为返回空字符串并跳过无效歌词字段）、`ImportLrcText` 显式导入失败静默 null（`LyricEditorDialog.cs:413`，已修为 UI 层捕获并弹出错误框）、`ReadSettingValue` 用 NRE 当控制流（`XmlSettingsProvider.cs:115`）。
 - **并发 / 性能小问题**：`SourceOrderControl` 500ms 空轮询（`:289`）、每单元格 `new SolidBrush`（`EditableListView.cs:502`）、UI 线程 `task.Wait()`（`StateFieldInstance.cs:4181`）、批次结束 `GC.Collect()` 卡顿（`AutoMatchTagsDialog.cs:1790`）、相似度/歌词热路径 `new Regex`（`TrackSearchResult.cs:503`、`LyricTextProcessor.cs:216`、`FilenameRelatedBatchDialog.cs:444`）、`ApplicationInfoService` 后台线程弹 `MessageBox` 并写 `Settings`（`:20`）、`GetScheduledTasks` 返回活引用（`LimitedConcurrencyTaskScheduler.cs:77`）。
 - **正确性小问题**：仅大小写改名被误判为冲突（`FilenameRelatedBatchDialog.cs:243`）、`PictureFromTagsDialog` 未选中点 OK 返回 null（`:241`）、内联重命名把用户输入直拼路径可越目录（`StateFieldInstance.cs:6681`）、`SetId3v2Version` 全局静态不复位（`ConfigDescriptorState.cs:1045`）、撤销字节计数在卸载后仍累加（`TagHistoryRepository.cs:351`）。
 
@@ -219,4 +219,5 @@
 | P2-17 查找替换快捷键处理 | 已实现 | `Ctrl+Z` 只执行一次 `Undo()`，并对已处理的 `Ctrl+A`/`Ctrl+Z`/`F2`/`F3` 设置 `SuppressKeyPress` |
 | P2-18 网易专辑请求资源释放 | 已实现 | `LoadAlbumDetails` 为临时 album `HttpClient` 建立 `using` 生命周期，避免每次请求泄漏 |
 | P2-19 QQ 歌词 Base64 解码失败处理 | 已实现 | `DecodeBase64String` 解码失败返回空字符串，避免把无效 base64 payload 写入歌词正文 |
+| P2-20 LRC 导入失败可见性 | 已实现 | 显式导入 LRC 时不再在 `ImportLrcText` 吞异常，点击处理器捕获后用错误框展示失败原因 |
 | P2 后续 | 待办 | 更零散的 Low 级资源释放问题 |
