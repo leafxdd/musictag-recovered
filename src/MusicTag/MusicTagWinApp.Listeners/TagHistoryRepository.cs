@@ -328,8 +328,14 @@ internal class TagHistoryRepository : IDisposable
 
 	public static int ClearAllHistory()
 	{
+		return TryClearAllHistory(out string _);
+	}
+
+	public static int TryClearAllHistory(out string errorMessage)
+	{
 		try
 		{
+			errorMessage = null;
 			int result;
 			using (TagHistoryRepository tagHistory = new TagHistoryRepository(useTransaction: true))
 			{
@@ -346,7 +352,8 @@ internal class TagHistoryRepository : IDisposable
 		}
 		catch (Exception ex)
 		{
-			Console.WriteLine("DeleteAllTagsHistory fail:" + ex.Message);
+			errorMessage = ex.GetMessageChain();
+			Console.WriteLine("DeleteAllTagsHistory fail:" + errorMessage);
 		}
 		return -1;
 	}

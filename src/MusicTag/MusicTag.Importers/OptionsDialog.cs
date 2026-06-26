@@ -956,13 +956,13 @@ internal class OptionsDialog : Form
 	{
 		if (DatabaseMapper.ConfirmYesNo(Resources.Msg_ConfirmClearAllTagsHistory))
 		{
-			if (TagHistoryRepository.ClearAllHistory() >= 0)
+			if (TagHistoryRepository.TryClearAllHistory(out string errorMessage) >= 0)
 			{
 				DatabaseMapper.ShowInformationMessage(Resources.Msg_ClearAllTagsHistoryComplete);
 			}
 			else
 			{
-				DatabaseMapper.ShowInformationMessage(Resources.Msg_ClearAllTagsHistoryFail);
+				DatabaseMapper.ShowErrorMessage(Resources.Msg_ClearAllTagsHistoryFail + "\n" + errorMessage);
 			}
 		}
 	}
