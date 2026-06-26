@@ -150,6 +150,7 @@ internal sealed class TextBoxFindReplaceController
 		if (e.Control && e.KeyCode == Keys.A)
 		{
 			textBox.SelectAll();
+			e.SuppressKeyPress = true;
 			return;
 		}
 
@@ -158,20 +159,22 @@ internal sealed class TextBoxFindReplaceController
 			if (textBox.CanUndo)
 			{
 				textBox.Undo();
-				textBox.Undo();
 			}
+			e.SuppressKeyPress = true;
 			return;
 		}
 
 		if (e.KeyCode == Keys.F2)
 		{
 			FindPrevious();
+			e.SuppressKeyPress = true;
 			return;
 		}
 
 		if (e.KeyCode == Keys.F3)
 		{
 			FindNext();
+			e.SuppressKeyPress = true;
 		}
 	}
 }
