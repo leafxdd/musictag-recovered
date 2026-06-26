@@ -101,7 +101,6 @@
 
 | id | 问题 | 位置 |
 |---|---|---|
-| `listview-controls-1` / `services-misc-3` | 静态初始化器里无保护 `JsonConvert.Deserialize`，损坏配置 → `TypeInitializationException` → 核心列设置/合并搜索路径**永久崩溃无法自愈** | `CustomColumnsDialog.cs:45,290`；`CombinedTagOverwriteOptionsDialog.cs:45` |
 | `data-history-1` | `TagHistoryRepository` 事务无回滚 + `ExecuteReader` 失败把 static 共享连接置 null → 级联失败 + 原始异常被掩盖（验证后 high→medium）| `TagHistoryRepository.cs:76-171` |
 | `data-history-2` | static 共享连接/序列号/`UndoTags` 无任何同步，仅靠"UI 串行 await"这一**未强制**的不变量 | `TagHistoryRepository.cs:55,173,345` |
 | `config-medium` | `AppSettingData` 仍使用 `BinaryFormatter` 反序列化退出状态，长期兼容/安全性差（非原子保存、后台 UI 读取和保存异常收尾已修） | `StateFieldInstance.cs:2338` |
@@ -216,4 +215,5 @@
 | P2-28 退出设置保存快照 | 已实现 | `StartSaveAppSettingData` 在 UI 线程快照排序、窗口、筛选条件后再进后台保存；保存异常写日志并在 `finally` 关闭进度框 |
 | P2-29 搜索对话框异常收尾 | 已实现 | `CombinedTagSearchDialog.SearchCombinedTagsAsync/DownloadCoverAsync` 和 `PictureFromTagsDialog.StartPictureSearchAsync` 均已补 catch/finally，搜索进度、任务栏状态和 `BeginUpdate/EndUpdate` 可收尾 |
 | P2-30 全局异常处理同步化 | 已实现 | `Application.ThreadException` / `AppDomain.UnhandledException` 处理器改为同步写日志、弹错误框并退出，移除 `async void` + `Task.Yield` 竞态 |
+| P2-31 列配置无效项容错 | 已实现 | 列设置 JSON 反序列化后过滤 `null`/无名列，`lyricist` 迁移检查也跳过无效项；合并覆盖选项已有 `JsonException` 回退 |
 | P2 后续 | 待办 | 更零散的 Low 级资源释放问题 |
