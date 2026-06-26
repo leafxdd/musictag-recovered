@@ -12,7 +12,6 @@ using System.Net;
 using System.Resources;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Runtime.Serialization.Formatters.Binary;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -2398,10 +2397,7 @@ internal class StateFieldInstance : Form
 			string backupPath = appSettingDataPath + ".bak";
 			try
 			{
-				using (FileStream fileStream = new FileStream(temporaryPath, FileMode.Create, FileAccess.Write, FileShare.None))
-				{
-					new BinaryFormatter().Serialize(fileStream, appSettingsData);
-				}
+				appSettingsData.Save(temporaryPath);
 				if (File.Exists(appSettingDataPath))
 				{
 					File.Replace(temporaryPath, appSettingDataPath, backupPath);
@@ -6591,8 +6587,7 @@ internal class StateFieldInstance : Form
 			ProgressDialog progressDialog = null;
 			try
 			{
-				using FileStream serializationStream = new FileStream(AppSettingData.AppSettingDataPath, FileMode.Open);
-				AppSettingData appSettingData = new BinaryFormatter().Deserialize(serializationStream) as AppSettingData;
+				AppSettingData appSettingData = AppSettingData.Load(AppSettingData.AppSettingDataPath);
 				FileSettings = appSettingData.ListViewFileSetting;
 				FileSettings.ResetListSet();
 				if (startupFileArgs.Any())
