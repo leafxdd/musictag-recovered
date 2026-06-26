@@ -80,7 +80,7 @@ internal class ConfigDescriptorState : IDisposable
 
 	private string filePath;
 
-	private readonly string loadError;
+	private string loadError;
 
 	public object this[string fieldName]
 	{
@@ -198,19 +198,19 @@ internal class ConfigDescriptorState : IDisposable
 			string tagValue = ReadFieldText(tagField);
 			switch (tagField)
 			{
-			case "trackstr":
-				TagValues.Add(tagField, ((int)TagValues["track"] > 0) ? tagValue : "");
-				break;
-			case "discstr":
-				TagValues.Add(tagField, ((int)TagValues["disc"] > 0) ? tagValue : "");
-				break;
-			case "track":
-			case "disc":
-				TagValues.Add(tagField, int.TryParse(tagValue, out var numericValue) ? numericValue : 0);
-				break;
-			default:
-				TagValues.Add(tagField, tagValue);
-				break;
+				case "trackstr":
+					TagValues.Add(tagField, ((int)TagValues["track"] > 0) ? tagValue : "");
+					break;
+				case "discstr":
+					TagValues.Add(tagField, ((int)TagValues["disc"] > 0) ? tagValue : "");
+					break;
+				case "track":
+				case "disc":
+					TagValues.Add(tagField, int.TryParse(tagValue, out var numericValue) ? numericValue : 0);
+					break;
+				default:
+					TagValues.Add(tagField, tagValue);
+					break;
 			}
 		}
 	}
@@ -427,61 +427,79 @@ internal class ConfigDescriptorState : IDisposable
 
 	public bool SaveTagFields()
 	{
-		TagLib.Tag tag = tagFile.Tag;
-		// Same fixed field order as the former native m0 string[12] contract.
-		tag.Title = TagValues["title"] as string;
-		tag.Performers = ToSingleValue(TagValues["artist"] as string);
-		tag.Album = TagValues["album"] as string;
-		SetYear(tag, TagValues["year"] as string);
-		SetTrack(tag, TagValues["trackstr"] as string);
-		SetDisc(tag, TagValues["discstr"] as string);
-		tag.Genres = ToSingleValue(TagValues["genre"] as string);
-		tag.AlbumArtists = ToSingleValue(TagValues["albumartist"] as string);
-		tag.Composers = ToSingleValue(TagValues["composer"] as string);
-		// Match the original native m0 behavior: it cleared ALL comment frames before
-		// writing the new value, so a netease "163 key" COMM (which carries a non-empty
-		// description) does NOT survive a comment edit. TagLib's Tag.Comment setter only
-		// replaces the default (empty-description) COMM, so clear the rest explicitly to
-		// stay behavior-equivalent (verified: original native write drops the 163 key).
-		if (tagFile.GetTag(TagLib.TagTypes.Id3v2, create: false) is TagLib.Id3v2.Tag id3v2ForComment)
+		try
 		{
-			id3v2ForComment.RemoveFrames("COMM");
-		}
-		tag.Comment = TagValues["comment"] as string;
-		WriteLyricist(TagValues["lyricist"] as string);
-		tag.Lyrics = TagValues["lyrics"] as string;
-		if (TagValues.TryGetValue("allpicturedata", out var value))
-		{
-			List<PictureData> pictures = value as List<PictureData>;
-			List<TagLib.IPicture> tagLibPictures = new List<TagLib.IPicture>();
-			foreach (PictureData picture in pictures)
+			loadError = null;
+			TagLib.Tag tag = tagFile.Tag;
+			// Same fixed field order as the former native m0 string[12] contract.
+			tag.Title = TagValues["title"] as string;
+			tag.Performers = ToSingleValue(TagValues["artist"] as string);
+			tag.Album = TagValues["album"] as string;
+			SetYear(tag, TagValues["year"] as string);
+			SetTrack(tag, TagValues["trackstr"] as string);
+			SetDisc(tag, TagValues["discstr"] as string);
+			tag.Genres = ToSingleValue(TagValues["genre"] as string);
+			tag.AlbumArtists = ToSingleValue(TagValues["albumartist"] as string);
+			tag.Composers = ToSingleValue(TagValues["composer"] as string);
+			// Match the original native m0 behavior: it cleared ALL comment frames before
+			// writing the new value, so a netease "163 key" COMM (which carries a non-empty
+			// description) does NOT survive a comment edit. TagLib's Tag.Comment setter only
+			// replaces the default (empty-description) COMM, so clear the rest explicitly to
+			// stay behavior-equivalent (verified: original native write drops the 163 key).
+			if (tagFile.GetTag(TagLib.TagTypes.Id3v2, create: false) is TagLib.Id3v2.Tag id3v2ForComment)
 			{
-				if (picture.MimeType == null || picture.Width == 0 || picture.Height == 0)
-				{
-					using (LoadPictureImage(picture))
-					{
-					}
-				}
-				TagLib.Picture tagLibPicture = new TagLib.Picture(new TagLib.ByteVector(picture.ImageBytes))
-				{
-					Type = NameToPictureType(picture.PictureType),
-					MimeType = picture.MimeType,
-					Description = ""
-				};
-				tagLibPictures.Add(tagLibPicture);
+				id3v2ForComment.RemoveFrames("COMM");
 			}
-			tag.Pictures = tagLibPictures.ToArray();
+			tag.Comment = TagValues["comment"] as string;
+			WriteLyricist(TagValues["lyricist"] as string);
+			tag.Lyrics = TagValues["lyrics"] as string;
+			if (TagValues.TryGetValue("allpicturedata", out var value))
+			{
+				List<PictureData> pictures = value as List<PictureData>;
+				List<TagLib.IPicture> tagLibPictures = new List<TagLib.IPicture>();
+				foreach (PictureData picture in pictures)
+				{
+					if (picture.MimeType == null || picture.Width == 0 || picture.Height == 0)
+					{
+						using (LoadPictureImage(picture))
+						{
+						}
+					}
+					TagLib.Picture tagLibPicture = new TagLib.Picture(new TagLib.ByteVector(picture.ImageBytes))
+					{
+						Type = NameToPictureType(picture.PictureType),
+						MimeType = picture.MimeType,
+						Description = ""
+					};
+					tagLibPictures.Add(tagLibPicture);
+				}
+				tag.Pictures = tagLibPictures.ToArray();
+			}
+			SetId3v2Version();
+			tagFile.Save();
+			return true;
 		}
-		SetId3v2Version();
-		tagFile.Save();
-		return true;
+		catch (Exception ex)
+		{
+			loadError = string.IsNullOrWhiteSpace(ex.Message) ? Resources.Msg_SaveFail : ex.Message;
+			return false;
+		}
 	}
 
 	public bool SaveCurrentTagFile()
 	{
-		SetId3v2Version();
-		tagFile.Save();
-		return true;
+		try
+		{
+			loadError = null;
+			SetId3v2Version();
+			tagFile.Save();
+			return true;
+		}
+		catch (Exception ex)
+		{
+			loadError = string.IsNullOrWhiteSpace(ex.Message) ? Resources.Msg_SaveFail : ex.Message;
+			return false;
+		}
 	}
 
 	public bool TryGetRawValue(string key, out object value)
@@ -501,17 +519,17 @@ internal class ConfigDescriptorState : IDisposable
 		object value = this[fieldName];
 		switch (fieldName)
 		{
-		case "bitrate":
-			return string.Concat(value, "kbps");
-		case "samplerate":
-			return string.Concat(value, "Hz");
-		case "haspicture":
-		case "hasvideotrack":
-			return (bool)value ? "√" : "";
-		case "durationinms":
-			return FormatDurationWithMilliseconds((int)value);
-		default:
-			return value.ToString();
+			case "bitrate":
+				return string.Concat(value, "kbps");
+			case "samplerate":
+				return string.Concat(value, "Hz");
+			case "haspicture":
+			case "hasvideotrack":
+				return (bool)value ? "√" : "";
+			case "durationinms":
+				return FormatDurationWithMilliseconds((int)value);
+			default:
+				return value.ToString();
 		}
 	}
 
@@ -541,36 +559,36 @@ internal class ConfigDescriptorState : IDisposable
 		TagLib.Tag tag = tagFile.Tag;
 		switch (field)
 		{
-		case "title":
-			return tag.Title ?? "";
-		case "artist":
-			return JoinMulti(tag.Performers);
-		case "album":
-			return tag.Album ?? "";
-		case "year":
-			return (tag.Year == 0) ? "" : tag.Year.ToString();
-		case "track":
-			return (tag.Track == 0) ? "" : tag.Track.ToString();
-		case "disc":
-			return (tag.Disc == 0) ? "" : tag.Disc.ToString();
-		case "trackstr":
-			return tag.Track.ToString() + ((tag.TrackCount > 0) ? ("/" + tag.TrackCount) : "");
-		case "discstr":
-			return tag.Disc.ToString() + ((tag.DiscCount > 0) ? ("/" + tag.DiscCount) : "");
-		case "genre":
-			return JoinMulti(tag.Genres);
-		case "albumartist":
-			return JoinMulti(tag.AlbumArtists);
-		case "composer":
-			return JoinMulti(tag.Composers);
-		case "lyricist":
-			return ReadLyricist();
-		case "comment":
-			return tag.Comment ?? "";
-		case "lyrics":
-			return tag.Lyrics ?? "";
-		default:
-			return "";
+			case "title":
+				return tag.Title ?? "";
+			case "artist":
+				return JoinMulti(tag.Performers);
+			case "album":
+				return tag.Album ?? "";
+			case "year":
+				return (tag.Year == 0) ? "" : tag.Year.ToString();
+			case "track":
+				return (tag.Track == 0) ? "" : tag.Track.ToString();
+			case "disc":
+				return (tag.Disc == 0) ? "" : tag.Disc.ToString();
+			case "trackstr":
+				return tag.Track.ToString() + ((tag.TrackCount > 0) ? ("/" + tag.TrackCount) : "");
+			case "discstr":
+				return tag.Disc.ToString() + ((tag.DiscCount > 0) ? ("/" + tag.DiscCount) : "");
+			case "genre":
+				return JoinMulti(tag.Genres);
+			case "albumartist":
+				return JoinMulti(tag.AlbumArtists);
+			case "composer":
+				return JoinMulti(tag.Composers);
+			case "lyricist":
+				return ReadLyricist();
+			case "comment":
+				return tag.Comment ?? "";
+			case "lyrics":
+				return tag.Lyrics ?? "";
+			default:
+				return "";
 		}
 	}
 
@@ -809,24 +827,24 @@ internal class ConfigDescriptorState : IDisposable
 	{
 		switch (field)
 		{
-		case "title":
-			return "TIT2";
-		case "artist":
-			return "TPE1";
-		case "album":
-			return "TALB";
-		case "year":
-			return "TDRC";
-		case "genre":
-			return "TCON";
-		case "albumartist":
-			return "TPE2";
-		case "composer":
-			return "TCOM";
-		case "lyricist":
-			return "TEXT";
-		default:
-			return null;
+			case "title":
+				return "TIT2";
+			case "artist":
+				return "TPE1";
+			case "album":
+				return "TALB";
+			case "year":
+				return "TDRC";
+			case "genre":
+				return "TCON";
+			case "albumartist":
+				return "TPE2";
+			case "composer":
+				return "TCOM";
+			case "lyricist":
+				return "TEXT";
+			default:
+				return null;
 		}
 	}
 
@@ -834,28 +852,28 @@ internal class ConfigDescriptorState : IDisposable
 	{
 		switch (field)
 		{
-		case "title":
-			return "TITLE";
-		case "artist":
-			return "ARTIST";
-		case "album":
-			return "ALBUM";
-		case "year":
-			return "DATE";
-		case "genre":
-			return "GENRE";
-		case "albumartist":
-			return "ALBUMARTIST";
-		case "composer":
-			return "COMPOSER";
-		case "lyricist":
-			return "LYRICIST";
-		case "comment":
-			return "COMMENT";
-		case "lyrics":
-			return "LYRICS";
-		default:
-			return null;
+			case "title":
+				return "TITLE";
+			case "artist":
+				return "ARTIST";
+			case "album":
+				return "ALBUM";
+			case "year":
+				return "DATE";
+			case "genre":
+				return "GENRE";
+			case "albumartist":
+				return "ALBUMARTIST";
+			case "composer":
+				return "COMPOSER";
+			case "lyricist":
+				return "LYRICIST";
+			case "comment":
+				return "COMMENT";
+			case "lyrics":
+				return "LYRICS";
+			default:
+				return null;
 		}
 	}
 
@@ -863,28 +881,28 @@ internal class ConfigDescriptorState : IDisposable
 	{
 		switch (field)
 		{
-		case "title":
-			return "Title";
-		case "artist":
-			return "Artist";
-		case "album":
-			return "Album";
-		case "year":
-			return "Year";
-		case "genre":
-			return "Genre";
-		case "albumartist":
-			return "Album Artist";
-		case "composer":
-			return "Composer";
-		case "lyricist":
-			return "Lyricist";
-		case "comment":
-			return "Comment";
-		case "lyrics":
-			return "Lyrics";
-		default:
-			return null;
+			case "title":
+				return "Title";
+			case "artist":
+				return "Artist";
+			case "album":
+				return "Album";
+			case "year":
+				return "Year";
+			case "genre":
+				return "Genre";
+			case "albumartist":
+				return "Album Artist";
+			case "composer":
+				return "Composer";
+			case "lyricist":
+				return "Lyricist";
+			case "comment":
+				return "Comment";
+			case "lyrics":
+				return "Lyrics";
+			default:
+				return null;
 		}
 	}
 
@@ -892,16 +910,16 @@ internal class ConfigDescriptorState : IDisposable
 	{
 		switch (stringType)
 		{
-		case TagLib.StringType.Latin1:
-			return "Latin1";
-		case TagLib.StringType.UTF16:
-			return "UTF16";
-		case TagLib.StringType.UTF16BE:
-			return "UTF16BE";
-		case TagLib.StringType.UTF16LE:
-			return "UTF16LE";
-		default:
-			return "UTF8";
+			case TagLib.StringType.Latin1:
+				return "Latin1";
+			case TagLib.StringType.UTF16:
+				return "UTF16";
+			case TagLib.StringType.UTF16BE:
+				return "UTF16BE";
+			case TagLib.StringType.UTF16LE:
+				return "UTF16LE";
+			default:
+				return "UTF8";
 		}
 	}
 
@@ -913,14 +931,14 @@ internal class ConfigDescriptorState : IDisposable
 		}
 		switch (stringType)
 		{
-		case TagLib.StringType.Latin1:
-			return Latin1Encoding.GetBytes(value);
-		case TagLib.StringType.UTF16BE:
-			return Encoding.BigEndianUnicode.GetBytes(value);
-		case TagLib.StringType.UTF8:
-			return Encoding.UTF8.GetBytes(value);
-		default:
-			return Encoding.Unicode.GetBytes(value);
+			case TagLib.StringType.Latin1:
+				return Latin1Encoding.GetBytes(value);
+			case TagLib.StringType.UTF16BE:
+				return Encoding.BigEndianUnicode.GetBytes(value);
+			case TagLib.StringType.UTF8:
+				return Encoding.UTF8.GetBytes(value);
+			default:
+				return Encoding.Unicode.GetBytes(value);
 		}
 	}
 

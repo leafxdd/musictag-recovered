@@ -210,6 +210,10 @@ internal class AutoMatchTagsDialog : Form
 					}
 					ApplySearchResults(searchResults, textTagUpdateFilter);
 				}
+				catch (Exception ex)
+				{
+					worker.loadErrorMessage = string.IsNullOrWhiteSpace(ex.Message) ? Resources.Msg_SaveFail : ex.Message;
+				}
 				finally
 				{
 					FinishSearch();
@@ -476,7 +480,7 @@ internal class AutoMatchTagsDialog : Form
 					break;
 				}
 			}
-	
+
 			internal bool DownloadCoverToTempFile(TrackSearchResult searchResult)
 			{
 				var (tempCoverPath, coverLease) = worker.coverTempFileCache.Reserve(searchResult.Cover.CoverUrl);
@@ -1410,12 +1414,12 @@ internal class AutoMatchTagsDialog : Form
 					return;
 				}
 				ProcessSequentially();
-				}
-				finally
-				{
-					owner.tagHistoryTransaction.Dispose();
-				}
 			}
+			finally
+			{
+				owner.tagHistoryTransaction.Dispose();
+			}
+		}
 
 		private void Cancel()
 		{
@@ -1768,27 +1772,39 @@ internal class AutoMatchTagsDialog : Form
 	{
 		AutoMatchTagsWorker worker = new AutoMatchTagsWorker(this, paths, progressDialog, canCancelReadonlyFile);
 		worker.RegisterProgressCallbacks();
-		(string msg, bool isErr) result;
-		await Task.Run((Action)worker.Run, worker.CancellationToken);
-		progressDialog.CloseAfterCompletion();
-		if (paths.Length > 1)
+		(string msg, bool isErr) result = default((string, bool));
+		try
 		{
-			result = CreateBatchAutoMatchResult();
+			await Task.Run((Action)worker.Run, worker.CancellationToken);
+			if (paths.Length > 1)
+			{
+				result = CreateBatchAutoMatchResult();
+			}
+			else if (successCount > 0)
+			{
+				result = (Resources.Msg_SaveCompleted + "\n" + autoMatchLog.ToString(), false);
+			}
+			else if (skippedCount > 0)
+			{
+				result = (Resources.Msg_Skipped + "\n" + autoMatchLog.ToString(), false);
+			}
+			else
+			{
+				result = (autoMatchLog.ToString(), true);
+			}
 		}
-		else if (successCount > 0)
+		catch (Exception ex)
 		{
-			result = (Resources.Msg_SaveCompleted + "\n" + autoMatchLog.ToString(), false);
-		}
-		else if (skippedCount > 0)
-		{
-			result = (Resources.Msg_Skipped + "\n" + autoMatchLog.ToString(), false);
-		}
-		else
-		{
+			DatabaseMapper.WriteAutoMatchLog(ex.Message);
+			autoMatchLog.AddLine(ex.Message);
 			result = (autoMatchLog.ToString(), true);
 		}
-		GC.Collect();
-		finallyCallback(result);
+		finally
+		{
+			progressDialog.CloseAfterCompletion();
+			GC.Collect();
+			finallyCallback(result);
+		}
 	}
 
 	private (string msg, bool isErr) CreateBatchAutoMatchResult()
@@ -1961,5 +1977,3 @@ internal class AutoMatchTagsDialog : Form
 	}
 
 }
-
-
