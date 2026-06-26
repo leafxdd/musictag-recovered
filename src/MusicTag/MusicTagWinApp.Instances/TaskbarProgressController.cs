@@ -15,6 +15,7 @@ internal class TaskbarProgressController
 	{
 		this.ownerForm = ownerForm;
 		taskbarList = (ITaskbarList4)new CTaskbarList();
+		taskbarList.HrInit();
 	}
 
 	public void SetProgressValue(int current, int total)
