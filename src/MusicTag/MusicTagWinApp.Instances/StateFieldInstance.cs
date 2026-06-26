@@ -79,6 +79,9 @@ internal class StateFieldInstance : Form
 		// 文件类型图标键(扩展名),第一列 CellPainting 据此取图标。
 		public string IconKey;
 
+		// 文件类型图标对象缓存,避免滚动重绘时反复查 ImageList。
+		public Image IconImage;
+
 		// 过滤隐藏位:true 表示当前过滤条件下不进 visibleRows(不显示)。
 		public bool IsHidden;
 
@@ -394,6 +397,8 @@ internal class StateFieldInstance : Form
 					columnIndex++;
 				}
 				bool loadFailed = tagFile == null || !tagFile.IsLoadedSuccessfully();
+				string iconKey = Path.GetExtension(filePath).ToLower();
+				Image iconImage = Owner.GetFileTypeIcon(iconKey);
 				Owner.cachedFileListItems.Add(new FileRow
 				{
 					IsHidden = false,
@@ -403,7 +408,8 @@ internal class StateFieldInstance : Form
 					DurationMs = durationMs,
 					CommentFullLength = commentFullLength,
 					LoadFailed = loadFailed,
-					IconKey = Path.GetExtension(filePath).ToLower()
+					IconKey = iconKey,
+					IconImage = iconImage
 				});
 				if (anyFileMode)
 				{
@@ -437,7 +443,7 @@ internal class StateFieldInstance : Form
 				string extension = CurrentFileInfo.Extension.ToLower();
 				if (CurrentFileInfo.Exists && EnabledTagTypesByExtension.ContainsKey(extension) && !ExistingFilePaths.Contains(fullPath))
 				{
-					if (!Owner.fileTypeImageList.Images.ContainsKey(extension))
+					if (!Owner.HasFileTypeIcon(extension))
 					{
 						AddFileTypeIcon(extension, fullPath);
 					}
@@ -490,19 +496,12 @@ internal class StateFieldInstance : Form
 			try
 			{
 				Bitmap listIcon = new Bitmap(FileIconSize.Width, FileIconSize.Height);
-				try
+				using (Graphics graphics = Graphics.FromImage(listIcon))
 				{
-					using (Graphics graphics = Graphics.FromImage(listIcon))
-					{
-						graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
-						graphics.DrawImage(sourceIcon, new Point((FileIconSize.Width - sourceIcon.Width) / 2, (FileIconSize.Height - sourceIcon.Height) / 2));
-					}
-					Owner.fileTypeImageList.Images.Add(extension, listIcon);
+					graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+					graphics.DrawImage(sourceIcon, new Point((FileIconSize.Width - sourceIcon.Width) / 2, (FileIconSize.Height - sourceIcon.Height) / 2));
 				}
-				finally
-				{
-					listIcon.Dispose();
-				}
+				Owner.CacheFileTypeIcon(extension, listIcon);
 			}
 			finally
 			{
@@ -2432,6 +2431,10 @@ internal class StateFieldInstance : Form
 
 	private readonly ImageList fileTypeImageList;
 
+	private readonly Dictionary<string, Image> fileTypeIconCache;
+
+	private readonly object fileTypeIconCacheLock = new object();
+
 	private readonly Dictionary<string, ComboBox> tagComboBoxes;
 
 	private readonly Dictionary<string, (Label label, EventHandler cbTextChangedEvent)> tagFieldTextHandlers;
@@ -2910,6 +2913,16 @@ internal class StateFieldInstance : Form
 	// visibleRows 的 行 → 下标 反查(InvalidateRow / 恢复选区 用),随 visibleRows 重建。
 	private readonly Dictionary<FileRow, int> visibleRowIndex = new Dictionary<FileRow, int>();
 
+	private readonly HashSet<FileRow> selectedVisibleRows = new HashSet<FileRow>();
+
+	private int selectedFileCount;
+
+	private FileRow singleSelectedVisibleRow;
+
+	private int fileListIconSize;
+
+	private int fileListIconPadding;
+
 	// 抑制 DGV SelectionChanged 处理(过滤/排序/全选反选等程序化改选区时置 true,避免重入)。
 	private bool suppressFileListSelectionEvents;
 
@@ -2933,6 +2946,36 @@ internal class StateFieldInstance : Form
 	{
 		get => fileSettings;
 		set => fileSettings = value;
+	}
+
+	private bool HasFileTypeIcon(string extension)
+	{
+		lock (fileTypeIconCacheLock)
+		{
+			return fileTypeIconCache.ContainsKey(extension);
+		}
+	}
+
+	private Image GetFileTypeIcon(string extension)
+	{
+		lock (fileTypeIconCacheLock)
+		{
+			fileTypeIconCache.TryGetValue(extension, out Image iconImage);
+			return iconImage;
+		}
+	}
+
+	private void CacheFileTypeIcon(string extension, Image iconImage)
+	{
+		lock (fileTypeIconCacheLock)
+		{
+			if (fileTypeIconCache.ContainsKey(extension))
+			{
+				iconImage.Dispose();
+				return;
+			}
+			fileTypeIconCache.Add(extension, iconImage);
+		}
 	}
 
 	static StateFieldInstance()
@@ -2990,6 +3033,7 @@ internal class StateFieldInstance : Form
 	{
 		localizedResources = new ComponentResourceManager(typeof(StateFieldInstance));
 		fileTypeImageList = new ImageList();
+		fileTypeIconCache = new Dictionary<string, Image>();
 		tagComboBoxes = new Dictionary<string, ComboBox>();
 		tagFieldTextHandlers = new Dictionary<string, (Label, EventHandler)>();
 		selectedFilterValueStates = new Dictionary<string, (Dictionary<string, int> valueCounts, List<(string value, bool wasRemoved)> changedValues)>();
@@ -3469,7 +3513,7 @@ internal class StateFieldInstance : Form
 				HeaderText = columnInfo.Name,
 				Width = columnInfo.width,
 				Visible = columnInfo.isShow,
-				SortMode = DataGridViewColumnSortMode.NotSortable,
+				SortMode = DataGridViewColumnSortMode.Programmatic,
 				ReadOnly = true,
 				Resizable = DataGridViewTriState.True,
 				Tag = columnInfo
@@ -3485,6 +3529,9 @@ internal class StateFieldInstance : Form
 		}
 		fileTypeImageList.ColorDepth = ColorDepth.Depth32Bit;
 		fileTypeImageList.ImageSize = new Size(DatabaseMapper.ScaleByDpi(20f), DatabaseMapper.ScaleByDpi(20f));
+		fileListIconSize = fileTypeImageList.ImageSize.Width;
+		fileListIconPadding = DatabaseMapper.ScaleByDpi(2f);
+		fileListView.RowTemplate.Height = Math.Max(DatabaseMapper.ScaleByDpi(22f), fileTypeImageList.ImageSize.Height + fileListIconPadding);
 	}
 
 	private static DataGridViewContentAlignment MapColumnAlignment(HorizontalAlignment textAlign)
@@ -3500,14 +3547,52 @@ internal class StateFieldInstance : Form
 		}
 	}
 
+	private void ApplyFileListVisualStyle()
+	{
+		Font listFont = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+		fileListView.Font = listFont;
+		fileListView.BackgroundColor = Color.White;
+		fileListView.GridColor = SystemColors.ControlLight;
+		fileListView.CellBorderStyle = DataGridViewCellBorderStyle.None;
+		fileListView.AdvancedCellBorderStyle.All = DataGridViewAdvancedCellBorderStyle.None;
+		fileListView.AdvancedColumnHeadersBorderStyle.All = DataGridViewAdvancedCellBorderStyle.None;
+		fileListView.AdvancedColumnHeadersBorderStyle.Right = DataGridViewAdvancedCellBorderStyle.Single;
+		fileListView.EnableHeadersVisualStyles = false;
+		fileListView.DefaultCellStyle.BackColor = Color.White;
+		fileListView.DefaultCellStyle.ForeColor = SystemColors.WindowText;
+		fileListView.DefaultCellStyle.Font = listFont;
+		fileListView.DefaultCellStyle.SelectionBackColor = SystemColors.Highlight;
+		fileListView.DefaultCellStyle.SelectionForeColor = SystemColors.HighlightText;
+		fileListView.RowsDefaultCellStyle.BackColor = Color.White;
+		fileListView.AlternatingRowsDefaultCellStyle.BackColor = Color.White;
+		fileListView.ColumnHeadersDefaultCellStyle.BackColor = Color.White;
+		fileListView.ColumnHeadersDefaultCellStyle.ForeColor = SystemColors.ControlText;
+		fileListView.ColumnHeadersDefaultCellStyle.Font = listFont;
+		fileListView.ColumnHeadersDefaultCellStyle.Padding = Padding.Empty;
+		fileListView.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
+		fileListView.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.White;
+		fileListView.ColumnHeadersDefaultCellStyle.SelectionForeColor = SystemColors.ControlText;
+		fileListView.ColumnHeadersHeight = Math.Max(fileListView.ColumnHeadersHeight, DatabaseMapper.ScaleByDpi(24f));
+	}
+
 	// 依 cachedFileListItems(主表 = 显示顺序)的 IsHidden 重建可见行集合与下标反查,并把 RowCount 同步给 DGV。
 	private void RebuildVisibleRows()
 	{
 		visibleRows = cachedFileListItems.Where((FileRow r) => !r.IsHidden).ToList();
 		visibleRowIndex.Clear();
+		selectedVisibleRows.Clear();
+		selectedFileCount = 0;
+		singleSelectedVisibleRow = null;
 		for (int i = 0; i < visibleRows.Count; i++)
 		{
-			visibleRowIndex[visibleRows[i]] = i;
+			FileRow fileRow = visibleRows[i];
+			visibleRowIndex[fileRow] = i;
+			if (fileRow.Selected)
+			{
+				selectedVisibleRows.Add(fileRow);
+				selectedFileCount++;
+				singleSelectedVisibleRow = selectedFileCount == 1 ? fileRow : null;
+			}
 		}
 		bool previous = suppressFileListSelectionEvents;
 		suppressFileListSelectionEvents = true;
@@ -3520,6 +3605,50 @@ internal class StateFieldInstance : Form
 			suppressFileListSelectionEvents = previous;
 		}
 		fileListView.Invalidate();
+	}
+
+	private void SetFileRowSelected(FileRow fileRow, bool selected)
+	{
+		if (fileRow.Selected == selected)
+		{
+			return;
+		}
+
+		fileRow.Selected = selected;
+		bool isVisible = visibleRowIndex.ContainsKey(fileRow);
+		if (selected && isVisible)
+		{
+			if (selectedVisibleRows.Add(fileRow))
+			{
+				selectedFileCount++;
+			}
+		}
+		else if (!selected && isVisible)
+		{
+			if (selectedVisibleRows.Remove(fileRow) && selectedFileCount > 0)
+			{
+				selectedFileCount--;
+			}
+		}
+		RefreshSingleSelectedVisibleRow();
+	}
+
+	private void RefreshSingleSelectedVisibleRow()
+	{
+		if (selectedFileCount == 1)
+		{
+			foreach (FileRow selectedRow in selectedVisibleRows)
+			{
+				singleSelectedVisibleRow = selectedRow;
+				return;
+			}
+		}
+		singleSelectedVisibleRow = null;
+	}
+
+	private FileRow GetSingleSelectedFileRow()
+	{
+		return selectedFileCount == 1 ? singleSelectedVisibleRow : null;
 	}
 
 	// 据 FileRow.Selected 把 DGV 行选区恢复成与模型一致(VirtualMode 行选区随 RowCount 重建而失效)。
@@ -3566,10 +3695,11 @@ internal class StateFieldInstance : Form
 
 	private void FileList_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
 	{
-		if (e.RowIndex >= 0 && e.RowIndex < visibleRows.Count && visibleRows[e.RowIndex].LoadFailed)
+		if (e.RowIndex < 0 || e.RowIndex >= visibleRows.Count)
 		{
-			e.CellStyle.ForeColor = Color.Red;
+			return;
 		}
+		e.CellStyle.ForeColor = visibleRows[e.RowIndex].LoadFailed ? Color.Red : fileListView.DefaultCellStyle.ForeColor;
 	}
 
 	// 首列自绘"图标 + 文字"(DGV 无内建图文同格);其余列/表头不接管,走默认绘制。
@@ -3580,16 +3710,17 @@ internal class StateFieldInstance : Form
 			return;
 		}
 		FileRow fileRow = visibleRows[e.RowIndex];
+		if (fileRow.IconImage == null)
+		{
+			return;
+		}
 		bool isSelected = (e.State & DataGridViewElementStates.Selected) != 0;
 		e.PaintBackground(e.CellBounds, isSelected);
-		int iconSize = fileTypeImageList.ImageSize.Width;
-		int padding = DatabaseMapper.ScaleByDpi(2f);
+		int iconSize = fileListIconSize;
+		int padding = fileListIconPadding;
 		int iconX = e.CellBounds.Left + padding;
 		int iconY = e.CellBounds.Top + (e.CellBounds.Height - iconSize) / 2;
-		if (fileRow.IconKey != null && fileTypeImageList.Images.ContainsKey(fileRow.IconKey))
-		{
-			e.Graphics.DrawImage(fileTypeImageList.Images[fileRow.IconKey], iconX, iconY, iconSize, iconSize);
-		}
+		e.Graphics.DrawImage(fileRow.IconImage, iconX, iconY, iconSize, iconSize);
 		int textLeft = iconX + iconSize + padding;
 		Rectangle textBounds = new Rectangle(textLeft, e.CellBounds.Top, Math.Max(0, e.CellBounds.Right - textLeft), e.CellBounds.Height);
 		Color foreColor = isSelected ? e.CellStyle.SelectionForeColor : e.CellStyle.ForeColor;
@@ -3875,9 +4006,9 @@ internal class StateFieldInstance : Form
 	}
 
 	// 选中态以 FileRow.Selected 为模型真源(隐藏行恒为 false),按 visibleRows 顺序读取与显示顺序一致。
-	private int SelectedFileCount => visibleRows.Count(r => r.Selected);
+	private int SelectedFileCount => selectedFileCount;
 
-	private IEnumerable<FileRow> SelectedFileRows => visibleRows.Where(r => r.Selected);
+	private IEnumerable<FileRow> SelectedFileRows => visibleRows.Where(r => selectedVisibleRows.Contains(r));
 
 	private void RefreshStatusLabelsFromCachedTotals()
 	{
@@ -4066,18 +4197,30 @@ internal class StateFieldInstance : Form
 		{
 			return;
 		}
-		List<(FileRow row, bool nowSelected)> toggles = new List<(FileRow, bool)>();
-		int selectedCount = 0;
-		for (int i = 0; i < visibleRows.Count; i++)
+
+		HashSet<FileRow> currentSelectedRows = new HashSet<FileRow>();
+		foreach (DataGridViewRow selectedRow in fileListView.SelectedRows)
 		{
-			bool nowSelected = fileListView.Rows[i].Selected;
-			if (nowSelected)
+			int rowIndex = selectedRow.Index;
+			if (rowIndex >= 0 && rowIndex < visibleRows.Count)
 			{
-				selectedCount++;
+				currentSelectedRows.Add(visibleRows[rowIndex]);
 			}
-			if (nowSelected != visibleRows[i].Selected)
+		}
+
+		List<(FileRow row, bool nowSelected)> toggles = new List<(FileRow, bool)>();
+		foreach (FileRow row in currentSelectedRows)
+		{
+			if (!selectedVisibleRows.Contains(row))
 			{
-				toggles.Add((visibleRows[i], nowSelected));
+				toggles.Add((row, true));
+			}
+		}
+		foreach (FileRow row in selectedVisibleRows.ToArray())
+		{
+			if (!currentSelectedRows.Contains(row))
+			{
+				toggles.Add((row, false));
 			}
 		}
 		if (toggles.Count == 0)
@@ -4086,13 +4229,17 @@ internal class StateFieldInstance : Form
 		}
 		foreach (var toggle in toggles)
 		{
-			toggle.row.Selected = toggle.nowSelected;
+			SetFileRowSelected(toggle.row, toggle.nowSelected);
 		}
-		if (selectedCount == 1)
+		if (SelectedFileCount == 1)
 		{
-			LoadSingleSelectedFile(visibleRows.First((FileRow r) => r.Selected));
+			FileRow selectedRow = GetSingleSelectedFileRow();
+			if (selectedRow != null)
+			{
+				LoadSingleSelectedFile(selectedRow);
+			}
 		}
-		else if (selectedCount <= 0)
+		else if (SelectedFileCount <= 0)
 		{
 			ClearSelectedFilterSummaries();
 			selectedFilesStatusLabel.Tag = (0L, 0L);
@@ -4117,7 +4264,11 @@ internal class StateFieldInstance : Form
 		int selectedCount = SelectedFileCount;
 		if (selectedCount == 1)
 		{
-			LoadSingleSelectedFile(SelectedFileRows.First());
+			FileRow selectedRow = GetSingleSelectedFileRow();
+			if (selectedRow != null)
+			{
+				LoadSingleSelectedFile(selectedRow);
+			}
 		}
 		else if (selectedCount <= 0)
 		{
@@ -4369,7 +4520,7 @@ internal class StateFieldInstance : Form
 						fileRow.IsHidden = true;
 						if (fileRow.Selected)
 						{
-							fileRow.Selected = false;
+							SetFileRowSelected(fileRow, selected: false);
 						}
 					}
 				}
@@ -4405,7 +4556,11 @@ internal class StateFieldInstance : Form
 			ScheduleSelectionStatusUpdate(refreshStatusAllInfo: false);
 			if (SelectedFileCount == 1)
 			{
-				LoadSingleSelectedFile(SelectedFileRows.First());
+				FileRow selectedRow = GetSingleSelectedFileRow();
+				if (selectedRow != null)
+				{
+					LoadSingleSelectedFile(selectedRow);
+				}
 			}
 			else
 			{
@@ -4663,15 +4818,15 @@ internal class StateFieldInstance : Form
 		{
 			switch (selectionMode)
 			{
-			case FileSelectionMode.SelectAll:
-				fileRow.Selected = true;
-				break;
-			case FileSelectionMode.UnselectAll:
-				fileRow.Selected = false;
-				break;
-			case FileSelectionMode.Invert:
-				fileRow.Selected = !fileRow.Selected;
-				break;
+				case FileSelectionMode.SelectAll:
+					SetFileRowSelected(fileRow, selected: true);
+					break;
+				case FileSelectionMode.UnselectAll:
+					SetFileRowSelected(fileRow, selected: false);
+					break;
+				case FileSelectionMode.Invert:
+					SetFileRowSelected(fileRow, !fileRow.Selected);
+					break;
 			}
 
 			if (!fileRow.Selected)
@@ -4698,7 +4853,11 @@ internal class StateFieldInstance : Form
 			{
 				ScheduleSelectionStatusUpdate(refreshStatusAllInfo: true);
 			}
-			LoadSingleSelectedFile(SelectedFileRows.First());
+			FileRow selectedRow = GetSingleSelectedFileRow();
+			if (selectedRow != null)
+			{
+				LoadSingleSelectedFile(selectedRow);
+			}
 		}
 		else
 		{
@@ -4759,7 +4918,7 @@ internal class StateFieldInstance : Form
 		}
 		else if (visibleRows.Count == 1)
 		{
-			visibleRows[0].Selected = true;
+			SetFileRowSelected(visibleRows[0], selected: true);
 			RestoreDgvSelectionFromModel();
 			OnFileSelectionSettled();
 		}
@@ -4787,7 +4946,7 @@ internal class StateFieldInstance : Form
 		}
 		if (unselectedItemCount == 1)
 		{
-			singleUnselectedItem.Selected = true;
+			SetFileRowSelected(singleUnselectedItem, selected: true);
 			RestoreDgvSelectionFromModel();
 			OnFileSelectionSettled();
 		}
@@ -4922,7 +5081,12 @@ internal class StateFieldInstance : Form
 		{
 			return;
 		}
-		fileListView.Columns[columnIndex.Value].HeaderCell.SortGlyphDirection = sortOrder;
+		DataGridViewColumn column = fileListView.Columns[columnIndex.Value];
+		if (column.SortMode == DataGridViewColumnSortMode.NotSortable)
+		{
+			column.SortMode = DataGridViewColumnSortMode.Programmatic;
+		}
+		column.HeaderCell.SortGlyphDirection = sortOrder;
 	}
 
 	private void ExitApplication_Click(object sender, EventArgs e)
@@ -8138,7 +8302,11 @@ internal class StateFieldInstance : Form
 		fileListView.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
 		fileListView.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None;
 		fileListView.EditMode = DataGridViewEditMode.EditProgrammatically;
+		fileListView.ShowCellToolTips = false;
+		fileListView.ClipboardCopyMode = DataGridViewClipboardCopyMode.Disable;
+		fileListView.RowHeadersWidthSizeMode = DataGridViewRowHeadersWidthSizeMode.DisableResizing;
 		fileListView.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+		ApplyFileListVisualStyle();
 		fileListView.Location = new Point(0, 0);
 		fileListView.Margin = new Padding(0);
 		fileListView.Name = "listView1";
