@@ -161,12 +161,16 @@ internal class XmlSettingsProvider : SettingsProvider
 	{
 		try
 		{
-			return LoadSettingsDocument().SelectSingleNode(GetSettingXPath(property)).InnerText;
+			XmlNode settingNode = LoadSettingsDocument().SelectSingleNode(GetSettingXPath(property));
+			if (settingNode != null)
+			{
+				return settingNode.InnerText;
+			}
 		}
 		catch (Exception)
 		{
-			return property.DefaultValue == null ? "" : property.DefaultValue.ToString();
 		}
+		return property.DefaultValue == null ? "" : property.DefaultValue.ToString();
 	}
 
 	private void SaveSettingValue(SettingsPropertyValue propertyValue)
