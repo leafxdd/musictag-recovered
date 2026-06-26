@@ -130,6 +130,9 @@ internal static class NativeMethods
 	[DllImport("user32.dll", CharSet = CharSet.Auto, EntryPoint = "SetWindowText", SetLastError = true)]
 	public static extern bool SetWindowText(IntPtr windowHandle, string text);
 
+	[DllImport("user32.dll", EntryPoint = "DestroyIcon")]
+	public static extern bool DestroyIcon(IntPtr iconHandle);
+
 	[DllImport("shell32.dll", CharSet = CharSet.Auto, EntryPoint = "SHGetFileInfo")]
 	public static extern IntPtr GetShellFileInfo(string path, uint fileAttributes, ref ShellFileInfo fileInfo, uint fileInfoSize, uint flags);
 

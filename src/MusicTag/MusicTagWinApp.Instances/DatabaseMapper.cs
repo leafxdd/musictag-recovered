@@ -457,7 +457,19 @@ internal static class DatabaseMapper
 	{
 		NativeMethods.ShellFileInfo fileInfo = default(NativeMethods.ShellFileInfo);
 		NativeMethods.GetShellFileInfo(filePath, 0u, ref fileInfo, (uint)Marshal.SizeOf(fileInfo), 257u);
-		return Icon.FromHandle(fileInfo.IconHandle);
+		if (fileInfo.IconHandle == IntPtr.Zero)
+		{
+			return (Icon)SystemIcons.WinLogo.Clone();
+		}
+		try
+		{
+			using Icon icon = Icon.FromHandle(fileInfo.IconHandle);
+			return (Icon)icon.Clone();
+		}
+		finally
+		{
+			NativeMethods.DestroyIcon(fileInfo.IconHandle);
+		}
 	}
 
 	public static void ShowInExplorer(string path)

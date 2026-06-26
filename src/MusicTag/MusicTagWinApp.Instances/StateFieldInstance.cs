@@ -492,7 +492,8 @@ internal class StateFieldInstance : Form
 
 		private void AddFileTypeIcon(string extension, string filePath)
 		{
-			Bitmap sourceIcon = DatabaseMapper.GetSmallFileIcon(filePath).ToBitmap();
+			using Icon smallFileIcon = DatabaseMapper.GetSmallFileIcon(filePath);
+			Bitmap sourceIcon = smallFileIcon.ToBitmap();
 			try
 			{
 				Bitmap listIcon = new Bitmap(FileIconSize.Width, FileIconSize.Height);
