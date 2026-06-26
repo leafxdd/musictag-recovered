@@ -6,11 +6,7 @@ internal static class TextEncodingService
 {
 	public static string DecodeBasicHtmlEntities(string value)
 	{
-		return value.Replace("&lt;", "<")
-			.Replace("&gt;", ">")
-			.Replace("&quot;", "\"")
-			.Replace("&apos;", "'")
-			.Replace("&amp;", "&");
+		return HttpUtility.HtmlDecode(value ?? string.Empty);
 	}
 
 	public static string JavaScriptStringEncode(string value)
