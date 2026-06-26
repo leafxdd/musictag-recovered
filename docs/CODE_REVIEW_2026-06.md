@@ -135,7 +135,7 @@
 ## 5. Low（约 30 条，按类别汇总）
 
 - **GDI / 句柄泄漏（确定但量小/低频）**：`GetSmallFileIcon` 的 HICON 永不 `DestroyIcon`（`DatabaseMapper.cs:456`，三处命中）、`LoadResourceBitmap` 的 `Graphics` 未释放（`DatabaseMapper.cs:664`）、多处对话框 `ImageList`（`CustomColumnsDialog.cs:90`、`CharacterSetSelectionDialog.cs:46`、`DirectoryManagerDialog.cs:46`）、`Icon`（`AboutDialog.cs:191`）、按钮位图（`SourceOrderControl.cs:75`、`LyricEditorDialog.cs:142/145`）、歌词搜索对话框（`LyricEditorDialog.cs:259`）、Shell COM 从不 `ReleaseComObject`（`FolderSelectionDialog.cs`、`LyricSaveFileDialog.cs`）、`PictureFromTagsDialog` 重复哈希图未释放（`:145`）。
-- **文化相关（非中文区）**：年份 `ToString("yyyy")` → 佛历/回历错年份（`NetEaseMusicTagProvider.cs:337`、`QqMusicTagProvider.cs:232`）、`ToUpper()` → 土耳其语非法编码名（`TagTextEncoding.cs:109`）、查找替换用 `CurrentCulture` 比较（`TextBoxFindReplaceController.cs:30`）。
+- **文化相关（非中文区）**：年份 `ToString("yyyy")` → 佛历/回历错年份（`NetEaseMusicTagProvider.cs:337`、`QqMusicTagProvider.cs:232`）、`ToUpper()` → 土耳其语非法编码名（`TagTextEncoding.cs:109`，已修为 `ToUpperInvariant()`）、查找替换用 `CurrentCulture` 比较（`TextBoxFindReplaceController.cs:30`）。
 - **解析强转**：`long.Parse(SourceTrackId)`（`QqMusicTagProvider.cs:300`、`NetEaseMusicTagProvider.cs:430`）、`tagState["durationinms"]` 缺键 `KeyNotFoundException`（`TrackSearchContext.cs:39`）、单位数小数秒偏小 10 倍（`LyricTextProcessor.cs:228`）、HTML 实体只解码 5 个、数字引用 `&#39;` 残留（`TextEncodingService.cs:7`）、酷狗 `?? ""` 死防御兼潜在 NRE（`KugouTagProvider.cs:322`）。
 - **异常静默（WinForms 无控制台，`Console.WriteLine` 日志全不可见）**：`DecodeBase64String` 失败返回原文污染歌词（`DatabaseMapper.cs:82`）、`ImportLrcText` 显式导入失败静默 null（`LyricEditorDialog.cs:413`）、`ReadSettingValue` 用 NRE 当控制流（`XmlSettingsProvider.cs:115`）。
 - **并发 / 性能小问题**：`SourceOrderControl` 500ms 空轮询（`:289`）、每单元格 `new SolidBrush`（`EditableListView.cs:502`）、UI 线程 `task.Wait()`（`StateFieldInstance.cs:4181`）、批次结束 `GC.Collect()` 卡顿（`AutoMatchTagsDialog.cs:1790`）、相似度/歌词热路径 `new Regex`（`TrackSearchResult.cs:503`、`LyricTextProcessor.cs:216`、`FilenameRelatedBatchDialog.cs:444`）、`ApplicationInfoService` 后台线程弹 `MessageBox` 并写 `Settings`（`:20`）、`GetScheduledTasks` 返回活引用（`LimitedConcurrencyTaskScheduler.cs:77`）。
@@ -208,4 +208,5 @@
 | P2-3 Low 级 GDI 释放 | 已实现 | `AboutDialog` 使用 `Icon.ToBitmap()` 后释放源 `Icon`；Shell 文件图标 clone 后释放原 HICON 和 clone；替换封面预览和提取封面时释放临时 `Image`；资源位图缩放后释放 `Graphics`；对话框 `SmallImageList` 挂入组件容器释放；源顺序/歌词编辑按钮图像随控件释放；歌词搜索对话框随用随释放 |
 | P2-4 历史库错误可见性 | 已实现 | 清空历史失败时返回具体异常链并用错误框展示 |
 | P2-5 嵌入封面选择正确性 | 已实现 | `PictureFromTagsDialog` 去重显示时保留原始封面索引，避免选中/导出错图 |
+| P2-6 编码名文化无关规范化 | 已实现 | 默认编码名使用 `ToUpperInvariant()`，避免土耳其语等区域设置下生成非法编码名 |
 | P2 后续 | 待办 | 更零散的 Low 级资源释放问题 |
