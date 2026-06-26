@@ -117,7 +117,7 @@
 | `dialogs-search-1` | `CombinedTagSearchDialog.SearchCombinedTagsAsync` 外层 `async void` 无 catch/finally；普通网络/解析失败多由 provider 内部吞吐，但仍存在未覆盖异常导致全局退出、进度图标/任务栏状态不复位的风险 | `CombinedTagSearchDialog.cs:801` |
 | `dialogs-search-7` | `CombinedTagSearchDialog.DownloadCoverAsync` 在 `searchResultsListView.BeginUpdate()` 后才进入复杂 UI 更新，异常路径不调用 `EndUpdate()` → ListView 刷新状态可能被永久挂住 | `CombinedTagSearchDialog.cs:634` |
 | `dialogs-search-8` | `PictureFromTagsDialog.StartPictureSearchAsync` 只捕获 `OperationCanceledException`；嵌入封面读取/解码的非取消异常会逃出 `async void` 进入全局退出路径 | `PictureFromTagsDialog.cs:164` |
-| `dialogs-search-4` | `PictureFromTagsDialog` 列表索引与重新取图计数口径不一致 → **选/导出到错误封面** | `PictureFromTagsDialog.cs:142` |
+| `dialogs-search-4` | `PictureFromTagsDialog` 列表索引与重新取图计数口径不一致 → **选/导出到错误封面** | `PictureFromTagsDialog.cs:142`（已修：列表项保留原始封面索引） |
 | `dialogs-search-2` | `LyricSearchDialog.StartLyricSearch` 同为 async void 无 catch + 缺 `IsDisposed` 判断 | `LyricSearchDialog.cs:454` |
 | `win32-shell-2` | `WM_COPYDATA` 的 `cbData` 少 1 字节（`len*2+1` 应为 `+2`）→ 跨进程传参尾部可能读到垃圾 | `Program.cs:127` |
 | `win32-shell-3` | `ITaskbarList` 从未 `HrInit()` → 部分系统任务栏进度静默不显示 | `TaskbarProgressController.cs:14` |
@@ -207,4 +207,5 @@
 | P2-2 文化无关歌词时间轴 | 已实现 | LRC offset/时间戳解析与输出使用 invariant culture；Kuwo 歌词秒数按 invariant 小数解析 |
 | P2-3 Low 级 GDI 释放 | 已实现 | `AboutDialog` 使用 `Icon.ToBitmap()` 后释放源 `Icon`；Shell 文件图标 clone 后释放原 HICON 和 clone；替换封面预览和提取封面时释放临时 `Image`；资源位图缩放后释放 `Graphics`；对话框 `SmallImageList` 挂入组件容器释放；源顺序/歌词编辑按钮图像随控件释放；歌词搜索对话框随用随释放 |
 | P2-4 历史库错误可见性 | 已实现 | 清空历史失败时返回具体异常链并用错误框展示 |
+| P2-5 嵌入封面选择正确性 | 已实现 | `PictureFromTagsDialog` 去重显示时保留原始封面索引，避免选中/导出错图 |
 | P2 后续 | 待办 | 更零散的 Low 级资源释放问题 |
