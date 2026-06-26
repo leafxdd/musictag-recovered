@@ -122,7 +122,6 @@
 | `win32-shell-2` | `WM_COPYDATA` 的 `cbData` 少 1 字节（`len*2+1` 应为 `+2`）→ 跨进程传参尾部可能读到垃圾 | `Program.cs:127`（已修：按 UTF-16 字节数包含终止符） |
 | `win32-shell-3` | `ITaskbarList` 从未 `HrInit()` → 部分系统任务栏进度静默不显示 | `TaskbarProgressController.cs:14`（已修：构造时调用 `HrInit()`） |
 | `win32-shell-1` / `xcut-concurrency-4` | `AppDomain.UnhandledException` 处理器 `async void` + `await Task.Yield` 与进程终止竞争 → 崩溃日志/提示可能丢失 | `Program.cs:147` |
-| `net-providers-2` / `xcut-parsing-1` | 酷我歌词 `double.Parse` 未用 `InvariantCulture` → 逗号小数区域时间轴整体放大百倍（非中文区用户）| `KuwoTagProvider.cs:449` |
 | `config-medium` | `XmlSettingsProvider.Save` 在只读安装目录（Program Files）抛 `UnauthorizedAccessException` 未处理 | `XmlSettingsProvider.cs:64` |
 | `services-misc-1` / `xcut-concurrency-5` | `ProgressDialog` 计时器后台线程 check-then-Invoke 竞态 + 构造期即 Start（句柄未建）| `ProgressDialog.cs:45,193` |
 
