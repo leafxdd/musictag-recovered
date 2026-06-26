@@ -212,4 +212,5 @@
 | P2-32 历史库共享状态串行化 | 已实现 | `TagHistoryRepository` 构造到 `Dispose` 持有同一静态锁，事务失败统一回滚；共享连接/序列号和撤销列表改为锁内访问，UI/任务使用撤销快照 |
 | P2-33 退出状态 JSON 化 | 已实现 | `AppSettingData` 退出状态改为 JSON 读写，不再反序列化 `BinaryFormatter`；保存仍沿用临时文件 + `File.Replace` 的原子替换流程 |
 | P2-34 主窗口异步任务收尾 | 已实现 | `StateFieldInstance` 的加载、刷新、下载、批量保存/撤销/删除/导出等 `StartXxx` 后台任务补异常记录/展示和 `finally` 关闭进度框；取消路径不再走全局异常链 |
+| P2-35 Shell 对话框 COM 生命周期 | 已实现 | `FolderSelectionDialog` / `LyricSaveFileDialog` 释放 Vista Shell 对话框、结果项和路径 ShellItem 的 COM RCW；路径指针继续用 `FreeCoTaskMem` 释放 |
 | P2 后续 | 待办 | 更零散的 Low 级资源释放问题 |
