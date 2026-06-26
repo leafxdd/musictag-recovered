@@ -111,7 +111,7 @@ internal class TagTextEncoding
 			{
 				return "GB18030";
 			}
-			return Encoding.Default.HeaderName.ToUpper();
+			return Encoding.Default.HeaderName.ToUpperInvariant();
 		}
 	}
 
