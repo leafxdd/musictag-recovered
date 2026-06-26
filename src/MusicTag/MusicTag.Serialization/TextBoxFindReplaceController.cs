@@ -1,6 +1,6 @@
 using System;
+using System.Text;
 using System.Windows.Forms;
-using Microsoft.VisualBasic;
 using MusicTagWinApp.Instances;
 using MusicTagWinApp.Properties;
 
@@ -102,11 +102,29 @@ internal sealed class TextBoxFindReplaceController
 			return;
 		}
 
-		textBox.SelectAll();
-		textBox.Paste(Strings.Replace(textBox.Text, SearchText, replacementText, 1, -1, MatchCase ? CompareMethod.Binary : CompareMethod.Text));
+		textBox.Text = ReplaceAllMatches(textBox.Text, replacementText);
 		textBox.SelectionStart = 0;
 		textBox.SelectionLength = 0;
 		textBox.ScrollToCaret();
+	}
+
+	private string ReplaceAllMatches(string text, string replacementText)
+	{
+		StringBuilder result = new StringBuilder(text.Length);
+		int startIndex = 0;
+		while (true)
+		{
+			int matchIndex = text.IndexOf(SearchText, startIndex, GetStringComparison());
+			if (matchIndex < 0)
+			{
+				result.Append(text, startIndex, text.Length - startIndex);
+				return result.ToString();
+			}
+
+			result.Append(text, startIndex, matchIndex - startIndex);
+			result.Append(replacementText);
+			startIndex = matchIndex + SearchText.Length;
+		}
 	}
 
 	private void SelectMatchOrShowNotFound(int matchIndex)
@@ -124,7 +142,7 @@ internal sealed class TextBoxFindReplaceController
 
 	private StringComparison GetStringComparison()
 	{
-		return MatchCase ? StringComparison.CurrentCulture : StringComparison.CurrentCultureIgnoreCase;
+		return MatchCase ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
 	}
 
 	private void TextBox_KeyDown(object sender, KeyEventArgs e)
