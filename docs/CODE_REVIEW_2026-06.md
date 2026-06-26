@@ -101,8 +101,6 @@
 
 | id | 问题 | 位置 |
 |---|---|---|
-| `statefield-3` / `xcut-resources-1` | 封面预览每次换图不释放旧 `Bitmap`，浏览多文件热路径泄漏 → OOM | `StateFieldInstance.cs:4689` |
-| `xcut-resources-2/3` / `config` | `LoadPictureImage` 双重职责：返回值在 3+ 处循环被丢弃（泄漏）、且返回基于**已释放 `MemoryStream`** 的 Image（GDI+ 隐患）| `ConfigDescriptorState.cs:367`；`StateFieldInstance.cs:1342/1355/2231`；`TagHistoryRepository.cs:305` |
 | `listview-controls-1` / `services-misc-3` | 静态初始化器里无保护 `JsonConvert.Deserialize`，损坏配置 → `TypeInitializationException` → 核心列设置/合并搜索路径**永久崩溃无法自愈** | `CustomColumnsDialog.cs:45,290`；`CombinedTagOverwriteOptionsDialog.cs:45` |
 | `data-history-1` | `TagHistoryRepository` 事务无回滚 + `ExecuteReader` 失败把 static 共享连接置 null → 级联失败 + 原始异常被掩盖（验证后 high→medium）| `TagHistoryRepository.cs:76-171` |
 | `data-history-2` | static 共享连接/序列号/`UndoTags` 无任何同步，仅靠"UI 串行 await"这一**未强制**的不变量 | `TagHistoryRepository.cs:55,173,345` |
@@ -219,4 +217,5 @@
 | P2-24 自动匹配标签生命周期 | 已实现 | `LoadCurrentTagFile` 不再返回已 `Dispose` 的 `ConfigDescriptorState`，搜索任务在 `finally` 中统一释放加载的标签状态 |
 | P2-25 自动匹配封面临时租约 | 已实现 | 封面候选下载失败时立即释放临时文件租约；成功候选被后续候选替换时释放旧租约，避免引用计数泄漏 |
 | P2-26 自动匹配进度路径快照 | 已实现 | `UpdateProgress` 对 `activeFilePaths` 使用快照式 `FirstOrDefault()`，避免并发清空集合时 `.First()` 抛异常 |
+| P2-27 封面图片加载生命周期 | 已实现 | `LoadPictureImage` 返回脱离输入 `MemoryStream` 的 `Bitmap`，保存快照中只读取图片元数据的调用统一 `using`；封面预览旧图释放已由 `SetCoverPreviewImage` 处理 |
 | P2 后续 | 待办 | 更零散的 Low 级资源释放问题 |
