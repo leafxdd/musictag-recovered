@@ -297,6 +297,10 @@ internal class CustomColumnsDialog : Form
 			}
 			foreach (ColumnHeaderInfo savedColumnHeader in savedColumnHeaders)
 			{
+				if (savedColumnHeader == null || string.IsNullOrWhiteSpace(savedColumnHeader.Name))
+				{
+					continue;
+				}
 				if (columnHeaderByName.TryGetValue(savedColumnHeader.Name, out var columnHeader))
 				{
 					columnHeader.width = savedColumnHeader.width;
@@ -305,7 +309,7 @@ internal class CustomColumnsDialog : Form
 					columnHeader.isShow = savedColumnHeader.isShow;
 				}
 			}
-			if (!savedColumnHeaders.Exists(columnHeader => columnHeader.Name == "lyricist"))
+			if (!savedColumnHeaders.Exists(columnHeader => columnHeader != null && columnHeader.Name == "lyricist"))
 			{
 				int lyricistDisplayIndex = columnHeaderByName["composer"].displayIndex + 1;
 				foreach (KeyValuePair<string, ColumnHeaderInfo> columnHeaderPair in columnHeaderByName)
