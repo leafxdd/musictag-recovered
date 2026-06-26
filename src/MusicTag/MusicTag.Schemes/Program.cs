@@ -6,7 +6,6 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 using MusicTagWinApp.Containers;
 using MusicTagWinApp.Instances;
@@ -144,23 +143,27 @@ internal static class Program
 		return commandLine.ToString();
 	}
 
-	private static async void OnThreadException(object sender, ThreadExceptionEventArgs args)
+	private static void OnThreadException(object sender, ThreadExceptionEventArgs args)
 	{
-		await HandleUnhandledException(args.Exception, "Application.ThreadException");
+		HandleUnhandledException(args.Exception, "Application.ThreadException");
 	}
 
-	private static async void OnUnhandledException(object sender, UnhandledExceptionEventArgs args)
+	private static void OnUnhandledException(object sender, UnhandledExceptionEventArgs args)
 	{
-		await HandleUnhandledException((Exception)args.ExceptionObject, "AppDomain.CurrentDomain.UnhandledException");
+		HandleUnhandledException((Exception)args.ExceptionObject, "AppDomain.CurrentDomain.UnhandledException");
 	}
 
-	private static async Task HandleUnhandledException(Exception exception, string exceptionSource)
+	private static void HandleUnhandledException(Exception exception, string exceptionSource)
 	{
-		Task taskLogMessage = Task.Run(() => LogUnhandledException(exception, exceptionSource));
-		await Task.Yield();
-		DatabaseMapper.ShowErrorMessage(Resources.Msg_ApplicationExceptionWillExit);
-		await taskLogMessage;
-		Environment.Exit(0);
+		try
+		{
+			LogUnhandledException(exception, exceptionSource);
+			DatabaseMapper.ShowErrorMessage(Resources.Msg_ApplicationExceptionWillExit);
+		}
+		finally
+		{
+			Environment.Exit(0);
+		}
 	}
 
 	private static void LogUnhandledException(Exception exception, string exceptionSource)
