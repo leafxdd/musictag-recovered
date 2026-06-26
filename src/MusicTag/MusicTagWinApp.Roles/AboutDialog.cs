@@ -190,14 +190,8 @@ internal class AboutDialog : Form
 
 	private void LoadApplicationIcon()
 	{
-		try
-		{
-			appIconPictureBox.Image = new Icon(Resources.AppIcon, appIconPictureBox.Size).ToBitmap();
-		}
-		catch (Exception)
-		{
-			appIconPictureBox.Image = Bitmap.FromHicon(new Icon(Resources.AppIcon, appIconPictureBox.Size).Handle);
-		}
+		using Icon icon = new Icon(Resources.AppIcon, appIconPictureBox.Size);
+		appIconPictureBox.Image = icon.ToBitmap();
 	}
 
 	private static string GetLocalizedAboutText()
