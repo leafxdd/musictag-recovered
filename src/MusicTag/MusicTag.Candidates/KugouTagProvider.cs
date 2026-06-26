@@ -33,6 +33,8 @@ internal class KugouTagProvider : RemoteTagProviderBase
 
 	private const string lyricUrlTemplate = "https://m3ws.kugou.com/api/v1/krc/get_krc?keyword={0}&hash={1}&timelength={2}";
 
+	private static readonly Regex bracketedContentRegex = new Regex("^\\[(.*)\\]$", RegexOptions.Compiled);
+
 	public static HttpClient CreateKugouHttpClient()
 	{
 		HttpClient httpClient = new HttpClient(new HttpClientHandler
@@ -329,14 +331,13 @@ internal class KugouTagProvider : RemoteTagProviderBase
 		List<string> translatedLines = new List<string>();
 		try
 		{
-			Regex regex = new Regex("^\\[(.*)\\]$");
-			Match outerMatch = regex.Match(content.Trim());
+			Match outerMatch = bracketedContentRegex.Match(content.Trim());
 			if (outerMatch.Success)
 			{
 				string[] translationItems = outerMatch.Groups[1].Value.Trim().Split(',');
 				foreach (string translationItem in translationItems)
 				{
-					Match innerMatch = regex.Match(translationItem.Trim());
+					Match innerMatch = bracketedContentRegex.Match(translationItem.Trim());
 					if (innerMatch.Success)
 					{
 						translatedLines.Add(innerMatch.Groups[1].Value.Trim());

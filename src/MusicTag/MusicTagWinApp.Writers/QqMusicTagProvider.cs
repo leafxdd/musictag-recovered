@@ -34,6 +34,8 @@ internal class QqMusicTagProvider : RemoteTagProviderBase
 
 	private const string albumCoverUrlTemplate = "https://y.qq.com/music/photo_new/T002R800x800M000{0}.jpg";
 
+	private static readonly Regex callbackJsonRegex = new Regex(Regex.Escape(callbackName) + "\\((.+)\\)", RegexOptions.Compiled);
+
 	protected override SearchSource GetSource()
 	{
 		return SearchSource.QQ;
@@ -89,35 +91,41 @@ internal class QqMusicTagProvider : RemoteTagProviderBase
 				return new List<QqSongInfo>();
 			}
 
-			if (attempt + 1 < maxAttempts && IsRateLimited(responseBody))
+			JObject parsedResponse = TryParseJsonObject(responseBody);
+			if (attempt + 1 < maxAttempts && IsRateLimited(parsedResponse))
 			{
 				Console.WriteLine($"QQ search throttled (req_0.code 2001), retry {attempt + 1}/{maxAttempts - 1}");
 				cancellationSource.Token.WaitHandle.WaitOne(800 * (attempt + 1));
 				continue;
 			}
 
-			return ParseSongSearchResponse(responseBody);
+			return ParseSongSearchResponse(parsedResponse);
 		}
 
 		return new List<QqSongInfo>();
 	}
 
-	private static bool IsRateLimited(string responseBody)
+	private static JObject TryParseJsonObject(string responseBody)
 	{
 		if (string.IsNullOrWhiteSpace(responseBody))
 		{
-			return false;
+			return null;
 		}
 
 		try
 		{
-			JToken codeToken = JObject.Parse(responseBody)["req_0"]?["code"];
-			return codeToken != null && codeToken.Type == JTokenType.Integer && (int)codeToken == 2001;
+			return JObject.Parse(responseBody);
 		}
 		catch (Exception)
 		{
-			return false;
+			return null;
 		}
+	}
+
+	private static bool IsRateLimited(JObject parsedResponse)
+	{
+		JToken codeToken = parsedResponse?["req_0"]?["code"];
+		return codeToken != null && codeToken.Type == JTokenType.Integer && (int)codeToken == 2001;
 	}
 
 	public List<LyricSearchResult> SearchLyrics(string query, int maxResults, int sourceOrder)
@@ -306,7 +314,7 @@ internal class QqMusicTagProvider : RemoteTagProviderBase
 
 	private static string ExtractCallbackJson(string value)
 	{
-		Match match = new Regex($"{callbackName}\\((.+)\\)").Match(value.Trim());
+		Match match = callbackJsonRegex.Match(value.Trim());
 		if (!match.Success)
 		{
 			return "";
@@ -314,17 +322,12 @@ internal class QqMusicTagProvider : RemoteTagProviderBase
 		return match.Groups[1].Value;
 	}
 
-	private List<QqSongInfo> ParseSongSearchResponse(string responseBody)
+	private List<QqSongInfo> ParseSongSearchResponse(JObject parsedResponse)
 	{
 		List<QqSongInfo> songs = new List<QqSongInfo>();
 		try
 		{
-			if (string.IsNullOrWhiteSpace(responseBody))
-			{
-				return songs;
-			}
-
-			JToken songListJson = JObject.Parse(responseBody)["req_0"]?["data"]?["body"]?["song"]?["list"];
+			JToken songListJson = parsedResponse?["req_0"]?["data"]?["body"]?["song"]?["list"];
 			if (!(songListJson is JArray songList))
 			{
 				return songs;
