@@ -227,11 +227,7 @@ internal class LyricTextProcessor
 					seconds = long.Parse(timestampPart, CultureInfo.InvariantCulture);
 					break;
 				case 2:
-					milliseconds = long.Parse(timestampPart, CultureInfo.InvariantCulture);
-					if (timestampPart.Length < 3)
-					{
-						milliseconds *= 10L;
-					}
+					milliseconds = ParseMillisecondPart(timestampPart);
 					break;
 				}
 			}
@@ -241,6 +237,16 @@ internal class LyricTextProcessor
 			Console.WriteLine("stringtotime error:" + ex.Message);
 		}
 		return (minutes * 60L + seconds) * 1000L + milliseconds;
+	}
+
+	private static long ParseMillisecondPart(string timestampPart)
+	{
+		long milliseconds = long.Parse(timestampPart, CultureInfo.InvariantCulture);
+		for (int digitCount = timestampPart.Length; digitCount < 3; digitCount++)
+		{
+			milliseconds *= 10L;
+		}
+		return milliseconds;
 	}
 
 	public static string FormatTimestamp(long timestampMilliseconds, bool useThreeDigitMilliseconds)
