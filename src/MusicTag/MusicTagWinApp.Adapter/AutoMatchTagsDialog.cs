@@ -1453,16 +1453,14 @@ internal class AutoMatchTagsDialog : Form
 				return;
 			}
 			StringBuilder message = new StringBuilder(Resources.Msg_Searching);
-			lock (owner.activeFilePaths)
+			int pendingCount = owner.activeFilePaths.Count;
+			string activeFilePath = owner.activeFilePaths.Keys.FirstOrDefault();
+			if (activeFilePath != null)
 			{
-				int pendingCount = owner.activeFilePaths.Count();
-				if (pendingCount > 0)
+				message.Append(Path.GetFileName(activeFilePath));
+				if (pendingCount > 1)
 				{
-					message.Append(Path.GetFileName(owner.activeFilePaths.Keys.First()));
-					if (pendingCount > 1)
-					{
-						message.Append($"...({pendingCount})");
-					}
+					message.Append($"...({pendingCount})");
 				}
 			}
 			progressDialog.UpdateStatisticsProgress(message.ToString(), owner.processedCount, paths.Length, owner.successCount, owner.failedCount, owner.skippedCount, paths.Length);
