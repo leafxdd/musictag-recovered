@@ -59,6 +59,10 @@ internal class SourceOrderControl : UserControl
 	{
 		if (disposing)
 		{
+			moveUpButton.Image?.Dispose();
+			moveUpButton.Image = null;
+			moveDownButton.Image?.Dispose();
+			moveDownButton.Image = null;
 			components?.Dispose();
 		}
 
