@@ -101,10 +101,7 @@
 
 | id | 问题 | 位置 |
 |---|---|---|
-| `dialogs-search-4` | `PictureFromTagsDialog` 列表索引与重新取图计数口径不一致 → **选/导出到错误封面** | `PictureFromTagsDialog.cs:142`（已修：列表项保留原始封面索引） |
-| `dialogs-search-2` | `LyricSearchDialog.StartLyricSearch` 同为 async void 无 catch + 缺 `IsDisposed` 判断 | `LyricSearchDialog.cs:454`（已修：捕获取消/异常并在 `finally` 收尾 UI） |
-| `win32-shell-2` | `WM_COPYDATA` 的 `cbData` 少 1 字节（`len*2+1` 应为 `+2`）→ 跨进程传参尾部可能读到垃圾 | `Program.cs:127`（已修：按 UTF-16 字节数包含终止符） |
-| `win32-shell-3` | `ITaskbarList` 从未 `HrInit()` → 部分系统任务栏进度静默不显示 | `TaskbarProgressController.cs:14`（已修：构造时调用 `HrInit()`） |
+| — | 暂无未修复 Medium 条目 | — |
 
 > 标 `/` 的条目为工作流横切扫描与模块审查**独立两次命中**的同一问题，可信度更高。
 
