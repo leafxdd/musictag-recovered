@@ -113,7 +113,7 @@
 - **文化相关（非中文区）**：年份 `ToString("yyyy")` → 佛历/回历错年份（`NetEaseMusicTagProvider.cs:337`、`QqMusicTagProvider.cs:232`，已修为 invariant culture）、`ToUpper()` → 土耳其语非法编码名（`TagTextEncoding.cs:109`，已修为 `ToUpperInvariant()`）、查找替换用 `CurrentCulture` 比较（`TextBoxFindReplaceController.cs:30`，已修为 ordinal 比较）。
 - **解析强转**：`long.Parse(SourceTrackId)`（`QqMusicTagProvider.cs:300`、`NetEaseMusicTagProvider.cs:430`，已修为 `TryParse`）、`tagState["durationinms"]` 缺键 `KeyNotFoundException`（`TrackSearchContext.cs:39`，已修为 `GetDisplayValue`）、单位数小数秒偏小 10 倍（`LyricTextProcessor.cs:228`，已修为按位数补齐到毫秒）、HTML 实体只解码 5 个、数字引用 `&#39;` 残留（`TextEncodingService.cs:7`，已改用 `HttpUtility.HtmlDecode`）、酷狗 `?? ""` 死防御兼潜在 NRE（`KugouTagProvider.cs:322`，已修空值防御）。
 - **异常静默（WinForms 无控制台，`Console.WriteLine` 日志全不可见）**：`DecodeBase64String` 失败返回原文污染歌词（`DatabaseMapper.cs:82`，已修为返回空字符串并跳过无效歌词字段）、`ImportLrcText` 显式导入失败静默 null（`LyricEditorDialog.cs:413`，已修为 UI 层捕获并弹出错误框）、`ReadSettingValue` 用 NRE 当控制流（`XmlSettingsProvider.cs:115`，已修为显式判空后回默认值）。
-- **并发 / 性能小问题**：`SourceOrderControl` 500ms 空轮询（`:289`）、每单元格 `new SolidBrush`（`EditableListView.cs:502`）、UI 线程 `task.Wait()`（`StateFieldInstance.cs:4181`）、批次结束 `GC.Collect()` 卡顿（`AutoMatchTagsDialog.cs:1790`）、相似度/歌词热路径 `new Regex`（`TrackSearchResult.cs:503`、`LyricTextProcessor.cs:216`、`FilenameRelatedBatchDialog.cs:444`）、`ApplicationInfoService` 后台线程弹 `MessageBox` 并写 `Settings`（`:20`）、`GetScheduledTasks` 返回活引用（`LimitedConcurrencyTaskScheduler.cs:77`）。
+- **并发 / 性能小问题**：每单元格 `new SolidBrush`（`EditableListView.cs:502`）。
 - **正确性小问题**：仅大小写改名被误判为冲突（`FilenameRelatedBatchDialog.cs:243`）、`PictureFromTagsDialog` 未选中点 OK 返回 null（`:241`）、内联重命名把用户输入直拼路径可越目录（`StateFieldInstance.cs:6681`）、`SetId3v2Version` 全局静态不复位（`ConfigDescriptorState.cs:1045`）、撤销字节计数在卸载后仍累加（`TagHistoryRepository.cs:351`）。
 
 ---
@@ -146,7 +146,7 @@
 当前 3 处改动（Kugou 正则缓存、QQ 合并 `Parse`、`RemoteTagProviderBase` ASCII→UTF8）**验证无回归**。两点提示：
 
 - ASCII→UTF8 这处**当前并未修复真实乱码**（非 JSON 分支唯一调用方 NetEase 的 body 已是纯 ASCII，UTF8 与 ASCII 产生相同字节），是合理的防御性改动；
-- 同一"内联 `new Regex` 外提"主题下**漏了 3 处更高频的点**：`LyricTextProcessor.cs:216`、`TrackSearchResult.cs:503`、`FilenameRelatedBatchDialog.cs:444`，建议顺手处理。
+- 同一"内联 `new Regex` 外提"主题下已补齐 3 处更高频的点：`LyricTextProcessor.cs:216`、`TrackSearchResult.cs:503`、`FilenameRelatedBatchDialog.cs:61`。
 
 ---
 
@@ -213,4 +213,10 @@
 | P2-33 退出状态 JSON 化 | 已实现 | `AppSettingData` 退出状态改为 JSON 读写，不再反序列化 `BinaryFormatter`；保存仍沿用临时文件 + `File.Replace` 的原子替换流程 |
 | P2-34 主窗口异步任务收尾 | 已实现 | `StateFieldInstance` 的加载、刷新、下载、批量保存/撤销/删除/导出等 `StartXxx` 后台任务补异常记录/展示和 `finally` 关闭进度框；取消路径不再走全局异常链 |
 | P2-35 Shell 对话框 COM 生命周期 | 已实现 | `FolderSelectionDialog` / `LyricSaveFileDialog` 释放 Vista Shell 对话框、结果项和路径 ShellItem 的 COM RCW；路径指针继续用 `FreeCoTaskMem` 释放 |
+| P2-36 轮询与阻塞刷新移除 | 已实现 | `SourceOrderControl` 改为选择变化驱动按钮状态更新，去掉 500ms timer；`StateFieldInstance.StartRefreshItems` 不再在 UI 线程 `task.Wait()` |
+| P2-37 批处理完成不再强制回收 | 已实现 | 自动匹配和文件名相关批处理去掉完成收尾的显式 `GC.Collect()`，减少操作结束时的额外暂停 |
+| P2-38 更新检查提示线程修正 | 已实现 | `ApplicationInfoService` 不再在后台线程弹 `MessageBox` / 写 `Settings`，提示与版本忽略写回都回到调用线程 |
+| P2-39 歌词时间戳分隔复用 | 已实现 | `LyricTextProcessor.ParseTimestampMilliseconds` 改用静态 `TimestampSeparatorRegex`，避免每次拆时间串都构造新 `Regex` |
+| P2-40 相似度文本替换复用 | 已实现 | `TrackSearchResult.NormalizeSimilarityTextCandidates` 改为复用静态 `Regex` 实例，去掉每个 pattern 的重复构造 |
+| P2-41 文件名批处理 regex 缓存 | 已实现 | `FilenameRegexCaptureExtractor` 对相同 pattern 复用 `Regex`，减少批量文件名解析时的重复编译/分配 |
 | P2 后续 | 待办 | 更零散的 Low 级资源释放问题 |
