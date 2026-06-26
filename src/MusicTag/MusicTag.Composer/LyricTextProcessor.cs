@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -151,7 +152,7 @@ internal class LyricTextProcessor
 		{
 			try
 			{
-				timestampOffsetMilliseconds = long.Parse(rawLine.Substring(8, rawLine.Length - 9).Trim());
+				timestampOffsetMilliseconds = long.Parse(rawLine.Substring(8, rawLine.Length - 9).Trim(), CultureInfo.InvariantCulture);
 			}
 			catch (Exception ex)
 			{
@@ -220,13 +221,13 @@ internal class LyricTextProcessor
 				switch (index)
 				{
 				case 0:
-					minutes = long.Parse(timestampPart);
+					minutes = long.Parse(timestampPart, CultureInfo.InvariantCulture);
 					break;
 				case 1:
-					seconds = long.Parse(timestampPart);
+					seconds = long.Parse(timestampPart, CultureInfo.InvariantCulture);
 					break;
 				case 2:
-					milliseconds = long.Parse(timestampPart);
+					milliseconds = long.Parse(timestampPart, CultureInfo.InvariantCulture);
 					if (timestampPart.Length < 3)
 					{
 						milliseconds *= 10L;
@@ -249,9 +250,9 @@ internal class LyricTextProcessor
 		long minutes = timestampMilliseconds / 1000L / 60L;
 		if (useThreeDigitMilliseconds)
 		{
-			return $"[{minutes:D2}:{seconds:D2}.{milliseconds:D3}]";
+			return string.Format(CultureInfo.InvariantCulture, "[{0:D2}:{1:D2}.{2:D3}]", minutes, seconds, milliseconds);
 		}
-		return $"[{minutes:D2}:{seconds:D2}.{milliseconds / 10L:D2}]";
+		return string.Format(CultureInfo.InvariantCulture, "[{0:D2}:{1:D2}.{2:D2}]", minutes, seconds, milliseconds / 10L);
 	}
 
 	private string MergeMetadataValue(string currentValue, string incomingValue)

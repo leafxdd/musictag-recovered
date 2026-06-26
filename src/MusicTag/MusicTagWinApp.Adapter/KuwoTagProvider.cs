@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -446,7 +447,7 @@ internal class KuwoTagProvider : RemoteTagProviderBase
 							continue;
 						}
 
-						long timestampMs = Convert.ToInt64(double.Parse(ReadJsonString(lyricToken, "time")) * 1000.0);
+						long timestampMs = Convert.ToInt64(double.Parse(ReadJsonString(lyricToken, "time"), CultureInfo.InvariantCulture) * 1000.0);
 						string lyricText = TextEncodingService.DecodeBasicHtmlEntities(ReadJsonString(lyricToken, "lineLyric"));
 						if (timedLines.ContainsKey(timestampMs))
 						{
