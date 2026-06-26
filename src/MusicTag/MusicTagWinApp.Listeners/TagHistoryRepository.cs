@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Threading;
 using MusicTag.Readers;
 using MusicTag.States;
 using MusicTagWinApp.Instances;
@@ -50,7 +51,9 @@ internal class TagHistoryRepository : IDisposable
 
 	private const long MaxInMemoryUndoPayloadBytes = 104857600L;
 
-	public static List<ConfigDescriptorState> UndoTags { get; } = new List<ConfigDescriptorState>();
+	private static readonly object syncRoot = new object();
+
+	private static readonly List<ConfigDescriptorState> undoTags = new List<ConfigDescriptorState>();
 
 	private static SQLiteConnection sharedConnection;
 
@@ -64,14 +67,26 @@ internal class TagHistoryRepository : IDisposable
 
 	private long undoPayloadByteCount;
 
-	public static List<(string oldPath, string newPath, bool failed)> RenameUndoOperations { get; } = new List<(string, string, bool)>();
+	private bool syncLockHeld;
+
+	private static readonly List<(string oldPath, string newPath, bool failed)> renameUndoOperations = new List<(string, string, bool)>();
 
 	public TagHistoryRepository(bool useTransaction)
 	{
-		EnsureConnectionOpen();
-		if (useTransaction)
+		Monitor.Enter(syncRoot);
+		syncLockHeld = true;
+		try
 		{
-			currentTransaction = sharedConnection.BeginTransaction();
+			EnsureConnectionOpen();
+			if (useTransaction)
+			{
+				currentTransaction = sharedConnection.BeginTransaction();
+			}
+		}
+		catch
+		{
+			ReleaseSyncLock();
+			throw;
 		}
 	}
 
@@ -94,12 +109,13 @@ internal class TagHistoryRepository : IDisposable
 		}
 		catch
 		{
-			CloseSharedConnection();
+			CloseSharedConnectionCore();
 			throw;
 		}
 		finally
 		{
 			currentTransaction?.Dispose();
+			ReleaseSyncLock();
 		}
 	}
 
@@ -112,7 +128,7 @@ internal class TagHistoryRepository : IDisposable
 		catch (Exception ex)
 		{
 			Console.WriteLine("RollbackTagsHistory fail:" + ex.Message);
-			CloseSharedConnection();
+			CloseSharedConnectionCore();
 		}
 	}
 
@@ -131,6 +147,14 @@ internal class TagHistoryRepository : IDisposable
 
 	public static void CloseSharedConnection()
 	{
+		lock (syncRoot)
+		{
+			CloseSharedConnectionCore();
+		}
+	}
+
+	private static void CloseSharedConnectionCore()
+	{
 		if (sharedConnection != null)
 		{
 			if (sharedConnection.State != ConnectionState.Closed)
@@ -139,6 +163,16 @@ internal class TagHistoryRepository : IDisposable
 			}
 		}
 		sharedConnection = null;
+	}
+
+	private void ReleaseSyncLock()
+	{
+		if (!syncLockHeld)
+		{
+			return;
+		}
+		syncLockHeld = false;
+		Monitor.Exit(syncRoot);
 	}
 
 	public static string InitializeDatabase()
@@ -215,7 +249,6 @@ internal class TagHistoryRepository : IDisposable
 		catch
 		{
 			transactionFailed = currentTransaction != null;
-			CloseSharedConnection();
 			throw;
 		}
 	}
@@ -429,7 +462,7 @@ internal class TagHistoryRepository : IDisposable
 	{
 		try
 		{
-			int count = UndoTags.Count;
+			int count = undoTags.Count;
 			string lyrics;
 			if ((lyrics = tags.GetDisplayValue("lyrics")) != null && !string.IsNullOrWhiteSpace(lyrics))
 			{
@@ -465,7 +498,7 @@ internal class TagHistoryRepository : IDisposable
 				undoStore.undoPayloadByteCount += pictureByteCount;
 			}
 			tags["tags_history_serial"] = historySerial;
-			UndoTags.Add(tags);
+			undoTags.Add(tags);
 		}
 		catch (Exception ex)
 		{
@@ -506,16 +539,19 @@ internal class TagHistoryRepository : IDisposable
 
 	public static void ClearUndoState()
 	{
-		bool shouldCollectGarbage = UndoTags.Any() || RenameUndoOperations.Any();
-		UndoTags.Clear();
-		if (Directory.Exists(DatabaseMapper.GetUndoTempDirectoryPath()))
+		lock (syncRoot)
 		{
-			Directory.GetFiles(DatabaseMapper.GetUndoTempDirectoryPath()).ForEachItem(DeleteUndoTempFile);
-		}
-		RenameUndoOperations.Clear();
-		if (shouldCollectGarbage)
-		{
-			GC.Collect();
+			bool shouldCollectGarbage = undoTags.Any() || renameUndoOperations.Any();
+			undoTags.Clear();
+			if (Directory.Exists(DatabaseMapper.GetUndoTempDirectoryPath()))
+			{
+				Directory.GetFiles(DatabaseMapper.GetUndoTempDirectoryPath()).ForEachItem(DeleteUndoTempFile);
+			}
+			renameUndoOperations.Clear();
+			if (shouldCollectGarbage)
+			{
+				GC.Collect();
+			}
 		}
 	}
 
@@ -526,46 +562,93 @@ internal class TagHistoryRepository : IDisposable
 
 	public static bool HasPendingUndoActions()
 	{
-		return UndoTags.Any() || RenameUndoOperations.Any();
+		lock (syncRoot)
+		{
+			return undoTags.Any() || renameUndoOperations.Any();
+		}
+	}
+
+	public static int UndoTagsCount()
+	{
+		lock (syncRoot)
+		{
+			return undoTags.Count;
+		}
+	}
+
+	public static int RenameUndoOperationsCount()
+	{
+		lock (syncRoot)
+		{
+			return renameUndoOperations.Count;
+		}
+	}
+
+	public static List<ConfigDescriptorState> GetUndoTagSnapshots()
+	{
+		lock (syncRoot)
+		{
+			return new List<ConfigDescriptorState>(undoTags);
+		}
+	}
+
+	public static List<(string oldPath, string newPath, bool failed)> GetRenameUndoOperations()
+	{
+		lock (syncRoot)
+		{
+			return new List<(string oldPath, string newPath, bool failed)>(renameUndoOperations);
+		}
 	}
 
 	public static string BuildUndoTagsPreview()
 	{
-		StringBuilder stringBuilder = new StringBuilder();
-		foreach (ConfigDescriptorState tags in UndoTags.Take(10))
+		lock (syncRoot)
 		{
-			stringBuilder.Append(Path.GetFileName(tags.GetDisplayValue("filepath")) + "\n");
+			StringBuilder stringBuilder = new StringBuilder();
+			foreach (ConfigDescriptorState tags in undoTags.Take(10))
+			{
+				stringBuilder.Append(Path.GetFileName(tags.GetDisplayValue("filepath")) + "\n");
+			}
+			if (undoTags.Count > 10)
+			{
+				stringBuilder.Append("...");
+			}
+			return stringBuilder.ToString();
 		}
-		if (UndoTags.Count > 10)
-		{
-			stringBuilder.Append("...");
-		}
-		return stringBuilder.ToString();
 	}
 
 	public static void AddRenameUndoRecord(string oldPath, string newPath)
 	{
-		RenameUndoOperations.Add((oldPath, newPath, false));
+		lock (syncRoot)
+		{
+			renameUndoOperations.Add((oldPath, newPath, false));
+		}
 	}
 
 	public static string BuildRenameUndoPreview()
 	{
-		StringBuilder stringBuilder = new StringBuilder();
-		foreach (var renameOperation in RenameUndoOperations.Take(10))
+		lock (syncRoot)
 		{
-			stringBuilder.Append(Path.GetFileName(renameOperation.newPath) + "\n");
+			StringBuilder stringBuilder = new StringBuilder();
+			foreach (var renameOperation in renameUndoOperations.Take(10))
+			{
+				stringBuilder.Append(Path.GetFileName(renameOperation.newPath) + "\n");
+			}
+			if (renameUndoOperations.Count > 10)
+			{
+				stringBuilder.Append("...");
+			}
+			return stringBuilder.ToString();
 		}
-		if (RenameUndoOperations.Count > 10)
-		{
-			stringBuilder.Append("...");
-		}
-		return stringBuilder.ToString();
 	}
 
 	public static void RemovePendingUndoForFile(string filePath)
 	{
-		UndoTags.RemoveAll(tag => tag["filepath"] as string == filePath);
-		RenameUndoOperations.RemoveAll(renameOperation => renameOperation.newPath == filePath);
+		lock (syncRoot)
+		{
+			undoTags.RemoveAll(tag => tag["filepath"] as string == filePath);
+			renameUndoOperations.RemoveAll(renameOperation => renameOperation.newPath == filePath);
+		}
 	}
 
 }

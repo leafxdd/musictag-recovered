@@ -5744,29 +5744,32 @@ internal class StateFieldInstance : Form
 
 	private void UndoLastOperation_Click(object sender, EventArgs e)
 	{
-		if (TagHistoryRepository.UndoTags.Any())
+		int undoTagsCount = TagHistoryRepository.UndoTagsCount();
+		if (undoTagsCount > 0)
 		{
-			if (DatabaseMapper.ConfirmYesNo(string.Format(Resources.Msg_ConfirmUndoTags, TagHistoryRepository.UndoTags.Count) + "\n" + TagHistoryRepository.BuildUndoTagsPreview()))
+			if (DatabaseMapper.ConfirmYesNo(string.Format(Resources.Msg_ConfirmUndoTags, undoTagsCount) + "\n" + TagHistoryRepository.BuildUndoTagsPreview()))
 			{
 				ProgressDialog progressDialog = new ProgressDialog(taskbarProgress);
 				StartUndoSaveTags(progressDialog);
 				progressDialog.ShowDialogIfNotDisposed();
 			}
+			return;
 		}
-		else if (TagHistoryRepository.RenameUndoOperations.Any())
+
+		int renameUndoOperationsCount = TagHistoryRepository.RenameUndoOperationsCount();
+		if (renameUndoOperationsCount > 0)
 		{
-			if (DatabaseMapper.ConfirmYesNo(string.Format(Resources.Msg_ConfirmUndoRename, TagHistoryRepository.RenameUndoOperations.Count) + "\n" + TagHistoryRepository.BuildRenameUndoPreview()))
+			if (DatabaseMapper.ConfirmYesNo(string.Format(Resources.Msg_ConfirmUndoRename, renameUndoOperationsCount) + "\n" + TagHistoryRepository.BuildRenameUndoPreview()))
 			{
 				ProgressDialog progressDialog = new ProgressDialog(taskbarProgress);
 				StartUndoRename(progressDialog);
 				progressDialog.ShowDialogIfNotDisposed();
 			}
+			return;
 		}
-		else
-		{
-			undoMenuItem.Enabled = false;
-			undoToolStripButton.Enabled = false;
-		}
+
+		undoMenuItem.Enabled = false;
+		undoToolStripButton.Enabled = false;
 	}
 
 	private void ReformatLyricTimeTags_Click(object sender, EventArgs e)
@@ -5927,7 +5930,7 @@ internal class StateFieldInstance : Form
 		undoSaveTagsContext.progressDialog = progressDialog;
 		undoSaveTagsContext.cancellationSource = new CancellationTokenSource();
 		undoSaveTagsContext.progressDialog.AddCancelRequestedHandler(undoSaveTagsContext.Cancel);
-		undoSaveTagsContext.undoTagSnapshots = TagHistoryRepository.UndoTags;
+		undoSaveTagsContext.undoTagSnapshots = TagHistoryRepository.GetUndoTagSnapshots();
 		undoSaveTagsContext.restoredCount = 0;
 		undoSaveTagsContext.failedCount = 0;
 		undoSaveTagsContext.skippedCount = 0;
@@ -5978,7 +5981,7 @@ internal class StateFieldInstance : Form
 		undoRenameContext.owner = this;
 		undoRenameContext.cancellationSource = new CancellationTokenSource();
 		undoRenameContext.progressDialog.AddCancelRequestedHandler(undoRenameContext.Cancel);
-		undoRenameContext.renameUndoOperations = TagHistoryRepository.RenameUndoOperations;
+		undoRenameContext.renameUndoOperations = TagHistoryRepository.GetRenameUndoOperations();
 		undoRenameContext.successCount = 0;
 		undoRenameContext.failedCount = 0;
 		undoRenameContext.skippedCount = 0;
