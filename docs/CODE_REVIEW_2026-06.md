@@ -104,9 +104,8 @@
 | `listview-controls-1` / `services-misc-3` | 静态初始化器里无保护 `JsonConvert.Deserialize`，损坏配置 → `TypeInitializationException` → 核心列设置/合并搜索路径**永久崩溃无法自愈** | `CustomColumnsDialog.cs:45,290`；`CombinedTagOverwriteOptionsDialog.cs:45` |
 | `data-history-1` | `TagHistoryRepository` 事务无回滚 + `ExecuteReader` 失败把 static 共享连接置 null → 级联失败 + 原始异常被掩盖（验证后 high→medium）| `TagHistoryRepository.cs:76-171` |
 | `data-history-2` | static 共享连接/序列号/`UndoTags` 无任何同步，仅靠"UI 串行 await"这一**未强制**的不变量 | `TagHistoryRepository.cs:55,173,345` |
-| `config-medium` | `AppSettingData` 用 `BinaryFormatter` + `FileMode.Create` 非原子保存，`SaveSettings` 整体无 try/catch | `StateFieldInstance.cs:2338` |
+| `config-medium` | `AppSettingData` 仍使用 `BinaryFormatter` 反序列化退出状态，长期兼容/安全性差（非原子保存、后台 UI 读取和保存异常收尾已修） | `StateFieldInstance.cs:2338` |
 | `statefield-4` | 14 个 `async void StartXxx` 在 await 后收尾无 finally，异常时进度框残留、列表不刷新 | `StateFieldInstance.cs:4796,5360,5785…` |
-| `statefield-2` | 后台线程读 `filterTextBox.Text`（跨线程控件访问）| `StateFieldInstance.cs:2348` |
 | `dialogs-search-1` | `CombinedTagSearchDialog.SearchCombinedTagsAsync` 外层 `async void` 无 catch/finally；普通网络/解析失败多由 provider 内部吞吐，但仍存在未覆盖异常导致全局退出、进度图标/任务栏状态不复位的风险 | `CombinedTagSearchDialog.cs:801` |
 | `dialogs-search-7` | `CombinedTagSearchDialog.DownloadCoverAsync` 在 `searchResultsListView.BeginUpdate()` 后才进入复杂 UI 更新，异常路径不调用 `EndUpdate()` → ListView 刷新状态可能被永久挂住 | `CombinedTagSearchDialog.cs:634` |
 | `dialogs-search-8` | `PictureFromTagsDialog.StartPictureSearchAsync` 只捕获 `OperationCanceledException`；嵌入封面读取/解码的非取消异常会逃出 `async void` 进入全局退出路径 | `PictureFromTagsDialog.cs:164` |
@@ -218,4 +217,5 @@
 | P2-25 自动匹配封面临时租约 | 已实现 | 封面候选下载失败时立即释放临时文件租约；成功候选被后续候选替换时释放旧租约，避免引用计数泄漏 |
 | P2-26 自动匹配进度路径快照 | 已实现 | `UpdateProgress` 对 `activeFilePaths` 使用快照式 `FirstOrDefault()`，避免并发清空集合时 `.First()` 抛异常 |
 | P2-27 封面图片加载生命周期 | 已实现 | `LoadPictureImage` 返回脱离输入 `MemoryStream` 的 `Bitmap`，保存快照中只读取图片元数据的调用统一 `using`；封面预览旧图释放已由 `SetCoverPreviewImage` 处理 |
+| P2-28 退出设置保存快照 | 已实现 | `StartSaveAppSettingData` 在 UI 线程快照排序、窗口、筛选条件后再进后台保存；保存异常写日志并在 `finally` 关闭进度框 |
 | P2 后续 | 待办 | 更零散的 Low 级资源释放问题 |
