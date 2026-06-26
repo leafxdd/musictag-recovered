@@ -321,9 +321,9 @@ internal class KugouTagProvider : RemoteTagProviderBase
 		}
 		if (string.IsNullOrWhiteSpace(title))
 		{
-			return DatabaseMapper.UrlEncodeUtf8(artist.Trim() ?? "");
+			return DatabaseMapper.UrlEncodeUtf8((artist ?? "").Trim());
 		}
-		return DatabaseMapper.UrlEncodeUtf8(title.Trim() ?? "");
+		return DatabaseMapper.UrlEncodeUtf8((title ?? "").Trim());
 	}
 
 	private string ParseTranslatedLyric(string content, LyricTextProcessor lyricMerger)
