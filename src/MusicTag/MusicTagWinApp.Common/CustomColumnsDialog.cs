@@ -287,7 +287,7 @@ internal class CustomColumnsDialog : Form
 			}
 		}
 
-		List<ColumnHeaderInfo> savedColumnHeaders = JsonConvert.DeserializeObject<List<ColumnHeaderInfo>>(Settings.Default.ListviewColumnHeader);
+		List<ColumnHeaderInfo> savedColumnHeaders = TryDeserializeColumnHeaderSettings();
 		if (savedColumnHeaders != null)
 		{
 			Dictionary<string, ColumnHeaderInfo> columnHeaderByName = new Dictionary<string, ColumnHeaderInfo>();
@@ -330,6 +330,18 @@ internal class CustomColumnsDialog : Form
 	{
 		string listviewColumnHeader = JsonConvert.SerializeObject(GetColumnHeaderSettings());
 		Settings.Default.ListviewColumnHeader = listviewColumnHeader;
+	}
+
+	private static List<ColumnHeaderInfo> TryDeserializeColumnHeaderSettings()
+	{
+		try
+		{
+			return JsonConvert.DeserializeObject<List<ColumnHeaderInfo>>(Settings.Default.ListviewColumnHeader);
+		}
+		catch (JsonException)
+		{
+			return null;
+		}
 	}
 
 	private void UpdateLayout(object sender, EventArgs e)

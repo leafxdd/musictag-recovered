@@ -456,7 +456,7 @@ internal class OptionsDialog : Form
 		lyricSourceOrderControl.SetSources(LyricSearchResult.GetSortedLyricSourceSettings());
 		tagSourceOrderControl.SetSources(TrackSearchResult.GetSortedTagSourceSettings());
 
-		webSearchItemLimitTrackBar.Value = Settings.Default.WebSearchItemsLimit;
+		SetTrackBarValue(webSearchItemLimitTrackBar, Settings.Default.WebSearchItemsLimit);
 		UpdateWebSearchLimitLabel(null, null);
 		downloadTranslatedLyricsCheckBox.Checked = Settings.Default.LyricDownload_DownloadTrans_Enable;
 		skipOriginalLyricCheckBox.Checked = Settings.Default.LyricDownload_DownloadTrans_DontDownloadOrigLyric;
@@ -646,9 +646,9 @@ internal class OptionsDialog : Form
 		lyricSourceLimitLabel.Enabled = lyricSourceLimitTrackBar.Enabled;
 		tagSourceLimitLabel.Enabled = tagSourceLimitTrackBar.Enabled;
 
-		coverSourceLimitTrackBar.Value = GetSearchResultLimit(coverSource);
-		lyricSourceLimitTrackBar.Value = GetSearchResultLimit(lyricSource);
-		tagSourceLimitTrackBar.Value = GetSearchResultLimit(tagSource);
+		SetTrackBarValue(coverSourceLimitTrackBar, GetSearchResultLimit(coverSource));
+		SetTrackBarValue(lyricSourceLimitTrackBar, GetSearchResultLimit(lyricSource));
+		SetTrackBarValue(tagSourceLimitTrackBar, GetSearchResultLimit(tagSource));
 		UpdateCoverSearchLimit(null, null);
 		UpdateLyricSearchLimit(null, null);
 		UpdateTagSearchLimit(null, null);
@@ -696,7 +696,7 @@ internal class OptionsDialog : Form
 
 	private void SaveOptionsAndClose(object sender, EventArgs e)
 	{
-		string[] restrictedExtensions = restrictedExtensionsTextBox.Text.Split(new char[1] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+		string[] restrictedExtensions = NormalizeRestrictedExtensions(restrictedExtensionsTextBox.Text);
 		if (!restrictedExtensions.Any())
 		{
 			DatabaseMapper.ShowErrorMessage(Resources.Msg_PleaseInputValidExt);
@@ -713,6 +713,8 @@ internal class OptionsDialog : Form
 			restrictedExtensionsTextBox.Focus();
 			return;
 		}
+
+		restrictedExtensionsTextBox.Text = string.Join(";", restrictedExtensions) + ";";
 
 		Dictionary<string, string> previousExtensions = new Dictionary<string, string>(StateFieldInstance.EnabledTagTypesByExtension);
 		StateFieldInstance.EnabledTagTypesByExtension.Clear();
@@ -811,6 +813,21 @@ internal class OptionsDialog : Form
 	private static bool IsUnknownRestrictedExtension(string extension)
 	{
 		return !StateFieldInstance.KnownTagTypesByExtension.ContainsKey(extension);
+	}
+
+	private static string[] NormalizeRestrictedExtensions(string restrictedExtensionsText)
+	{
+		return restrictedExtensionsText
+			.Split(new char[1] { ';' }, StringSplitOptions.RemoveEmptyEntries)
+			.Select(extension => extension.Trim().ToLowerInvariant())
+			.Where(extension => !string.IsNullOrEmpty(extension))
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.ToArray();
+	}
+
+	private static void SetTrackBarValue(TrackBar trackBar, int value)
+	{
+		trackBar.Value = Math.Max(trackBar.Minimum, Math.Min(trackBar.Maximum, value));
 	}
 
 	private void CancelOptionsDialog(object sender, EventArgs e)
@@ -2039,17 +2056,23 @@ internal class OptionsDialog : Form
 	{
 		if (sourceItem == null)
 		{
-			return 1;
+			return coverSourceLimitTrackBar.Minimum;
 		}
 
 		if (searchResultLimitsBySource.TryGetValue(sourceItem, out int limit))
 		{
-			return limit;
+			return ClampSearchResultLimit(limit);
 		}
 
 		limit = sourceItem.SearchResultLimit;
+		limit = ClampSearchResultLimit(limit);
 		searchResultLimitsBySource[sourceItem] = limit;
 		return limit;
+	}
+
+	private int ClampSearchResultLimit(int limit)
+	{
+		return Math.Max(coverSourceLimitTrackBar.Minimum, Math.Min(coverSourceLimitTrackBar.Maximum, limit));
 	}
 
 }

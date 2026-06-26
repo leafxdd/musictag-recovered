@@ -44,7 +44,7 @@ internal class CombinedTagOverwriteOptionsDialog : Form
 
 	static CombinedTagOverwriteOptionsDialog()
 	{
-		Dictionary<string, bool> savedOptions = JsonConvert.DeserializeObject<Dictionary<string, bool>>(Settings.Default.CombTagsSearchOverwriteOptions);
+		Dictionary<string, bool> savedOptions = TryDeserializeOverwriteOptions();
 		if (savedOptions == null)
 		{
 			return;
@@ -99,6 +99,18 @@ internal class CombinedTagOverwriteOptionsDialog : Form
 		Settings.Default.CombTagsSearchOverwriteOptions = JsonConvert.SerializeObject(GetOverwriteOptions());
 		DialogResult = DialogResult.OK;
 		Close();
+	}
+
+	private static Dictionary<string, bool> TryDeserializeOverwriteOptions()
+	{
+		try
+		{
+			return JsonConvert.DeserializeObject<Dictionary<string, bool>>(Settings.Default.CombTagsSearchOverwriteOptions);
+		}
+		catch (JsonException)
+		{
+			return null;
+		}
 	}
 
 	private void CancelButtonClick(object sender, EventArgs e)
