@@ -73,49 +73,49 @@ internal class CombinedTagSearchDialog : Form
 
 		public CoverDownloadRequestContext Request;
 
-			internal Image LoadOrDownloadImage()
+		internal Image LoadOrDownloadImage()
+		{
+			CoverDownloadFile coverDownload = new CoverDownloadFile
 			{
-				CoverDownloadFile coverDownload = new CoverDownloadFile
-				{
-					LoadTask = this,
-					LocalCoverPath = Request.CoverResult.LocalCoverPath ?? DatabaseMapper.GetPictureCacheDirectory() + DatabaseMapper.ComputeMd5HashString(Request.CoverResult.CoverUrl, "UTF-8").Replace("-", ""),
-					DownloadedBytes = 0L
-				};
-				Request.CoverResult.LocalCoverPath = coverDownload.LocalCoverPath;
-				if (coverDownload.IsAlreadyDownloading())
-				{
-					return null;
-				}
-				RemoteTagProviderBase.DownloadStatus dlStatus = RemoteTagProviderBase.DownloadStatus.Error;
-				Bitmap bitmap = null;
-				if (File.Exists(coverDownload.LocalCoverPath))
+				LoadTask = this,
+				LocalCoverPath = Request.CoverResult.LocalCoverPath ?? DatabaseMapper.GetPictureCacheDirectory() + DatabaseMapper.ComputeMd5HashString(Request.CoverResult.CoverUrl, "UTF-8").Replace("-", ""),
+				DownloadedBytes = 0L
+			};
+			Request.CoverResult.LocalCoverPath = coverDownload.LocalCoverPath;
+			if (coverDownload.IsAlreadyDownloading())
+			{
+				return null;
+			}
+			RemoteTagProviderBase.DownloadStatus dlStatus = RemoteTagProviderBase.DownloadStatus.Error;
+			Bitmap bitmap = null;
+			if (File.Exists(coverDownload.LocalCoverPath))
+			{
+				bitmap = coverDownload.DecodeAndResizeImage();
+			}
+			if (bitmap == null)
+			{
+				dlStatus = coverDownload.DownloadCoverFile();
+				if (dlStatus == RemoteTagProviderBase.DownloadStatus.Success)
 				{
 					bitmap = coverDownload.DecodeAndResizeImage();
 				}
-				if (bitmap == null)
+				else
 				{
-					dlStatus = coverDownload.DownloadCoverFile();
-					if (dlStatus == RemoteTagProviderBase.DownloadStatus.Success)
-					{
-						bitmap = coverDownload.DecodeAndResizeImage();
-					}
-					else
-					{
-						coverDownload.DeleteFailedDownload();
-					}
+					coverDownload.DeleteFailedDownload();
 				}
-				if (bitmap == null)
-				{
-					Console.WriteLine(string.Concat("bmp fail:", Request.CoverResult.CoverUrl, ",", coverDownload.LocalCoverPath, ",", coverDownload.DownloadedBytes));
-					if (dlStatus != RemoteTagProviderBase.DownloadStatus.NotFound)
-					{
-						return Request.Owner.coverImageList.Images["download_failed"];
-					}
-					return Request.Owner.coverImageList.Images["image_not_found"];
-				}
-				return bitmap;
 			}
+			if (bitmap == null)
+			{
+				Console.WriteLine(string.Concat("bmp fail:", Request.CoverResult.CoverUrl, ",", coverDownload.LocalCoverPath, ",", coverDownload.DownloadedBytes));
+				if (dlStatus != RemoteTagProviderBase.DownloadStatus.NotFound)
+				{
+					return Request.Owner.coverImageList.Images["download_failed"];
+				}
+				return Request.Owner.coverImageList.Images["image_not_found"];
+			}
+			return bitmap;
 		}
+	}
 
 	private sealed class CoverDownloadFile
 	{
@@ -125,54 +125,54 @@ internal class CombinedTagSearchDialog : Form
 
 		public CoverImageLoadTask LoadTask;
 
-			internal bool IsAlreadyDownloading()
+		internal bool IsAlreadyDownloading()
+		{
+			HashSet<string> queuedCoverDownloadPaths = LoadTask.Request.Owner.queuedCoverDownloadPaths;
+			bool lockTaken = false;
+			try
 			{
-				HashSet<string> queuedCoverDownloadPaths = LoadTask.Request.Owner.queuedCoverDownloadPaths;
-				bool lockTaken = false;
-				try
+				Monitor.Enter(queuedCoverDownloadPaths, ref lockTaken);
+				if (!queuedCoverDownloadPaths.Contains(LocalCoverPath))
 				{
-					Monitor.Enter(queuedCoverDownloadPaths, ref lockTaken);
-					if (!queuedCoverDownloadPaths.Contains(LocalCoverPath))
-					{
-						queuedCoverDownloadPaths.Add(LocalCoverPath);
-						return false;
-					}
-					return true;
+					queuedCoverDownloadPaths.Add(LocalCoverPath);
+					return false;
 				}
-				finally
+				return true;
+			}
+			finally
+			{
+				if (lockTaken)
 				{
-					if (lockTaken)
-					{
-						Monitor.Exit(queuedCoverDownloadPaths);
-					}
+					Monitor.Exit(queuedCoverDownloadPaths);
 				}
 			}
+		}
 
 		internal RemoteTagProviderBase.DownloadStatus DownloadCoverFile()
 		{
-				try
-				{
-						var (result, downloadedBytes) = LoadTask.Request.CoverResult.CoverDownloader(LoadTask.Request.Owner.cancellationSource, LocalCoverPath, 300000);
-					DownloadedBytes = downloadedBytes;
-					return result;
-				}
-				catch (System.Exception ex)
-				{
-					Console.WriteLine("downloadfile fail:" + ex.Message);
-				}
-				return RemoteTagProviderBase.DownloadStatus.Error;
+			try
+			{
+				var (result, downloadedBytes) = LoadTask.Request.CoverResult.CoverDownloader(LoadTask.Request.Owner.cancellationSource, LocalCoverPath, 300000);
+				DownloadedBytes = downloadedBytes;
+				return result;
 			}
+			catch (System.Exception ex)
+			{
+				Console.WriteLine("downloadfile fail:" + ex.Message);
+			}
+			return RemoteTagProviderBase.DownloadStatus.Error;
+		}
 
 		internal void DeleteFailedDownload()
 		{
-				try
+			try
+			{
+				if (File.Exists(LocalCoverPath))
 				{
-					if (File.Exists(LocalCoverPath))
-					{
-						File.Delete(LocalCoverPath);
-					}
+					File.Delete(LocalCoverPath);
 				}
-				catch (System.Exception ex)
+			}
+			catch (System.Exception ex)
 			{
 				Console.WriteLine("deletefile fail:" + ex.Message);
 			}
@@ -186,13 +186,13 @@ internal class CombinedTagSearchDialog : Form
 				LoadTask.OriginalImageSize = bitmap.Size;
 				return DatabaseMapper.ResizeImageToFit(bitmap, LoadTask.Request.Owner.coverImageList.ImageSize, centerOnCanvas: true);
 			}
-				catch (System.Exception ex)
-				{
-					Console.WriteLine("decode bitmap fail " + ex.Message);
-				}
-				return null;
+			catch (System.Exception ex)
+			{
+				Console.WriteLine("decode bitmap fail " + ex.Message);
 			}
+			return null;
 		}
+	}
 
 	private sealed class TrackSearchCoordinator
 	{
@@ -296,34 +296,34 @@ internal class CombinedTagSearchDialog : Form
 
 		public TrackSearchCoordinator Coordinator;
 
-			internal void RankLimitAndReportCurrentBatch(bool useProviderRanking)
+		internal void RankLimitAndReportCurrentBatch(bool useProviderRanking)
+		{
+			TrackResultLimitCollector resultLimiter = new TrackResultLimitCollector();
+			resultLimiter.SearchLimits = this;
+			if (useProviderRanking)
 			{
-				TrackResultLimitCollector resultLimiter = new TrackResultLimitCollector();
-				resultLimiter.SearchLimits = this;
-				if (useProviderRanking)
-				{
-					Coordinator.Owner.RankCurrentSearchResults(CurrentBatch);
-				}
-				else
-				{
-					Coordinator.Owner.SortCurrentSearchResults(CurrentBatch);
-				}
-				resultLimiter.LimitedResults = new List<TrackSearchResult>();
-				CurrentBatch.ForEach(resultLimiter.AddIfWithinLimit);
-				AccumulatedResults.AddRange(resultLimiter.LimitedResults);
-				Coordinator.ProgressReporter.Report(resultLimiter.LimitedResults);
+				Coordinator.Owner.RankCurrentSearchResults(CurrentBatch);
 			}
+			else
+			{
+				Coordinator.Owner.SortCurrentSearchResults(CurrentBatch);
+			}
+			resultLimiter.LimitedResults = new List<TrackSearchResult>();
+			CurrentBatch.ForEach(resultLimiter.AddIfWithinLimit);
+			AccumulatedResults.AddRange(resultLimiter.LimitedResults);
+			Coordinator.ProgressReporter.Report(resultLimiter.LimitedResults);
+		}
 
 		internal void InitializeSourceLimit(SourceItem sourceItem)
 		{
 			RemainingResultsBySource[sourceItem.SearchSource] = sourceItem.GetEffectiveSearchResultLimit();
 		}
 
-			internal bool IsPrimaryNetEaseSourceAvailable(SourceItem sourceItem)
-			{
-				return sourceItem.Enabled && !sourceItem.IsSecondarySource && RemainingResultsBySource[sourceItem.SearchSource] > 0 && sourceItem.SearchSource == SearchSource.Music163;
-			}
+		internal bool IsPrimaryNetEaseSourceAvailable(SourceItem sourceItem)
+		{
+			return sourceItem.Enabled && !sourceItem.IsSecondarySource && RemainingResultsBySource[sourceItem.SearchSource] > 0 && sourceItem.SearchSource == SearchSource.Music163;
 		}
+	}
 
 	private sealed class TrackResultLimitCollector
 	{
@@ -331,20 +331,20 @@ internal class CombinedTagSearchDialog : Form
 
 		public TrackSearchLimitState SearchLimits;
 
-			internal void AddIfWithinLimit(TrackSearchResult trackResult)
+		internal void AddIfWithinLimit(TrackSearchResult trackResult)
+		{
+			if (SearchLimits.RemainingGlobalResults <= 0 || SearchLimits.RemainingResultsBySource[trackResult.SearchSource] <= 0)
 			{
-				if (SearchLimits.RemainingGlobalResults <= 0 || SearchLimits.RemainingResultsBySource[trackResult.SearchSource] <= 0)
-				{
-					return;
-				}
-				LimitedResults.Add(trackResult);
-				SearchLimits.RemainingResultsBySource[trackResult.SearchSource]--;
-				int remainingResults = SearchLimits.RemainingGlobalResults;
-				SearchLimits.RemainingGlobalResults = remainingResults - 1;
+				return;
 			}
+			LimitedResults.Add(trackResult);
+			SearchLimits.RemainingResultsBySource[trackResult.SearchSource]--;
+			int remainingResults = SearchLimits.RemainingGlobalResults;
+			SearchLimits.RemainingGlobalResults = remainingResults - 1;
 		}
+	}
 
-		private int activeMediaDownloadCount;
+	private int activeMediaDownloadCount;
 
 	private static bool cachedSearchCompleted;
 
@@ -636,6 +636,7 @@ internal class CombinedTagSearchDialog : Form
 		CoverDownloadRequestContext coverDownloadRequest = new CoverDownloadRequestContext();
 		coverDownloadRequest.CoverResult = coverResult;
 		coverDownloadRequest.Owner = this;
+		bool listUpdateStarted = false;
 		try
 		{
 			CoverImageLoadTask coverLoadTask = new CoverImageLoadTask();
@@ -643,6 +644,7 @@ internal class CombinedTagSearchDialog : Form
 			coverLoadTask.OriginalImageSize = null;
 			Image result = await Task.Run((Func<Image>)coverLoadTask.LoadOrDownloadImage, cancellationSource.Token);
 			searchResultsListView.BeginUpdate();
+			listUpdateStarted = true;
 			CoverImageListViewItem coverImageListViewItem = searchResultsListView.Items[coverLoadTask.Request.CoverResult.ListViewIndex] as CoverImageListViewItem;
 			if (result != null)
 			{
@@ -689,7 +691,6 @@ internal class CombinedTagSearchDialog : Form
 					}
 				}
 			}
-			searchResultsListView.EndUpdate();
 			bool queuedNextCoverDownload = false;
 			foreach (TrackSearchResult current in cachedSearchResults)
 			{
@@ -718,6 +719,13 @@ internal class CombinedTagSearchDialog : Form
 			Console.WriteLine("DownloadPicture error:" + v.GetMessageChain());
 			activeMediaDownloadCount--;
 		}
+		finally
+		{
+			if (listUpdateStarted)
+			{
+				searchResultsListView.EndUpdate();
+			}
+		}
 	}
 
 	private List<TrackSearchResult> SearchCurrentContextTracks(SearchSource source, bool useLinkedNetEaseId, List<TrackSearchResult> existingResults, int searchPass)
@@ -730,71 +738,71 @@ internal class CombinedTagSearchDialog : Form
 		List<TrackSearchResult> results = new List<TrackSearchResult>();
 		switch (source)
 		{
-		case SearchSource.Music163:
-			{
-				using NetEaseMusicTagProvider netEaseProvider = new NetEaseMusicTagProvider(cancellationSource);
-				if (useLinkedNetEaseId)
+			case SearchSource.Music163:
 				{
-					results.AddRange(netEaseProvider.SearchTracks("", 0, searchContext.LinkedMusicMetadata.musicId, 0, searchPass, existingResults, results));
+					using NetEaseMusicTagProvider netEaseProvider = new NetEaseMusicTagProvider(cancellationSource);
+					if (useLinkedNetEaseId)
+					{
+						results.AddRange(netEaseProvider.SearchTracks("", 0, searchContext.LinkedMusicMetadata.musicId, 0, searchPass, existingResults, results));
+						return results;
+					}
+					results.AddRange(netEaseProvider.SearchTracks((searchContext.Title + " " + searchContext.Artist).Trim(), 15, 0L, 0, searchPass, existingResults, results));
+					if (cancellationSource.IsCancellationRequested)
+					{
+						return results;
+					}
+					if (!string.IsNullOrWhiteSpace(searchContext.Artist))
+					{
+						results.AddRange(netEaseProvider.SearchTracks(searchContext.Title.Trim(), 10, 0L, 1, searchPass, existingResults, results));
+					}
+					if (cancellationSource.IsCancellationRequested)
+					{
+						return results;
+					}
+					if (!string.IsNullOrWhiteSpace(searchContext.Album) && searchContext.Album != searchContext.Title)
+					{
+						results.AddRange(netEaseProvider.SearchTracks((searchContext.Album + " " + searchContext.Artist).Trim(), 8, 0L, 2, searchPass, existingResults, results));
+					}
 					return results;
 				}
-				results.AddRange(netEaseProvider.SearchTracks((searchContext.Title + " " + searchContext.Artist).Trim(), 15, 0L, 0, searchPass, existingResults, results));
-				if (cancellationSource.IsCancellationRequested)
+			case SearchSource.QQ:
 				{
+					using QqMusicTagProvider qqProvider = new QqMusicTagProvider(cancellationSource);
+					results.AddRange(qqProvider.SearchTracks((searchContext.Title + " " + searchContext.Artist).Trim(), 15, 0, searchPass, existingResults, results));
+					if (cancellationSource.IsCancellationRequested)
+					{
+						return results;
+					}
+					if (!string.IsNullOrWhiteSpace(searchContext.Artist))
+					{
+						results.AddRange(qqProvider.SearchTracks(searchContext.Title.Trim(), 10, 1, searchPass, existingResults, results));
+					}
+					if (cancellationSource.IsCancellationRequested)
+					{
+						return results;
+					}
+					if (!string.IsNullOrWhiteSpace(searchContext.Album) && searchContext.Album != searchContext.Title)
+					{
+						results.AddRange(qqProvider.SearchTracks((searchContext.Album + " " + searchContext.Artist).Trim(), 8, 2, searchPass, existingResults, results));
+					}
 					return results;
 				}
-				if (!string.IsNullOrWhiteSpace(searchContext.Artist))
+			default:
+				return new List<TrackSearchResult>();
+			case SearchSource.Kuwo:
 				{
-					results.AddRange(netEaseProvider.SearchTracks(searchContext.Title.Trim(), 10, 0L, 1, searchPass, existingResults, results));
-				}
-				if (cancellationSource.IsCancellationRequested)
-				{
+					using KuwoTagProvider kuwoTagProvider = new KuwoTagProvider(cancellationSource);
+					results.AddRange(kuwoTagProvider.SearchTracks((searchContext.Title + " " + searchContext.Artist).Trim(), 8, 0, searchPass, existingResults, results));
+					if (cancellationSource.IsCancellationRequested)
+					{
+						return results;
+					}
+					if (!results.Any() && !string.IsNullOrWhiteSpace(searchContext.Album) && searchContext.Album != searchContext.Title)
+					{
+						results.AddRange(kuwoTagProvider.SearchTracks((searchContext.Album + " " + searchContext.Artist).Trim(), 8, 1, searchPass, existingResults, results));
+					}
 					return results;
 				}
-				if (!string.IsNullOrWhiteSpace(searchContext.Album) && searchContext.Album != searchContext.Title)
-				{
-					results.AddRange(netEaseProvider.SearchTracks((searchContext.Album + " " + searchContext.Artist).Trim(), 8, 0L, 2, searchPass, existingResults, results));
-				}
-				return results;
-			}
-		case SearchSource.QQ:
-			{
-				using QqMusicTagProvider qqProvider = new QqMusicTagProvider(cancellationSource);
-				results.AddRange(qqProvider.SearchTracks((searchContext.Title + " " + searchContext.Artist).Trim(), 15, 0, searchPass, existingResults, results));
-				if (cancellationSource.IsCancellationRequested)
-				{
-					return results;
-				}
-				if (!string.IsNullOrWhiteSpace(searchContext.Artist))
-				{
-					results.AddRange(qqProvider.SearchTracks(searchContext.Title.Trim(), 10, 1, searchPass, existingResults, results));
-				}
-				if (cancellationSource.IsCancellationRequested)
-				{
-					return results;
-				}
-				if (!string.IsNullOrWhiteSpace(searchContext.Album) && searchContext.Album != searchContext.Title)
-				{
-					results.AddRange(qqProvider.SearchTracks((searchContext.Album + " " + searchContext.Artist).Trim(), 8, 2, searchPass, existingResults, results));
-				}
-				return results;
-			}
-		default:
-			return new List<TrackSearchResult>();
-		case SearchSource.Kuwo:
-			{
-				using KuwoTagProvider kuwoTagProvider = new KuwoTagProvider(cancellationSource);
-				results.AddRange(kuwoTagProvider.SearchTracks((searchContext.Title + " " + searchContext.Artist).Trim(), 8, 0, searchPass, existingResults, results));
-				if (cancellationSource.IsCancellationRequested)
-				{
-					return results;
-				}
-				if (!results.Any() && !string.IsNullOrWhiteSpace(searchContext.Album) && searchContext.Album != searchContext.Title)
-				{
-					results.AddRange(kuwoTagProvider.SearchTracks((searchContext.Album + " " + searchContext.Artist).Trim(), 8, 1, searchPass, existingResults, results));
-				}
-				return results;
-			}
 		}
 	}
 
@@ -805,9 +813,22 @@ internal class CombinedTagSearchDialog : Form
 		cachedSearchResults = new List<TrackSearchResult>();
 		trackSearchCoordinator.ProgressReporter = new Progress<List<TrackSearchResult>>(trackSearchCoordinator.OnSearchResultsReported);
 		taskbarProgress.SetProgressState(TaskbarProgressBarStatus.Indeterminate);
-		cachedSearchCompleted = await Task.Run((Func<bool>)trackSearchCoordinator.SearchAllSources, cancellationSource.Token);
-		progressPictureBox.Hide();
-		taskbarProgress.SetProgressState(TaskbarProgressBarStatus.NoProgress);
+		try
+		{
+			cachedSearchCompleted = await Task.Run((Func<bool>)trackSearchCoordinator.SearchAllSources, cancellationSource.Token);
+		}
+		catch (System.Exception ex)
+		{
+			Console.WriteLine("SearchCombinedTags error:" + ex.GetMessageChain());
+		}
+		finally
+		{
+			if (!IsDisposed)
+			{
+				progressPictureBox.Hide();
+				taskbarProgress.SetProgressState(TaskbarProgressBarStatus.NoProgress);
+			}
+		}
 	}
 
 	private void SortCurrentSearchResults(List<TrackSearchResult> results)
@@ -1020,13 +1041,13 @@ internal class CombinedTagSearchDialog : Form
 		WithSelectedCoverImageData(OpenCoverImage);
 	}
 
-		private static void OpenCoverImage(ConfigDescriptorState.PictureData pictureData)
-		{
-			string extension = DatabaseMapper.GetImageExtensionForMimeType(pictureData.MimeType, "");
-			string tempCoverPath = DatabaseMapper.GetPictureCacheDirectory() + "tempcover" + extension;
-			File.WriteAllBytes(tempCoverPath, pictureData.ImageBytes);
-			Process.Start(tempCoverPath);
-		}
+	private static void OpenCoverImage(ConfigDescriptorState.PictureData pictureData)
+	{
+		string extension = DatabaseMapper.GetImageExtensionForMimeType(pictureData.MimeType, "");
+		string tempCoverPath = DatabaseMapper.GetPictureCacheDirectory() + "tempcover" + extension;
+		File.WriteAllBytes(tempCoverPath, pictureData.ImageBytes);
+		Process.Start(tempCoverPath);
+	}
 
 	private void ExtractCoverMenuClick(object sender, EventArgs args)
 	{

@@ -174,6 +174,10 @@ internal class PictureFromTagsDialog : Form
 		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 		{
 		}
+		catch (Exception ex)
+		{
+			Console.WriteLine("PictureSearch error:" + ex.GetMessageChain());
+		}
 		finally
 		{
 			progressPictureBox.Hide();
