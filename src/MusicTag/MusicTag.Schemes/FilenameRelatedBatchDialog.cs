@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
@@ -25,8 +26,8 @@ namespace MusicTag.Schemes;
 
 internal class FilenameRelatedBatchDialog : Form
 {
-	private sealed class FilenameRegexCaptureExtractor
-	{
+		private sealed class FilenameRegexCaptureExtractor
+		{
 		private sealed class MaskedFilenameVariant
 		{
 			public int MaskDepth;
@@ -36,14 +37,16 @@ internal class FilenameRelatedBatchDialog : Form
 			public List<string> ProtectedSegments = new List<string>();
 		}
 
-		private static readonly Regex ProtectedSegmentRegex = new Regex("\\([^()]*\\)|\\[[^\\[\\]]*\\]|\\{[^{}]*\\}|<[^<>]*>|（[^（）]*）|【[^【】]*】|《[^《》]*》|“[^“”]”|‘[^‘’]’|『[^『』]』|「[^「」]」");
+			private static readonly Regex ProtectedSegmentRegex = new Regex("\\([^()]*\\)|\\[[^\\[\\]]*\\]|\\{[^{}]*\\}|<[^<>]*>|（[^（）]*）|【[^【】]*】|《[^《》]*》|“[^“”]”|‘[^‘’]’|『[^『』]』|「[^「」]」");
+
+			private static readonly ConcurrentDictionary<string, Regex> RegexCache = new ConcurrentDictionary<string, Regex>(StringComparer.Ordinal);
 
 		private readonly List<MaskedFilenameVariant> maskedVariants = new List<MaskedFilenameVariant>();
 
 		public List<string> Captures { get; } = new List<string>();
 
-		public FilenameRegexCaptureExtractor(string filename, string regexPattern)
-		{
+			public FilenameRegexCaptureExtractor(string filename, string regexPattern)
+			{
 			int maskDepth = 0;
 			string maskedFilename = filename;
 			while ((maskedFilename = MaskProtectedSegments(maskedFilename, maskDepth++)) != null)
@@ -56,10 +59,10 @@ internal class FilenameRelatedBatchDialog : Form
 					Text = filename,
 					MaskDepth = 0
 				});
-			}
-			maskedVariants.Reverse();
-			Regex regex = new Regex(regexPattern);
-			Match match = null;
+				}
+				maskedVariants.Reverse();
+				Regex regex = RegexCache.GetOrAdd(regexPattern, pattern => new Regex(pattern));
+				Match match = null;
 			int matchedVariantIndex = -1;
 			for (int index = 0; index < maskedVariants.Count; index++)
 			{
@@ -1176,7 +1179,6 @@ internal class FilenameRelatedBatchDialog : Form
 		await Task.Run((Action)worker.RenameFiles, worker.CancellationTokenSource.Token);
 		progressDialog.CloseAfterCompletion();
 		(string msg, bool isErr) result = BuildBatchCompletionResult(paths.Length);
-		GC.Collect();
 		finallyCallback(result);
 	}
 
@@ -1208,7 +1210,6 @@ internal class FilenameRelatedBatchDialog : Form
 		finally
 		{
 			progressDialog.CloseAfterCompletion();
-			GC.Collect();
 			finallyCallback(result);
 		}
 	}

@@ -1819,7 +1819,6 @@ internal class AutoMatchTagsDialog : Form
 		finally
 		{
 			progressDialog.CloseAfterCompletion();
-			GC.Collect();
 			finallyCallback(result);
 		}
 	}

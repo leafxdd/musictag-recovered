@@ -4,28 +4,22 @@ using System.IO;
 using System.Net.Http;
 using System.Reflection;
 using System.Text.RegularExpressions;
-using System.Threading;
 using System.Windows.Forms;
 using MusicTagWinApp.Instances;
 using MusicTagWinApp.Properties;
 
 namespace MusicTag.Services;
 
-internal static class ApplicationInfoService
-{
-	private const string UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+	internal static class ApplicationInfoService
+	{
+		private const string UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
 	public static readonly string UpdatePageUrl = "https://www.cnblogs.com/vinlxc/p/11347744.html";
 
-	private static void RunPromptOnBackgroundThread(ThreadStart prompt)
-	{
-		new Thread(prompt).Start();
-	}
-
-	private static void ShowAlreadyLatestVersionMessage()
-	{
-		DatabaseMapper.ShowInformationMessage(Resources.Msg_UsingLastestVersion);
-	}
+		private static void ShowAlreadyLatestVersionMessage()
+		{
+			DatabaseMapper.ShowInformationMessage(Resources.Msg_UsingLastestVersion);
+		}
 
 	private static void ShowVersionCheckFailedMessage()
 	{
@@ -124,12 +118,12 @@ internal static class ApplicationInfoService
 						{
 							if (latestVersion != Settings.Default.IgnoreCheckSpecAppVersion)
 							{
-									RunPromptOnBackgroundThread(() => ShowNewVersionPrompt(latestVersion));
+								ShowNewVersionPrompt(latestVersion);
 							}
 						}
 						else if (!isStartup)
 						{
-								RunPromptOnBackgroundThread(ShowAlreadyLatestVersionMessage);
+							ShowAlreadyLatestVersionMessage();
 						}
 						handled = true;
 					}
@@ -143,12 +137,12 @@ internal static class ApplicationInfoService
 		catch (Exception exception)
 		{
 			handled = true;
-				RunPromptOnBackgroundThread(() => ShowUpdateCheckRequestFailedMessage(exception));
+			ShowUpdateCheckRequestFailedMessage(exception);
 		}
 
 		if (!handled)
 		{
-			RunPromptOnBackgroundThread(ShowVersionCheckFailedMessage);
+			ShowVersionCheckFailedMessage();
 		}
 		callback();
 	}

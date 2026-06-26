@@ -11,8 +11,8 @@ using MusicTagWinApp.Properties;
 
 namespace MusicTag.Composer;
 
-internal class LyricTextProcessor
-{
+	internal class LyricTextProcessor
+	{
 	private class LyricLine
 	{
 		public string OriginalText;
@@ -25,7 +25,9 @@ internal class LyricTextProcessor
 		}
 	}
 
-	private static readonly Regex TimestampRegex = new Regex("\\[(\\d{1,2}:\\d{1,2}\\.\\d{1,3})\\]|\\[(\\d{1,2}:\\d{1,2})\\]|\\[(\\d{1,2}:\\d{1,2}:\\d{1,3})\\]");
+		private static readonly Regex TimestampRegex = new Regex("\\[(\\d{1,2}:\\d{1,2}\\.\\d{1,3})\\]|\\[(\\d{1,2}:\\d{1,2})\\]|\\[(\\d{1,2}:\\d{1,2}:\\d{1,3})\\]");
+
+		private static readonly Regex TimestampSeparatorRegex = new Regex(":|\\.");
 
 	private string lyricist;
 	
@@ -214,7 +216,7 @@ internal class LyricTextProcessor
 		long milliseconds = 0L;
 		try
 		{
-			string[] timestampParts = new Regex(":|\\.").Split(timestampText);
+				string[] timestampParts = TimestampSeparatorRegex.Split(timestampText);
 			for (int index = 0; index < timestampParts.Length; index++)
 			{
 				string timestampPart = timestampParts[index];

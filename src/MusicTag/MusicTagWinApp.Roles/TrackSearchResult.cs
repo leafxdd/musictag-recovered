@@ -13,8 +13,8 @@ using Newtonsoft.Json;
 
 namespace MusicTagWinApp.Roles;
 
-internal class TrackSearchResult
-{
+	internal class TrackSearchResult
+	{
 	private const int TitleSimilarityScoreIndex = 0;
 
 	private const int ArtistSimilarityScoreIndex = 1;
@@ -35,7 +35,27 @@ internal class TrackSearchResult
 
 	private const int UnassignedSortOrder = -1;
 
-	private static readonly List<SourceItem> tagSourceSettings;
+		private static readonly List<SourceItem> tagSourceSettings;
+
+		private static readonly Regex WhitespaceRegex = new Regex("\\s+");
+
+		private static readonly Regex LeftParenRegex = new Regex("（");
+
+		private static readonly Regex RightParenRegex = new Regex("）");
+
+		private static readonly Regex ExclamationRegex = new Regex("！");
+
+		private static readonly Regex QuestionRegex = new Regex("？");
+
+		private static readonly Regex EllipsisRegex = new Regex("…");
+
+		private static readonly Regex CommaRegex = new Regex("，");
+
+		private static readonly Regex PeriodRegex = new Regex("。");
+
+		private static readonly Regex ColonRegex = new Regex("：");
+
+		private static readonly Regex FullWidthPeriodRegex = new Regex("．");
 	
 	public float[] SimilarityScores { get; }
 
@@ -500,13 +520,12 @@ internal class TrackSearchResult
 		}
 	}
 
-	private static void ReplaceRegexInTextCandidates(string pattern, string replacement, string[] textCandidates)
-	{
-		Regex regex = new Regex(pattern);
-		for (int index = 0; index < textCandidates.Length; index++)
+		private static void ReplaceRegexInTextCandidates(Regex regex, string replacement, string[] textCandidates)
 		{
-			if (textCandidates[index] != null)
+			for (int index = 0; index < textCandidates.Length; index++)
 			{
+				if (textCandidates[index] != null)
+				{
 				textCandidates[index] = regex.Replace(textCandidates[index], replacement);
 			}
 		}
@@ -528,20 +547,20 @@ internal class TrackSearchResult
 		return ChineseTextConverter.TraditionalToSimplified().ConvertCharactersOnly(text);
 	}
 
-	private static void NormalizeSimilarityTextCandidates(string[] textCandidates)
-	{
-		ReplaceRegexInTextCandidates("\\s+", "", textCandidates);
-		ReplaceRegexInTextCandidates("（", "(", textCandidates);
-		ReplaceRegexInTextCandidates("）", ")", textCandidates);
-		ReplaceRegexInTextCandidates("！", "!", textCandidates);
-		ReplaceRegexInTextCandidates("？", "?", textCandidates);
-		ReplaceRegexInTextCandidates("…", "...", textCandidates);
-		ReplaceRegexInTextCandidates("，", ",", textCandidates);
-		ReplaceRegexInTextCandidates("。", ".", textCandidates);
-		ReplaceRegexInTextCandidates("：", ":", textCandidates);
-		ReplaceRegexInTextCandidates("．", ".", textCandidates);
-		ConvertTextCandidatesChineseCharacters(textCandidates);
-	}
+		private static void NormalizeSimilarityTextCandidates(string[] textCandidates)
+		{
+			ReplaceRegexInTextCandidates(WhitespaceRegex, "", textCandidates);
+			ReplaceRegexInTextCandidates(LeftParenRegex, "(", textCandidates);
+			ReplaceRegexInTextCandidates(RightParenRegex, ")", textCandidates);
+			ReplaceRegexInTextCandidates(ExclamationRegex, "!", textCandidates);
+			ReplaceRegexInTextCandidates(QuestionRegex, "?", textCandidates);
+			ReplaceRegexInTextCandidates(EllipsisRegex, "...", textCandidates);
+			ReplaceRegexInTextCandidates(CommaRegex, ",", textCandidates);
+			ReplaceRegexInTextCandidates(PeriodRegex, ".", textCandidates);
+			ReplaceRegexInTextCandidates(ColonRegex, ":", textCandidates);
+			ReplaceRegexInTextCandidates(FullWidthPeriodRegex, ".", textCandidates);
+			ConvertTextCandidatesChineseCharacters(textCandidates);
+		}
 
 	private static string NormalizeForMatch(string text)
 	{
