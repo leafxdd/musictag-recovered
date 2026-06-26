@@ -110,7 +110,6 @@
 | `dialogs-search-2` | `LyricSearchDialog.StartLyricSearch` 同为 async void 无 catch + 缺 `IsDisposed` 判断 | `LyricSearchDialog.cs:454`（已修：捕获取消/异常并在 `finally` 收尾 UI） |
 | `win32-shell-2` | `WM_COPYDATA` 的 `cbData` 少 1 字节（`len*2+1` 应为 `+2`）→ 跨进程传参尾部可能读到垃圾 | `Program.cs:127`（已修：按 UTF-16 字节数包含终止符） |
 | `win32-shell-3` | `ITaskbarList` 从未 `HrInit()` → 部分系统任务栏进度静默不显示 | `TaskbarProgressController.cs:14`（已修：构造时调用 `HrInit()`） |
-| `win32-shell-1` / `xcut-concurrency-4` | `AppDomain.UnhandledException` 处理器 `async void` + `await Task.Yield` 与进程终止竞争 → 崩溃日志/提示可能丢失 | `Program.cs:147` |
 
 > 标 `/` 的条目为工作流横切扫描与模块审查**独立两次命中**的同一问题，可信度更高。
 
@@ -216,4 +215,5 @@
 | P2-27 封面图片加载生命周期 | 已实现 | `LoadPictureImage` 返回脱离输入 `MemoryStream` 的 `Bitmap`，保存快照中只读取图片元数据的调用统一 `using`；封面预览旧图释放已由 `SetCoverPreviewImage` 处理 |
 | P2-28 退出设置保存快照 | 已实现 | `StartSaveAppSettingData` 在 UI 线程快照排序、窗口、筛选条件后再进后台保存；保存异常写日志并在 `finally` 关闭进度框 |
 | P2-29 搜索对话框异常收尾 | 已实现 | `CombinedTagSearchDialog.SearchCombinedTagsAsync/DownloadCoverAsync` 和 `PictureFromTagsDialog.StartPictureSearchAsync` 均已补 catch/finally，搜索进度、任务栏状态和 `BeginUpdate/EndUpdate` 可收尾 |
+| P2-30 全局异常处理同步化 | 已实现 | `Application.ThreadException` / `AppDomain.UnhandledException` 处理器改为同步写日志、弹错误框并退出，移除 `async void` + `Task.Yield` 竞态 |
 | P2 后续 | 待办 | 更零散的 Low 级资源释放问题 |
