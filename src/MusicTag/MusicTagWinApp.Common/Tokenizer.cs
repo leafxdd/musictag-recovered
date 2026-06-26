@@ -28,7 +28,7 @@ internal class Tokenizer
 		try
 		{
 			byte[] buffer = new byte[2000];
-			using FileStream fileStream = new FileStream(filePath, FileMode.Open);
+			using FileStream fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
 			int bytesRead = fileStream.Read(buffer, 0, buffer.Length);
 			if (bytesRead <= 0)
 			{

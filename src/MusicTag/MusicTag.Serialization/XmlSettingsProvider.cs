@@ -61,7 +61,7 @@ internal class XmlSettingsProvider : SettingsProvider
 		{
 			SaveSettingValue(propertyValue);
 		}
-		LoadSettingsDocument().Save(SettingsFilePath);
+		SaveSettingsDocument();
 	}
 
 	public override SettingsPropertyValueCollection GetPropertyValues(SettingsContext context, SettingsPropertyCollection properties)
@@ -86,6 +86,11 @@ internal class XmlSettingsProvider : SettingsProvider
 			return settingsDocument;
 		}
 		settingsDocument = new XmlDocument();
+		if (!File.Exists(SettingsFilePath))
+		{
+			CreateEmptySettingsDocument();
+			return settingsDocument;
+		}
 		try
 		{
 			settingsDocument.Load(SettingsFilePath);
@@ -94,11 +99,53 @@ internal class XmlSettingsProvider : SettingsProvider
 				CreateEmptySettingsDocument();
 			}
 		}
-		catch (Exception)
+		catch (XmlException)
 		{
 			CreateEmptySettingsDocument();
 		}
 		return settingsDocument;
+	}
+
+	private void SaveSettingsDocument()
+	{
+		string settingsFilePath = SettingsFilePath;
+		string temporaryFilePath = settingsFilePath + ".tmp";
+		string backupFilePath = settingsFilePath + ".bak";
+		XmlDocument document = LoadSettingsDocument();
+		try
+		{
+			document.Save(temporaryFilePath);
+			if (File.Exists(settingsFilePath))
+			{
+				File.Replace(temporaryFilePath, settingsFilePath, backupFilePath);
+			}
+			else
+			{
+				File.Move(temporaryFilePath, settingsFilePath);
+			}
+		}
+		catch
+		{
+			TryDeleteFile(temporaryFilePath);
+			throw;
+		}
+	}
+
+	private static void TryDeleteFile(string filePath)
+	{
+		try
+		{
+			if (File.Exists(filePath))
+			{
+				File.Delete(filePath);
+			}
+		}
+		catch (IOException)
+		{
+		}
+		catch (UnauthorizedAccessException)
+		{
+		}
 	}
 
 	private void CreateEmptySettingsDocument()

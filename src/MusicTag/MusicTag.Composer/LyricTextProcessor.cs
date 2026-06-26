@@ -179,7 +179,7 @@ internal class LyricTextProcessor
 				{
 					continue;
 				}
-				long lyricTime = ParseTimestampMilliseconds(timestamp) + timestampOffsetMilliseconds;
+				long lyricTime = Math.Max(0L, ParseTimestampMilliseconds(timestamp) + timestampOffsetMilliseconds);
 				if (linesByTimestamp.TryGetValue(lyricTime, out existingLine))
 				{
 					if (allowDuplicateTimestamps)
@@ -746,4 +746,3 @@ internal class LyricTextProcessor
 	}
 
 }
-
