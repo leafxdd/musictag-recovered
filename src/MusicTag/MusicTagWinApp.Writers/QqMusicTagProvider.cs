@@ -229,7 +229,7 @@ internal class QqMusicTagProvider : RemoteTagProviderBase
 			track.Comment = songInfo.Subtitle;
 			if (!string.IsNullOrWhiteSpace(songInfo.ReleaseDate) && DateTime.TryParseExact(songInfo.ReleaseDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var releaseDate))
 			{
-				track.Year = releaseDate.ToString("yyyy");
+				track.Year = releaseDate.ToString("yyyy", CultureInfo.InvariantCulture);
 			}
 
 			if (songInfo.TrackNumber.HasValue && songInfo.TrackNumber.Value > 0)

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Net;
 using System.Net.Http;
 using System.Text.RegularExpressions;
@@ -287,7 +288,7 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase
 			{
 				try
 				{
-					return DatabaseMapper.UnixMillisecondsToDateTime(publishTimeValue).ToString("yyyy");
+					return DatabaseMapper.UnixMillisecondsToDateTime(publishTimeValue).ToString("yyyy", CultureInfo.InvariantCulture);
 				}
 				catch (Exception)
 				{
@@ -334,7 +335,7 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase
 			{
 				try
 				{
-					track.Year = DatabaseMapper.UnixMillisecondsToDateTime(publishTimeValue).ToString("yyyy");
+					track.Year = DatabaseMapper.UnixMillisecondsToDateTime(publishTimeValue).ToString("yyyy", CultureInfo.InvariantCulture);
 				}
 				catch (Exception)
 				{
