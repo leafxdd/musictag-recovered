@@ -268,6 +268,11 @@ internal class OptionsDialog : Form
 		durationFilterOptions = new List<int>();
 		searchResultLimitsBySource = new Dictionary<SourceItem, int>();
 		InitializeComponent();
+		// 构造后半段要创建/本地化/填充大量嵌套 AutoSize 控件,每次改动都触发级联布局重算。
+		// 挂起最外层布局,把这批 reflow 合并到末尾一次完成 —— 削减"每次打开选项卡一下"的构造开销。
+		// 不改下列语句顺序,最终布局由 ResumeLayout(true) 一次性算出,结果与逐次 reflow 等价。
+		SuspendLayout();
+		rootLayoutPanel.SuspendLayout();
 		optionsTreeView.ExpandAll();
 		base.Width = MinimumSize.Width;
 		base.Height = MinimumSize.Height;
@@ -278,6 +283,8 @@ internal class OptionsDialog : Form
 		ApplyLocalizedText();
 		LoadSavedOptions();
 		UpdateResponsiveLayout();
+		rootLayoutPanel.ResumeLayout(performLayout: false);
+		ResumeLayout(performLayout: true);
 	}
 
 	private void AddSourceTreeNodes()
