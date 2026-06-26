@@ -1343,7 +1343,9 @@ internal class StateFieldInstance : Form
 										List<ConfigDescriptorState.PictureData> newPictures = failureReporter.tagState["allpicturedata"] as List<ConfigDescriptorState.PictureData>;
 										foreach (ConfigDescriptorState.PictureData picture in newPictures)
 										{
-											ConfigDescriptorState.LoadPictureImage(picture);
+											using (ConfigDescriptorState.LoadPictureImage(picture))
+											{
+											}
 										}
 										originalTagSnapshot["allpicturedata"] = newPictures;
 									}
@@ -1356,7 +1358,9 @@ internal class StateFieldInstance : Form
 									List<ConfigDescriptorState.PictureData> originalPictureCopies = new List<ConfigDescriptorState.PictureData>();
 									foreach (ConfigDescriptorState.PictureData picture in currentPictures)
 									{
-										ConfigDescriptorState.LoadPictureImage(picture);
+										using (ConfigDescriptorState.LoadPictureImage(picture))
+										{
+										}
 										originalPictureCopies.Add(new ConfigDescriptorState.PictureData
 										{
 											ImageBytes = (byte[])picture.ImageBytes.Clone(),

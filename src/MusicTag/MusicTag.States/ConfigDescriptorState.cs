@@ -369,22 +369,19 @@ internal class ConfigDescriptorState : IDisposable
 		try
 		{
 			using MemoryStream memoryStream = new MemoryStream(pictureData.ImageBytes);
-			Image image = Image.FromStream(memoryStream);
-			if (image != null)
+			using Image image = Image.FromStream(memoryStream);
+			ImageCodecInfo imageCodecInfo = DatabaseMapper.GetImageDecoderByFormatId(image.RawFormat.Guid);
+			if (imageCodecInfo != null && imageCodecInfo.MimeType != null)
 			{
-				ImageCodecInfo imageCodecInfo = DatabaseMapper.GetImageDecoderByFormatId(image.RawFormat.Guid);
-				if (imageCodecInfo != null && imageCodecInfo.MimeType != null)
-				{
-					pictureData.MimeType = imageCodecInfo.MimeType;
-				}
-				else
-				{
-					pictureData.MimeType = "";
-				}
+				pictureData.MimeType = imageCodecInfo.MimeType;
+			}
+			else
+			{
+				pictureData.MimeType = "";
 			}
 			pictureData.Width = image.Width;
 			pictureData.Height = image.Height;
-			return image;
+			return new Bitmap(image);
 		}
 		catch (Exception ex)
 		{
