@@ -627,6 +627,39 @@ internal class StateFieldInstance : Form
 		}
 	}
 
+	private void ReportAsyncOperationError(System.Exception exception, string context)
+	{
+		System.Exception displayException = UnwrapAsyncOperationException(exception);
+		DatabaseMapper.WriteExceptionDetails(displayException, context);
+		DatabaseMapper.ShowErrorMessage(displayException.GetMessageChain());
+	}
+
+	private static bool IsCancellationException(System.Exception exception, CancellationTokenSource cancellationSource)
+	{
+		if (cancellationSource == null || !cancellationSource.IsCancellationRequested)
+		{
+			return false;
+		}
+		if (exception is OperationCanceledException)
+		{
+			return true;
+		}
+		if (exception is AggregateException aggregateException && aggregateException.InnerExceptions.Count > 0)
+		{
+			return aggregateException.InnerExceptions.All(innerException => IsCancellationException(innerException, cancellationSource));
+		}
+		return false;
+	}
+
+	private static System.Exception UnwrapAsyncOperationException(System.Exception exception)
+	{
+		if (exception is AggregateException aggregateException && aggregateException.InnerExceptions.Count == 1)
+		{
+			return aggregateException.InnerExceptions[0];
+		}
+		return exception;
+	}
+
 	private sealed class FileListFilterContext
 	{
 		public StateFieldInstance owner;
@@ -4039,20 +4072,35 @@ internal class StateFieldInstance : Form
 		ProgressDialog.ProgressDialogCallback progressUpdateHandler = fileCollector.ShowScanningProgress;
 		progressDialog.AddCancelRequestedHandler(cancelRequestedHandler);
 		progressDialog.AddProgressUpdateHandler(progressUpdateHandler);
-		await Task.Run((Action)fileCollector.CollectFilePaths);
-		progressDialog.RemoveCancelRequestedHandler(cancelRequestedHandler);
-		progressDialog.RemoveProgressUpdateHandler(progressUpdateHandler);
-		if (fileCollector.CancellationTokenSource.IsCancellationRequested)
+		bool continueAddingFiles = false;
+		try
 		{
-			progressDialog.CloseAfterCompletion();
+			await Task.Run((Action)fileCollector.CollectFilePaths);
+			continueAddingFiles = !fileCollector.CancellationTokenSource.IsCancellationRequested;
+			if (fileCollector.ErrorMessage != null)
+			{
+				BeginInvoke(new Action(fileCollector.ShowErrorMessage));
+			}
 		}
-		else
+		catch (System.Exception ex)
+		{
+			if (!IsCancellationException(ex, fileCollector.CancellationTokenSource))
+			{
+				ReportAsyncOperationError(ex, nameof(StartAddAnyFiles));
+			}
+		}
+		finally
+		{
+			progressDialog.RemoveCancelRequestedHandler(cancelRequestedHandler);
+			progressDialog.RemoveProgressUpdateHandler(progressUpdateHandler);
+			if (!continueAddingFiles)
+			{
+				progressDialog.CloseAfterCompletion();
+			}
+		}
+		if (continueAddingFiles)
 		{
 			StartAddFiles(fileCollector.FilePaths, progressDialog);
-		}
-		if (fileCollector.ErrorMessage != null)
-		{
-			BeginInvoke(new Action(fileCollector.ShowErrorMessage));
 		}
 	}
 
@@ -4163,14 +4211,27 @@ internal class StateFieldInstance : Form
 		progressDialog.AddCancelRequestedHandler(addFilesWorker.Cancel);
 		progressDialog.AddProgressUpdateHandler(addFilesWorker.UpdateProgress);
 		addFilesWorker.LoadedFilesProgress = new Progress<List<(ConfigDescriptorState TagFile, Dictionary<string, string> DisplayValues, string FilePath)>>(addFilesWorker.AddLoadedFilesToListView);
-		await Task.Run((Action)addFilesWorker.LoadFiles, addFilesWorker.CancellationTokenSource.Token);
-		ApplyFileListSort();
-		ApplyFileListFilter(requireFilterText: true, suspendListSorting: false);
-		progressDialog.CloseAfterCompletion();
-		UpdateFileListStatusSummary(selectedItemsOnly: false);
-		if (addFilesWorker.LoadErrors.LineCount > 0)
+		try
 		{
-			BeginInvoke(new Action(addFilesWorker.ShowLoadErrors));
+			await Task.Run((Action)addFilesWorker.LoadFiles, addFilesWorker.CancellationTokenSource.Token);
+			ApplyFileListSort();
+			ApplyFileListFilter(requireFilterText: true, suspendListSorting: false);
+			UpdateFileListStatusSummary(selectedItemsOnly: false);
+			if (addFilesWorker.LoadErrors.LineCount > 0)
+			{
+				BeginInvoke(new Action(addFilesWorker.ShowLoadErrors));
+			}
+		}
+		catch (System.Exception ex)
+		{
+			if (!IsCancellationException(ex, addFilesWorker.CancellationTokenSource))
+			{
+				ReportAsyncOperationError(ex, nameof(StartAddFiles));
+			}
+		}
+		finally
+		{
+			progressDialog.CloseAfterCompletion();
 		}
 	}
 
@@ -4259,14 +4320,29 @@ internal class StateFieldInstance : Form
 		if (refreshContext.progressDialog == null)
 		{
 			task.Wait();
+			ApplyFileSelectionMode(FileSelectionMode.RefreshOnly, refreshStatusAllInfo);
+			BeginInvoke(new Action(refreshContext.ShowCompletionMessages));
 		}
 		else
 		{
-			await task;
+			try
+			{
+				await task;
+				ApplyFileSelectionMode(FileSelectionMode.RefreshOnly, refreshStatusAllInfo);
+				BeginInvoke(new Action(refreshContext.ShowCompletionMessages));
+			}
+			catch (System.Exception ex)
+			{
+				if (!IsCancellationException(ex, refreshContext.cancellationSource))
+				{
+					ReportAsyncOperationError(ex, nameof(StartRefreshItems));
+				}
+			}
+			finally
+			{
+				refreshContext.progressDialog.CloseAfterCompletion();
+			}
 		}
-		ApplyFileSelectionMode(FileSelectionMode.RefreshOnly, refreshStatusAllInfo);
-		refreshContext.progressDialog?.CloseAfterCompletion();
-		BeginInvoke(new Action(refreshContext.ShowCompletionMessages));
 	}
 
 	// DGV 选区变化(用户驱动):与模型(FileRow.Selected)做差分,复刻原 ListView 的 per-item 增量语义,
@@ -4894,10 +4970,23 @@ internal class StateFieldInstance : Form
 		lyricDownloadContext.cancellationSource = new CancellationTokenSource();
 		lyricDownloadContext.progressDialog.SetCancelAction(lyricDownloadContext.Cancel);
 		ComboBox lyricTextComboBox = lyricsComboBox;
-		string result = await Task.Run((Func<string>)lyricDownloadContext.DownloadLyricText, lyricDownloadContext.cancellationSource.Token);
-		lyricTextComboBox.Text = result;
-		lyricTextComboBox = null;
-		lyricDownloadContext.progressDialog.CloseProgressDialog();
+		try
+		{
+			string result = await Task.Run((Func<string>)lyricDownloadContext.DownloadLyricText, lyricDownloadContext.cancellationSource.Token);
+			lyricTextComboBox.Text = result;
+		}
+		catch (System.Exception ex)
+		{
+			if (!IsCancellationException(ex, lyricDownloadContext.cancellationSource))
+			{
+				ReportAsyncOperationError(ex, nameof(StartDownloadLyric));
+			}
+		}
+		finally
+		{
+			lyricTextComboBox = null;
+			lyricDownloadContext.progressDialog.CloseProgressDialog();
+		}
 	}
 
 	private void ApplyFileSelectionMode(FileSelectionMode selectionMode, bool refreshStatusAllInfo)
@@ -5457,12 +5546,25 @@ internal class StateFieldInstance : Form
 		releaseYearContext.trackResult = searchResult;
 		releaseYearContext.cancellationSource = new CancellationTokenSource();
 		releaseYearContext.progressDialog.SetCancelAction(releaseYearContext.Cancel);
-		string result = await Task.Run((Func<string>)releaseYearContext.FetchReleaseYear, releaseYearContext.cancellationSource.Token);
-		if (!string.IsNullOrWhiteSpace(result))
+		try
 		{
-			yearComboBox.Text = result;
+			string result = await Task.Run((Func<string>)releaseYearContext.FetchReleaseYear, releaseYearContext.cancellationSource.Token);
+			if (!string.IsNullOrWhiteSpace(result))
+			{
+				yearComboBox.Text = result;
+			}
 		}
-		releaseYearContext.progressDialog.CloseProgressDialog();
+		catch (System.Exception ex)
+		{
+			if (!IsCancellationException(ex, releaseYearContext.cancellationSource))
+			{
+				ReportAsyncOperationError(ex, nameof(StartSearchYearLookup));
+			}
+		}
+		finally
+		{
+			releaseYearContext.progressDialog.CloseProgressDialog();
+		}
 	}
 
 	private void ToggleCoverResolutionLimit_Click(object sender, EventArgs e)
@@ -5843,39 +5945,53 @@ internal class StateFieldInstance : Form
 		batchContext.currentFile = null;
 		batchContext.progressDialog.AddProgressUpdateHandler(batchContext.UpdateProgress);
 		batchContext.messageLog = new Page();
-		await Task.Run((Action)batchContext.ConvertFilenames, batchContext.cancellationSource.Token);
-		batchContext.progressDialog.CloseAfterCompletion();
-		(string Path, string NewPath, int ListViewIndex)[] completedRenameItems = batchContext.renameItems;
-		for (int i = 0; i < completedRenameItems.Length; i++)
+		try
 		{
-			(string Path, string NewPath, int ListViewIndex) renameItem = completedRenameItems[i];
-			if (renameItem.NewPath != null)
+			await Task.Run((Action)batchContext.ConvertFilenames, batchContext.cancellationSource.Token);
+			(string Path, string NewPath, int ListViewIndex)[] completedRenameItems = batchContext.renameItems;
+			for (int i = 0; i < completedRenameItems.Length; i++)
 			{
-				FileRow fileRow = cachedFileListItems[renameItem.ListViewIndex];
-				fileRow.FilePath = renameItem.NewPath;
-				InvalidateFileRow(fileRow);
+				(string Path, string NewPath, int ListViewIndex) renameItem = completedRenameItems[i];
+				if (renameItem.NewPath != null)
+				{
+					FileRow fileRow = cachedFileListItems[renameItem.ListViewIndex];
+					fileRow.FilePath = renameItem.NewPath;
+					InvalidateFileRow(fileRow);
+				}
+			}
+			(string, bool) value = default((string, bool));
+			if (batchContext.renameItems.Length > 1)
+			{
+				value.Item1 = string.Format(Resources.Msg_SaveCompleted + "\n" + Resources.Msg_OK_Fail_Skip_Count, batchContext.renamedCount, batchContext.failedCount, batchContext.skippedCount, batchContext.processedCount) + "\n" + batchContext.messageLog.ToString();
+			}
+			else if (batchContext.renamedCount > 0)
+			{
+				value.Item1 = Resources.Msg_SaveCompleted + "\n" + batchContext.messageLog.ToString();
+			}
+			else if (batchContext.skippedCount > 0)
+			{
+				value.Item1 = Resources.Msg_Skipped + "\n" + batchContext.messageLog.ToString();
+			}
+			else
+			{
+				value.Item1 = batchContext.messageLog.ToString();
+				value.Item2 = true;
+			}
+			batchContext.progressDialog.CloseAfterCompletion();
+			GC.Collect();
+			RefreshSelectedItems(showErrorMessageBox: false, showProgressDialog: true, refreshStatusAllInfo: true, previousMessage: value);
+		}
+		catch (System.Exception ex)
+		{
+			if (!IsCancellationException(ex, batchContext.cancellationSource))
+			{
+				ReportAsyncOperationError(ex, nameof(StartRenameFiles));
 			}
 		}
-		(string, bool) value = default((string, bool));
-		if (batchContext.renameItems.Length > 1)
+		finally
 		{
-			value.Item1 = string.Format(Resources.Msg_SaveCompleted + "\n" + Resources.Msg_OK_Fail_Skip_Count, batchContext.renamedCount, batchContext.failedCount, batchContext.skippedCount, batchContext.processedCount) + "\n" + batchContext.messageLog.ToString();
+			batchContext.progressDialog.CloseAfterCompletion();
 		}
-		else if (batchContext.renamedCount > 0)
-		{
-			value.Item1 = Resources.Msg_SaveCompleted + "\n" + batchContext.messageLog.ToString();
-		}
-		else if (batchContext.skippedCount > 0)
-		{
-			value.Item1 = Resources.Msg_Skipped + "\n" + batchContext.messageLog.ToString();
-		}
-		else
-		{
-			value.Item1 = batchContext.messageLog.ToString();
-			value.Item2 = true;
-		}
-		GC.Collect();
-		RefreshSelectedItems(showErrorMessageBox: false, showProgressDialog: true, refreshStatusAllInfo: true, previousMessage: value);
 	}
 
 	private async void StartCommonSaveTags(SelectedListViewItemInfo[] itemInfos, ProgressDialog progressDialog, Dictionary<string, object> valueMap, bool canCancelFileReadonly, bool needUpdatePictureResolution = false)
@@ -5896,28 +6012,42 @@ internal class StateFieldInstance : Form
 		saveTagsContext.currentFile = null;
 		saveTagsContext.progressDialog.AddProgressUpdateHandler(saveTagsContext.UpdateProgress);
 		saveTagsContext.messageLog = new Page();
-		await Task.Run((Action)saveTagsContext.SaveTags, saveTagsContext.cancellationSource.Token);
-		saveTagsContext.progressDialog.CloseAfterCompletion();
-		(string, bool) value = default((string, bool));
-		if (saveTagsContext.itemsToSave.Length > 1)
+		try
 		{
-			value.Item1 = string.Format(Resources.Msg_SaveCompleted + "\n" + Resources.Msg_OK_Fail_Skip_Count, saveTagsContext.savedCount, saveTagsContext.failedCount, saveTagsContext.skippedCount, saveTagsContext.processedCount) + "\n" + saveTagsContext.messageLog.ToString();
+			await Task.Run((Action)saveTagsContext.SaveTags, saveTagsContext.cancellationSource.Token);
+			(string, bool) value = default((string, bool));
+			if (saveTagsContext.itemsToSave.Length > 1)
+			{
+				value.Item1 = string.Format(Resources.Msg_SaveCompleted + "\n" + Resources.Msg_OK_Fail_Skip_Count, saveTagsContext.savedCount, saveTagsContext.failedCount, saveTagsContext.skippedCount, saveTagsContext.processedCount) + "\n" + saveTagsContext.messageLog.ToString();
+			}
+			else if (saveTagsContext.savedCount > 0)
+			{
+				value.Item1 = Resources.Msg_SaveCompleted + "\n" + saveTagsContext.messageLog.ToString();
+			}
+			else if (saveTagsContext.skippedCount > 0)
+			{
+				value.Item1 = Resources.Msg_Skipped + "\n" + saveTagsContext.messageLog.ToString();
+			}
+			else
+			{
+				value.Item1 = saveTagsContext.messageLog.ToString();
+				value.Item2 = true;
+			}
+			saveTagsContext.progressDialog.CloseAfterCompletion();
+			GC.Collect();
+			RefreshSelectedItems(showErrorMessageBox: false, showProgressDialog: true, refreshStatusAllInfo: true, previousMessage: value);
 		}
-		else if (saveTagsContext.savedCount > 0)
+		catch (System.Exception ex)
 		{
-			value.Item1 = Resources.Msg_SaveCompleted + "\n" + saveTagsContext.messageLog.ToString();
+			if (!IsCancellationException(ex, saveTagsContext.cancellationSource))
+			{
+				ReportAsyncOperationError(ex, nameof(StartCommonSaveTags));
+			}
 		}
-		else if (saveTagsContext.skippedCount > 0)
+		finally
 		{
-			value.Item1 = Resources.Msg_Skipped + "\n" + saveTagsContext.messageLog.ToString();
+			saveTagsContext.progressDialog.CloseAfterCompletion();
 		}
-		else
-		{
-			value.Item1 = saveTagsContext.messageLog.ToString();
-			value.Item2 = true;
-		}
-		GC.Collect();
-		RefreshSelectedItems(showErrorMessageBox: false, showProgressDialog: true, refreshStatusAllInfo: true, previousMessage: value);
 	}
 
 	private async void StartUndoSaveTags(ProgressDialog progressDialog)
@@ -5934,40 +6064,54 @@ internal class StateFieldInstance : Form
 		undoSaveTagsContext.currentFile = null;
 		undoSaveTagsContext.progressDialog.AddProgressUpdateHandler(undoSaveTagsContext.UpdateProgress);
 		undoSaveTagsContext.messageLog = new Page();
-		await Task.Run((Action)undoSaveTagsContext.RestoreSavedTags, undoSaveTagsContext.cancellationSource.Token);
-		List<SelectedListViewItemInfo> refreshedItems = new List<SelectedListViewItemInfo>();
-		undoSaveTagsContext.processedCount = 0;
-		while (undoSaveTagsContext.processedCount < cachedFileListItems.Count)
+		try
 		{
-			UndoSaveTagsListItemMatcher listItemMatcher = new UndoSaveTagsListItemMatcher();
-			listItemMatcher.fileRow = cachedFileListItems[undoSaveTagsContext.processedCount];
-			if (undoSaveTagsContext.undoTagSnapshots.Find(listItemMatcher.MatchesSnapshotPath) != null)
+			await Task.Run((Action)undoSaveTagsContext.RestoreSavedTags, undoSaveTagsContext.cancellationSource.Token);
+			List<SelectedListViewItemInfo> refreshedItems = new List<SelectedListViewItemInfo>();
+			undoSaveTagsContext.processedCount = 0;
+			while (undoSaveTagsContext.processedCount < cachedFileListItems.Count)
 			{
-				refreshedItems.Add(new SelectedListViewItemInfo
+				UndoSaveTagsListItemMatcher listItemMatcher = new UndoSaveTagsListItemMatcher();
+				listItemMatcher.fileRow = cachedFileListItems[undoSaveTagsContext.processedCount];
+				if (undoSaveTagsContext.undoTagSnapshots.Find(listItemMatcher.MatchesSnapshotPath) != null)
 				{
-					Index = undoSaveTagsContext.processedCount,
-					FilePath = listItemMatcher.fileRow.FilePath
-				});
+					refreshedItems.Add(new SelectedListViewItemInfo
+					{
+						Index = undoSaveTagsContext.processedCount,
+						FilePath = listItemMatcher.fileRow.FilePath
+					});
+				}
+				undoSaveTagsContext.processedCount++;
 			}
-			undoSaveTagsContext.processedCount++;
+			(string, bool) value = default((string, bool));
+			if (undoSaveTagsContext.undoTagSnapshots.Count > 1)
+			{
+				value.Item1 = string.Format(Resources.Msg_UndoCompleted + "\n" + Resources.Msg_OK_Fail_Skip_Count, undoSaveTagsContext.restoredCount, undoSaveTagsContext.failedCount, undoSaveTagsContext.skippedCount, undoSaveTagsContext.processedCount) + "\n" + undoSaveTagsContext.messageLog.ToString();
+			}
+			else if (undoSaveTagsContext.restoredCount > 0)
+			{
+				value.Item1 = Resources.Msg_UndoCompleted + "\n" + undoSaveTagsContext.messageLog.ToString();
+			}
+			else
+			{
+				value.Item1 = undoSaveTagsContext.messageLog.ToString();
+				value.Item2 = true;
+			}
+			undoSaveTagsContext.progressDialog.CloseAfterCompletion();
+			TagHistoryRepository.ClearUndoState();
+			RefreshItemsWithOptionalProgressDialog(refreshedItems.ToArray(), showErrorMessageBox: false, showProgressDialog: true, refreshStatusAllInfo: true, previousMessage: value, listForMirror: true);
 		}
-		undoSaveTagsContext.progressDialog.CloseAfterCompletion();
-		(string, bool) value = default((string, bool));
-		if (undoSaveTagsContext.undoTagSnapshots.Count > 1)
+		catch (System.Exception ex)
 		{
-			value.Item1 = string.Format(Resources.Msg_UndoCompleted + "\n" + Resources.Msg_OK_Fail_Skip_Count, undoSaveTagsContext.restoredCount, undoSaveTagsContext.failedCount, undoSaveTagsContext.skippedCount, undoSaveTagsContext.processedCount) + "\n" + undoSaveTagsContext.messageLog.ToString();
+			if (!IsCancellationException(ex, undoSaveTagsContext.cancellationSource))
+			{
+				ReportAsyncOperationError(ex, nameof(StartUndoSaveTags));
+			}
 		}
-		else if (undoSaveTagsContext.restoredCount > 0)
+		finally
 		{
-			value.Item1 = Resources.Msg_UndoCompleted + "\n" + undoSaveTagsContext.messageLog.ToString();
+			undoSaveTagsContext.progressDialog.CloseAfterCompletion();
 		}
-		else
-		{
-			value.Item1 = undoSaveTagsContext.messageLog.ToString();
-			value.Item2 = true;
-		}
-		TagHistoryRepository.ClearUndoState();
-		RefreshItemsWithOptionalProgressDialog(refreshedItems.ToArray(), showErrorMessageBox: false, showProgressDialog: true, refreshStatusAllInfo: true, previousMessage: value, listForMirror: true);
 	}
 
 	private async void StartUndoRename(ProgressDialog progressDialog)
@@ -5985,46 +6129,60 @@ internal class StateFieldInstance : Form
 		undoRenameContext.currentFile = null;
 		undoRenameContext.progressDialog.AddProgressUpdateHandler(undoRenameContext.UpdateProgress);
 		undoRenameContext.errorLog = new Page();
-		await Task.Run((Action)undoRenameContext.UndoRenames, undoRenameContext.cancellationSource.Token);
-		List<SelectedListViewItemInfo> list = new List<SelectedListViewItemInfo>();
-		undoRenameContext.processedCount = 0;
-		while (undoRenameContext.processedCount < cachedFileListItems.Count)
+		try
 		{
-			RenameUndoListItemMatcher listItemMatcher = new RenameUndoListItemMatcher();
-			listItemMatcher.fileRow = cachedFileListItems[undoRenameContext.processedCount];
-			(string oldPath, string newPath, bool failed) operation = undoRenameContext.renameUndoOperations.Find(listItemMatcher.MatchesCurrentPath);
-			if (!string.IsNullOrWhiteSpace(operation.oldPath))
+			await Task.Run((Action)undoRenameContext.UndoRenames, undoRenameContext.cancellationSource.Token);
+			List<SelectedListViewItemInfo> list = new List<SelectedListViewItemInfo>();
+			undoRenameContext.processedCount = 0;
+			while (undoRenameContext.processedCount < cachedFileListItems.Count)
 			{
-				if (!operation.failed)
+				RenameUndoListItemMatcher listItemMatcher = new RenameUndoListItemMatcher();
+				listItemMatcher.fileRow = cachedFileListItems[undoRenameContext.processedCount];
+				(string oldPath, string newPath, bool failed) operation = undoRenameContext.renameUndoOperations.Find(listItemMatcher.MatchesCurrentPath);
+				if (!string.IsNullOrWhiteSpace(operation.oldPath))
 				{
-					listItemMatcher.fileRow.FilePath = operation.oldPath;
-					InvalidateFileRow(listItemMatcher.fileRow);
+					if (!operation.failed)
+					{
+						listItemMatcher.fileRow.FilePath = operation.oldPath;
+						InvalidateFileRow(listItemMatcher.fileRow);
+					}
+					list.Add(new SelectedListViewItemInfo
+					{
+						Index = undoRenameContext.processedCount,
+						FilePath = listItemMatcher.fileRow.FilePath
+					});
 				}
-				list.Add(new SelectedListViewItemInfo
-				{
-					Index = undoRenameContext.processedCount,
-					FilePath = listItemMatcher.fileRow.FilePath
-				});
+				undoRenameContext.processedCount++;
 			}
-			undoRenameContext.processedCount++;
+			(string, bool) value = default((string, bool));
+			if (undoRenameContext.renameUndoOperations.Count > 1)
+			{
+				value.Item1 = string.Format(Resources.Msg_UndoCompleted + "\n" + Resources.Msg_OK_Fail_Skip_Count, undoRenameContext.successCount, undoRenameContext.failedCount, undoRenameContext.skippedCount, undoRenameContext.processedCount) + "\n" + undoRenameContext.errorLog.ToString();
+			}
+			else if (undoRenameContext.successCount > 0)
+			{
+				value.Item1 = Resources.Msg_UndoCompleted + "\n" + undoRenameContext.errorLog.ToString();
+			}
+			else
+			{
+				value.Item1 = undoRenameContext.errorLog.ToString();
+				value.Item2 = true;
+			}
+			undoRenameContext.progressDialog.CloseAfterCompletion();
+			TagHistoryRepository.ClearUndoState();
+			RefreshItemsWithOptionalProgressDialog(list.ToArray(), showErrorMessageBox: false, showProgressDialog: true, refreshStatusAllInfo: true, previousMessage: value, listForMirror: true);
 		}
-		undoRenameContext.progressDialog.CloseAfterCompletion();
-		(string, bool) value = default((string, bool));
-		if (undoRenameContext.renameUndoOperations.Count > 1)
+		catch (System.Exception ex)
 		{
-			value.Item1 = string.Format(Resources.Msg_UndoCompleted + "\n" + Resources.Msg_OK_Fail_Skip_Count, undoRenameContext.successCount, undoRenameContext.failedCount, undoRenameContext.skippedCount, undoRenameContext.processedCount) + "\n" + undoRenameContext.errorLog.ToString();
+			if (!IsCancellationException(ex, undoRenameContext.cancellationSource))
+			{
+				ReportAsyncOperationError(ex, nameof(StartUndoRename));
+			}
 		}
-		else if (undoRenameContext.successCount > 0)
+		finally
 		{
-			value.Item1 = Resources.Msg_UndoCompleted + "\n" + undoRenameContext.errorLog.ToString();
+			undoRenameContext.progressDialog.CloseAfterCompletion();
 		}
-		else
-		{
-			value.Item1 = undoRenameContext.errorLog.ToString();
-			value.Item2 = true;
-		}
-		TagHistoryRepository.ClearUndoState();
-		RefreshItemsWithOptionalProgressDialog(list.ToArray(), showErrorMessageBox: false, showProgressDialog: true, refreshStatusAllInfo: true, previousMessage: value, listForMirror: true);
 	}
 
 	private async void StartClearTags(SelectedListViewItemInfo[] itemInfos, ProgressDialog progressDialog, bool canCancelFileReadonly)
@@ -6041,24 +6199,38 @@ internal class StateFieldInstance : Form
 		clearTagsContext.currentFile = null;
 		clearTagsContext.progressDialog.AddProgressUpdateHandler(clearTagsContext.UpdateProgress);
 		clearTagsContext.errorLog = new Page();
-		await Task.Run((Action)clearTagsContext.ClearTags, clearTagsContext.cancellationSource.Token);
-		clearTagsContext.progressDialog.CloseAfterCompletion();
-		(string, bool) value = default((string, bool));
-		if (clearTagsContext.itemsToClear.Length > 1)
+		try
 		{
-			value.Item1 = string.Format(Resources.Msg_CleartagsCompleted + "\n" + Resources.Msg_OK_Fail_Count, clearTagsContext.successCount, clearTagsContext.failedCount, clearTagsContext.processedCount) + "\n" + clearTagsContext.errorLog.ToString();
+			await Task.Run((Action)clearTagsContext.ClearTags, clearTagsContext.cancellationSource.Token);
+			(string, bool) value = default((string, bool));
+			if (clearTagsContext.itemsToClear.Length > 1)
+			{
+				value.Item1 = string.Format(Resources.Msg_CleartagsCompleted + "\n" + Resources.Msg_OK_Fail_Count, clearTagsContext.successCount, clearTagsContext.failedCount, clearTagsContext.processedCount) + "\n" + clearTagsContext.errorLog.ToString();
+			}
+			else if (clearTagsContext.successCount > 0)
+			{
+				value.Item1 = Resources.Msg_CleartagsCompleted;
+			}
+			else
+			{
+				value.Item1 = clearTagsContext.errorLog.ToString();
+				value.Item2 = true;
+			}
+			clearTagsContext.progressDialog.CloseAfterCompletion();
+			GC.Collect();
+			RefreshSelectedItems(showErrorMessageBox: false, showProgressDialog: true, refreshStatusAllInfo: true, previousMessage: value);
 		}
-		else if (clearTagsContext.successCount > 0)
+		catch (System.Exception ex)
 		{
-			value.Item1 = Resources.Msg_CleartagsCompleted;
+			if (!IsCancellationException(ex, clearTagsContext.cancellationSource))
+			{
+				ReportAsyncOperationError(ex, nameof(StartClearTags));
+			}
 		}
-		else
+		finally
 		{
-			value.Item1 = clearTagsContext.errorLog.ToString();
-			value.Item2 = true;
+			clearTagsContext.progressDialog.CloseAfterCompletion();
 		}
-		GC.Collect();
-		RefreshSelectedItems(showErrorMessageBox: false, showProgressDialog: true, refreshStatusAllInfo: true, previousMessage: value);
 	}
 
 	private void StartBatchLyricsOperation(string lyricsOperationResourceKey)
@@ -6093,9 +6265,22 @@ internal class StateFieldInstance : Form
 		deleteFilesContext.deletedCount = 0;
 		deleteFilesContext.failedCount = 0;
 		deleteFilesContext.errorLog = new Page();
-		await Task.Run((Action)deleteFilesContext.DeleteFiles, deleteFilesContext.cancellationSource.Token);
-		deleteFilesContext.progressDialog.CloseAfterCompletion();
-		BeginInvoke(new Action(deleteFilesContext.ShowCompletionResult));
+		try
+		{
+			await Task.Run((Action)deleteFilesContext.DeleteFiles, deleteFilesContext.cancellationSource.Token);
+			BeginInvoke(new Action(deleteFilesContext.ShowCompletionResult));
+		}
+		catch (System.Exception ex)
+		{
+			if (!IsCancellationException(ex, deleteFilesContext.cancellationSource))
+			{
+				ReportAsyncOperationError(ex, nameof(StartRemoveFiles));
+			}
+		}
+		finally
+		{
+			deleteFilesContext.progressDialog.CloseAfterCompletion();
+		}
 	}
 
 	private async void StartSaveLrcFiles(SelectedListViewItemInfo[] itemInfos, ProgressDialog progressDialog)
@@ -6112,9 +6297,22 @@ internal class StateFieldInstance : Form
 		saveLrcContext.failedCount = 0;
 		saveLrcContext.skippedCount = 0;
 		saveLrcContext.errorLog = new Page();
-		await Task.Run((Action)saveLrcContext.SaveLrcFiles, saveLrcContext.cancellationSource.Token);
-		saveLrcContext.progressDialog.CloseAfterCompletion();
-		BeginInvoke(new Action(saveLrcContext.ShowCompletionResult));
+		try
+		{
+			await Task.Run((Action)saveLrcContext.SaveLrcFiles, saveLrcContext.cancellationSource.Token);
+			BeginInvoke(new Action(saveLrcContext.ShowCompletionResult));
+		}
+		catch (System.Exception ex)
+		{
+			if (!IsCancellationException(ex, saveLrcContext.cancellationSource))
+			{
+				ReportAsyncOperationError(ex, nameof(StartSaveLrcFiles));
+			}
+		}
+		finally
+		{
+			saveLrcContext.progressDialog.CloseAfterCompletion();
+		}
 	}
 
 	private async void StartExtractCovers(SelectedListViewItemInfo[] itemInfos, ProgressDialog progressDialog)
@@ -6131,9 +6329,22 @@ internal class StateFieldInstance : Form
 		extractCoversContext.failedCount = 0;
 		extractCoversContext.skippedCount = 0;
 		extractCoversContext.errorLog = new Page();
-		await Task.Run((Action)extractCoversContext.ExtractCovers, extractCoversContext.cancellationSource.Token);
-		extractCoversContext.progressDialog.CloseAfterCompletion();
-		BeginInvoke(new Action(extractCoversContext.ShowCompletionResult));
+		try
+		{
+			await Task.Run((Action)extractCoversContext.ExtractCovers, extractCoversContext.cancellationSource.Token);
+			BeginInvoke(new Action(extractCoversContext.ShowCompletionResult));
+		}
+		catch (System.Exception ex)
+		{
+			if (!IsCancellationException(ex, extractCoversContext.cancellationSource))
+			{
+				ReportAsyncOperationError(ex, nameof(StartExtractCovers));
+			}
+		}
+		finally
+		{
+			extractCoversContext.progressDialog.CloseAfterCompletion();
+		}
 	}
 
 	private void EditSingleFieldEncoding_Click(object sender, EventArgs e)
