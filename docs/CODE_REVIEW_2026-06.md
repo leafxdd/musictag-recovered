@@ -101,8 +101,6 @@
 
 | id | 问题 | 位置 |
 |---|---|---|
-| `data-history-1` | `TagHistoryRepository` 事务无回滚 + `ExecuteReader` 失败把 static 共享连接置 null → 级联失败 + 原始异常被掩盖（验证后 high→medium）| `TagHistoryRepository.cs:76-171` |
-| `data-history-2` | static 共享连接/序列号/`UndoTags` 无任何同步，仅靠"UI 串行 await"这一**未强制**的不变量 | `TagHistoryRepository.cs:55,173,345` |
 | `config-medium` | `AppSettingData` 仍使用 `BinaryFormatter` 反序列化退出状态，长期兼容/安全性差（非原子保存、后台 UI 读取和保存异常收尾已修） | `StateFieldInstance.cs:2338` |
 | `statefield-4` | 14 个 `async void StartXxx` 在 await 后收尾无 finally，异常时进度框残留、列表不刷新 | `StateFieldInstance.cs:4796,5360,5785…` |
 | `dialogs-search-4` | `PictureFromTagsDialog` 列表索引与重新取图计数口径不一致 → **选/导出到错误封面** | `PictureFromTagsDialog.cs:142`（已修：列表项保留原始封面索引） |
@@ -216,4 +214,5 @@
 | P2-29 搜索对话框异常收尾 | 已实现 | `CombinedTagSearchDialog.SearchCombinedTagsAsync/DownloadCoverAsync` 和 `PictureFromTagsDialog.StartPictureSearchAsync` 均已补 catch/finally，搜索进度、任务栏状态和 `BeginUpdate/EndUpdate` 可收尾 |
 | P2-30 全局异常处理同步化 | 已实现 | `Application.ThreadException` / `AppDomain.UnhandledException` 处理器改为同步写日志、弹错误框并退出，移除 `async void` + `Task.Yield` 竞态 |
 | P2-31 列配置无效项容错 | 已实现 | 列设置 JSON 反序列化后过滤 `null`/无名列，`lyricist` 迁移检查也跳过无效项；合并覆盖选项已有 `JsonException` 回退 |
+| P2-32 历史库共享状态串行化 | 已实现 | `TagHistoryRepository` 构造到 `Dispose` 持有同一静态锁，事务失败统一回滚；共享连接/序列号和撤销列表改为锁内访问，UI/任务使用撤销快照 |
 | P2 后续 | 待办 | 更零散的 Low 级资源释放问题 |
