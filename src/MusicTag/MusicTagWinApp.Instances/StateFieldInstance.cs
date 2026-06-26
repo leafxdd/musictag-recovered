@@ -58,6 +58,26 @@ internal class StateFieldInstance : Form
 		public string FilePath;
 	}
 
+	// 文件列表的一行数据。迁移 ListView→DataGridView 期间逐步取代"用 ListViewItem 当数据容器"。
+	private sealed class FileRow
+	{
+		// 迁移期脚手架:显示与选中暂仍由 ListView 承担,该引用在阶段2(换控件)后移除,
+		// 届时 FileRow 成为唯一数据真源。
+		public ListViewItem ListViewItem;
+
+		public bool IsHidden;
+
+		public string FilePath;
+
+		// 按 configuredColumnHeaders 的逻辑列序存各列显示文本(lyrics/comment 已按 20 字截断,
+		// 与 ListViewItem.SubItems[i].Text 一致),供过滤/排序消费。
+		public string[] CellTexts;
+
+		public bool LoadFailed;
+
+		public string IconKey;
+	}
+
 	private class ListViewItemNaturalComparer : IComparer
 	{
 		[Serializable]
@@ -335,6 +355,8 @@ internal class StateFieldInstance : Form
 				Dictionary<string, string> displayValues = loadedFile.DisplayValues;
 				string filePath = loadedFile.FilePath;
 				ListViewItem listViewItem = null;
+				string[] cellTexts = new string[columns.Count];
+				int columnIndex = 0;
 				foreach (CustomColumnsDialog.ColumnHeaderInfo column in columns)
 				{
 					if (!displayValues.TryGetValue(column.Name, out var value) && tagFile != null && tagFile.IsLoadedSuccessfully())
@@ -350,6 +372,7 @@ internal class StateFieldInstance : Form
 					{
 						value = value.Substring(0, 20).Trim();
 					}
+					cellTexts[columnIndex] = value;
 					if (column.Name == columns[0].Name)
 					{
 						listViewItem = new ListViewItem(value)
@@ -370,15 +393,25 @@ internal class StateFieldInstance : Form
 							subItem.Tag = fullValueLength;
 						}
 					}
+					columnIndex++;
 				}
 				if (listViewItem != null)
 				{
-					if (tagFile == null || !tagFile.IsLoadedSuccessfully())
+					bool loadFailed = tagFile == null || !tagFile.IsLoadedSuccessfully();
+					if (loadFailed)
 					{
 						listViewItem.ForeColor = Color.Red;
 					}
 					Owner.fileListView.Items.Add(listViewItem);
-					Owner.cachedFileListItems.Add((listViewItem, false));
+					Owner.cachedFileListItems.Add(new FileRow
+					{
+						ListViewItem = listViewItem,
+						IsHidden = false,
+						FilePath = filePath,
+						CellTexts = cellTexts,
+						LoadFailed = loadFailed,
+						IconKey = Path.GetExtension(filePath).ToLower()
+					});
 					if (anyFileMode)
 					{
 						Owner.FileSettings.AddForAnyFile(filePath);
@@ -538,7 +571,7 @@ internal class StateFieldInstance : Form
 
 		internal void UpdateSingleListViewItem((SelectedListViewItemInfo ItemInfo, ConfigDescriptorState TagState, Dictionary<string, string> DisplayValues) info)
 		{
-			ListViewItem listViewItem = updateCachedListItems ? owner.cachedFileListItems[info.ItemInfo.Index].listViewItem : owner.fileListView.Items[info.ItemInfo.Index];
+			ListViewItem listViewItem = updateCachedListItems ? owner.cachedFileListItems[info.ItemInfo.Index].ListViewItem : owner.fileListView.Items[info.ItemInfo.Index];
 			owner.UpdateListViewItemValues(listViewItem, info.TagState, info.DisplayValues);
 		}
 
@@ -2876,7 +2909,7 @@ internal class StateFieldInstance : Form
 
 	private ToolStripMenuItem changeCoverResolutionMenuItem;
 
-	private List<(ListViewItem listViewItem, bool isHidden)> cachedFileListItems { get; }
+	private List<FileRow> cachedFileListItems { get; }
 
 	private FormPosSizeInfo MainFormPosSizeInfo { get; set; }
 
@@ -2953,7 +2986,7 @@ internal class StateFieldInstance : Form
 		tagComboBoxes = new Dictionary<string, ComboBox>();
 		tagFieldTextHandlers = new Dictionary<string, (Label, EventHandler)>();
 		selectedFilterValueStates = new Dictionary<string, (Dictionary<string, int> valueCounts, List<(string value, bool wasRemoved)> changedValues)>();
-		cachedFileListItems = new List<(ListViewItem, bool)>();
+		cachedFileListItems = new List<FileRow>();
 		editableTagFieldNames = new string[14]
 		{
 			"filename", "filedir", "tagtypes", "title", "artist", "album", "year", "trackstr", "discstr", "genre",
@@ -3567,7 +3600,7 @@ internal class StateFieldInstance : Form
 		HashSet<string> filePaths = new HashSet<string>();
 		foreach (var cachedItem in cachedFileListItems)
 		{
-			ListViewItem listViewItem = cachedItem.listViewItem;
+			ListViewItem listViewItem = cachedItem.ListViewItem;
 			filePaths.Add(listViewItem.Tag as string);
 		}
 		return filePaths;
@@ -4162,14 +4195,11 @@ internal class StateFieldInstance : Form
 					{
 						filterContext = activeFilterContext
 					};
-					var (listViewItem, isHidden) = cachedFileListItems[index];
-					filterMatcher.listViewItem = listViewItem;
+					FileRow fileRow = cachedFileListItems[index];
+					filterMatcher.listViewItem = fileRow.ListViewItem;
 					if (filterColumnIndexes.Any(filterMatcher.MatchesFilterText))
 					{
-						if (isHidden)
-						{
-							cachedFileListItems[index] = (filterMatcher.listViewItem, false);
-						}
+						fileRow.IsHidden = false;
 						if (filterMatcher.listViewItem.Selected)
 						{
 							selectedFilterValueStates.ForEachItem(filterMatcher.CountSelectedFilterValue);
@@ -4177,10 +4207,7 @@ internal class StateFieldInstance : Form
 					}
 					else
 					{
-						if (!isHidden)
-						{
-							cachedFileListItems[index] = (filterMatcher.listViewItem, true);
-						}
+						fileRow.IsHidden = true;
 						if (filterMatcher.listViewItem.Selected)
 						{
 							filterMatcher.listViewItem.Selected = false;
@@ -4199,11 +4226,11 @@ internal class StateFieldInstance : Form
 					{
 						filterContext = activeFilterContext
 					};
-					var (listViewItem, isHidden) = cachedFileListItems[index];
-					selectedFilterRestorer.listViewItem = listViewItem;
-					if (isHidden)
+					FileRow fileRow = cachedFileListItems[index];
+					selectedFilterRestorer.listViewItem = fileRow.ListViewItem;
+					if (fileRow.IsHidden)
 					{
-						cachedFileListItems[index] = (selectedFilterRestorer.listViewItem, false);
+						fileRow.IsHidden = false;
 					}
 					else if (selectedFilterRestorer.listViewItem.Selected)
 					{
@@ -4541,19 +4568,19 @@ internal class StateFieldInstance : Form
 		comboBox.EndUpdate();
 	}
 
-	private static bool IsHiddenCachedListViewItem((ListViewItem listViewItem, bool isHidden) cachedItem)
+	private static bool IsHiddenCachedListViewItem(FileRow cachedItem)
 	{
-		return cachedItem.isHidden;
+		return cachedItem.IsHidden;
 	}
 
-	private static bool IsVisibleCachedListViewItem((ListViewItem listViewItem, bool isHidden) cachedItem)
+	private static bool IsVisibleCachedListViewItem(FileRow cachedItem)
 	{
-		return !cachedItem.isHidden;
+		return !cachedItem.IsHidden;
 	}
 
-	private static ListViewItem GetCachedListViewItem((ListViewItem listViewItem, bool isHidden) cachedItem)
+	private static ListViewItem GetCachedListViewItem(FileRow cachedItem)
 	{
-		return cachedItem.listViewItem;
+		return cachedItem.ListViewItem;
 	}
 
 	private static int FindColumnHeaderIndexByName(string columnName)
@@ -4658,7 +4685,7 @@ internal class StateFieldInstance : Form
 				FileSettings.RemoveForAnyFile(selectedItem.Tag as string);
 			}
 		}
-		cachedFileListItems.RemoveAll(itemState => selectedItemSet.Contains(itemState.listViewItem));
+		cachedFileListItems.RemoveAll(itemState => selectedItemSet.Contains(itemState.ListViewItem));
 		selectedFilesStatusLabel.Tag = (Math.Max(0L, selectedDurationMs), Math.Max(0L, selectedFileSizeBytes));
 		totalFilesStatusLabel.Tag = (Math.Max(0L, allDurationMs), Math.Max(0L, allFileSizeBytes));
 		RefreshStatusLabelsFromCachedTotals();
@@ -5504,7 +5531,7 @@ internal class StateFieldInstance : Form
 		while (undoSaveTagsContext.processedCount < cachedFileListItems.Count)
 		{
 			UndoSaveTagsListItemMatcher listItemMatcher = new UndoSaveTagsListItemMatcher();
-			listItemMatcher.listViewItem = cachedFileListItems[undoSaveTagsContext.processedCount].listViewItem;
+			listItemMatcher.listViewItem = cachedFileListItems[undoSaveTagsContext.processedCount].ListViewItem;
 			if (undoSaveTagsContext.undoTagSnapshots.Find(listItemMatcher.MatchesSnapshotPath) != null)
 			{
 				refreshedItems.Add(new SelectedListViewItemInfo
@@ -5555,7 +5582,7 @@ internal class StateFieldInstance : Form
 		while (undoRenameContext.processedCount < cachedFileListItems.Count)
 		{
 			RenameUndoListItemMatcher listItemMatcher = new RenameUndoListItemMatcher();
-			listItemMatcher.ListViewItem = cachedFileListItems[undoRenameContext.processedCount].listViewItem;
+			listItemMatcher.ListViewItem = cachedFileListItems[undoRenameContext.processedCount].ListViewItem;
 			(string oldPath, string newPath, bool failed) operation = undoRenameContext.renameUndoOperations.Find(listItemMatcher.MatchesCurrentPath);
 			if (!string.IsNullOrWhiteSpace(operation.oldPath))
 			{
