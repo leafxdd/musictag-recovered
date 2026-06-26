@@ -128,7 +128,7 @@ internal static class Program
 			{
 				DataIdentifier = IntPtr.Zero,
 				Data = commandLine,
-				DataLength = Encoding.Unicode.GetBytes(commandLine).Length + 1
+				DataLength = Encoding.Unicode.GetByteCount(commandLine + "\0")
 			};
 			NativeMethods.SendCopyDataMessage(windowHandle, 74, IntPtr.Zero, ref copyData);
 		}
@@ -171,4 +171,3 @@ internal static class Program
 		}
 	}
 }
-
