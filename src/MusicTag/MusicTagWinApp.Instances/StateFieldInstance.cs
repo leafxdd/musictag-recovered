@@ -2365,10 +2365,7 @@ internal class StateFieldInstance : Form
 
 		internal void SaveSettings()
 		{
-			using (FileStream fileStream = new FileStream(AppSettingData.AppSettingDataPath, FileMode.Create))
-			{
-				new BinaryFormatter().Serialize(fileStream, appSettingsData);
-			}
+			SaveAppSettingData();
 
 			Settings.Default.SortSetting = JsonConvert.SerializeObject(owner.SortSetting);
 			Settings.Default.MainFormPosSizeInfo = JsonConvert.SerializeObject(owner.MainFormPosSizeInfo);
@@ -2379,6 +2376,50 @@ internal class StateFieldInstance : Form
 			Settings.Default.Save();
 			TagHistoryRepository.ClearUndoState();
 			TagHistoryRepository.CloseSharedConnection();
+		}
+
+		private void SaveAppSettingData()
+		{
+			string appSettingDataPath = AppSettingData.AppSettingDataPath;
+			string temporaryPath = appSettingDataPath + ".tmp";
+			string backupPath = appSettingDataPath + ".bak";
+			try
+			{
+				using (FileStream fileStream = new FileStream(temporaryPath, FileMode.Create, FileAccess.Write, FileShare.None))
+				{
+					new BinaryFormatter().Serialize(fileStream, appSettingsData);
+				}
+				if (File.Exists(appSettingDataPath))
+				{
+					File.Replace(temporaryPath, appSettingDataPath, backupPath);
+				}
+				else
+				{
+					File.Move(temporaryPath, appSettingDataPath);
+				}
+			}
+			catch
+			{
+				TryDeleteFile(temporaryPath);
+				throw;
+			}
+		}
+
+		private static void TryDeleteFile(string filePath)
+		{
+			try
+			{
+				if (File.Exists(filePath))
+				{
+					File.Delete(filePath);
+				}
+			}
+			catch (IOException)
+			{
+			}
+			catch (UnauthorizedAccessException)
+			{
+			}
 		}
 	}
 
