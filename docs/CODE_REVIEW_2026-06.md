@@ -187,7 +187,7 @@
 
 - **P0（核心功能稳健性，已完成）**：第 1 节崩溃链三处 —— `SaveTagFields` 契约 + `RunSearch` catch + `StartXxx` try/catch/finally。一组改动消除"批量操作遇坏文件就崩"的整类问题。
 - **P1（数据安全，已完成主要项）**：歌词编码/offset、配置覆盖原子写、静态反序列化崩溃、选项边界、退出状态原子写、历史库失败回滚已修。
-- **P2（资源/体验）**：封面/嵌入图片热路径泄漏、非中文区歌词时间轴、About/Shell 图标句柄释放已修；仍剩更零散的 Low 级资源释放和历史库错误可见性优化。
+- **P2（资源/体验）**：封面/嵌入图片热路径泄漏、非中文区歌词时间轴、About/Shell 图标句柄释放、清空历史错误可见性已修；仍剩更零散的 Low 级资源释放。
 
 > 每步修复后运行：`scripts\Verify-Build.ps1 -RunSmokeTests`，并人工回归对应流程（批量改标签 / 自动匹配 / 歌词下载 / 配置保存）。
 
@@ -206,4 +206,5 @@
 | P2-1 图片热路径资源释放 | 已实现 | `ImageList.Images.Add` 后释放源 `Bitmap/Image`；取消嵌入图片搜索时释放未进入 UI 的候选图 |
 | P2-2 文化无关歌词时间轴 | 已实现 | LRC offset/时间戳解析与输出使用 invariant culture；Kuwo 歌词秒数按 invariant 小数解析 |
 | P2-3 Low 级 GDI 释放 | 已实现 | `AboutDialog` 使用 `Icon.ToBitmap()` 后释放源 `Icon`；Shell 文件图标 clone 后释放原 HICON 和 clone |
-| P2 后续 | 待办 | 更零散的 Low 级资源释放问题、历史库错误可见性优化 |
+| P2-4 历史库错误可见性 | 已实现 | 清空历史失败时返回具体异常链并用错误框展示 |
+| P2 后续 | 待办 | 更零散的 Low 级资源释放问题 |
