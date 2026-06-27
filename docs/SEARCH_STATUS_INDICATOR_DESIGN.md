@@ -45,8 +45,8 @@
 QQ 重试循环在 `QqMusicTagProvider.SearchSongs`(`:77-106`)内部:
 - 仅 `SearchSongs`(搜歌)自身有重试循环;`SearchLyrics` 无自有重试,但它**调用** `SearchSongs`,故 `SearchLyrics` / `SearchTracks` 的调用路径上仍会发生重试与 `Retrying` 上报(见 §12.4 更正)。
 - 仅针对限流码 2001(`IsRateLimited`);其它失败(网络/空/解析失败)不重试。
-- `maxAttempts = 3`(原始 1 次 + 重试 2 次)。
-- 退避**线性**:`cancellationSource.Token.WaitHandle.WaitOne(800 * (attempt + 1))` → 800ms、1600ms(可被取消打断)。
+- `maxAttempts = 6`(原始 1 次 + 重试 5 次;倒计时显示 x/5)。**(2026-06-27 调整,原为 3 = 原始 1 + 重试 2,见 §17)**
+- 退避**指数**:重试 1~5 依次等待 **2/4/8/16/32 秒**(`1 << (attempt+1)` 秒;可被取消打断)。**(原为线性 800ms/1600ms)**
 - 仅 `Console.WriteLine` 打日志,**UI 完全看不到重试状态**。
 
 ### 2.5 酷我的"重试"实为**封面详情熔断**,不是搜索重试
@@ -226,7 +226,7 @@ SourceSearchStatus {
 4. **§5.6 酷我详情接口提示暂缓(本期未实现)。**
    核实发现酷我 `LoadSongDetails`(详情/封面)**不在搜索流程调用**——它是结果显示后封面下载的**延迟路径**(`SearchTracks` 仅解析搜索响应)。因此"搜索结束即读熔断标志"恒为 false。要正确提示需另挂到延迟下载路径。`KuwoTagProvider` 已保留实例标志 `DetailApiUnavailableThisSearch` 备用,提示本身延后为独立增强。
 
-5. **D4 倒计时取整:向上取整**(800ms→1 秒,`(waitMs+999)/1000`),退避仍为 800/1600ms。UI 用带 `IsDisposed` 保护的 1s `Timer` 逐秒递减;`OnClosed` 停表。
+5. **D4 倒计时取整:向上取整**(800ms→1 秒,`(waitMs+999)/1000`),退避仍为 800/1600ms。UI 用带 `IsDisposed` 保护的 1s `Timer` 逐秒递减;`OnClosed` 停表。**(此为初版口径;退避与跳 0 已于 §17 重做。)**
 
 6. **错误判定:有结果即视为完成**(即便末次子请求出错);仅当 **0 结果且末次传输出错**才标记 Error。业务码优先(QQ 2001 由 provider 回填),否则回退 `timeout`/`network`/HTTP 状态码。
 
@@ -352,3 +352,16 @@ SourceSearchStatus {
 | **§15.3**:把合并标签弹窗收敛到共享渲染器 | ✅ **已完成**(单独提交,不与 P1/P3 补漏混提):`CombinedTagSearchDialog` 改用 `SearchStatusIndicator`(构造 `new SearchStatusIndicator(searchStatusLabel, () => searchResultsListView.Items.Count > 0, components)`,调用点 `Begin/End/Reset/Report/StopCountdown`),删除内联的 `sourceSearchStatuses` / `searchInProgress` / `searchHasRun` / `retryCountdownTimer` 字段与 `BeginSearchStatusTracking` / `EndSearchStatusTracking` / `ResetSearchStatusDisplay` / `OnSourceStatusReported` / `RetryCountdownTimerTick` / `RefreshSearchStatusDisplay` / `BuildSearchingLine` / `BuildErrorOrRetryLine` / `GetStatusesInDisplayOrder` / `FormatErrorCode` / `GetSourceDisplayName` 方法。行为等价,过 `Verify-Build.ps1 -RunSmokeTests`。三处弹窗至此统一,DRY 待办清除 |
 
 **人工验证(无法由编译/冒烟覆盖)**:迁移后重点验证缓存命中不显示状态、首选源快路径只显示单源、取消不残留"正在搜索"、0 结果显示"未找到匹配结果"、QQ 重试倒计时仍逐秒刷新。
+
+---
+
+## 17. QQ 限流重试调整(2026-06-27,用户需求)
+
+针对 QQ 限流(2001)重试做三处调整(`QqMusicTagProvider.SearchSongs`):
+
+1. **倒计时能数到 0(修 bug)。** 原"最低显示 1、跳不到 0"的根因是退避太短(800ms/1600ms),而倒计时 `Timer` 间隔 1 秒——第一次 tick 还没到,800ms 的等待就结束、直接重试了。改法:① 退避拉长成整秒(见下);② 把"显示秒数"与"实际等待"解耦——`ReportStatus` 传精确整秒 `countdownSeconds`,实际 `WaitOne` 多留 `RetryCountdownBufferMs = 300ms` 缓冲(`waitMs = countdownSeconds*1000 + 300`),保证倒计时计时器在等待结束前数到 0 并稳定显示一瞬再重试。不再用 `(waitMs+999)/1000` 向上取整。
+2. **重试次数 2 → 5。** `maxAttempts = 6`(原始 1 次 + 重试 5 次),倒计时显示 `(retryNumber/5)`。
+3. **退避线性 → 指数。** 重试 1~5 依次 **2/4/8/16/32 秒**(`countdownSeconds = 1 << (attempt+1)`),5 次全触发最坏累计 ≈ 62 秒(可被取消打断)。
+
+> 范围:仅 QQ 搜歌路径(`SearchSongs`,搜歌 / 搜词候选共用)有此重试;倒计时渲染由共享 `SearchStatusIndicator` 负责(§16 后三处弹窗统一,本次改动对三处一致生效)。`SearchLyrics`/`SearchTracks` 经 `SearchSongs`,故歌词/合并标签/封面弹窗在 QQ 限流时都会看到新的 2/4/8/16/32 倒计时。
+> 待人工验证:真实限流下 5 次指数退避的倒计时逐秒递减并跳 0、(x/5) 计数正确、取消能即时中断等待。

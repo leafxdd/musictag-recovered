@@ -36,6 +36,10 @@ internal class QqMusicTagProvider : RemoteTagProviderBase
 
 	private static readonly Regex callbackJsonRegex = new Regex(Regex.Escape(callbackName) + "\\((.+)\\)", RegexOptions.Compiled);
 
+	// QQ 限流(2001)重试的倒计时缓冲:实际等待 = 显示秒数 * 1000 + 该值。多留这点缓冲,
+	// 使倒计时计时器能在等待结束前数到 0 再发起重试(否则秒数会停在 1,跳不到 0)。
+	private const int RetryCountdownBufferMs = 300;
+
 	protected override SearchSource GetSource()
 	{
 		return SearchSource.QQ;
@@ -77,7 +81,7 @@ internal class QqMusicTagProvider : RemoteTagProviderBase
 	private List<QqSongInfo> SearchSongs(string query, int maxResults)
 	{
 		string requestBody = string.Format(searchRequestTemplate, "req_0", TextEncodingService.JavaScriptStringEncode(query), maxResults);
-		const int maxAttempts = 3;
+		const int maxAttempts = 6;
 		for (int attempt = 0; attempt < maxAttempts; attempt++)
 		{
 			if (cancellationSource.IsCancellationRequested)
@@ -96,10 +100,12 @@ internal class QqMusicTagProvider : RemoteTagProviderBase
 			{
 				int retryNumber = attempt + 1;
 				int retryTotal = maxAttempts - 1;
-				int waitMilliseconds = 800 * (attempt + 1);
-				int secondsLeft = (waitMilliseconds + 999) / 1000;
+				// 指数退避:2/4/8/16/32 秒。倒计时按整秒显示,实际等待多留缓冲(见
+				// RetryCountdownBufferMs),确保倒计时能数到 0 再重试。
+				int countdownSeconds = 1 << (attempt + 1);
+				int waitMilliseconds = countdownSeconds * 1000 + RetryCountdownBufferMs;
 				Console.WriteLine($"QQ search throttled (req_0.code 2001), retry {retryNumber}/{retryTotal}");
-				ReportStatus(SourceSearchPhase.Retrying, "2001", retryNumber, retryTotal, secondsLeft);
+				ReportStatus(SourceSearchPhase.Retrying, "2001", retryNumber, retryTotal, countdownSeconds);
 				cancellationSource.Token.WaitHandle.WaitOne(waitMilliseconds);
 				continue;
 			}
