@@ -36,7 +36,8 @@ internal class TrackSearchContext
 
 		Artist = Settings.Default.SearchCondition_UseArtist ? artist.Trim() : "";
 		Album = Settings.Default.SearchCondition_UseAlbum ? album.Trim() : "";
-		DurationMillisecondsText = tagState.GetDisplayValue("durationinms");
+		// 取原始毫秒文本(与属性名 DurationMillisecondsText 语义一致);缺键/未加载音频属性时回退空串。
+		DurationMillisecondsText = tagState.TryGetRawValue("durationinms", out object durationValue) && durationValue != null ? durationValue.ToString() : "";
 		Title = ResolveSearchTitle(title);
 	}
 

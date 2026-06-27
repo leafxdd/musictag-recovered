@@ -817,7 +817,7 @@ internal class CombinedTagSearchDialog : Form
 		{
 			cachedSearchCompleted = await Task.Run((Func<bool>)trackSearchCoordinator.SearchAllSources, cancellationSource.Token);
 		}
-		catch (System.Exception ex)
+		catch (System.Exception ex) when (!(ex is OperationCanceledException && cancellationSource.IsCancellationRequested))
 		{
 			Console.WriteLine("SearchCombinedTags error:" + ex.GetMessageChain());
 		}
@@ -1056,9 +1056,18 @@ internal class CombinedTagSearchDialog : Form
 
 	protected override void Dispose(bool disposing)
 	{
-		if (disposing && components != null)
+		if (disposing)
 		{
-			components.Dispose();
+			if (coverImageCache != null)
+			{
+				// 释放缓存的缩放/占位封面位图副本,避免反复搜索累积 GDI 句柄泄漏。
+				foreach (Image cachedCover in coverImageCache.Values)
+				{
+					cachedCover?.Dispose();
+				}
+				coverImageCache.Clear();
+			}
+			components?.Dispose();
 		}
 		base.Dispose(disposing);
 	}

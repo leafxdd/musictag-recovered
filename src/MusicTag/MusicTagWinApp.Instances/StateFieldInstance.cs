@@ -1803,6 +1803,8 @@ internal class StateFieldInstance : Form
 		internal void UndoRenames()
 		{
 			TagHistoryRepository tagHistoryRepository = new TagHistoryRepository(useTransaction: true);
+			try
+			{
 			while (processedCount < renameUndoOperations.Count)
 			{
 				if (cancellationSource.IsCancellationRequested)
@@ -1842,7 +1844,11 @@ internal class StateFieldInstance : Form
 				processedCount++;
 			}
 
-			tagHistoryRepository.Dispose();
+			}
+			finally
+			{
+				tagHistoryRepository.Dispose();
+			}
 		}
 	}
 
@@ -4636,6 +4642,7 @@ internal class StateFieldInstance : Form
 		}
 
 		tagComboBoxes.Values.ForEachItem(BeginComboBoxUpdate);
+		bool textHandlersResubscribed = false;
 		try
 		{
 			foreach (KeyValuePair<string, (Label, EventHandler)> handlerEntry in tagFieldTextHandlers)
@@ -4701,6 +4708,7 @@ internal class StateFieldInstance : Form
 			{
 				tagComboBoxes[handlerEntry.Key].TextChanged += handlerEntry.Value.Item2;
 			}
+			textHandlersResubscribed = true;
 			ScheduleSelectionStatusUpdate(refreshStatusAllInfo: false);
 			if (SelectedFileCount == 1)
 			{
@@ -4718,6 +4726,14 @@ internal class StateFieldInstance : Form
 		}
 		finally
 		{
+			// 异常路径下也必须重订 TextChanged,否则字段变更监听会永久脱落。
+			if (!textHandlersResubscribed)
+			{
+				foreach (KeyValuePair<string, (Label, EventHandler)> handlerEntry in tagFieldTextHandlers)
+				{
+					tagComboBoxes[handlerEntry.Key].TextChanged += handlerEntry.Value.Item2;
+				}
+			}
 			tagComboBoxes.Values.ForEachItem(EndComboBoxUpdate);
 		}
 	}
@@ -4983,6 +4999,9 @@ internal class StateFieldInstance : Form
 	private void ApplyFileSelectionMode(FileSelectionMode selectionMode, bool refreshStatusAllInfo)
 	{
 		tagComboBoxes.Values.ForEachItem(BeginComboBoxUpdate);
+		bool textHandlersResubscribed = false;
+		try
+		{
 		fileListView.Focus();
 		foreach (KeyValuePair<string, (Label, EventHandler)> handlerEntry in tagFieldTextHandlers)
 		{
@@ -5023,6 +5042,7 @@ internal class StateFieldInstance : Form
 		{
 			tagComboBoxes[handlerEntry.Key].TextChanged += handlerEntry.Value.Item2;
 		}
+		textHandlersResubscribed = true;
 		if (SelectedFileCount == 1)
 		{
 			if (refreshStatusAllInfo)
@@ -5041,7 +5061,19 @@ internal class StateFieldInstance : Form
 			StartSelectionStatusUpdateTimer();
 		}
 		UpdateSelectionCommandState();
-		tagComboBoxes.Values.ForEachItem(EndComboBoxUpdate);
+		}
+		finally
+		{
+			// 异常路径下也必须重订 TextChanged 并结束更新,否则监听脱落、组合框停留在 BeginUpdate。
+			if (!textHandlersResubscribed)
+			{
+				foreach (KeyValuePair<string, (Label, EventHandler)> handlerEntry in tagFieldTextHandlers)
+				{
+					tagComboBoxes[handlerEntry.Key].TextChanged += handlerEntry.Value.Item2;
+				}
+			}
+			tagComboBoxes.Values.ForEachItem(EndComboBoxUpdate);
+		}
 	}
 
 	private static void BeginComboBoxUpdate(ComboBox comboBox)
@@ -6805,7 +6837,20 @@ internal class StateFieldInstance : Form
 			}
 			catch (System.Exception ex)
 			{
-				Console.WriteLine("open appsettingdatapath fail " + ex.Message);
+				// 配置无法读取时落盘日志便于诊断(WinForms 无控制台,Console 输出不可见)。
+				DatabaseMapper.WriteExceptionDetails(ex, "StateFieldInstance.LoadAppSettingData");
+				if (ex is Newtonsoft.Json.JsonException)
+				{
+					// 格式不兼容(如旧版本二进制 .dat 用新版 JSON 解析失败)无法自行恢复:
+					// 删除该文件自愈,避免每次启动都失败,下次退出会写出新的 JSON 格式。
+					try
+					{
+						File.Delete(AppSettingData.AppSettingDataPath);
+					}
+					catch
+					{
+					}
+				}
 				progressDialog?.CloseAfterCompletion();
 				return;
 			}

@@ -192,9 +192,11 @@ internal class FilenameRelatedBatchDialog : Form
 		internal void RenameFiles()
 		{
 			Owner.historyTransaction = new TagHistoryRepository(useTransaction: true);
-			TagHistoryRepository.ClearUndoState();
-			for (int index = 0; index < RenameItems.Length && !CancellationTokenSource.IsCancellationRequested; index++)
+			try
 			{
+				TagHistoryRepository.ClearUndoState();
+				for (int index = 0; index < RenameItems.Length && !CancellationTokenSource.IsCancellationRequested; index++)
+				{
 				var (originalPath, _, listViewIndex) = RenameItems[index];
 				using (ConfigDescriptorState configDescriptorState = new ConfigDescriptorState(originalPath))
 				{
@@ -243,7 +245,7 @@ internal class FilenameRelatedBatchDialog : Form
 										sourceImagePath = DatabaseMapper.FindExistingSiblingImageFile(originalPath);
 									}
 									string destinationAudioPath = Path.GetDirectoryName(originalPath) + "\\" + newFilename + Path.GetExtension(originalPath);
-									if (File.Exists(destinationAudioPath) && newFilename != Path.GetFileNameWithoutExtension(originalPath))
+									if (File.Exists(destinationAudioPath) && !string.Equals(newFilename, Path.GetFileNameWithoutExtension(originalPath), StringComparison.OrdinalIgnoreCase))
 									{
 										int duplicateIndex = 1;
 										while (true)
@@ -277,22 +279,39 @@ internal class FilenameRelatedBatchDialog : Form
 									newFilename = Path.GetFileName(destinationAudioPath);
 									if (newFilename != Path.GetFileName(originalPath))
 									{
-									try
-									{
-										DatabaseMapper.MoveFileAllowingCaseOnlyRename(originalPath, destinationAudioPath);
-										if (sourceLrcPath != null && destinationLrcPath != null)
+										try
 										{
-											DatabaseMapper.MoveFileAllowingCaseOnlyRename(sourceLrcPath, destinationLrcPath);
-										}
-										if (sourceImagePath != null && destinationImagePath != null)
-										{
-											DatabaseMapper.MoveFileAllowingCaseOnlyRename(sourceImagePath, destinationImagePath);
-										}
+											DatabaseMapper.MoveFileAllowingCaseOnlyRename(originalPath, destinationAudioPath);
+											// 音频本体已移动到新路径,内部状态必须立即无条件回写,
+											// 否则列表/历史/撤销会指向已不存在的旧路径(文件"失踪")。
 											RenameItems[index] = (path: originalPath, _: destinationAudioPath, lvIndex: listViewIndex);
 											FileSettings.UpdateForAnyFile(originalPath, destinationAudioPath);
 											TagHistoryRepository.UpdateHistoryFilePath(originalPath, destinationAudioPath, Owner.historyTransaction);
 											TagHistoryRepository.AddRenameUndoRecord(originalPath, destinationAudioPath);
 											Owner.successCount++;
+											// 关联文件(歌词/封面)为尽力而为:移动失败只记录告警,不回退已成功的音频改名。
+											if (sourceLrcPath != null && destinationLrcPath != null)
+											{
+												try
+												{
+													DatabaseMapper.MoveFileAllowingCaseOnlyRename(sourceLrcPath, destinationLrcPath);
+												}
+												catch (Exception lrcEx)
+												{
+													ReportFailure(sourceLrcPath, lrcEx.Message);
+												}
+											}
+											if (sourceImagePath != null && destinationImagePath != null)
+											{
+												try
+												{
+													DatabaseMapper.MoveFileAllowingCaseOnlyRename(sourceImagePath, destinationImagePath);
+												}
+												catch (Exception imageEx)
+												{
+													ReportFailure(sourceImagePath, imageEx.Message);
+												}
+											}
 										}
 										catch (Exception ex)
 										{
@@ -331,7 +350,11 @@ internal class FilenameRelatedBatchDialog : Form
 				}
 				Owner.processedCount++;
 			}
-			Owner.historyTransaction.Dispose();
+			}
+			finally
+			{
+				Owner.historyTransaction.Dispose();
+			}
 		}
 	}
 
@@ -1176,10 +1199,22 @@ internal class FilenameRelatedBatchDialog : Form
 		progressDialog.AddCancelRequestedHandler(worker.Cancel);
 		progressDialog.AddProgressUpdateHandler(worker.UpdateProgress);
 		worker.ReportFailure = worker.ReportRenameFailure;
-		await Task.Run((Action)worker.RenameFiles, worker.CancellationTokenSource.Token);
-		progressDialog.CloseAfterCompletion();
-		(string msg, bool isErr) result = BuildBatchCompletionResult(paths.Length);
-		finallyCallback(result);
+		(string msg, bool isErr) result = default((string, bool));
+		try
+		{
+			await Task.Run((Action)worker.RenameFiles, worker.CancellationTokenSource.Token);
+			result = BuildBatchCompletionResult(paths.Length);
+		}
+		catch (Exception ex)
+		{
+			batchMessages.AddLine(ex.Message);
+			result = (batchMessages.ToString(), true);
+		}
+		finally
+		{
+			progressDialog.CloseAfterCompletion();
+			finallyCallback(result);
+		}
 	}
 
 	internal async void StartChangeTags(string[] paths, ProgressDialog progressDialog, bool canCancelFileReadonly, Action<(string msg, bool isErr)> finallyCallback)

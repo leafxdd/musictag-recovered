@@ -449,6 +449,7 @@ internal class LyricEditorDialog : Form
 			searchButton.Image = null;
 			saveAsLrcButton.Image?.Dispose();
 			saveAsLrcButton.Image = null;
+			downloadCancellation?.Dispose();
 			components.Dispose();
 		}
 

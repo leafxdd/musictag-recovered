@@ -69,7 +69,8 @@ internal class FolderSelectionDialog
 			SetShellFolder(InitialFolder, shellItem => fileOpenDialog.SetFolder(shellItem));
 			SetShellFolder(DefaultFolder, shellItem => fileOpenDialog.SetDefaultFolder(shellItem));
 
-			if (fileOpenDialog.Show(owner.Handle) == 0 && fileOpenDialog.GetResults(out results) == 0 && results.GetCount(out uint selectedCount) == 0L && selectedCount != 0)
+			IntPtr ownerHandle = owner?.Handle ?? IntPtr.Zero;
+			if (fileOpenDialog.Show(ownerHandle) == 0 && fileOpenDialog.GetResults(out results) == 0 && results.GetCount(out uint selectedCount) == 0L && selectedCount != 0)
 			{
 				for (uint index = 0; index < selectedCount; index++)
 				{

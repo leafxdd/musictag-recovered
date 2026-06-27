@@ -535,7 +535,12 @@ internal class ConfigDescriptorState : IDisposable
 
 	public string GetDisplayValue(string fieldName)
 	{
-		object value = this[fieldName];
+		// 缺键或空值时返回空串而非抛 KeyNotFoundException / 强转空值崩溃
+		//(例如音频属性尚未加载时读取 durationinms)。
+		if (!TagValues.TryGetValue(fieldName, out object value) || value == null)
+		{
+			return "";
+		}
 		switch (fieldName)
 		{
 			case "bitrate":

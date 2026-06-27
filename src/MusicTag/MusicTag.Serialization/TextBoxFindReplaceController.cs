@@ -102,7 +102,11 @@ internal sealed class TextBoxFindReplaceController
 			return;
 		}
 
-		textBox.Text = ReplaceAllMatches(textBox.Text, replacementText);
+		// 用 SelectAll + Paste 写回(可撤销),与单匹配分支一致;
+		// 直接给 textBox.Text 赋值会清空撤销缓冲区,导致整批替换无法 Ctrl+Z 撤销。
+		string replacedText = ReplaceAllMatches(textBox.Text, replacementText);
+		textBox.SelectAll();
+		textBox.Paste(replacedText);
 		textBox.SelectionStart = 0;
 		textBox.SelectionLength = 0;
 		textBox.ScrollToCaret();

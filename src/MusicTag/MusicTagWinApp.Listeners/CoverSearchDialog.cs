@@ -615,10 +615,10 @@ internal class CoverSearchDialog : Form
 			}
 			finally
 			{
-				if (image != candidateImageList.Images["image_not_found"] && image != candidateImageList.Images["download_failed"])
-				{
-					image.Dispose();
-				}
+				// image 已被上面的 ImageList.Images.Add 复制进原生句柄,可无条件释放。
+				// 原先与 candidateImageList.Images["..."] 比较恒为 true(索引器每次返回新副本),
+				// 既是死逻辑又每次额外泄漏两张占位图副本。
+				image.Dispose();
 			}
 			return;
 		}

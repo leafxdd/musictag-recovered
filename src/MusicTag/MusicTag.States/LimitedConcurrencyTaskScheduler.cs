@@ -63,29 +63,29 @@ internal sealed class LimitedConcurrencyTaskScheduler : TaskScheduler
 		}
 	}
 
-		protected sealed override IEnumerable<Task> GetScheduledTasks()
+	protected sealed override IEnumerable<Task> GetScheduledTasks()
+	{
+		bool lockTaken = false;
+		try
 		{
-			bool lockTaken = false;
-			try
+			Monitor.TryEnter(queuedTasks, ref lockTaken);
+			if (!lockTaken)
 			{
-				Monitor.TryEnter(queuedTasks, ref lockTaken);
-				if (!lockTaken)
-				{
-					throw new NotSupportedException();
-				}
-
-				Task[] scheduledTasks = new Task[queuedTasks.Count];
-				queuedTasks.CopyTo(scheduledTasks, 0);
-				return scheduledTasks;
+				throw new NotSupportedException();
 			}
-			finally
+
+			Task[] scheduledTasks = new Task[queuedTasks.Count];
+			queuedTasks.CopyTo(scheduledTasks, 0);
+			return scheduledTasks;
+		}
+		finally
+		{
+			if (lockTaken)
 			{
-				if (lockTaken)
-				{
-					Monitor.Exit(queuedTasks);
-				}
+				Monitor.Exit(queuedTasks);
 			}
 		}
+	}
 
 	private void QueueWorker()
 	{

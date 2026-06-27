@@ -225,3 +225,53 @@
 | P2-45 撤销字节计数重置 | 已实现 | `TagHistoryRepository.ClearUndoState` 同步重置共享撤销字节计数，避免清空后继续沿用旧阈值 |
 | P2-46 热路径刷对象去分配 | 已实现 | `EditableListView`、`ImageComboBox`、`CombinedTagOverwriteOptionsDialog`、`AutoMatchTagsDialog` 改用 `TextRenderer` 直绘文本，去掉每次绘制新建 `SolidBrush` |
 | P2 后续 | 已完成 | Low 级问题已清空 |
+
+---
+
+## 11. 第二轮复核：对 Codex 修复的审查 + 二次修复（2026-06-27）
+
+对 Codex 上一轮全部修复(`7f0d8e4..c88a388`,43 文件 +2659/-1433)做多智能体复核(10 组并行核实 + 逐条对抗验证)。
+
+**核实结果**:72 条原始发现 —— **63 正确 / 4 部分修复 / 3 修错 / 2 未动 / 0 功能回归**。P0 崩溃链、配置原子写、歌词文化无关解析、网络层、COM/Win32、GDI 释放等大头修得扎实,无 use-after-dispose / double-dispose / 误释放共享占位图。
+
+**对抗验证驳回 1 条误报**:并行自动匹配下"历史写入/撤销共享状态被多线程并发访问"——经线程模型追踪证明:webSearchThreadCount>1 时搜索线程只跑网络搜索,真正的保存/历史/撤销写入只在单一 Run 线程经单槽队列(`parallelProcessorQueue` 同时最多一个待处理项)串行触达,搜索线程仅通过 `CreateTagSnapshot`(纯内存快照,不碰连接/事务/undoTags)接触仓库。故写路径无并发,`data-history-2` 对并行路径"未真正加锁"不构成缺陷。
+
+### 二次修复(本轮已实现,均过 `Verify-Build -RunSmokeTests`)
+
+**Codex 引入的回归(给历史库加锁时漏改,最关键)**:
+
+| 项 | 严重度 | 修复 |
+|---|---|---|
+| `RenameFiles` 持进程级锁的事务无 `try/finally` → 异常时 `syncRoot` 锁永久泄漏 → 全应用历史功能死锁 | High | `FilenameRelatedBatchDialog.RenameFiles` 整体包 `try/finally`,`ClearUndoState` 移入 try,`finally` 中 `Dispose`;`StartRenameFiles` 补 `try/catch/finally`;`AutoMatchTagsDialog.Run` 的 `ClearUndoState` 移入 try |
+| `TagHistoryRepository.Dispose` 的 finally 中先 `Dispose` 事务后释放锁,事务 Dispose 抛异常会跳过 `ReleaseSyncLock` | Medium | finally 改为嵌套 `try { currentTransaction?.Dispose(); } finally { ReleaseSyncLock(); }` |
+| 构造函数 `Monitor.Enter` 与 `syncLockHeld` 赋值非原子 | Low | 改用 `Monitor.Enter(syncRoot, ref syncLockHeld)` lockTaken 模式 |
+| `TryClearAllHistory` 在释放锁后才重置静态序列号 | Low | 序列号重置移入 `lock(syncRoot)` |
+
+**原始发现未真正修掉的 live bug**:
+
+| 项 | 修复 |
+|---|---|
+| `dialogs-search-7`:`RenameFiles` 关联文件移动失败后已改名音频状态不回写 → 文件"失踪" | 音频移动成功后立即无条件回写状态(列表/`FileSettings`/历史/撤销),关联 lrc/封面改为尽力而为(各自 `try/catch`,失败仅告警不回退) |
+| `dialogs-search-8`:纯大小写改名被误判冲突、helper 死分支不可达 | 冲突判定第 246 行改 `OrdinalIgnoreCase`,使 case-only 改名走到 `MoveFileAllowingCaseOnlyRename` |
+| `statefield-5`:`ApplyFileListFilter`/`ApplyFileSelectionMode` 的 `TextChanged` 重订非异常安全 | 引入 `textHandlersResubscribed` 标志,正常路径保持原顺序(handlers 在 `LoadSingleSelectedFile` 期间活跃),异常路径在 `finally` 中补重订 + `EndComboBoxUpdate`;`ApplyFileSelectionMode` 补 `try/finally` |
+| `data-history-7`:`TrackSearchContext` 仍会 `KeyNotFoundException` | `ConfigDescriptorState.GetDisplayValue` 缺键/空值返回空串(根治所有调用方);`TrackSearchContext` 改用 `TryGetRawValue` 取原始毫秒(与 `DurationMillisecondsText` 命名一致) |
+| `data-history-3`:撤销字节计数卸盘后仍累加 | 歌词/封面字节数 `+=` 移入"仍在内存"分支(卸盘到磁盘则不计) |
+| `win32-shell-4`:`FolderSelectionDialog` 的 `owner.Handle` 裸解引用 | 改 `owner?.Handle ?? IntPtr.Zero` |
+| `dialogs-search-3`:`CombinedTagSearchDialog.coverImageCache` 从不释放 | `Dispose` 中遍历释放缓存封面位图 |
+
+**Codex 新引入的次要瑕疵(low)**:
+
+| 项 | 修复 |
+|---|---|
+| `RunSearch`/`StartAutoMatchTags`/`SearchCombinedTagsAsync` 把用户取消当错误上报/打日志 | 通用 catch 前加 `OperationCanceledException` 过滤(when `IsCancellationRequested`) |
+| 自动匹配封面下载成功后出错路径租约未释放 | 错误分支补 `coverTempFileCache.Release` |
+| `MoveFileAllowingCaseOnlyRename` 两步改名第二步失败遗留随机临时名 | 失败回滚到原名后重抛;拒绝相对目标路径 |
+| `ReplaceAll` 多匹配改 `Text=` 赋值致 Ctrl+Z 不可撤销 | 改 `SelectAll` + `Paste`(可撤销),与单匹配分支一致 |
+| `HttpUtility.HtmlDecode` 在 net481 下不解 `&apos;` | 解码前先 `Replace("&apos;", "'")` |
+| `CoverSearchDialog` 占位图排除判断恒真 + 每次泄漏 2 张副本 | 删除恒真比较,直接 `image.Dispose()`(已被 `ImageList.Add` 复制) |
+| `LyricEditorDialog.downloadCancellation`(CTS)未释放 | `Dispose` 中补 `downloadCancellation?.Dispose()` |
+| `AppSettingData` JSON 化无旧 `.dat` 迁移、静默丢弃 | 加载失败经 `WriteExceptionDetails` 落盘日志;格式不兼容(`JsonException`)时删除 `.dat` 自愈 |
+| `ApplicationInfoService` / `LimitedConcurrencyTaskScheduler` 缩进错乱 | 统一缩进 |
+
+**经核实无需修复**:`SaveLyricFile_Click` 的 `LyricSaveFileDialog`(原报"未 using")—— 该类并非 `IDisposable`(其 Vista Shell COM 由 `ShowDialog` 内部 P2-35 释放),为误报。
+

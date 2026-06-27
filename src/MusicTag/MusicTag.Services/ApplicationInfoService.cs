@@ -10,16 +10,16 @@ using MusicTagWinApp.Properties;
 
 namespace MusicTag.Services;
 
-	internal static class ApplicationInfoService
-	{
-		private const string UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+internal static class ApplicationInfoService
+{
+	private const string UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
 	public static readonly string UpdatePageUrl = "https://www.cnblogs.com/vinlxc/p/11347744.html";
 
-		private static void ShowAlreadyLatestVersionMessage()
-		{
-			DatabaseMapper.ShowInformationMessage(Resources.Msg_UsingLastestVersion);
-		}
+	private static void ShowAlreadyLatestVersionMessage()
+	{
+		DatabaseMapper.ShowInformationMessage(Resources.Msg_UsingLastestVersion);
+	}
 
 	private static void ShowVersionCheckFailedMessage()
 	{
@@ -102,7 +102,7 @@ namespace MusicTag.Services;
 				Timeout = TimeSpan.FromSeconds(60.0)
 			};
 			httpClient.DefaultRequestHeaders.Add("user-agent", UserAgent);
-				string response = await httpClient.GetStringAsync(UpdatePageUrl);
+			string response = await httpClient.GetStringAsync(UpdatePageUrl);
 			Match match = Regex.Match(response, "<p>当前版本：(.+)</p>");
 			if (match.Success)
 			{

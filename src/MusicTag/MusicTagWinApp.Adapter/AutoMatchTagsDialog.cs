@@ -210,6 +210,10 @@ internal class AutoMatchTagsDialog : Form
 					}
 					ApplySearchResults(searchResults, textTagUpdateFilter);
 				}
+				catch (OperationCanceledException) when (worker.GetCancellationSource().IsCancellationRequested)
+				{
+					// 用户主动取消:静默处理,不计入失败计数、不写错误日志,与各搜索对话框一致。
+				}
 				catch (Exception ex)
 				{
 					worker.loadErrorMessage = string.IsNullOrWhiteSpace(ex.Message) ? Resources.Msg_SaveFail : ex.Message;
@@ -824,6 +828,8 @@ internal class AutoMatchTagsDialog : Form
 			}
 			else
 			{
+				// 封面可能在搜索阶段已下载并持有临时文件租约,出错路径同样要释放,避免租约泄漏。
+				coverTempFileCache.Release(tempCoverFilePath);
 				RecordAutoMatchError(loadErrorMessage);
 				GetOwnerDialog().failedCount++;
 			}
@@ -1417,9 +1423,9 @@ internal class AutoMatchTagsDialog : Form
 		{
 			owner.pendingPathQueue = new FilePathQueue(paths);
 			owner.tagHistoryTransaction = new TagHistoryRepository(useTransaction: true);
-			TagHistoryRepository.ClearUndoState();
 			try
 			{
+				TagHistoryRepository.ClearUndoState();
 				if (owner.webSearchThreadCount > 1)
 				{
 					for (int workerIndex = 0; workerIndex < owner.webSearchThreadCount; workerIndex++)
@@ -1812,6 +1818,11 @@ internal class AutoMatchTagsDialog : Form
 			{
 				result = (autoMatchLog.ToString(), true);
 			}
+		}
+		catch (OperationCanceledException) when (worker.CancellationToken.IsCancellationRequested)
+		{
+			// 用户取消:不当作错误上报,沿用已累计的结果文案。
+			result = (autoMatchLog.ToString(), false);
 		}
 		catch (Exception ex)
 		{

@@ -73,10 +73,12 @@ internal class TagHistoryRepository : IDisposable
 
 	public TagHistoryRepository(bool useTransaction)
 	{
-		Monitor.Enter(syncRoot);
-		syncLockHeld = true;
+		// 用 lockTaken 重载获取锁:Monitor.Enter 与 syncLockHeld 的赋值是原子的,
+		// 即使在 Enter 与后续语句之间发生异步异常(如 ThreadAbort),syncLockHeld 也能
+		// 准确反映锁是否真正持有,避免 ReleaseSyncLock 误跳过 Monitor.Exit 造成锁泄漏。
 		try
 		{
+			Monitor.Enter(syncRoot, ref syncLockHeld);
 			EnsureConnectionOpen();
 			if (useTransaction)
 			{
@@ -114,8 +116,16 @@ internal class TagHistoryRepository : IDisposable
 		}
 		finally
 		{
-			currentTransaction?.Dispose();
-			ReleaseSyncLock();
+			// 把锁释放放进独立 finally:即便 currentTransaction.Dispose() 抛异常,
+			// ReleaseSyncLock 仍会执行,确保 Monitor.Exit 不被跳过、不泄漏进程级静态锁。
+			try
+			{
+				currentTransaction?.Dispose();
+			}
+			finally
+			{
+				ReleaseSyncLock();
+			}
 		}
 	}
 
@@ -381,8 +391,11 @@ internal class TagHistoryRepository : IDisposable
 			{
 				tagHistory.TryVacuum();
 			}
-			historySerialPrefix = 1L;
-			historySerialSequence = 0L;
+			lock (syncRoot)
+			{
+				historySerialPrefix = 1L;
+				historySerialSequence = 0L;
+			}
 			CloseSharedConnection();
 			return result;
 		}
@@ -473,7 +486,11 @@ internal class TagHistoryRepository : IDisposable
 					tags.RemoveRawValue("lyrics");
 					tags["lyrics_path"] = lyricsPath;
 				}
-				undoPayloadByteCount += lyrics.Length * 2;
+				else
+				{
+					// 仅当歌词仍保留在内存时才累加内存字节数;卸载到磁盘后不计入,避免阈值判定失真。
+					undoPayloadByteCount += lyrics.Length * 2;
+				}
 			}
 			if (tags.TryGetRawValue("allpicturedata", out var pictureValue) && pictureValue is List<ConfigDescriptorState.PictureData> pictures)
 			{
@@ -495,7 +512,11 @@ internal class TagHistoryRepository : IDisposable
 					}
 					tags["allpicturedata_path"] = picturePaths;
 				}
-				undoPayloadByteCount += pictureByteCount;
+				else
+				{
+					// 同理:封面数据仍在内存时才累加内存字节数,卸载到磁盘后不计入。
+					undoPayloadByteCount += pictureByteCount;
+				}
 			}
 			tags["tags_history_serial"] = historySerial;
 			undoTags.Add(tags);

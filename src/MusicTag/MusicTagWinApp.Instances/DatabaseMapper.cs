@@ -450,15 +450,35 @@ internal static class DatabaseMapper
 		if (string.Equals(sourcePath, destinationPath, StringComparison.OrdinalIgnoreCase) && !string.Equals(sourcePath, destinationPath, StringComparison.Ordinal))
 		{
 			string destinationDirectory = Path.GetDirectoryName(destinationPath);
+			if (string.IsNullOrWhiteSpace(destinationDirectory))
+			{
+				// 拒绝相对路径:否则临时文件会落到当前工作目录而非源文件所在目录。
+				throw new ArgumentException("Case-only rename requires an absolute destination path.", nameof(destinationPath));
+			}
 			string tempPath;
 			do
 			{
-				tempPath = string.IsNullOrWhiteSpace(destinationDirectory) ? Path.GetRandomFileName() : Path.Combine(destinationDirectory, Path.GetRandomFileName());
+				tempPath = Path.Combine(destinationDirectory, Path.GetRandomFileName());
 			}
 			while (File.Exists(tempPath));
 
 			File.Move(sourcePath, tempPath);
-			File.Move(tempPath, destinationPath);
+			try
+			{
+				File.Move(tempPath, destinationPath);
+			}
+			catch
+			{
+				// 第二步失败时把文件回滚到原名,避免遗留为随机临时名导致原文件名永久丢失。
+				try
+				{
+					File.Move(tempPath, sourcePath);
+				}
+				catch
+				{
+				}
+				throw;
+			}
 			return;
 		}
 
