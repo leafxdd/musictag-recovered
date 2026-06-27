@@ -40,6 +40,10 @@ internal class CoverSearchDialog : Form
 
 		private int remainingTotal;
 
+		private readonly HashSet<SearchSource> completedSources = new HashSet<SearchSource>();
+
+		private readonly Dictionary<SearchSource, HttpResult> errorBySource = new Dictionary<SearchSource, HttpResult>();
+
 		public CandidateSearchWorker(CoverSearchDialog dialog, IProgress<List<CoverSearchResult>> progress)
 		{
 			this.dialog = dialog;
@@ -67,6 +71,13 @@ internal class CoverSearchDialog : Form
 			foreach (SourceItem sourceItem in sources)
 			{
 				remainingBySource[sourceItem] = sourceItem.GetEffectiveSearchResultLimit();
+			}
+			foreach (SourceItem sourceItem in sources)
+			{
+				if (sourceItem.Enabled)
+				{
+					ReportStatus(sourceItem.SearchSource, SourceSearchPhase.Searching);
+				}
 			}
 
 			if (!string.IsNullOrWhiteSpace(dialog.GetCurrentTrack().Album) || !string.IsNullOrWhiteSpace(dialog.GetCurrentTrack().Artist))
@@ -113,6 +124,16 @@ internal class CoverSearchDialog : Form
 				}
 			}
 
+			if (!dialog.GetSearchCancellation().IsCancellationRequested)
+			{
+				foreach (SourceItem sourceItem in sources)
+				{
+					if (sourceItem.Enabled)
+					{
+						ReportFinalOutcome(sourceItem.SearchSource);
+					}
+				}
+			}
 			return !dialog.GetSearchCancellation().IsCancellationRequested;
 		}
 
@@ -125,6 +146,7 @@ internal class CoverSearchDialog : Form
 			}
 
 			remainingBySource[sourceItem] = sourceItem.GetEffectiveSearchResultLimit();
+			ReportStatus(preferredSource, SourceSearchPhase.Searching);
 
 			if (!string.IsNullOrWhiteSpace(dialog.GetCurrentTrack().Album) || !string.IsNullOrWhiteSpace(dialog.GetCurrentTrack().Artist))
 			{
@@ -135,6 +157,11 @@ internal class CoverSearchDialog : Form
 			{
 				SearchAndReport(sourceItem, "title/artist", () => dialog.SearchByTitleAndArtist(preferredSource, accumulatedCandidates));
 			}
+
+			if (!dialog.GetSearchCancellation().IsCancellationRequested)
+			{
+				ReportFinalOutcome(preferredSource);
+			}
 		}
 
 		private bool CanSearch(SourceItem sourceItem, bool isOtherSource)
@@ -144,6 +171,43 @@ internal class CoverSearchDialog : Form
 				&& sourceItem.IsSecondarySource == isOtherSource
 				&& remainingTotal > 0
 				&& remainingBySource[sourceItem] > 0;
+		}
+
+		// 状态上报:经 dialog 的 reporter(Progress<T>)编组回 UI 线程。
+		private void ReportStatus(SearchSource source, SourceSearchPhase phase, string errorCode = null)
+		{
+			dialog.searchStatusReporter?.Invoke(new SourceSearchStatus
+			{
+				Source = source,
+				Phase = phase,
+				ErrorCode = errorCode
+			});
+		}
+
+		// 记录本源一次搜索的结果:有结果即视为完成;0 结果且传输出错则记录错误。
+		private void RecordSourceOutcome(SearchSource source, int resultCount, HttpResult transportResult)
+		{
+			if (resultCount > 0)
+			{
+				completedSources.Add(source);
+			}
+			else if (transportResult != null && !transportResult.IsSuccess)
+			{
+				errorBySource[source] = transportResult;
+			}
+		}
+
+		// 搜索结束后上报本源最终状态:完成(有结果或无错空结果)/ 出错(始终无结果且有错)。
+		private void ReportFinalOutcome(SearchSource source)
+		{
+			if (!completedSources.Contains(source) && errorBySource.TryGetValue(source, out HttpResult error) && error != null && !error.IsSuccess)
+			{
+				ReportStatus(source, SourceSearchPhase.Error, error.ErrorCode);
+			}
+			else
+			{
+				ReportStatus(source, SourceSearchPhase.Completed);
+			}
 		}
 
 		private void SearchAndReport(SourceItem sourceItem, string searchKind, Func<List<CoverSearchResult>> search)
@@ -165,9 +229,11 @@ internal class CoverSearchDialog : Form
 			catch (System.Exception ex)
 			{
 				Console.WriteLine($"Tag search error ({sourceItem.SearchSource}, {searchKind}): {ex.GetMessageChain()}");
+				RecordSourceOutcome(sourceItem.SearchSource, 0, dialog.lastSourceTransportResult);
 				return;
 			}
 
+			RecordSourceOutcome(sourceItem.SearchSource, candidates.Count, dialog.lastSourceTransportResult);
 			List<CoverSearchResult> selectedCandidates = candidates.Take(Math.Min(Math.Min(remainingTotal, candidates.Count), remainingBySource[sourceItem])).ToList();
 			if (selectedCandidates.Count == 0)
 			{
@@ -342,7 +408,7 @@ internal class CoverSearchDialog : Form
 
 	private ImageList candidateImageList;
 
-	private FlowLayoutPanel footerPanel;
+	private Panel footerPanel;
 
 	private FlowLayoutPanel buttonPanel;
 
@@ -360,7 +426,13 @@ internal class CoverSearchDialog : Form
 
 	private SaveFileDialog coverSaveDialog;
 
-	private PictureBox progressPictureBox;
+	private Label searchStatusLabel;
+
+	private SearchStatusIndicator searchStatusIndicator;
+
+	private Action<SourceSearchStatus> searchStatusReporter;
+
+	private HttpResult lastSourceTransportResult;
 
 	private TrackSearchContext GetCurrentTrack()
 	{
@@ -423,6 +495,7 @@ internal class CoverSearchDialog : Form
 		coverDownloadPaths = new HashSet<string>();
 		InitializeComponent();
 		InitializeCandidateImages();
+		searchStatusIndicator = new SearchStatusIndicator(searchStatusLabel, () => candidateListView.Items.Count > 0, components);
 		taskbarProgress = new TaskbarProgressController(this);
 		okButton.Text = Resources.OK;
 		cancelButton.Text = Resources.Cancel;
@@ -438,7 +511,6 @@ internal class CoverSearchDialog : Form
 		candidateImageList.Images.Add("loading", DatabaseMapper.LoadResourceBitmap("loading", candidateImageList.ImageSize));
 		candidateImageList.Images.Add("download_failed", DatabaseMapper.LoadResourceBitmap("download_failed", candidateImageList.ImageSize));
 		candidateImageList.Images.Add("image_not_found", DatabaseMapper.LoadResourceBitmap("imagenotfound", candidateImageList.ImageSize));
-		progressPictureBox.Image = DatabaseMapper.LoadResourceBitmap("img_wait");
 	}
 
 	protected override void OnShown(EventArgs i)
@@ -446,6 +518,8 @@ internal class CoverSearchDialog : Form
 		base.OnShown(i);
 		if (lastCandidateSearchSucceeded && GetCachedCandidates() != null && cachedSearchTrack != null && GetCachedCandidates().Any() && cachedSearchSource == GetPreferredSource() && GetCurrentTrack().Title == cachedSearchTrack.Title && GetCurrentTrack().Artist == cachedSearchTrack.Artist && GetCurrentTrack().Album == cachedSearchTrack.Album)
 		{
+			// 缓存复用:不联网搜索,状态标识保持隐藏。
+			searchStatusIndicator.Reset();
 			foreach (CoverSearchResult cachedCandidate in GetCachedCandidates())
 			{
 				cachedCandidate.CoverDownloadQueued = false;
@@ -467,6 +541,7 @@ internal class CoverSearchDialog : Form
 		string preservedCoverPath = default(string);
 		base.OnClosed(e);
 		cachedCandidateReplayTimer.Stop();
+		searchStatusIndicator.StopCountdown();
 		GetSearchCancellation().Cancel();
 		if (base.DialogResult == DialogResult.OK)
 		{
@@ -479,10 +554,16 @@ internal class CoverSearchDialog : Form
 	{
 		candidateListView.Width = mainLayoutPanel.Width;
 		candidateListView.Height = mainLayoutPanel.Height - footerPanel.Height;
-		int buttonLeftMargin = (footerPanel.Width - buttonPanel.Width) / 2;
-		buttonPanel.Margin = new Padding(buttonLeftMargin, buttonPanel.Margin.Top, 0, buttonPanel.Margin.Bottom);
-		int statusImageLeftMargin = footerPanel.Width - progressPictureBox.Width - buttonPanel.Location.X - buttonPanel.Width - progressPictureBox.Margin.Top;
-		progressPictureBox.Margin = new Padding(statusImageLeftMargin, progressPictureBox.Margin.Top, 0, progressPictureBox.Margin.Bottom);
+		// footerPanel 为普通 Panel,子控件绝对定位:按钮恒定居中(与状态标签显隐无关),
+		// 状态标签置于按钮右侧、垂直中线与按钮对齐。详见 docs/SEARCH_STATUS_INDICATOR_DESIGN.md。
+		int buttonLeft = Math.Max(0, (footerPanel.Width - buttonPanel.Width) / 2);
+		int buttonTop = Math.Max(0, (footerPanel.Height - buttonPanel.Height) / 2);
+		buttonPanel.Location = new Point(buttonLeft, buttonTop);
+		int statusGap = 12;
+		int statusLeft = buttonPanel.Location.X + buttonPanel.Width + statusGap;
+		int statusTop = buttonPanel.Location.Y + buttonPanel.Height / 2 - searchStatusLabel.Height / 2;
+		searchStatusLabel.Location = new Point(statusLeft, statusTop);
+		searchStatusLabel.Width = Math.Max(0, footerPanel.Width - statusLeft - 8);
 	}
 
 	private void OnSearchDialogLayoutChanged(object sender, EventArgs e)
@@ -492,48 +573,68 @@ internal class CoverSearchDialog : Form
 
 	private List<CoverSearchResult> SearchByAlbumAndArtist(SearchSource source, List<CoverSearchResult> existingCandidates)
 	{
+		lastSourceTransportResult = null;
 		switch (source)
 		{
 		case SearchSource.Music163:
 		{
 			using NetEaseMusicTagProvider netEaseProvider = new NetEaseMusicTagProvider(GetSearchCancellation());
-			return netEaseProvider.SearchCovers((GetCurrentTrack().Album + " " + GetCurrentTrack().Artist).Trim(), 15, existingCandidates);
+			netEaseProvider.StatusReporter = searchStatusReporter;
+			List<CoverSearchResult> covers = netEaseProvider.SearchCovers((GetCurrentTrack().Album + " " + GetCurrentTrack().Artist).Trim(), 15, existingCandidates);
+			lastSourceTransportResult = netEaseProvider.LastTransportResult;
+			return covers;
 		}
 		case SearchSource.QQ:
 		{
 			using QqMusicTagProvider qqProvider = new QqMusicTagProvider(GetSearchCancellation());
-			return qqProvider.SearchCovers((GetCurrentTrack().Album + " " + GetCurrentTrack().Artist).Trim(), 15, existingCandidates);
+			qqProvider.StatusReporter = searchStatusReporter;
+			List<CoverSearchResult> covers = qqProvider.SearchCovers((GetCurrentTrack().Album + " " + GetCurrentTrack().Artist).Trim(), 15, existingCandidates);
+			lastSourceTransportResult = qqProvider.LastTransportResult;
+			return covers;
 		}
 		default:
 			return new List<CoverSearchResult>();
 		case SearchSource.Kuwo:
 		{
 			using KuwoTagProvider kuwoTagProvider = new KuwoTagProvider(GetSearchCancellation());
-			return kuwoTagProvider.SearchCovers((GetCurrentTrack().Album + " " + GetCurrentTrack().Artist).Trim(), 5, existingCandidates);
+			kuwoTagProvider.StatusReporter = searchStatusReporter;
+			List<CoverSearchResult> covers = kuwoTagProvider.SearchCovers((GetCurrentTrack().Album + " " + GetCurrentTrack().Artist).Trim(), 5, existingCandidates);
+			lastSourceTransportResult = kuwoTagProvider.LastTransportResult;
+			return covers;
 		}
 		}
 	}
 
 	private List<CoverSearchResult> SearchByTitleAndArtist(SearchSource source, List<CoverSearchResult> existingCandidates)
 	{
+		lastSourceTransportResult = null;
 		switch (source)
 		{
 		case SearchSource.Music163:
 		{
 			using NetEaseMusicTagProvider netEaseProvider = new NetEaseMusicTagProvider(GetSearchCancellation());
-			return netEaseProvider.SearchCovers((GetCurrentTrack().Title + " " + GetCurrentTrack().Artist).Trim(), 15, existingCandidates);
+			netEaseProvider.StatusReporter = searchStatusReporter;
+			List<CoverSearchResult> covers = netEaseProvider.SearchCovers((GetCurrentTrack().Title + " " + GetCurrentTrack().Artist).Trim(), 15, existingCandidates);
+			lastSourceTransportResult = netEaseProvider.LastTransportResult;
+			return covers;
 		}
 		case SearchSource.QQ:
 		{
 			using QqMusicTagProvider qqProvider = new QqMusicTagProvider(GetSearchCancellation());
-			return qqProvider.SearchCovers((GetCurrentTrack().Title + " " + GetCurrentTrack().Artist).Trim(), 15, existingCandidates);
+			qqProvider.StatusReporter = searchStatusReporter;
+			List<CoverSearchResult> covers = qqProvider.SearchCovers((GetCurrentTrack().Title + " " + GetCurrentTrack().Artist).Trim(), 15, existingCandidates);
+			lastSourceTransportResult = qqProvider.LastTransportResult;
+			return covers;
 		}
 		default:
 			return new List<CoverSearchResult>();
 		case SearchSource.Kuwo:
 		{
 			using KuwoTagProvider kuwoTagProvider = new KuwoTagProvider(GetSearchCancellation());
-			return kuwoTagProvider.SearchCovers((GetCurrentTrack().Title + " " + GetCurrentTrack().Artist).Trim(), 5, existingCandidates);
+			kuwoTagProvider.StatusReporter = searchStatusReporter;
+			List<CoverSearchResult> covers = kuwoTagProvider.SearchCovers((GetCurrentTrack().Title + " " + GetCurrentTrack().Artist).Trim(), 5, existingCandidates);
+			lastSourceTransportResult = kuwoTagProvider.LastTransportResult;
+			return covers;
 		}
 		}
 	}
@@ -542,6 +643,10 @@ internal class CoverSearchDialog : Form
 	{
 		SetCachedCandidates(new List<CoverSearchResult>());
 		IProgress<List<CoverSearchResult>> progress = new Progress<List<CoverSearchResult>>(OnSearchCandidatesFound);
+		// 状态通道:Progress<T> 在 UI 线程构造,Report 自动编组回 UI 线程。
+		Progress<SourceSearchStatus> statusProgress = new Progress<SourceSearchStatus>(searchStatusIndicator.Report);
+		searchStatusReporter = (SourceSearchStatus status) => ((IProgress<SourceSearchStatus>)statusProgress).Report(status);
+		searchStatusIndicator.Begin();
 		CandidateSearchWorker searchWorker = new CandidateSearchWorker(this, progress);
 
 		GetTaskbarProgress().SetProgressState(TaskbarProgressBarStatus.Indeterminate);
@@ -562,8 +667,8 @@ internal class CoverSearchDialog : Form
 		{
 			if (!IsDisposed)
 			{
-				progressPictureBox.Hide();
 				GetTaskbarProgress().SetProgressState(TaskbarProgressBarStatus.NoProgress);
+				searchStatusIndicator.End();
 			}
 		}
 	}
@@ -768,11 +873,11 @@ internal class CoverSearchDialog : Form
 		mainLayoutPanel = new FlowLayoutPanel();
 		candidateListView = new HeaderAwareListView();
 		candidateImageList = new ImageList(components);
-		footerPanel = new FlowLayoutPanel();
+		footerPanel = new Panel();
 		buttonPanel = new FlowLayoutPanel();
 		okButton = new Button();
 		cancelButton = new Button();
-		progressPictureBox = new PictureBox();
+		searchStatusLabel = new Label();
 		cachedCandidateReplayTimer = new System.Windows.Forms.Timer(components);
 		coverContextMenu = new ContextMenuStrip(components);
 		openCoverMenuItem = new ToolStripMenuItem();
@@ -782,7 +887,6 @@ internal class CoverSearchDialog : Form
 		mainLayoutPanel.SuspendLayout();
 		footerPanel.SuspendLayout();
 		buttonPanel.SuspendLayout();
-		((ISupportInitialize)progressPictureBox).BeginInit();
 		coverContextMenu.SuspendLayout();
 		SuspendLayout();
 
@@ -816,15 +920,14 @@ internal class CoverSearchDialog : Form
 		candidateImageList.ImageSize = new Size(128, 128);
 		candidateImageList.TransparentColor = Color.Transparent;
 
+		footerPanel.Controls.Add(searchStatusLabel);
 		footerPanel.Controls.Add(buttonPanel);
-		footerPanel.Controls.Add(progressPictureBox);
 		footerPanel.Dock = DockStyle.Fill;
 		footerPanel.Location = new Point(0, 431);
 		footerPanel.Margin = new Padding(0);
 		footerPanel.Name = "flowLayoutPanel2";
 		footerPanel.Size = new Size(534, 60);
 		footerPanel.TabIndex = 8;
-		footerPanel.WrapContents = false;
 
 		buttonPanel.Controls.Add(okButton);
 		buttonPanel.Controls.Add(cancelButton);
@@ -852,14 +955,13 @@ internal class CoverSearchDialog : Form
 		cancelButton.UseVisualStyleBackColor = true;
 		cancelButton.Click += CancelSelection;
 
-		progressPictureBox.Image = Resources.img_wait;
-		progressPictureBox.Location = new Point(220, 13);
-		progressPictureBox.Margin = new Padding(0, 13, 0, 0);
-		progressPictureBox.Name = "pbProgress";
-		progressPictureBox.Size = new Size(32, 32);
-		progressPictureBox.SizeMode = PictureBoxSizeMode.Zoom;
-		progressPictureBox.TabIndex = 7;
-		progressPictureBox.TabStop = false;
+		searchStatusLabel.AutoSize = false;
+		searchStatusLabel.AutoEllipsis = true;
+		searchStatusLabel.Name = "searchStatusLabel";
+		searchStatusLabel.Size = new Size(200, 40);
+		searchStatusLabel.TextAlign = ContentAlignment.MiddleLeft;
+		searchStatusLabel.ForeColor = SystemColors.GrayText;
+		searchStatusLabel.Visible = false;
 
 		cachedCandidateReplayTimer.Interval = 50;
 
@@ -894,14 +996,12 @@ internal class CoverSearchDialog : Form
 		mainLayoutPanel.ResumeLayout(false);
 		footerPanel.ResumeLayout(false);
 		buttonPanel.ResumeLayout(false);
-		((ISupportInitialize)progressPictureBox).EndInit();
 		ResumeLayout(false);
 	}
 
 	private void ReplayCachedCandidates(object sender, EventArgs e)
 	{
 		AddCandidatesToList(GetCachedCandidates());
-		progressPictureBox.Hide();
 		cachedCandidateReplayTimer.Stop();
 	}
 
