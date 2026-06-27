@@ -290,6 +290,17 @@ internal class CombinedTagSearchDialog : Form
 			});
 		}
 
+		// 某源 Task 因未预期异常 faulted(provider 抛出且未被内部 catch)时上报"出错"。
+		// 否则该源会停留在"搜索中",被收尾的 EndSearchStatusTracking 误置为"已完成"。
+		private void ReportError(SearchSource source)
+		{
+			Owner.searchStatusReporter?.Invoke(new SourceSearchStatus
+			{
+				Source = source,
+				Phase = SourceSearchPhase.Error
+			});
+		}
+
 		// 并行搜索一组源:每个源各开一个 Task 跑各自的网络请求,全部完成(或取消)后按源顺序合并。
 		// 各源使用独立 provider 实例、只读访问 existingResults 做同源去重,并行期间不修改任何共享状态,
 		// 故无需加锁(详见 docs/SEARCH_STATUS_INDICATOR_DESIGN.md 阶段2)。searchPass 按源在列表中的
@@ -321,11 +332,17 @@ internal class CombinedTagSearchDialog : Form
 			}
 			// 仅收割已正常完成的源;被取消而仍在后台运行的源 Status 非 RanToCompletion,
 			// 跳过即可(不访问 .Result,避免阻塞),它们会通过共享 token 自行中断并释放。
-			foreach (Task<List<TrackSearchResult>> sourceTask in sourceTasks)
+			// faulted(provider 抛出未预期异常)的源单独上报出错,避免被误判为"已完成/无结果"。
+			for (int taskIndex = 0; taskIndex < sourceTasks.Length; taskIndex++)
 			{
+				Task<List<TrackSearchResult>> sourceTask = sourceTasks[taskIndex];
 				if (sourceTask.Status == TaskStatus.RanToCompletion && sourceTask.Result != null)
 				{
 					combinedResults.AddRange(sourceTask.Result);
+				}
+				else if (sourceTask.IsFaulted && !cancellationToken.IsCancellationRequested)
+				{
+					ReportError(sources[taskIndex].SearchSource);
 				}
 			}
 			return combinedResults;

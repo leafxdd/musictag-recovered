@@ -43,7 +43,7 @@
 
 ### 2.4 QQ 重试对 UI 不可见
 QQ 重试循环在 `QqMusicTagProvider.SearchSongs`(`:77-106`)内部:
-- 仅 `SearchSongs`(搜歌)有重试,`SearchLyrics` 没有。
+- 仅 `SearchSongs`(搜歌)自身有重试循环;`SearchLyrics` 无自有重试,但它**调用** `SearchSongs`,故 `SearchLyrics` / `SearchTracks` 的调用路径上仍会发生重试与 `Retrying` 上报(见 §12.4 更正)。
 - 仅针对限流码 2001(`IsRateLimited`);其它失败(网络/空/解析失败)不重试。
 - `maxAttempts = 3`(原始 1 次 + 重试 2 次)。
 - 退避**线性**:`cancellationSource.Token.WaitHandle.WaitOne(800 * (attempt + 1))` → 800ms、1600ms(可被取消打断)。
@@ -245,7 +245,8 @@ SourceSearchStatus {
 合并标签弹窗落地后,功能同样需覆盖封面搜索(`CoverSearchDialog`)与歌词搜索(`LyricSearchDialog`)。
 
 ### 12.1 共享渲染器 `SearchStatusIndicator`
-为避免三处弹窗各自复制状态聚合 + 渲染 + 倒计时逻辑,抽出共享渲染器 `MusicTagWinApp.Web/SearchStatusIndicator.cs`:
+为避免**封面 / 歌词两个弹窗**各自复制状态聚合 + 渲染 + 倒计时逻辑,抽出共享渲染器 `MusicTagWinApp.Web/SearchStatusIndicator.cs`:
+> **注**:合并标签弹窗 `CombinedTagSearchDialog` **未迁移到本渲染器**,仍保留其自有内联实现(`BeginSearchStatusTracking` / `RefreshSearchStatusDisplay` / 自带倒计时 `retryCountdownTimer`)。共享渲染器目前**只被封面 / 歌词复用**;把合并标签也收敛过来是一项已知 DRY 待办(见 §13.3 / §14)。
 - 入参 `(Label, Func<bool> hasResults, IContainer)`;封装 §1 的单/双行规则、空结果态、QQ 重试逐秒倒计时(带 `Label.IsDisposed` 保护)。
 - 生命周期方法:`Begin()`(开搜清残留)、`End()`(收尾把非 Error 统一置 Completed)、`Reset()`(缓存命中等不联网路径)、`Report(status)`、`StopCountdown()`。
 - 源名中文映射(网易云/QQ/酷狗/酷我)收敛为静态方法。
@@ -261,7 +262,7 @@ SourceSearchStatus {
 - **无结果 `IProgress` 通道**:`StartLyricSearch` 是 `async void`,两段 `await Task.Run`(known-id 阶段 + candidate 阶段)。故 `Begin()`+各源 `Searching` 上报、最终结果上报均放在 `StartLyricSearch` 的 **UI 线程段**执行(await 后回到 UI 线程,后台写入的统计已可见),无需额外 marshaling;`End()` 在 finally 兜底。
 - **静态 provider 方法被 `AutoMatchTagsDialog` 复用**:`SearchLyricsBySource`/`SearchTracksBySource` 只**追加可选参数** `Action<SourceSearchStatus> statusReporter = null, Action<HttpResult> transportSink = null`(设 `StatusReporter` + 回填传输结果),`AutoMatchTagsDialog` 三处旧调用零影响。
 - 每源结果统计在实例转发器(`SearchLyricsFromSource`/`SearchTrackCandidates`)里经 `RecordLyricSourceOutcome` 记录;候选-track 模式以"搜到 track 即完成"为口径(下载歌词步骤不再单独判源成败)。
-- QQ 歌词路径(`SearchLyrics`/`SearchTracks`)本无重试,故 Retrying 行在歌词弹窗自然不出现;`StatusReporter` 仍接好以备将来。
+- **QQ 歌词路径其实会重试**:`QqMusicTagProvider.SearchLyrics` / `SearchTracks` 自身无重试循环,但二者都经由 `SearchSongs`,后者对限流码 2001 有重试并经 `StatusReporter` 上报 `Retrying`。因此在候选-track 搜索路径(`SearchLyricsByCandidateTracks` → `SearchTracksBySource` / `SearchLyricsBySource`)中,QQ 被限流时歌词弹窗**会**显示 Retrying 行(`StatusReporter` 已端到端接好:两处 `qqProvider.StatusReporter = statusReporter`,经 `Progress<SourceSearchStatus>` 编组到 `searchStatusIndicator.Report`)。仅 Music163-only 的 known-id 快路径不触发 QQ。(原此处"歌词路径本无重试,Retrying 不出现"的说法不准确,已更正——对应 §13.4。)
 
 ### 12.5 提交
 | 提交 | 内容 |
@@ -273,3 +274,29 @@ SourceSearchStatus {
 - 歌词/封面弹窗的状态标签视觉(同 §11 待验证项)。
 - 歌词两阶段中 known-id 占满限额导致 candidate 阶段跳过部分源时,这些源由 `End()` 兜底显示 Completed(非残留"正在搜索")。
 
+---
+
+## 13. Codex 二次复核意见(2026-06-27)
+
+1. **`ParseFailed` 尚未真正落地。** 当前只加了 `RemoteErrorKind.ParseFailed` 枚举,但没有任何 provider 实际设置它。QQ 的 `TryParseJsonObject` 解析失败会返回 `null`,Kuwo 的 `ParseSearchResponse` 会吞掉解析异常并返回空列表。结果是 HTTP 200 + 非法 JSON 仍可能被当成"0 条结果 / Completed",没有兑现 §5.4 / §10 中"解析失败单独列状态"的设计要求。
+
+2. **合并标签并行搜索吞掉 faulted task 后会误报 Completed。** `SearchSourcesInParallel` catch `AggregateException` 后只跳过非 `RanToCompletion` task,没有记录、也没有上报 Error。对应源此前已是 `Searching`,最终 `EndSearchStatusTracking` 会把非 Error 统一改成 `Completed`,导致某个源发生未预期异常时用户看到"完成 / 无结果",而不是 API 错误。
+
+3. **共享渲染器的文档描述与代码不一致。** §12.1 写 `SearchStatusIndicator` 是为了避免"三处弹窗各自复制状态聚合 + 渲染 + 倒计时逻辑",但当前实际只在封面 / 歌词弹窗实例化;合并标签弹窗仍保留自己的 `BeginSearchStatusTracking` / `RefreshSearchStatusDisplay` / 倒计时逻辑。后续若改共享渲染器,合并标签不会自动同步,需要么把合并标签也迁移到共享渲染器,要么把文档改成"封面 / 歌词复用,合并标签暂保留本地实现"。
+
+4. **QQ 歌词路径"无重试"的说明不准确。** §12.4 写"QQ 歌词路径(`SearchLyrics`/`SearchTracks`)本无重试,故 Retrying 行在歌词弹窗自然不出现",但 `QqMusicTagProvider.SearchLyrics` 和 `SearchTracks` 都会走 `SearchSongs`,而 `SearchSongs` 对限流 2001 会上报 `Retrying`。应改文档说明,或确认是否需要让歌词弹窗显示该 Retrying 状态。
+
+---
+
+## 14. 对 Codex 二次复核意见的处理(2026-06-27)
+
+经独立工作流亲读源码逐条核实,**§13 的 4 条意见全部成立**。1、2 为真实代码缺陷(已修),3、4 为文档/注释与实际不符(已更正):
+
+| Codex 意见 | 核实结论 | 处置 |
+|---|---|---|
+| 1. `ParseFailed` 从未被赋值,HTTP 200 + 非法 JSON 被当成"0 条 / Completed" | ✅ 成立:全仓 `ParseFailed` 仅出现在枚举声明 + 注释;传输层只产 None/HttpStatus/Timeout/Network,两 provider 解析失败均吞错返回空 | **修代码**:QQ `SearchSongs`(解析返回 null 且 `responseBody` 非空)、Kuwo `ParseSearchResponse`(顶层 `JObject.Parse` 抛异常且 `searchJson` 非空)各回填 `SetTransportError(ParseFailed, "parse")`;传输失败(body 为空)不误判。上层 `ReportSourceOutcome` 据"0 结果 + 末次传输非成功"即标 Error,解析失败遂与"0 条结果"区分开 |
+| 2. 并行搜索吞掉 faulted task → 误报 Completed | ✅ 成立:`SearchTracksFromSource` 内 provider 调用无 try/catch,抛异常则 `ReportSourceOutcome` 不执行,源停在 `Searching`;收割只取 `RanToCompletion`,`EndSearchStatusTracking` 又把非 Error 统一改 Completed | **修代码**:`SearchSourcesInParallel` 收割循环改带索引,对 `IsFaulted`(且未取消)的源调用新增的 `ReportError(source)` 上报 `Error`(`ErrorCode` 留空 → 显示"未知");`End` 保留 Error 不再覆盖 |
+| 3. 共享渲染器文档/注释称"三处弹窗复用",实际仅封面/歌词 | ✅ 成立:`new SearchStatusIndicator` 仅见于 `CoverSearchDialog`/`LyricSearchDialog`;合并标签仍自带 `BeginSearchStatusTracking`/`RefreshSearchStatusDisplay`/`retryCountdownTimer` | **改文档/注释**:§12.1 与 `SearchStatusIndicator.cs` 顶部注释均改为"封面/歌词两个弹窗复用,合并标签保留自有内联实现(DRY 待办)" |
+| 4. QQ 歌词路径"无重试"说明不准确 | ✅ 成立:`SearchLyrics`/`SearchTracks` 均经 `SearchSongs`,后者对 2001 上报 `Retrying`;歌词弹窗已端到端接好 `StatusReporter`,候选-track 路径下 QQ 限流**会**显示 Retrying | **改文档**(代码无需动,链路已通):§12.4 与 §2.4 措辞更正——歌词候选-track 路径会显示 Retrying,仅 Music163-only 快路径不触发 QQ |
+
+**已知 DRY 待办(未处理,留作后续)**:把合并标签弹窗 `CombinedTagSearchDialog` 也迁移到共享渲染器 `SearchStatusIndicator`,消除其内联重复实现。

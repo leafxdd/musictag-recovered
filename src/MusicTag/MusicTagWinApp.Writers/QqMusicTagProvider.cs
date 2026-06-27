@@ -109,6 +109,12 @@ internal class QqMusicTagProvider : RemoteTagProviderBase
 				// 重试用尽仍被限流:回填业务码,让上层把本源标记为出错(2001)而非"0 条结果"。
 				SetTransportError(RemoteErrorKind.RateLimited, "2001");
 			}
+			else if (parsedResponse == null && !string.IsNullOrWhiteSpace(responseBody))
+			{
+				// HTTP 200 拿到响应体却无法解析为 JSON:区分"解析失败"与"搜到 0 条 / 网络失败"。
+				// (传输失败时 responseBody 为空,已由传输层归类为 Network/Timeout/HttpStatus。)
+				SetTransportError(RemoteErrorKind.ParseFailed, "parse");
+			}
 			return ParseSongSearchResponse(parsedResponse);
 		}
 

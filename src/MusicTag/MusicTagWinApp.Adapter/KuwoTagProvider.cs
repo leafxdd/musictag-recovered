@@ -403,6 +403,12 @@ internal class KuwoTagProvider : RemoteTagProviderBase
 		catch (Exception parseError)
 		{
 			Console.WriteLine("ParseSongsJson error:" + parseError.GetMessageChain());
+			if (!string.IsNullOrWhiteSpace(searchJson))
+			{
+				// HTTP 200 拿到响应体却无法解析为 JSON:区分"解析失败"与"搜到 0 条 / 网络失败"。
+				// (传输失败时 searchJson 为空,已由传输层归类为 Network/Timeout/HttpStatus。)
+				SetTransportError(RemoteErrorKind.ParseFailed, "parse");
+			}
 		}
 
 		return albumResults.Any() ? albumResults : fallbackResults;
