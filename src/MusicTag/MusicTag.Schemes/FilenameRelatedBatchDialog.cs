@@ -262,7 +262,7 @@ internal class FilenameRelatedBatchDialog : Form
 									if (sourceLrcPath != null)
 									{
 										destinationLrcPath = DatabaseMapper.GetSiblingPathWithExtension(destinationAudioPath, ".lrc");
-										if (File.Exists(destinationLrcPath))
+										if (File.Exists(destinationLrcPath) && !string.Equals(destinationLrcPath, sourceLrcPath, StringComparison.OrdinalIgnoreCase))
 										{
 											destinationLrcPath = null;
 										}
@@ -271,7 +271,7 @@ internal class FilenameRelatedBatchDialog : Form
 									if (sourceImagePath != null)
 									{
 										destinationImagePath = DatabaseMapper.GetSiblingPathWithExtension(destinationAudioPath, Path.GetExtension(sourceImagePath));
-										if (File.Exists(destinationImagePath))
+										if (File.Exists(destinationImagePath) && !string.Equals(destinationImagePath, sourceImagePath, StringComparison.OrdinalIgnoreCase))
 										{
 											destinationImagePath = null;
 										}

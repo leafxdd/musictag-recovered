@@ -1178,6 +1178,8 @@ internal class StateFieldInstance : Form
 		internal void ConvertFilenames()
 		{
 			TagHistoryRepository tagHistoryRepository = new TagHistoryRepository(useTransaction: true);
+			try
+			{
 			TagHistoryRepository.ClearUndoState();
 			string directoryName = default(string);
 			while (processedCount < renameItems.Length)
@@ -1217,7 +1219,11 @@ internal class StateFieldInstance : Form
 				}
 				processedCount++;
 			}
-			tagHistoryRepository.Dispose();
+			}
+			finally
+			{
+				tagHistoryRepository.Dispose();
+			}
 		}
 	}
 
@@ -2073,6 +2079,8 @@ internal class StateFieldInstance : Form
 		internal void DeleteFiles()
 		{
 			TagHistoryRepository tagHistoryRepository = new TagHistoryRepository(useTransaction: true);
+			try
+			{
 			while (processedCount < itemsToDelete.Length && !cancellationSource.IsCancellationRequested)
 			{
 				string filePath = itemsToDelete[processedCount].FilePath;
@@ -2103,7 +2111,11 @@ internal class StateFieldInstance : Form
 				processedCount++;
 			}
 
-			tagHistoryRepository.Dispose();
+			}
+			finally
+			{
+				tagHistoryRepository.Dispose();
+			}
 		}
 
 		internal void ShowCompletionResult()

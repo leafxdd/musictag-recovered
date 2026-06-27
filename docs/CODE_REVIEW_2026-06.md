@@ -275,3 +275,48 @@
 
 **经核实无需修复**:`SaveLyricFile_Click` 的 `LyricSaveFileDialog`(原报"未 using")—— 该类并非 `IDisposable`(其 Vista Shell COM 由 `ShowDialog` 内部 P2-35 释放),为误报。
 
+---
+
+## 12. Codex 对第二轮修复的追加复核意见（2026-06-27）
+
+对 Claude 二次修复提交 `a1feeac` 做复核。总体结论:大部分修正方向正确,尤其是 `TagHistoryRepository.Dispose` 锁释放、`RenameFiles` 音频状态回写、取消路径过滤和图片资源释放。但仍有以下待继续修复项。
+
+### 待修问题
+
+| 项 | 严重度 | 位置 | 说明 | 建议 |
+|---|---|---|---|---|
+| 历史库静态锁泄漏同类路径未清完 | High | `src/MusicTag/MusicTagWinApp.Instances/StateFieldInstance.cs:1180`, `src/MusicTag/MusicTagWinApp.Instances/StateFieldInstance.cs:2075` | `ConvertFilenames()` 和 `DeleteFiles()` 仍然手动创建 `TagHistoryRepository(useTransaction: true)` 后在方法尾显式 `Dispose()`。中途若出现未捕获异常,会和前面已修路径一样泄漏 `syncRoot`,导致后续历史库/撤销相关功能卡死。 | 改成 `try/finally` 或 `using`,确保事务对象创建成功后无论循环内发生什么异常都调用 `Dispose()`。同时检查其它 `new TagHistoryRepository(useTransaction: true)` 调用点是否都已具备异常安全释放。 |
+| 批量纯大小写改名的关联文件仍会被跳过 | Medium | `src/MusicTag/MusicTag.Schemes/FilenameRelatedBatchDialog.cs:265`, `src/MusicTag/MusicTag.Schemes/FilenameRelatedBatchDialog.cs:274` | 音频目标路径冲突判断已改成 `OrdinalIgnoreCase`,能走 `MoveFileAllowingCaseOnlyRename`。但 `.lrc` 和封面目标仍使用裸 `File.Exists(destinationXxxPath)` 判冲突。在 Windows 大小写不敏感文件系统下,仅大小写变化时会把同一个关联文件误判为已存在,把 `destinationLrcPath` / `destinationImagePath` 置空,最终跳过关联文件改名。 | 关联文件的冲突判定应允许 `sourcePath` 与 `destinationPath` 仅大小写不同的情况,并继续调用 `MoveFileAllowingCaseOnlyRename`。 |
+| 提交对象存在文档 EOF 空白问题 | Low | `docs/CODE_REVIEW_2026-06.md:277` | `git diff c88a388..a1feeac --check` 报 `new blank line at EOF`。当前工作树 `git diff --check` 可能因为无源码 diff 而不暴露该提交内问题。 | 修文档时顺手去掉文件末尾多余空白行,保证 `git diff --check` 和提交范围 `git show --check` 都干净。 |
+
+### 已复核通过的关键点
+
+| 项 | 结论 |
+|---|---|
+| `TagHistoryRepository.Dispose` 嵌套 finally 释放锁 | 方向正确,即便事务 `Dispose()` 抛异常也会执行 `ReleaseSyncLock()`。 |
+| `TagHistoryRepository.ClearUndoState()` 在持锁事务内调用 | `Monitor` 可重入,不会自死锁。 |
+| `CoverSearchDialog.ApplyCoverDownloadResult` 无条件释放传入 `Image` | 方向正确,`ImageList.Images.Add` 会复制图像句柄,原图可释放。 |
+| `CombinedTagSearchDialog.coverImageCache` 在 `Dispose` 中释放 | 缓存里保存的是对话框自持有的缩放/占位图引用,释放方向合理。 |
+| 用户取消不再按错误上报 | `OperationCanceledException` 过滤方向正确。 |
+
+### 验证记录
+
+- `scripts\Verify-Build.ps1 -RunSmokeTests`:通过(Debug/Release 编译 + 冒烟)。
+- `git diff --check`:当前工作树通过。
+- `git diff c88a388..a1feeac --check`:发现 `docs/CODE_REVIEW_2026-06.md` EOF 空白问题,见上表 Low 项。
+
+---
+
+## 13. 对 Codex 追加复核意见的处理（2026-06-27）
+
+对 §12 的 3 条意见做对抗验证 + 同类遗漏扫描(扫了全部 `new TagHistoryRepository(useTransaction: true)` 调用点与所有 case-only 改名路径),结论:**3 条全部成立并已修复;扫描未发现额外遗漏**。
+
+| §12 项 | 核实 | 处理 |
+|---|---|---|
+| 历史库锁泄漏同类路径(`ConvertFilenames` 1180 / `DeleteFiles` 2075) | ✅成立(High):两处均 `new` 后裸 `Dispose` 在方法尾,循环外的 `ClearUndoState` / `itemsToDelete[i].FilePath` / `new FileInfo` 抛异常即跳过 Dispose、泄漏 `syncRoot` → 全局死锁 | 两处均改为 `try/finally`(创建表达式留在 try 外,`ClearUndoState` 及循环外初始化全部纳入 try,`finally` 中 `Dispose`) |
+| 批量纯大小写改名关联文件被跳过(lrc/封面) | ✅成立(Medium):音频本体冲突判定已带 case-only 防护,但 lrc/封面仍用裸 `File.Exists` → 仅大小写变化时同一文件被误判"已存在"、目标置 null → 关联文件改名被跳过 | lrc(`:265`)、封面(`:274`)冲突判定补 `&& !string.Equals(destXxx, sourceXxx, OrdinalIgnoreCase)`,纯大小写时不置 null、继续走 `MoveFileAllowingCaseOnlyRename`;目标确为另一文件时仍正确跳过 |
+| 提交 `a1feeac` 文档 EOF 空白 | ✅成立(Low):该空行是 `a1feeac` 中 §11 的末尾;§12 追加后已被推入文件中部,当前工作树末尾干净(`git diff --check` 通过) | 历史提交不改写;后续提交保持 EOF 干净 |
+
+**同类遗漏扫描结论(完整性)**:其余 `useTransaction: true` 调用点 —— `SaveTags`(1301)、`ClearTags`(1917)、`UndoRenames`、`RenameFiles`、`ChangeTags`、`AutoMatch.Run`、`InitializeDatabase`、`TryClearAllHistory`、`StateFieldInstance:1612` —— 均已 `try/finally` 或 `using` 包裹,异常安全;`ConvertFilenames` 不处理关联文件,无 case-only 关联问题。无新增遗漏。
+
+已过 `scripts\Verify-Build.ps1 -RunSmokeTests`(Debug+Release 编译 + 冒烟)。
