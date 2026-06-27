@@ -430,7 +430,7 @@ internal class CombinedTagSearchDialog : Form
 
 	private ImageList coverImageList;
 
-	private FlowLayoutPanel footerPanel;
+	private Panel footerPanel;
 
 	private FlowLayoutPanel buttonPanel;
 
@@ -465,8 +465,6 @@ internal class CombinedTagSearchDialog : Form
 	private ToolStripMenuItem extractCoverMenuItem;
 
 	private SaveFileDialog saveCoverDialog;
-
-	private PictureBox progressPictureBox;
 
 	private Label searchStatusLabel;
 
@@ -525,7 +523,6 @@ internal class CombinedTagSearchDialog : Form
 		};
 		okSplitButton.Size = new Size(DatabaseMapper.ScaleByDpi(100f), DatabaseMapper.ScaleByDpi(35f));
 		okSplitButton.Image = FontAwesome.Type.Check.AsImage(fontProperties);
-		progressPictureBox.Image = DatabaseMapper.LoadResourceBitmap("img_wait");
 	}
 
 	private void ApplyLocalizedText()
@@ -590,15 +587,16 @@ internal class CombinedTagSearchDialog : Form
 	{
 		searchResultsListView.Width = mainPanel.Width;
 		searchResultsListView.Height = mainPanel.Height - footerPanel.Height;
-		int left = (footerPanel.Width - buttonPanel.Width) / 2;
-		// 状态标签置于按钮左侧,填满从最左到按钮前的区域;按钮 / 转圈位置保持不变
-		// (label.Width + buttonPanel.Margin.Left == 原居中起点,故 buttonPanel.Location.X 不变)。
-		int statusGap = 8;
-		searchStatusLabel.Width = Math.Max(0, left - statusGap);
-		searchStatusLabel.Margin = new Padding(0, searchStatusLabel.Margin.Top, 0, searchStatusLabel.Margin.Bottom);
-		buttonPanel.Margin = new Padding(statusGap, buttonPanel.Margin.Top, 0, buttonPanel.Margin.Bottom);
-		left = footerPanel.Width - progressPictureBox.Width - buttonPanel.Location.X - buttonPanel.Width - progressPictureBox.Margin.Top;
-		progressPictureBox.Margin = new Padding(left, progressPictureBox.Margin.Top, 0, progressPictureBox.Margin.Bottom);
+		// footerPanel 为普通 Panel,子控件绝对定位:按钮恒定居中(与状态标签显隐无关),
+		// 状态标签置于按钮右侧、垂直中线与按钮对齐。详见 docs/SEARCH_STATUS_INDICATOR_DESIGN.md。
+		int buttonLeft = Math.Max(0, (footerPanel.Width - buttonPanel.Width) / 2);
+		int buttonTop = Math.Max(0, (footerPanel.Height - buttonPanel.Height) / 2);
+		buttonPanel.Location = new Point(buttonLeft, buttonTop);
+		int statusGap = 12;
+		int statusLeft = buttonPanel.Location.X + buttonPanel.Width + statusGap;
+		int statusTop = buttonPanel.Location.Y + buttonPanel.Height / 2 - searchStatusLabel.Height / 2;
+		searchStatusLabel.Location = new Point(statusLeft, statusTop);
+		searchStatusLabel.Width = Math.Max(0, footerPanel.Width - statusLeft - 8);
 	}
 
 	private void SearchPanelSizeChanged(object sender, EventArgs args)
@@ -935,7 +933,6 @@ internal class CombinedTagSearchDialog : Form
 		{
 			if (!IsDisposed)
 			{
-				progressPictureBox.Hide();
 				taskbarProgress.SetProgressState(TaskbarProgressBarStatus.NoProgress);
 				EndSearchStatusTracking();
 			}
@@ -1393,13 +1390,12 @@ internal class CombinedTagSearchDialog : Form
 		albumColumn = new ColumnHeader();
 		commentColumn = new ColumnHeader();
 		coverImageList = new ImageList(components);
-		footerPanel = new FlowLayoutPanel();
+		footerPanel = new Panel();
 		buttonPanel = new FlowLayoutPanel();
 		okSplitButton = new SplitButton();
 		okButtonMenu = new ContextMenuStrip(components);
 		overwriteOptionsMenuItem = new ToolStripMenuItem();
 		cancelButton = new Button();
-		progressPictureBox = new PictureBox();
 		cachedResultsTimer = new System.Windows.Forms.Timer(components);
 		searchStatusLabel = new Label();
 		retryCountdownTimer = new System.Windows.Forms.Timer(components);
@@ -1411,7 +1407,6 @@ internal class CombinedTagSearchDialog : Form
 		footerPanel.SuspendLayout();
 		buttonPanel.SuspendLayout();
 		okButtonMenu.SuspendLayout();
-		((ISupportInitialize)progressPictureBox).BeginInit();
 		coverContextMenu.SuspendLayout();
 		SuspendLayout();
 		mainPanel.Controls.Add(searchResultsListView);
@@ -1462,14 +1457,12 @@ internal class CombinedTagSearchDialog : Form
 		coverImageList.TransparentColor = Color.Transparent;
 		footerPanel.Controls.Add(searchStatusLabel);
 		footerPanel.Controls.Add(buttonPanel);
-		footerPanel.Controls.Add(progressPictureBox);
 		footerPanel.Dock = DockStyle.Fill;
 		footerPanel.Location = new Point(0, 431);
 		footerPanel.Margin = new Padding(0);
 		footerPanel.Name = "flowLayoutPanel2";
 		footerPanel.Size = new Size(534, 60);
 		footerPanel.TabIndex = 8;
-		footerPanel.WrapContents = false;
 		buttonPanel.Controls.Add(okSplitButton);
 		buttonPanel.Controls.Add(cancelButton);
 		buttonPanel.Location = new Point(0, 12);
@@ -1504,14 +1497,6 @@ internal class CombinedTagSearchDialog : Form
 		cancelButton.Text = "Cancel";
 		cancelButton.UseVisualStyleBackColor = true;
 		cancelButton.Click += CancelButtonClick;
-		progressPictureBox.Image = Resources.img_wait;
-		progressPictureBox.Location = new Point(220, 13);
-		progressPictureBox.Margin = new Padding(0, 13, 0, 0);
-		progressPictureBox.Name = "pbProgress";
-		progressPictureBox.Size = new Size(32, 32);
-		progressPictureBox.SizeMode = PictureBoxSizeMode.Zoom;
-		progressPictureBox.TabIndex = 7;
-		progressPictureBox.TabStop = false;
 		searchStatusLabel.AutoSize = false;
 		searchStatusLabel.AutoEllipsis = true;
 		searchStatusLabel.Margin = new Padding(0, 10, 0, 0);
@@ -1550,7 +1535,6 @@ internal class CombinedTagSearchDialog : Form
 		footerPanel.ResumeLayout(performLayout: false);
 		buttonPanel.ResumeLayout(performLayout: false);
 		okButtonMenu.ResumeLayout(performLayout: false);
-		((ISupportInitialize)progressPictureBox).EndInit();
 		coverContextMenu.ResumeLayout(performLayout: false);
 		ResumeLayout(performLayout: false);
 	}
@@ -1558,7 +1542,6 @@ internal class CombinedTagSearchDialog : Form
 	private void AddCachedResultsOnTimerTick(object sender, EventArgs args)
 	{
 		AddSearchResultsToList(cachedSearchResults);
-		progressPictureBox.Hide();
 		cachedResultsTimer.Stop();
 	}
 
