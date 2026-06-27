@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using MusicTagWinApp.Instances;
 using MusicTagWinApp.Properties;
 using MusicTagWinApp.Web;
@@ -76,7 +77,33 @@ internal abstract class RemoteTagProviderBase : IDisposable
 		this.cancellationSource = cancellationSource;
 	}
 
-	protected virtual string PostString(string url, string body, HttpClient client = null, bool postJson = false)
+	// 最近一次传输调用(本 provider 实例)的结果,供上层在拿到空结果时区分
+	// "搜到 0 条" 与 "网络/HTTP 失败"。每个源使用独立 provider 实例,并行下互不干扰。
+	protected HttpResult LastTransportResult { get; private set; }
+
+	private HttpResult RecordResult(HttpResult result)
+	{
+		LastTransportResult = result;
+		return result;
+	}
+
+	// 把传输异常归类为可观测的错误类型(详见 docs/SEARCH_STATUS_INDICATOR_DESIGN.md §5.4)。
+	// 用户/全局取消不算错误,返回 None。
+	private HttpResult ClassifyException(Exception exception)
+	{
+		if (cancellationSource.IsCancellationRequested)
+		{
+			return new HttpResult { Error = RemoteErrorKind.None };
+		}
+		Exception rootException = (exception is AggregateException aggregate) ? aggregate.GetBaseException() : exception;
+		if (rootException is TaskCanceledException || rootException is TimeoutException)
+		{
+			return new HttpResult { Error = RemoteErrorKind.Timeout, ErrorCode = "timeout" };
+		}
+		return new HttpResult { Error = RemoteErrorKind.Network, ErrorCode = "network" };
+	}
+
+	protected virtual HttpResult PostStringResult(string url, string body, HttpClient client = null, bool postJson = false)
 	{
 		if (client == null)
 		{
@@ -100,18 +127,24 @@ internal abstract class RemoteTagProviderBase : IDisposable
 			{
 				if (response.StatusCode == HttpStatusCode.OK)
 				{
-					return response.Content.ReadAsStringAsync().Result;
+					return RecordResult(new HttpResult { Body = response.Content.ReadAsStringAsync().Result });
 				}
+				return RecordResult(HttpResult.FromHttpStatus((int)response.StatusCode));
 			}
 		}
 		catch (Exception exception)
 		{
 			Console.WriteLine("PostHttp error:" + exception.GetMessageChain());
+			return RecordResult(ClassifyException(exception));
 		}
-		return null;
 	}
 
-	protected virtual byte[] GetResponseBytes(string url)
+	protected virtual string PostString(string url, string body, HttpClient client = null, bool postJson = false)
+	{
+		return PostStringResult(url, body, client, postJson).Body;
+	}
+
+	protected virtual HttpResult GetResponseBytesResult(string url)
 	{
 		try
 		{
@@ -130,24 +163,35 @@ internal abstract class RemoteTagProviderBase : IDisposable
 					}
 					memoryStream.Write(buffer, 0, bytesRead);
 				}
-				return memoryStream.ToArray();
+				return RecordResult(new HttpResult { Bytes = memoryStream.ToArray() });
 			}
+			return RecordResult(HttpResult.FromHttpStatus((int)response.StatusCode));
 		}
 		catch (Exception exception)
 		{
 			Console.WriteLine("GetHttp error:" + exception.GetMessageChain());
+			return RecordResult(ClassifyException(exception));
 		}
-		return null;
+	}
+
+	protected virtual byte[] GetResponseBytes(string url)
+	{
+		return GetResponseBytesResult(url).Bytes;
+	}
+
+	protected virtual HttpResult GetResponseStringResult(string url)
+	{
+		HttpResult result = GetResponseBytesResult(url);
+		if (result.Bytes != null)
+		{
+			result.Body = Encoding.UTF8.GetString(result.Bytes);
+		}
+		return result;
 	}
 
 	protected virtual string GetResponseString(string url)
 	{
-		byte[] responseBytes = GetResponseBytes(url);
-		if (responseBytes == null)
-		{
-			return "";
-		}
-		return Encoding.UTF8.GetString(responseBytes);
+		return GetResponseStringResult(url).Body ?? "";
 	}
 
 	protected virtual DownloadStatus DownloadToStream(string url, Stream destination, int readWriteTimeout = 30000, int requestTimeout = 300000)
@@ -203,6 +247,48 @@ internal abstract class RemoteTagProviderBase : IDisposable
 			downloader.SetCancellationSource(cancellation);
 			using FileStream fileStream = new FileStream(filePath, FileMode.Create);
 			return (downloader.DownloadToStream(url, fileStream, 30000, timeout), fileStream.Length);
+		};
+	}
+}
+
+// 传输层错误归类(详见 docs/SEARCH_STATUS_INDICATOR_DESIGN.md §5.4)。
+// RateLimited / ParseFailed 由 provider 在解析阶段判定后回填,传输层只产出
+// None / HttpStatus / Timeout / Network。
+internal enum RemoteErrorKind
+{
+	None,
+	HttpStatus,
+	Timeout,
+	Network,
+	ParseFailed,
+	RateLimited
+}
+
+// 统一的 GET/POST 请求结果,既保留响应体(Body/Bytes),又携带错误归类与错误码,
+// 使上层能区分 "搜到 0 条" / "网络失败" / "HTTP 错误" / "解析失败" / "限流"。
+internal sealed class HttpResult
+{
+	public string Body { get; set; }
+
+	public byte[] Bytes { get; set; }
+
+	// 非空表示 HTTP 层拿到了状态码(可能是非 2xx 的错误状态)。
+	public int? HttpStatus { get; set; }
+
+	public RemoteErrorKind Error { get; set; }
+
+	// 业务码(provider 回填,如 QQ 2001)或 HTTP 状态码 / 异常归类的字符串表示。
+	public string ErrorCode { get; set; }
+
+	public bool IsSuccess => Error == RemoteErrorKind.None;
+
+	public static HttpResult FromHttpStatus(int statusCode)
+	{
+		return new HttpResult
+		{
+			HttpStatus = statusCode,
+			Error = RemoteErrorKind.HttpStatus,
+			ErrorCode = statusCode.ToString()
 		};
 	}
 }
