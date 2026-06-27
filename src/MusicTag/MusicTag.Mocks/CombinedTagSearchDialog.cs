@@ -342,6 +342,8 @@ internal class CombinedTagSearchDialog : Form
 				}
 				else if (sourceTask.IsFaulted && !cancellationToken.IsCancellationRequested)
 				{
+					// 保留 provider 未预期异常的定位信息(UI 仍只显示"API错误(未知)")。
+					Console.WriteLine("SearchSourceInParallel error:" + sourceTask.Exception?.GetBaseException().GetMessageChain());
 					ReportError(sources[taskIndex].SearchSource);
 				}
 			}

@@ -300,3 +300,53 @@ SourceSearchStatus {
 | 4. QQ 歌词路径"无重试"说明不准确 | ✅ 成立:`SearchLyrics`/`SearchTracks` 均经 `SearchSongs`,后者对 2001 上报 `Retrying`;歌词弹窗已端到端接好 `StatusReporter`,候选-track 路径下 QQ 限流**会**显示 Retrying | **改文档**(代码无需动,链路已通):§12.4 与 §2.4 措辞更正——歌词候选-track 路径会显示 Retrying,仅 Music163-only 快路径不触发 QQ |
 
 **已知 DRY 待办(未处理,留作后续)**:把合并标签弹窗 `CombinedTagSearchDialog` 也迁移到共享渲染器 `SearchStatusIndicator`,消除其内联重复实现。
+
+---
+
+## 15. Codex 三次复核意见(2026-06-27)
+
+### 15.1 结论
+
+`0d88263` 已经修正了 §13 中的并行 faulted task 误报 Completed、共享渲染器说明不准、QQ 歌词重试说明不准这三类问题。但 `ParseFailed` 的修复仍不完整:本次只覆盖了 QQ 与酷我两个前一轮举例路径,网易云与酷狗的同类搜索解析失败仍会被吞掉并返回空列表。
+
+### 15.2 需要继续修改
+
+1. **[P1] `ParseFailed` 只落到 QQ / 酷我,网易云 / 酷狗仍会把 HTTP 200 + 非法 JSON 当成空结果。**
+
+   设计要求在 §5.4 已明确:"HTTP 200 拿到 body 但 JSON 解析失败"要与"网络失败"、"搜到 0 条"区分。当前 `QqMusicTagProvider.SearchSongs` 与 `KuwoTagProvider.ParseSearchResponse` 已补 `SetTransportError(RemoteErrorKind.ParseFailed, "parse")`,但另外两个源仍未补:
+   - `src/MusicTag/MusicTagWinApp.Exporters/NetEaseMusicTagProvider.cs:445-478` 的 `ParseSongSearchResponse` 在顶层 `JObject.Parse(responseBody)` 失败时只 `Console.WriteLine`,然后返回空 `songs`。
+   - `src/MusicTag/MusicTag.Candidates/KugouTagProvider.cs:184-220` 的 `ParseSongSearchResponse` 同样只打日志并返回空 `songs`。
+
+   影响:网易云 / 酷狗在"请求成功但响应体不可解析"时,上层 `ReportSourceOutcome` 看到 `results.Count == 0` 且 `LastTransportResult` 仍是成功,会把该源标记为 `Completed` / 空结果,没有显示"解析失败"。这与 §14 表格里"`ParseFailed` 问题已修"的结论不一致。
+
+   建议:对网易云、酷狗的搜索响应顶层 parse catch 按 QQ / 酷我同样处理:仅在 `responseBody` 非空时 `SetTransportError(RemoteErrorKind.ParseFailed, "parse")`;空 body 保持由传输层的 Network / Timeout / HttpStatus 归类。item-level 单条结果解析失败可以继续只跳过并记录日志,不必把整源标错。
+
+2. **[P3] 合并标签并行 faulted task 已能显示 Error,但异常细节被完全吞掉。**
+
+   `CombinedTagSearchDialog.SearchSourcesInParallel` 现在会对 `sourceTask.IsFaulted` 上报 `Error`,避免被 `EndSearchStatusTracking` 误置 `Completed`,这个方向是对的。但 `catch (AggregateException) { }` 仍完全不记录异常,新增的 `ReportError(source)` 也没有 `ErrorCode`,最终 UI 只能显示"API错误(未知)",控制台也失去具体异常链。
+
+   建议:至少在 `catch (AggregateException ex)` 或遍历 faulted task 时 `Console.WriteLine` 每个 `InnerException.GetMessageChain()`。UI 是否继续显示"未知"可以接受,但日志里应保留 provider 未预期异常的定位信息。
+
+### 15.3 是否把合并标签弹窗也收敛到共享渲染器
+
+建议做,但拆成后续单独重构提交,不要和上面的 `ParseFailed` 补漏混在一起。
+
+理由:
+- 现在 `CombinedTagSearchDialog` 仍内联维护 `sourceSearchStatuses`、`retryCountdownTimer`、`BeginSearchStatusTracking`、`EndSearchStatusTracking`、`RefreshSearchStatusDisplay`、`BuildErrorOrRetryLine`、源名映射等逻辑;`SearchStatusIndicator` 里已有几乎同一套实现。
+- 这次已经出现过"共享渲染器文档说三处复用,实际只两处复用"的漂移。继续保留双实现,后续改空结果态、错误文案、倒计时或源排序时很容易只改到一边。
+- `SearchStatusIndicator` 的构造参数已经能覆盖合并标签需求:`Label` + `Func<bool> hasResults` + `IContainer`。合并标签只需要把 `searchResultsListView.Items.Count > 0` 作为结果判断,把现有 `Begin/End/Reset/Report/StopCountdown` 调用点替换过去。
+
+迁移边界建议:
+- 先修 P1 的网易云 / 酷狗 `ParseFailed` 补漏。
+- 再单独提交迁移 `CombinedTagSearchDialog` 到 `SearchStatusIndicator`,删除内联重复渲染方法和本地状态字典。
+- 迁移后重点人工验证:缓存命中不显示状态、首选源快路径只显示单源、取消不残留"正在搜索"、0 结果显示"未找到匹配结果"、QQ 重试倒计时仍刷新。
+
+---
+
+## 16. 对 Codex 三次复核意见的处理(2026-06-27)
+
+| Codex §15 意见 | 处置 |
+|---|---|
+| **P1**:`ParseFailed` 只落到 QQ/酷我,网易云/酷狗仍把 HTTP 200 + 非法 JSON 当空结果 | ✅ **已补**:`NetEaseMusicTagProvider.ParseSongSearchResponse` 与 `KugouTagProvider.ParseSongSearchResponse` 顶层 parse catch 比照 QQ/酷我 —— 仅 `responseBody` 非空时 `SetTransportError(ParseFailed, "parse")`,空 body 保持由传输层归类;item-level 单条解析失败仍只跳过 + 记日志,不标整源。四个源至此一致 |
+| **P3**:并行 faulted task 已显示 Error,但异常细节被完全吞掉 | ✅ **已补日志**:`SearchSourcesInParallel` 收割 faulted 源时 `Console.WriteLine("SearchSourceInParallel error:" + sourceTask.Exception?.GetBaseException().GetMessageChain())`,保留 provider 未预期异常链;UI 仍显示"API错误(未知)"(可接受) |
+| **§15.3**:把合并标签弹窗收敛到共享渲染器 | ⏳ **单独提交进行**(不与 P1/P3 补漏混提):见下方迁移提交。迁移后删除 `CombinedTagSearchDialog` 内联的 `sourceSearchStatuses`/`retryCountdownTimer`/`Begin·End·Reset·RefreshSearchStatusDisplay`/`BuildErrorOrRetryLine`/源名映射,统一走 `SearchStatusIndicator` |
