@@ -33,6 +33,11 @@ internal class KuwoTagProvider : RemoteTagProviderBase
 
 	private static int lastDetailApiCheckTick;
 
+	// 本实例(本次搜索)期间是否因详情接口熔断/不可用而拿不到封面与歌词,供 UI 单独提示。
+	private bool detailUnavailableThisSearch;
+
+	public bool DetailApiUnavailableThisSearch => detailUnavailableThisSearch;
+
 	protected override SearchSource GetSource()
 	{
 		return SearchSource.Kuwo;
@@ -285,8 +290,13 @@ internal class KuwoTagProvider : RemoteTagProviderBase
 
 	private void LoadSongDetails(KuwoSongInfo song)
 	{
-		if (song.CoverUrl != null || IsDetailApiBackoffActive())
+		if (song.CoverUrl != null)
 		{
+			return;
+		}
+		if (IsDetailApiBackoffActive())
+		{
+			detailUnavailableThisSearch = true;
 			return;
 		}
 
@@ -301,6 +311,7 @@ internal class KuwoTagProvider : RemoteTagProviderBase
 		{
 			detailApiUnavailable = true;
 			lastDetailApiCheckTick = Environment.TickCount;
+			detailUnavailableThisSearch = true;
 			return;
 		}
 

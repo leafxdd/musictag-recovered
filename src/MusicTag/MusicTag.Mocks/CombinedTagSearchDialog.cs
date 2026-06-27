@@ -228,6 +228,7 @@ internal class CombinedTagSearchDialog : Form
 			{
 				SourceItem preferredSourceItem = TrackSearchResult.GetTagSourceSettings().Find(preferredSourcePredicate ?? (preferredSourcePredicate = IsPreferredSource));
 				searchLimits.RemainingResultsBySource[preferredSource.Value] = preferredSourceItem.GetEffectiveSearchResultLimit();
+				ReportSearching(preferredSource.Value);
 				if (!Owner.cancellationSource.IsCancellationRequested && searchLimits.RemainingGlobalResults > 0 && Owner.currentSearchContext.LinkedMusicMetadata.musicId > 0L && preferredSource.Value == SearchSource.Music163)
 				{
 					searchLimits.CurrentBatch = Owner.SearchCurrentContextTracks(preferredSource.Value, useLinkedNetEaseId: true, searchLimits.AccumulatedResults, 0);
@@ -242,6 +243,13 @@ internal class CombinedTagSearchDialog : Form
 			}
 			List<SourceItem> tagSources = TrackSearchResult.GetSortedTagSourceSettings();
 			tagSources.ForEach(searchLimits.InitializeSourceLimit);
+			foreach (SourceItem enabledSource in tagSources)
+			{
+				if (enabledSource.Enabled && searchLimits.RemainingResultsBySource[enabledSource.SearchSource] > 0)
+				{
+					ReportSearching(enabledSource.SearchSource);
+				}
+			}
 			int searchPass = 0;
 			SourceItem netEaseSource;
 			if (!Owner.cancellationSource.IsCancellationRequested && searchLimits.RemainingGlobalResults > 0 && Owner.currentSearchContext.LinkedMusicMetadata.musicId > 0L && (netEaseSource = tagSources.Find(searchLimits.IsPrimaryNetEaseSourceAvailable)) != null)
@@ -270,6 +278,16 @@ internal class CombinedTagSearchDialog : Form
 		internal bool IsPreferredSource(SourceItem sourceItem)
 		{
 			return sourceItem.SearchSource == Owner.preferredSource;
+		}
+
+		// 在源开始搜索前上报"搜索中",使状态行立即列出所有已勾选源(尚未完成者)。
+		private void ReportSearching(SearchSource source)
+		{
+			Owner.searchStatusReporter?.Invoke(new SourceSearchStatus
+			{
+				Source = source,
+				Phase = SourceSearchPhase.Searching
+			});
 		}
 
 		// 并行搜索一组源:每个源各开一个 Task 跑各自的网络请求,全部完成(或取消)后按源顺序合并。
@@ -386,6 +404,16 @@ internal class CombinedTagSearchDialog : Form
 
 	private SearchSource? preferredSource;
 
+	// 联网搜索状态标识相关(均仅在 UI 线程访问)。searchStatusReporter 由后台搜索线程调用,
+	// 内部经 Progress<T> 编组回 UI 线程,详见 docs/SEARCH_STATUS_INDICATOR_DESIGN.md。
+	private Action<SourceSearchStatus> searchStatusReporter;
+
+	private readonly Dictionary<SearchSource, SourceSearchStatus> sourceSearchStatuses = new Dictionary<SearchSource, SourceSearchStatus>();
+
+	private bool searchInProgress;
+
+	private bool searchHasRun;
+
 	private readonly CancellationTokenSource cancellationSource;
 
 	private static List<TrackSearchResult> cachedSearchResults;
@@ -439,6 +467,10 @@ internal class CombinedTagSearchDialog : Form
 	private SaveFileDialog saveCoverDialog;
 
 	private PictureBox progressPictureBox;
+
+	private Label searchStatusLabel;
+
+	private System.Windows.Forms.Timer retryCountdownTimer;
 
 	public void SetSearchContext(TrackSearchContext searchContext)
 	{
@@ -515,6 +547,8 @@ internal class CombinedTagSearchDialog : Form
 		bool canReuseCachedResults = cachedSearchCompleted && cachedSearchResults != null && lastSearchContext != null && cachedSearchResults.Any() && lastPreferredSource == preferredSource && searchContext.Title == lastSearchContext.Title && searchContext.Artist == lastSearchContext.Artist && searchContext.Album == lastSearchContext.Album;
 		if (canReuseCachedResults)
 		{
+			// 缓存复用:不联网搜索,缓存结果非空,状态标识保持隐藏(无空态)。
+			ResetSearchStatusDisplay();
 			foreach (TrackSearchResult result in cachedSearchResults)
 			{
 				if (result.Cover != null)
@@ -542,6 +576,7 @@ internal class CombinedTagSearchDialog : Form
 	{
 		base.OnClosed(spec);
 		cachedResultsTimer.Stop();
+		retryCountdownTimer.Stop();
 		cancellationSource.Cancel();
 		string selectedCoverPath = null;
 		if (base.DialogResult == DialogResult.OK)
@@ -556,7 +591,12 @@ internal class CombinedTagSearchDialog : Form
 		searchResultsListView.Width = mainPanel.Width;
 		searchResultsListView.Height = mainPanel.Height - footerPanel.Height;
 		int left = (footerPanel.Width - buttonPanel.Width) / 2;
-		buttonPanel.Margin = new Padding(left, buttonPanel.Margin.Top, 0, buttonPanel.Margin.Bottom);
+		// 状态标签置于按钮左侧,填满从最左到按钮前的区域;按钮 / 转圈位置保持不变
+		// (label.Width + buttonPanel.Margin.Left == 原居中起点,故 buttonPanel.Location.X 不变)。
+		int statusGap = 8;
+		searchStatusLabel.Width = Math.Max(0, left - statusGap);
+		searchStatusLabel.Margin = new Padding(0, searchStatusLabel.Margin.Top, 0, searchStatusLabel.Margin.Bottom);
+		buttonPanel.Margin = new Padding(statusGap, buttonPanel.Margin.Top, 0, buttonPanel.Margin.Bottom);
 		left = footerPanel.Width - progressPictureBox.Width - buttonPanel.Location.X - buttonPanel.Width - progressPictureBox.Margin.Top;
 		progressPictureBox.Margin = new Padding(left, progressPictureBox.Margin.Top, 0, progressPictureBox.Margin.Bottom);
 	}
@@ -760,26 +800,29 @@ internal class CombinedTagSearchDialog : Form
 
 	private List<TrackSearchResult> SearchCurrentContextTracks(SearchSource source, bool useLinkedNetEaseId, List<TrackSearchResult> existingResults, int searchPass)
 	{
-		return SearchTracksFromSource(source, useLinkedNetEaseId, existingResults, searchPass, currentSearchContext, cancellationSource);
+		return SearchTracksFromSource(source, useLinkedNetEaseId, existingResults, searchPass, currentSearchContext, cancellationSource, searchStatusReporter);
 	}
 
-	public static List<TrackSearchResult> SearchTracksFromSource(SearchSource source, bool useLinkedNetEaseId, List<TrackSearchResult> existingResults, int searchPass, TrackSearchContext searchContext, CancellationTokenSource cancellationSource)
+	public static List<TrackSearchResult> SearchTracksFromSource(SearchSource source, bool useLinkedNetEaseId, List<TrackSearchResult> existingResults, int searchPass, TrackSearchContext searchContext, CancellationTokenSource cancellationSource, Action<SourceSearchStatus> statusReporter = null)
 	{
 		List<TrackSearchResult> results = new List<TrackSearchResult>();
+		RemoteTagProviderBase searchProvider = null;
 		switch (source)
 		{
 			case SearchSource.Music163:
 				{
 					using NetEaseMusicTagProvider netEaseProvider = new NetEaseMusicTagProvider(cancellationSource);
+					netEaseProvider.StatusReporter = statusReporter;
+					searchProvider = netEaseProvider;
 					if (useLinkedNetEaseId)
 					{
 						results.AddRange(netEaseProvider.SearchTracks("", 0, searchContext.LinkedMusicMetadata.musicId, 0, searchPass, existingResults, results));
-						return results;
+						break;
 					}
 					results.AddRange(netEaseProvider.SearchTracks((searchContext.Title + " " + searchContext.Artist).Trim(), 15, 0L, 0, searchPass, existingResults, results));
 					if (cancellationSource.IsCancellationRequested)
 					{
-						return results;
+						break;
 					}
 					if (!string.IsNullOrWhiteSpace(searchContext.Artist))
 					{
@@ -787,21 +830,23 @@ internal class CombinedTagSearchDialog : Form
 					}
 					if (cancellationSource.IsCancellationRequested)
 					{
-						return results;
+						break;
 					}
 					if (!string.IsNullOrWhiteSpace(searchContext.Album) && searchContext.Album != searchContext.Title)
 					{
 						results.AddRange(netEaseProvider.SearchTracks((searchContext.Album + " " + searchContext.Artist).Trim(), 8, 0L, 2, searchPass, existingResults, results));
 					}
-					return results;
+					break;
 				}
 			case SearchSource.QQ:
 				{
 					using QqMusicTagProvider qqProvider = new QqMusicTagProvider(cancellationSource);
+					qqProvider.StatusReporter = statusReporter;
+					searchProvider = qqProvider;
 					results.AddRange(qqProvider.SearchTracks((searchContext.Title + " " + searchContext.Artist).Trim(), 15, 0, searchPass, existingResults, results));
 					if (cancellationSource.IsCancellationRequested)
 					{
-						return results;
+						break;
 					}
 					if (!string.IsNullOrWhiteSpace(searchContext.Artist))
 					{
@@ -809,31 +854,61 @@ internal class CombinedTagSearchDialog : Form
 					}
 					if (cancellationSource.IsCancellationRequested)
 					{
-						return results;
+						break;
 					}
 					if (!string.IsNullOrWhiteSpace(searchContext.Album) && searchContext.Album != searchContext.Title)
 					{
 						results.AddRange(qqProvider.SearchTracks((searchContext.Album + " " + searchContext.Artist).Trim(), 8, 2, searchPass, existingResults, results));
 					}
-					return results;
+					break;
 				}
 			default:
-				return new List<TrackSearchResult>();
+				return results;
 			case SearchSource.Kuwo:
 				{
 					using KuwoTagProvider kuwoTagProvider = new KuwoTagProvider(cancellationSource);
+					kuwoTagProvider.StatusReporter = statusReporter;
+					searchProvider = kuwoTagProvider;
 					results.AddRange(kuwoTagProvider.SearchTracks((searchContext.Title + " " + searchContext.Artist).Trim(), 8, 0, searchPass, existingResults, results));
 					if (cancellationSource.IsCancellationRequested)
 					{
-						return results;
+						break;
 					}
 					if (!results.Any() && !string.IsNullOrWhiteSpace(searchContext.Album) && searchContext.Album != searchContext.Title)
 					{
 						results.AddRange(kuwoTagProvider.SearchTracks((searchContext.Album + " " + searchContext.Artist).Trim(), 8, 1, searchPass, existingResults, results));
 					}
-					return results;
+					break;
 				}
 		}
+		// 仅在非"网易 linkedId 中间子搜索"时上报本源最终结果:linkedId 是 pass A 的中间步骤,
+		// 同源的常规搜索(pass B / 首选源非 linked)随后会给出真正的完成/出错状态,避免误报"已完成"。
+		if (statusReporter != null && !useLinkedNetEaseId && !cancellationSource.IsCancellationRequested)
+		{
+			ReportSourceOutcome(statusReporter, source, results, searchProvider?.LastTransportResult);
+		}
+		return results;
+	}
+
+	// 依据本源结果数量与最近一次传输结果,判定本源是"完成"还是"出错"并上报。
+	// 有结果即视为完成(即便末次子请求出错);仅当 0 结果且末次传输为错误时标记出错。
+	private static void ReportSourceOutcome(Action<SourceSearchStatus> statusReporter, SearchSource source, List<TrackSearchResult> results, HttpResult lastTransportResult)
+	{
+		if (results.Count == 0 && lastTransportResult != null && !lastTransportResult.IsSuccess)
+		{
+			statusReporter(new SourceSearchStatus
+			{
+				Source = source,
+				Phase = SourceSearchPhase.Error,
+				ErrorCode = lastTransportResult.ErrorCode
+			});
+			return;
+		}
+		statusReporter(new SourceSearchStatus
+		{
+			Source = source,
+			Phase = SourceSearchPhase.Completed
+		});
 	}
 
 	private async void SearchCombinedTagsAsync()
@@ -842,6 +917,11 @@ internal class CombinedTagSearchDialog : Form
 		trackSearchCoordinator.Owner = this;
 		cachedSearchResults = new List<TrackSearchResult>();
 		trackSearchCoordinator.ProgressReporter = new Progress<List<TrackSearchResult>>(trackSearchCoordinator.OnSearchResultsReported);
+		// 状态通道:Progress<T> 在 UI 线程构造,Report 自动编组回 UI 线程;
+		// 后台搜索线程通过 searchStatusReporter 推送,UI 线程聚合渲染。
+		Progress<SourceSearchStatus> statusProgress = new Progress<SourceSearchStatus>(OnSourceStatusReported);
+		searchStatusReporter = (SourceSearchStatus status) => ((IProgress<SourceSearchStatus>)statusProgress).Report(status);
+		BeginSearchStatusTracking();
 		taskbarProgress.SetProgressState(TaskbarProgressBarStatus.Indeterminate);
 		try
 		{
@@ -857,6 +937,7 @@ internal class CombinedTagSearchDialog : Form
 			{
 				progressPictureBox.Hide();
 				taskbarProgress.SetProgressState(TaskbarProgressBarStatus.NoProgress);
+				EndSearchStatusTracking();
 			}
 		}
 	}
@@ -864,6 +945,204 @@ internal class CombinedTagSearchDialog : Form
 	private void SortCurrentSearchResults(List<TrackSearchResult> results)
 	{
 		SortBySearchContextSimilarity(results, currentSearchContext);
+	}
+
+	// ===== 联网搜索状态标识(详见 docs/SEARCH_STATUS_INDICATOR_DESIGN.md) =====
+
+	private void BeginSearchStatusTracking()
+	{
+		sourceSearchStatuses.Clear();
+		searchInProgress = true;
+		searchHasRun = true;
+		retryCountdownTimer.Stop();
+		RefreshSearchStatusDisplay();
+	}
+
+	private void EndSearchStatusTracking()
+	{
+		searchInProgress = false;
+		retryCountdownTimer.Stop();
+		// 搜索整体结束:任何仍处于"搜索中/重试中"的源都应视为已完成,避免某些边角路径
+		// (如首选网易 linkedId 占满限额跳过常规搜索)导致"正在搜索"残留;错误状态保留(D3)。
+		foreach (SourceSearchStatus status in sourceSearchStatuses.Values)
+		{
+			if (status.Phase != SourceSearchPhase.Error)
+			{
+				status.Phase = SourceSearchPhase.Completed;
+			}
+		}
+		RefreshSearchStatusDisplay();
+	}
+
+	// 进入弹窗即重置:清空上一轮残留(出错行 / 重试倒计时 / 空态),且不视为"已搜索过"。
+	private void ResetSearchStatusDisplay()
+	{
+		sourceSearchStatuses.Clear();
+		searchInProgress = false;
+		searchHasRun = false;
+		retryCountdownTimer.Stop();
+		RefreshSearchStatusDisplay();
+	}
+
+	// 后台搜索线程经 Progress<T> 编组到 UI 线程后回调。
+	private void OnSourceStatusReported(SourceSearchStatus status)
+	{
+		if (IsDisposed || status == null)
+		{
+			return;
+		}
+		sourceSearchStatuses[status.Source] = status;
+		if (status.Phase == SourceSearchPhase.Retrying && !retryCountdownTimer.Enabled)
+		{
+			retryCountdownTimer.Start();
+		}
+		RefreshSearchStatusDisplay();
+	}
+
+	private void RetryCountdownTimerTick(object sender, EventArgs e)
+	{
+		if (IsDisposed)
+		{
+			retryCountdownTimer.Stop();
+			return;
+		}
+		bool anyRetrying = false;
+		foreach (SourceSearchStatus status in sourceSearchStatuses.Values)
+		{
+			if (status.Phase == SourceSearchPhase.Retrying)
+			{
+				anyRetrying = true;
+				if (status.RetrySecondsLeft > 0)
+				{
+					status.RetrySecondsLeft--;
+				}
+			}
+		}
+		if (!anyRetrying)
+		{
+			retryCountdownTimer.Stop();
+		}
+		RefreshSearchStatusDisplay();
+	}
+
+	private void RefreshSearchStatusDisplay()
+	{
+		if (IsDisposed || searchStatusLabel == null)
+		{
+			return;
+		}
+		string searchingLine = BuildSearchingLine();
+		string errorLine = BuildErrorOrRetryLine();
+		string text;
+		if (searchingLine != null && errorLine != null)
+		{
+			text = searchingLine + "\n" + errorLine;
+		}
+		else if (searchingLine != null)
+		{
+			text = searchingLine;
+		}
+		else if (errorLine != null)
+		{
+			text = errorLine;
+		}
+		else if (!searchInProgress && searchHasRun && searchResultsListView.Items.Count == 0)
+		{
+			text = "未找到匹配结果";
+		}
+		else
+		{
+			text = "";
+		}
+		searchStatusLabel.Text = text;
+		searchStatusLabel.Visible = text.Length > 0;
+	}
+
+	// 仍在搜索(尚未完成)的源:出错 / 重试中的源不出现在此行。
+	private string BuildSearchingLine()
+	{
+		List<string> sourceNames = new List<string>();
+		foreach (SourceSearchStatus status in GetStatusesInDisplayOrder())
+		{
+			if (status.Phase == SourceSearchPhase.Searching || status.Phase == SourceSearchPhase.Pending)
+			{
+				sourceNames.Add(GetSourceDisplayName(status.Source));
+			}
+		}
+		if (sourceNames.Count == 0)
+		{
+			return null;
+		}
+		return "正在搜索: " + string.Join("/", sourceNames);
+	}
+
+	// 错误 / 重试行:重试中优先;多个普通错误时合并源名(D2:最多一行)。
+	private string BuildErrorOrRetryLine()
+	{
+		foreach (SourceSearchStatus status in GetStatusesInDisplayOrder())
+		{
+			if (status.Phase == SourceSearchPhase.Retrying)
+			{
+				return GetSourceDisplayName(status.Source) + " API错误(" + FormatErrorCode(status.ErrorCode) + "), " + Math.Max(0, status.RetrySecondsLeft) + " 秒后重试 (" + status.RetryAttempt + "/" + status.RetryTotal + ")";
+			}
+		}
+		List<SourceSearchStatus> erroredSources = new List<SourceSearchStatus>();
+		foreach (SourceSearchStatus status in GetStatusesInDisplayOrder())
+		{
+			if (status.Phase == SourceSearchPhase.Error)
+			{
+				erroredSources.Add(status);
+			}
+		}
+		if (erroredSources.Count == 0)
+		{
+			return null;
+		}
+		if (erroredSources.Count == 1)
+		{
+			return GetSourceDisplayName(erroredSources[0].Source) + " API错误(" + FormatErrorCode(erroredSources[0].ErrorCode) + ")";
+		}
+		List<string> erroredNames = new List<string>();
+		foreach (SourceSearchStatus status in erroredSources)
+		{
+			erroredNames.Add(GetSourceDisplayName(status.Source));
+		}
+		return string.Join("/", erroredNames) + " API错误";
+	}
+
+	// 按固定显示顺序(网易云/QQ/酷狗/酷我)枚举已上报状态,保证渲染稳定。
+	private IEnumerable<SourceSearchStatus> GetStatusesInDisplayOrder()
+	{
+		SearchSource[] displayOrder = new SearchSource[4] { SearchSource.Music163, SearchSource.QQ, SearchSource.Kugou, SearchSource.Kuwo };
+		foreach (SearchSource source in displayOrder)
+		{
+			if (sourceSearchStatuses.TryGetValue(source, out SourceSearchStatus status))
+			{
+				yield return status;
+			}
+		}
+	}
+
+	private static string FormatErrorCode(string errorCode)
+	{
+		return string.IsNullOrEmpty(errorCode) ? "未知" : errorCode;
+	}
+
+	private static string GetSourceDisplayName(SearchSource source)
+	{
+		switch (source)
+		{
+			case SearchSource.Music163:
+				return "网易云";
+			case SearchSource.QQ:
+				return "QQ";
+			case SearchSource.Kugou:
+				return "酷狗";
+			case SearchSource.Kuwo:
+				return "酷我";
+			default:
+				return source.ToString();
+		}
 	}
 
 	public static void SortBySearchContextSimilarity(List<TrackSearchResult> results, TrackSearchContext searchContext)
@@ -1122,6 +1401,8 @@ internal class CombinedTagSearchDialog : Form
 		cancelButton = new Button();
 		progressPictureBox = new PictureBox();
 		cachedResultsTimer = new System.Windows.Forms.Timer(components);
+		searchStatusLabel = new Label();
+		retryCountdownTimer = new System.Windows.Forms.Timer(components);
 		coverContextMenu = new ContextMenuStrip(components);
 		openCoverMenuItem = new ToolStripMenuItem();
 		extractCoverMenuItem = new ToolStripMenuItem();
@@ -1179,6 +1460,7 @@ internal class CombinedTagSearchDialog : Form
 		coverImageList.ColorDepth = ColorDepth.Depth32Bit;
 		coverImageList.ImageSize = new Size(128, 128);
 		coverImageList.TransparentColor = Color.Transparent;
+		footerPanel.Controls.Add(searchStatusLabel);
 		footerPanel.Controls.Add(buttonPanel);
 		footerPanel.Controls.Add(progressPictureBox);
 		footerPanel.Dock = DockStyle.Fill;
@@ -1230,6 +1512,16 @@ internal class CombinedTagSearchDialog : Form
 		progressPictureBox.SizeMode = PictureBoxSizeMode.Zoom;
 		progressPictureBox.TabIndex = 7;
 		progressPictureBox.TabStop = false;
+		searchStatusLabel.AutoSize = false;
+		searchStatusLabel.AutoEllipsis = true;
+		searchStatusLabel.Margin = new Padding(0, 10, 0, 0);
+		searchStatusLabel.Name = "searchStatusLabel";
+		searchStatusLabel.Size = new Size(200, 40);
+		searchStatusLabel.TextAlign = ContentAlignment.MiddleLeft;
+		searchStatusLabel.ForeColor = SystemColors.GrayText;
+		searchStatusLabel.Visible = false;
+		retryCountdownTimer.Interval = 1000;
+		retryCountdownTimer.Tick += RetryCountdownTimerTick;
 		coverContextMenu.Items.AddRange(new ToolStripItem[2] { openCoverMenuItem, extractCoverMenuItem });
 		coverContextMenu.Name = "pictureBoxContextMenuStrip";
 		coverContextMenu.Size = new Size(152, 48);

@@ -79,12 +79,36 @@ internal abstract class RemoteTagProviderBase : IDisposable
 
 	// 最近一次传输调用(本 provider 实例)的结果,供上层在拿到空结果时区分
 	// "搜到 0 条" 与 "网络/HTTP 失败"。每个源使用独立 provider 实例,并行下互不干扰。
-	protected HttpResult LastTransportResult { get; private set; }
+	public HttpResult LastTransportResult { get; private set; }
 
 	private HttpResult RecordResult(HttpResult result)
 	{
 		LastTransportResult = result;
 		return result;
+	}
+
+	// 状态上报通道(可选):provider 在搜索过程中(如 QQ 限流重试)推送 SourceSearchStatus,
+	// 由协调器转发到 UI。默认 null(自动匹配等无 UI 场景不设置,零开销)。
+	public Action<SourceSearchStatus> StatusReporter { get; set; }
+
+	protected void ReportStatus(SourceSearchPhase phase, string errorCode = null, int retryAttempt = 0, int retryTotal = 0, int retrySecondsLeft = 0)
+	{
+		StatusReporter?.Invoke(new SourceSearchStatus
+		{
+			Source = GetSource(),
+			Phase = phase,
+			ErrorCode = errorCode,
+			RetryAttempt = retryAttempt,
+			RetryTotal = retryTotal,
+			RetrySecondsLeft = retrySecondsLeft
+		});
+	}
+
+	// provider 在解析阶段判定业务错误(如 QQ 限流 2001)后回填,使 LastTransportResult
+	// 反映业务码而非传输层的"HTTP 200 成功"。
+	protected void SetTransportError(RemoteErrorKind error, string errorCode)
+	{
+		LastTransportResult = new HttpResult { Error = error, ErrorCode = errorCode };
 	}
 
 	// 把传输异常归类为可观测的错误类型(详见 docs/SEARCH_STATUS_INDICATOR_DESIGN.md §5.4)。

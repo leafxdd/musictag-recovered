@@ -94,11 +94,21 @@ internal class QqMusicTagProvider : RemoteTagProviderBase
 			JObject parsedResponse = TryParseJsonObject(responseBody);
 			if (attempt + 1 < maxAttempts && IsRateLimited(parsedResponse))
 			{
-				Console.WriteLine($"QQ search throttled (req_0.code 2001), retry {attempt + 1}/{maxAttempts - 1}");
-				cancellationSource.Token.WaitHandle.WaitOne(800 * (attempt + 1));
+				int retryNumber = attempt + 1;
+				int retryTotal = maxAttempts - 1;
+				int waitMilliseconds = 800 * (attempt + 1);
+				int secondsLeft = (waitMilliseconds + 999) / 1000;
+				Console.WriteLine($"QQ search throttled (req_0.code 2001), retry {retryNumber}/{retryTotal}");
+				ReportStatus(SourceSearchPhase.Retrying, "2001", retryNumber, retryTotal, secondsLeft);
+				cancellationSource.Token.WaitHandle.WaitOne(waitMilliseconds);
 				continue;
 			}
 
+			if (IsRateLimited(parsedResponse))
+			{
+				// 重试用尽仍被限流:回填业务码,让上层把本源标记为出错(2001)而非"0 条结果"。
+				SetTransportError(RemoteErrorKind.RateLimited, "2001");
+			}
 			return ParseSongSearchResponse(parsedResponse);
 		}
 
