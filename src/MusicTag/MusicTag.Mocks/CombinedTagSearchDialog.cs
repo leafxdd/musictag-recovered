@@ -424,14 +424,11 @@ internal class CombinedTagSearchDialog : Form
 	private SearchSource? preferredSource;
 
 	// 联网搜索状态标识相关(均仅在 UI 线程访问)。searchStatusReporter 由后台搜索线程调用,
-	// 内部经 Progress<T> 编组回 UI 线程,详见 docs/SEARCH_STATUS_INDICATOR_DESIGN.md。
+	// 内部经 Progress<T> 编组回 UI 线程;状态聚合 / 渲染 / QQ 重试倒计时统一交给共享渲染器
+	// SearchStatusIndicator(与封面 / 歌词弹窗一致),详见 docs/SEARCH_STATUS_INDICATOR_DESIGN.md。
 	private Action<SourceSearchStatus> searchStatusReporter;
 
-	private readonly Dictionary<SearchSource, SourceSearchStatus> sourceSearchStatuses = new Dictionary<SearchSource, SourceSearchStatus>();
-
-	private bool searchInProgress;
-
-	private bool searchHasRun;
+	private SearchStatusIndicator searchStatusIndicator;
 
 	private readonly CancellationTokenSource cancellationSource;
 
@@ -487,8 +484,6 @@ internal class CombinedTagSearchDialog : Form
 
 	private Label searchStatusLabel;
 
-	private System.Windows.Forms.Timer retryCountdownTimer;
-
 	public void SetSearchContext(TrackSearchContext searchContext)
 	{
 		currentSearchContext = searchContext;
@@ -517,6 +512,7 @@ internal class CombinedTagSearchDialog : Form
 		taskbarProgress = new TaskbarProgressController(this);
 		InitializeComponent();
 		InitializeResultListImagesAndScaling();
+		searchStatusIndicator = new SearchStatusIndicator(searchStatusLabel, () => searchResultsListView.Items.Count > 0, components);
 		ApplyLocalizedText();
 		UpdateSearchDialogLayout();
 	}
@@ -564,7 +560,7 @@ internal class CombinedTagSearchDialog : Form
 		if (canReuseCachedResults)
 		{
 			// 缓存复用:不联网搜索,缓存结果非空,状态标识保持隐藏(无空态)。
-			ResetSearchStatusDisplay();
+			searchStatusIndicator.Reset();
 			foreach (TrackSearchResult result in cachedSearchResults)
 			{
 				if (result.Cover != null)
@@ -592,7 +588,7 @@ internal class CombinedTagSearchDialog : Form
 	{
 		base.OnClosed(spec);
 		cachedResultsTimer.Stop();
-		retryCountdownTimer.Stop();
+		searchStatusIndicator.StopCountdown();
 		cancellationSource.Cancel();
 		string selectedCoverPath = null;
 		if (base.DialogResult == DialogResult.OK)
@@ -936,9 +932,9 @@ internal class CombinedTagSearchDialog : Form
 		trackSearchCoordinator.ProgressReporter = new Progress<List<TrackSearchResult>>(trackSearchCoordinator.OnSearchResultsReported);
 		// 状态通道:Progress<T> 在 UI 线程构造,Report 自动编组回 UI 线程;
 		// 后台搜索线程通过 searchStatusReporter 推送,UI 线程聚合渲染。
-		Progress<SourceSearchStatus> statusProgress = new Progress<SourceSearchStatus>(OnSourceStatusReported);
+		Progress<SourceSearchStatus> statusProgress = new Progress<SourceSearchStatus>(searchStatusIndicator.Report);
 		searchStatusReporter = (SourceSearchStatus status) => ((IProgress<SourceSearchStatus>)statusProgress).Report(status);
-		BeginSearchStatusTracking();
+		searchStatusIndicator.Begin();
 		taskbarProgress.SetProgressState(TaskbarProgressBarStatus.Indeterminate);
 		try
 		{
@@ -953,7 +949,7 @@ internal class CombinedTagSearchDialog : Form
 			if (!IsDisposed)
 			{
 				taskbarProgress.SetProgressState(TaskbarProgressBarStatus.NoProgress);
-				EndSearchStatusTracking();
+				searchStatusIndicator.End();
 			}
 		}
 	}
@@ -961,204 +957,6 @@ internal class CombinedTagSearchDialog : Form
 	private void SortCurrentSearchResults(List<TrackSearchResult> results)
 	{
 		SortBySearchContextSimilarity(results, currentSearchContext);
-	}
-
-	// ===== 联网搜索状态标识(详见 docs/SEARCH_STATUS_INDICATOR_DESIGN.md) =====
-
-	private void BeginSearchStatusTracking()
-	{
-		sourceSearchStatuses.Clear();
-		searchInProgress = true;
-		searchHasRun = true;
-		retryCountdownTimer.Stop();
-		RefreshSearchStatusDisplay();
-	}
-
-	private void EndSearchStatusTracking()
-	{
-		searchInProgress = false;
-		retryCountdownTimer.Stop();
-		// 搜索整体结束:任何仍处于"搜索中/重试中"的源都应视为已完成,避免某些边角路径
-		// (如首选网易 linkedId 占满限额跳过常规搜索)导致"正在搜索"残留;错误状态保留(D3)。
-		foreach (SourceSearchStatus status in sourceSearchStatuses.Values)
-		{
-			if (status.Phase != SourceSearchPhase.Error)
-			{
-				status.Phase = SourceSearchPhase.Completed;
-			}
-		}
-		RefreshSearchStatusDisplay();
-	}
-
-	// 进入弹窗即重置:清空上一轮残留(出错行 / 重试倒计时 / 空态),且不视为"已搜索过"。
-	private void ResetSearchStatusDisplay()
-	{
-		sourceSearchStatuses.Clear();
-		searchInProgress = false;
-		searchHasRun = false;
-		retryCountdownTimer.Stop();
-		RefreshSearchStatusDisplay();
-	}
-
-	// 后台搜索线程经 Progress<T> 编组到 UI 线程后回调。
-	private void OnSourceStatusReported(SourceSearchStatus status)
-	{
-		if (IsDisposed || status == null)
-		{
-			return;
-		}
-		sourceSearchStatuses[status.Source] = status;
-		if (status.Phase == SourceSearchPhase.Retrying && !retryCountdownTimer.Enabled)
-		{
-			retryCountdownTimer.Start();
-		}
-		RefreshSearchStatusDisplay();
-	}
-
-	private void RetryCountdownTimerTick(object sender, EventArgs e)
-	{
-		if (IsDisposed)
-		{
-			retryCountdownTimer.Stop();
-			return;
-		}
-		bool anyRetrying = false;
-		foreach (SourceSearchStatus status in sourceSearchStatuses.Values)
-		{
-			if (status.Phase == SourceSearchPhase.Retrying)
-			{
-				anyRetrying = true;
-				if (status.RetrySecondsLeft > 0)
-				{
-					status.RetrySecondsLeft--;
-				}
-			}
-		}
-		if (!anyRetrying)
-		{
-			retryCountdownTimer.Stop();
-		}
-		RefreshSearchStatusDisplay();
-	}
-
-	private void RefreshSearchStatusDisplay()
-	{
-		if (IsDisposed || searchStatusLabel == null)
-		{
-			return;
-		}
-		string searchingLine = BuildSearchingLine();
-		string errorLine = BuildErrorOrRetryLine();
-		string text;
-		if (searchingLine != null && errorLine != null)
-		{
-			text = searchingLine + "\n" + errorLine;
-		}
-		else if (searchingLine != null)
-		{
-			text = searchingLine;
-		}
-		else if (errorLine != null)
-		{
-			text = errorLine;
-		}
-		else if (!searchInProgress && searchHasRun && searchResultsListView.Items.Count == 0)
-		{
-			text = "未找到匹配结果";
-		}
-		else
-		{
-			text = "";
-		}
-		searchStatusLabel.Text = text;
-		searchStatusLabel.Visible = text.Length > 0;
-	}
-
-	// 仍在搜索(尚未完成)的源:出错 / 重试中的源不出现在此行。
-	private string BuildSearchingLine()
-	{
-		List<string> sourceNames = new List<string>();
-		foreach (SourceSearchStatus status in GetStatusesInDisplayOrder())
-		{
-			if (status.Phase == SourceSearchPhase.Searching || status.Phase == SourceSearchPhase.Pending)
-			{
-				sourceNames.Add(GetSourceDisplayName(status.Source));
-			}
-		}
-		if (sourceNames.Count == 0)
-		{
-			return null;
-		}
-		return "正在搜索: " + string.Join("/", sourceNames);
-	}
-
-	// 错误 / 重试行:重试中优先;多个普通错误时合并源名(D2:最多一行)。
-	private string BuildErrorOrRetryLine()
-	{
-		foreach (SourceSearchStatus status in GetStatusesInDisplayOrder())
-		{
-			if (status.Phase == SourceSearchPhase.Retrying)
-			{
-				return GetSourceDisplayName(status.Source) + " API错误(" + FormatErrorCode(status.ErrorCode) + "), " + Math.Max(0, status.RetrySecondsLeft) + " 秒后重试 (" + status.RetryAttempt + "/" + status.RetryTotal + ")";
-			}
-		}
-		List<SourceSearchStatus> erroredSources = new List<SourceSearchStatus>();
-		foreach (SourceSearchStatus status in GetStatusesInDisplayOrder())
-		{
-			if (status.Phase == SourceSearchPhase.Error)
-			{
-				erroredSources.Add(status);
-			}
-		}
-		if (erroredSources.Count == 0)
-		{
-			return null;
-		}
-		if (erroredSources.Count == 1)
-		{
-			return GetSourceDisplayName(erroredSources[0].Source) + " API错误(" + FormatErrorCode(erroredSources[0].ErrorCode) + ")";
-		}
-		List<string> erroredNames = new List<string>();
-		foreach (SourceSearchStatus status in erroredSources)
-		{
-			erroredNames.Add(GetSourceDisplayName(status.Source));
-		}
-		return string.Join("/", erroredNames) + " API错误";
-	}
-
-	// 按固定显示顺序(网易云/QQ/酷狗/酷我)枚举已上报状态,保证渲染稳定。
-	private IEnumerable<SourceSearchStatus> GetStatusesInDisplayOrder()
-	{
-		SearchSource[] displayOrder = new SearchSource[4] { SearchSource.Music163, SearchSource.QQ, SearchSource.Kugou, SearchSource.Kuwo };
-		foreach (SearchSource source in displayOrder)
-		{
-			if (sourceSearchStatuses.TryGetValue(source, out SourceSearchStatus status))
-			{
-				yield return status;
-			}
-		}
-	}
-
-	private static string FormatErrorCode(string errorCode)
-	{
-		return string.IsNullOrEmpty(errorCode) ? "未知" : errorCode;
-	}
-
-	private static string GetSourceDisplayName(SearchSource source)
-	{
-		switch (source)
-		{
-			case SearchSource.Music163:
-				return "网易云";
-			case SearchSource.QQ:
-				return "QQ";
-			case SearchSource.Kugou:
-				return "酷狗";
-			case SearchSource.Kuwo:
-				return "酷我";
-			default:
-				return source.ToString();
-		}
 	}
 
 	public static void SortBySearchContextSimilarity(List<TrackSearchResult> results, TrackSearchContext searchContext)
@@ -1417,7 +1215,6 @@ internal class CombinedTagSearchDialog : Form
 		cancelButton = new Button();
 		cachedResultsTimer = new System.Windows.Forms.Timer(components);
 		searchStatusLabel = new Label();
-		retryCountdownTimer = new System.Windows.Forms.Timer(components);
 		coverContextMenu = new ContextMenuStrip(components);
 		openCoverMenuItem = new ToolStripMenuItem();
 		extractCoverMenuItem = new ToolStripMenuItem();
@@ -1524,8 +1321,6 @@ internal class CombinedTagSearchDialog : Form
 		searchStatusLabel.TextAlign = ContentAlignment.MiddleLeft;
 		searchStatusLabel.ForeColor = SystemColors.GrayText;
 		searchStatusLabel.Visible = false;
-		retryCountdownTimer.Interval = 1000;
-		retryCountdownTimer.Tick += RetryCountdownTimerTick;
 		coverContextMenu.Items.AddRange(new ToolStripItem[2] { openCoverMenuItem, extractCoverMenuItem });
 		coverContextMenu.Name = "pictureBoxContextMenuStrip";
 		coverContextMenu.Size = new Size(152, 48);

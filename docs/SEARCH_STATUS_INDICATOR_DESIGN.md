@@ -245,8 +245,8 @@ SourceSearchStatus {
 合并标签弹窗落地后,功能同样需覆盖封面搜索(`CoverSearchDialog`)与歌词搜索(`LyricSearchDialog`)。
 
 ### 12.1 共享渲染器 `SearchStatusIndicator`
-为避免**封面 / 歌词两个弹窗**各自复制状态聚合 + 渲染 + 倒计时逻辑,抽出共享渲染器 `MusicTagWinApp.Web/SearchStatusIndicator.cs`:
-> **注**:合并标签弹窗 `CombinedTagSearchDialog` **未迁移到本渲染器**,仍保留其自有内联实现(`BeginSearchStatusTracking` / `RefreshSearchStatusDisplay` / 自带倒计时 `retryCountdownTimer`)。共享渲染器目前**只被封面 / 歌词复用**;把合并标签也收敛过来是一项已知 DRY 待办(见 §13.3 / §14)。
+为避免**三个弹窗**各自复制状态聚合 + 渲染 + 倒计时逻辑,抽出共享渲染器 `MusicTagWinApp.Web/SearchStatusIndicator.cs`:
+> **注**:封面 / 歌词弹窗自抽出时即复用本渲染器;合并标签弹窗 `CombinedTagSearchDialog` 起初保留自有内联实现,后于 §16 的单独重构提交中**也迁移到本渲染器**(删除内联 `sourceSearchStatuses` / `retryCountdownTimer` / `Begin·End·Reset·Refresh` / `BuildErrorOrRetryLine` / 源名映射)。三处现已统一。
 - 入参 `(Label, Func<bool> hasResults, IContainer)`;封装 §1 的单/双行规则、空结果态、QQ 重试逐秒倒计时(带 `Label.IsDisposed` 保护)。
 - 生命周期方法:`Begin()`(开搜清残留)、`End()`(收尾把非 Error 统一置 Completed)、`Reset()`(缓存命中等不联网路径)、`Report(status)`、`StopCountdown()`。
 - 源名中文映射(网易云/QQ/酷狗/酷我)收敛为静态方法。
@@ -349,4 +349,6 @@ SourceSearchStatus {
 |---|---|
 | **P1**:`ParseFailed` 只落到 QQ/酷我,网易云/酷狗仍把 HTTP 200 + 非法 JSON 当空结果 | ✅ **已补**:`NetEaseMusicTagProvider.ParseSongSearchResponse` 与 `KugouTagProvider.ParseSongSearchResponse` 顶层 parse catch 比照 QQ/酷我 —— 仅 `responseBody` 非空时 `SetTransportError(ParseFailed, "parse")`,空 body 保持由传输层归类;item-level 单条解析失败仍只跳过 + 记日志,不标整源。四个源至此一致 |
 | **P3**:并行 faulted task 已显示 Error,但异常细节被完全吞掉 | ✅ **已补日志**:`SearchSourcesInParallel` 收割 faulted 源时 `Console.WriteLine("SearchSourceInParallel error:" + sourceTask.Exception?.GetBaseException().GetMessageChain())`,保留 provider 未预期异常链;UI 仍显示"API错误(未知)"(可接受) |
-| **§15.3**:把合并标签弹窗收敛到共享渲染器 | ⏳ **单独提交进行**(不与 P1/P3 补漏混提):见下方迁移提交。迁移后删除 `CombinedTagSearchDialog` 内联的 `sourceSearchStatuses`/`retryCountdownTimer`/`Begin·End·Reset·RefreshSearchStatusDisplay`/`BuildErrorOrRetryLine`/源名映射,统一走 `SearchStatusIndicator` |
+| **§15.3**:把合并标签弹窗收敛到共享渲染器 | ✅ **已完成**(单独提交,不与 P1/P3 补漏混提):`CombinedTagSearchDialog` 改用 `SearchStatusIndicator`(构造 `new SearchStatusIndicator(searchStatusLabel, () => searchResultsListView.Items.Count > 0, components)`,调用点 `Begin/End/Reset/Report/StopCountdown`),删除内联的 `sourceSearchStatuses` / `searchInProgress` / `searchHasRun` / `retryCountdownTimer` 字段与 `BeginSearchStatusTracking` / `EndSearchStatusTracking` / `ResetSearchStatusDisplay` / `OnSourceStatusReported` / `RetryCountdownTimerTick` / `RefreshSearchStatusDisplay` / `BuildSearchingLine` / `BuildErrorOrRetryLine` / `GetStatusesInDisplayOrder` / `FormatErrorCode` / `GetSourceDisplayName` 方法。行为等价,过 `Verify-Build.ps1 -RunSmokeTests`。三处弹窗至此统一,DRY 待办清除 |
+
+**人工验证(无法由编译/冒烟覆盖)**:迁移后重点验证缓存命中不显示状态、首选源快路径只显示单源、取消不残留"正在搜索"、0 结果显示"未找到匹配结果"、QQ 重试倒计时仍逐秒刷新。

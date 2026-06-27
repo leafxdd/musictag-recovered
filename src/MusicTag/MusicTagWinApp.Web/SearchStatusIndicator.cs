@@ -6,9 +6,8 @@ using System.Windows.Forms;
 namespace MusicTagWinApp.Web;
 
 // 联网搜索状态标识的共享渲染器:聚合各源(SourceSearchStatus)状态,按单/双行规则
-// 渲染到一个 Label,并管理 QQ 限流重试的逐秒倒计时。供封面 / 歌词两个搜索弹窗复用,
-// 确保行为一致(合并标签弹窗 CombinedTagSearchDialog 仍保留其自有内联实现,未迁移)。
-// 详见 docs/SEARCH_STATUS_INDICATOR_DESIGN.md。
+// 渲染到一个 Label,并管理 QQ 限流重试的逐秒倒计时。供合并标签 / 封面 / 歌词三个
+// 搜索弹窗复用,确保行为一致。详见 docs/SEARCH_STATUS_INDICATOR_DESIGN.md。
 //
 // 线程约定:所有公共方法仅在 UI 线程调用。后台搜索线程的上报须先经 Progress<T>
 // 编组回 UI 线程,再调用 Report。
