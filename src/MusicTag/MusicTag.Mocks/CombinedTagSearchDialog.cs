@@ -252,27 +252,16 @@ internal class CombinedTagSearchDialog : Form
 			}
 			if (!Owner.cancellationSource.IsCancellationRequested && searchLimits.RemainingGlobalResults > 0)
 			{
-				searchLimits.CurrentBatch = new List<TrackSearchResult>();
-				foreach (SourceItem primarySource in tagSources)
-				{
-					if (!Owner.cancellationSource.IsCancellationRequested && primarySource.Enabled && !primarySource.IsSecondarySource && searchLimits.RemainingResultsBySource[primarySource.SearchSource] > 0)
-					{
-						searchLimits.CurrentBatch.AddRange(Owner.SearchCurrentContextTracks(primarySource.SearchSource, useLinkedNetEaseId: false, searchLimits.AccumulatedResults, searchPass++));
-					}
-				}
+				List<SourceItem> primarySources = tagSources.FindAll((SourceItem source) => source.Enabled && !source.IsSecondarySource && searchLimits.RemainingResultsBySource[source.SearchSource] > 0);
+				searchLimits.CurrentBatch = SearchSourcesInParallel(primarySources, searchLimits.AccumulatedResults, useLinkedNetEaseId: false, searchPass);
+				searchPass += primarySources.Count;
 				searchLimits.RankLimitAndReportCurrentBatch(useProviderRanking: true);
 			}
 			if (!Owner.cancellationSource.IsCancellationRequested && searchLimits.RemainingGlobalResults > 0)
 			{
-				searchLimits.CurrentBatch = new List<TrackSearchResult>();
-				foreach (SourceItem secondarySource in tagSources)
-				{
-					if (Owner.cancellationSource.IsCancellationRequested || !secondarySource.Enabled || !secondarySource.IsSecondarySource || searchLimits.RemainingResultsBySource[secondarySource.SearchSource] <= 0)
-					{
-						continue;
-					}
-					searchLimits.CurrentBatch.AddRange(Owner.SearchCurrentContextTracks(secondarySource.SearchSource, useLinkedNetEaseId: false, searchLimits.AccumulatedResults, searchPass++));
-				}
+				List<SourceItem> secondarySources = tagSources.FindAll((SourceItem source) => source.Enabled && source.IsSecondarySource && searchLimits.RemainingResultsBySource[source.SearchSource] > 0);
+				searchLimits.CurrentBatch = SearchSourcesInParallel(secondarySources, searchLimits.AccumulatedResults, useLinkedNetEaseId: false, searchPass);
+				searchPass += secondarySources.Count;
 				searchLimits.RankLimitAndReportCurrentBatch(useProviderRanking: false);
 			}
 			return !Owner.cancellationSource.IsCancellationRequested;
@@ -281,6 +270,47 @@ internal class CombinedTagSearchDialog : Form
 		internal bool IsPreferredSource(SourceItem sourceItem)
 		{
 			return sourceItem.SearchSource == Owner.preferredSource;
+		}
+
+		// 并行搜索一组源:每个源各开一个 Task 跑各自的网络请求,全部完成(或取消)后按源顺序合并。
+		// 各源使用独立 provider 实例、只读访问 existingResults 做同源去重,并行期间不修改任何共享状态,
+		// 故无需加锁(详见 docs/SEARCH_STATUS_INDICATOR_DESIGN.md 阶段2)。searchPass 按源在列表中的
+		// 次序确定性分配,与原串行版本逐源自增完全一致,保证结果元数据不变。
+		private List<TrackSearchResult> SearchSourcesInParallel(List<SourceItem> sources, List<TrackSearchResult> existingResults, bool useLinkedNetEaseId, int baseSearchPass)
+		{
+			List<TrackSearchResult> combinedResults = new List<TrackSearchResult>();
+			if (sources == null || sources.Count == 0)
+			{
+				return combinedResults;
+			}
+			CancellationToken cancellationToken = Owner.cancellationSource.Token;
+			Task<List<TrackSearchResult>>[] sourceTasks = new Task<List<TrackSearchResult>>[sources.Count];
+			for (int taskIndex = 0; taskIndex < sources.Count; taskIndex++)
+			{
+				SearchSource source = sources[taskIndex].SearchSource;
+				int searchPassForSource = baseSearchPass + taskIndex;
+				sourceTasks[taskIndex] = Task.Run(() => Owner.SearchCurrentContextTracks(source, useLinkedNetEaseId, existingResults, searchPassForSource), cancellationToken);
+			}
+			try
+			{
+				Task.WaitAll(sourceTasks, cancellationToken);
+			}
+			catch (OperationCanceledException)
+			{
+			}
+			catch (AggregateException)
+			{
+			}
+			// 仅收割已正常完成的源;被取消而仍在后台运行的源 Status 非 RanToCompletion,
+			// 跳过即可(不访问 .Result,避免阻塞),它们会通过共享 token 自行中断并释放。
+			foreach (Task<List<TrackSearchResult>> sourceTask in sourceTasks)
+			{
+				if (sourceTask.Status == TaskStatus.RanToCompletion && sourceTask.Result != null)
+				{
+					combinedResults.AddRange(sourceTask.Result);
+				}
+			}
+			return combinedResults;
 		}
 	}
 
