@@ -199,3 +199,42 @@ SourceSearchStatus {
 - D4 QQ 重试退避是否改整秒 / 倒计时取整方式;
 - §5.4 统一结果模型采用"改签名"还是"新增重载并存"(§8 问题 6);
 - §5.6 酷我提示的具体文案与摆放位置。
+
+---
+
+## 11. 实现纪要(2026-06-27,已落地,供 Codex 复核)
+
+四个阶段已全部实现并提交(各阶段过 `Verify-Build.ps1 -RunSmokeTests`):
+
+| 提交 | 阶段 | 内容 |
+|---|---|---|
+| `b07864c` | 阶段1 | 状态模型 `SourceSearchStatus`/`SourceSearchPhase`;传输层 `HttpResult`/`RemoteErrorKind` + `*Result` 重载(旧签名委托) |
+| `3e089fa` | 阶段2 | `TrackSearchCoordinator` pass B/C 并行化(语义等价) |
+| `6d445bb` | 阶段3+4 | 状态通道端到端 + QQ 重试上报/倒计时 + UI 状态标识 |
+
+### 与原设计的偏差及理由(请重点复核)
+
+1. **D1「先缓冲、统一输出」被判定为不必要,未做缓冲重写。**
+   核实发现现有 `RankLimitAndReportCurrentBatch` 是**先限额、后上报**(`AddIfWithinLimit`→`LimitedResults`→`Report`),从不 show-then-trim,故 Codex 意见 1 担心的"超额显示 + 多余下载"在现有结构里本就不存在。并行化只让网络 I/O 重叠,排序/限额/上报逻辑**逐字未改**,输出结果集与排序与原串行版**等价**。pass B(rank)与 pass C(sort)分别排序,**未合并**以保序。
+
+2. **并行化采用 map→barrier→reduce,无锁,而非 §5.3 的「共享状态 + 锁」。**
+   每源独立 `Task` + 独立 provider 实例,只读访问 `existingResults` 做**同源**去重(已核实四个 provider 均只比 `SearchSource == GetSource()`,跨源为 no-op),并行期间不写任何共享状态,屏障后才在协调器线程串行 reduce。比加锁更安全。`searchPass` 按源次序确定性分配,与原逐源自增一致。
+   **附带健壮性改善**:原先单源抛异常会经 `Task.Run` 冒泡**中止整轮搜索**,改后仅丢弃该源(`Status != RanToCompletion` 跳过,不阻塞)。
+
+3. **§5.4 采用「新增重载并存」(非改签名)。** `PostString`/`GetResponseBytes`/`GetResponseString` 保留,新增 `*Result` 版本返回 `HttpResult`;封面/歌词等所有旧调用点零影响。`SearchTracksFromSource` 仅在**末尾追加可选参数** `statusReporter = null`,`AutoMatchTagsDialog` 三处旧调用不受影响。
+
+4. **§5.6 酷我详情接口提示暂缓(本期未实现)。**
+   核实发现酷我 `LoadSongDetails`(详情/封面)**不在搜索流程调用**——它是结果显示后封面下载的**延迟路径**(`SearchTracks` 仅解析搜索响应)。因此"搜索结束即读熔断标志"恒为 false。要正确提示需另挂到延迟下载路径。`KuwoTagProvider` 已保留实例标志 `DetailApiUnavailableThisSearch` 备用,提示本身延后为独立增强。
+
+5. **D4 倒计时取整:向上取整**(800ms→1 秒,`(waitMs+999)/1000`),退避仍为 800/1600ms。UI 用带 `IsDisposed` 保护的 1s `Timer` 逐秒递减;`OnClosed` 停表。
+
+6. **错误判定:有结果即视为完成**(即便末次子请求出错);仅当 **0 结果且末次传输出错**才标记 Error。业务码优先(QQ 2001 由 provider 回填),否则回退 `timeout`/`network`/HTTP 状态码。
+
+7. **收尾兜底:** 搜索整体结束时把所有**非 Error** 源统一置 Completed,杜绝边角路径(如首选网易 linkedId 占满限额跳过常规搜索)导致"正在搜索"残留;Error 行保留(D3)。
+
+8. **源名映射**:`GetDisplayName()` 走 `[Description]` 返回 163/QQ/Kugou/Kuwo;为贴合需求文案,状态行单独用中文映射 **网易云/QQ/酷狗/酷我**。
+
+### 待人工验证(无法由编译/冒烟覆盖)
+- **UI 视觉**:状态标签宽度、两行高度、与按钮/转圈的相对位置、长文案(重试行)是否被 `AutoEllipsis` 合理截断或换行。`UpdateSearchDialogLayout` 保证 `buttonPanel.Location.X` 不变(label 宽 + buttonPanel 左边距 == 原居中起点)。
+- **真实联网行为**:各源完成/出错/QQ 限流重试倒计时、并行结果排序与限额、取消能否干净中断所有源。
+
