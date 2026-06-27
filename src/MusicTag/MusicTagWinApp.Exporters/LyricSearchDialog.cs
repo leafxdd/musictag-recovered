@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using MusicTag.Candidates;
 using MusicTag.Consumers;
+using MusicTag.Serialization;
 using MusicTag.Services;
 using MusicTagWinApp.Adapter;
 using MusicTagWinApp.Containers;
@@ -214,7 +215,7 @@ internal class LyricSearchDialog : Form
 
 	private Button cancelButton;
 
-	private FlowLayoutPanel footerPanel;
+	private Panel footerPanel;
 
 	private ColumnHeader artistColumn;
 
@@ -226,7 +227,19 @@ internal class LyricSearchDialog : Form
 
 	private ColumnHeader iconColumn;
 
-	private PictureBox progressImage;
+	private Label searchStatusLabel;
+
+	private SearchStatusIndicator searchStatusIndicator;
+
+	private Action<SourceSearchStatus> searchStatusReporter;
+
+	private HttpResult lastSourceTransportResult;
+
+	// 本轮各源最终结果统计(后台搜索线程串行写入,await 后由 UI 线程读取):
+	// 有结果即视为完成;0 结果且末次传输出错则记录错误,供搜索结束时上报 Error。
+	private readonly HashSet<SearchSource> lyricCompletedSources = new HashSet<SearchSource>();
+
+	private readonly Dictionary<SearchSource, HttpResult> lyricErrorBySource = new Dictionary<SearchSource, HttpResult>();
 
 	public void SetTrackInfo(TrackSearchContext trackSearchContext)
 	{
@@ -255,6 +268,7 @@ internal class LyricSearchDialog : Form
 		taskbarProgress = new TaskbarProgressController(this);
 		InitializeComponent();
 		InitializeImagesAndColumns();
+		searchStatusIndicator = new SearchStatusIndicator(searchStatusLabel, () => lyricListView.Items.Count > 0, components);
 		LayoutFooterControls();
 		ApplyLocalizedText();
 	}
@@ -271,7 +285,6 @@ internal class LyricSearchDialog : Form
 		{
 			item.Width = DatabaseMapper.ScaleByDpi(item.Width);
 		}
-		progressImage.Image = DatabaseMapper.LoadResourceBitmap("img_wait");
 	}
 
 	private void ApplyLocalizedText()
@@ -288,10 +301,16 @@ internal class LyricSearchDialog : Form
 	{
 		lyricListView.Width = mainPanel.Width;
 		lyricListView.Height = mainPanel.Height - footerPanel.Height;
-		int left = (footerPanel.Width - buttonPanel.Width) / 2;
-		buttonPanel.Margin = new Padding(left, buttonPanel.Margin.Top, 0, buttonPanel.Margin.Bottom);
-		left = footerPanel.Width - progressImage.Width - buttonPanel.Location.X - buttonPanel.Width - progressImage.Margin.Top;
-		progressImage.Margin = new Padding(left, progressImage.Margin.Top, 0, progressImage.Margin.Bottom);
+		// footerPanel 为普通 Panel,子控件绝对定位:按钮恒定居中(与状态标签显隐无关),
+		// 状态标签置于按钮右侧、垂直中线与按钮对齐。详见 docs/SEARCH_STATUS_INDICATOR_DESIGN.md。
+		int buttonLeft = Math.Max(0, (footerPanel.Width - buttonPanel.Width) / 2);
+		int buttonTop = Math.Max(0, (footerPanel.Height - buttonPanel.Height) / 2);
+		buttonPanel.Location = new Point(buttonLeft, buttonTop);
+		int statusGap = 12;
+		int statusLeft = buttonPanel.Location.X + buttonPanel.Width + statusGap;
+		int statusTop = buttonPanel.Location.Y + buttonPanel.Height / 2 - searchStatusLabel.Height / 2;
+		searchStatusLabel.Location = new Point(statusLeft, statusTop);
+		searchStatusLabel.Width = Math.Max(0, footerPanel.Width - statusLeft - 8);
 	}
 
 	protected override void OnShown(EventArgs e)
@@ -299,7 +318,8 @@ internal class LyricSearchDialog : Form
 		base.OnShown(e);
 		if (candidateLyrics != null && cachedLyricSearchContext != null && candidateLyrics.Any() && cachedLyricSearchSource == selectedSource && trackInfo.Title == cachedLyricSearchContext.Title && trackInfo.Artist == cachedLyricSearchContext.Artist && trackInfo.Album == cachedLyricSearchContext.Album)
 		{
-			progressImage.Hide();
+			// 缓存复用:不联网搜索,状态标识保持隐藏。
+			searchStatusIndicator.Reset();
 			AddLyricsToList();
 		}
 		else
@@ -314,6 +334,7 @@ internal class LyricSearchDialog : Form
 	protected override void OnClosed(EventArgs e)
 	{
 		base.OnClosed(e);
+		searchStatusIndicator.StopCountdown();
 		cancellationSource.Cancel();
 	}
 
@@ -351,66 +372,109 @@ internal class LyricSearchDialog : Form
 
 	private List<LyricSearchResult> SearchLyricsFromSource(SearchSource searchSource, bool useKnownMusicId, List<LyricSearchResult> existingLyrics, int sourceOrder, bool searchCandidateTracks)
 	{
-		return SearchLyricsBySource(searchSource, useKnownMusicId, trackInfo, int.MaxValue, existingLyrics, sourceOrder, cancellationSource, searchCandidateTracks);
+		lastSourceTransportResult = null;
+		List<LyricSearchResult> lyrics = SearchLyricsBySource(searchSource, useKnownMusicId, trackInfo, int.MaxValue, existingLyrics, sourceOrder, cancellationSource, searchCandidateTracks, searchStatusReporter, result => lastSourceTransportResult = result);
+		RecordLyricSourceOutcome(searchSource, lyrics?.Count ?? 0, lastSourceTransportResult);
+		return lyrics;
 	}
 
-	public static List<LyricSearchResult> SearchLyricsBySource(SearchSource searchSource, bool useKnownMusicId, TrackSearchContext trackInfo, int maxResults, List<LyricSearchResult> existingLyrics, int sourceOrder, CancellationTokenSource cancellation, bool searchCandidateTracks)
+	public static List<LyricSearchResult> SearchLyricsBySource(SearchSource searchSource, bool useKnownMusicId, TrackSearchContext trackInfo, int maxResults, List<LyricSearchResult> existingLyrics, int sourceOrder, CancellationTokenSource cancellation, bool searchCandidateTracks, Action<SourceSearchStatus> statusReporter = null, Action<HttpResult> transportSink = null)
 	{
 		switch (searchSource)
 		{
 			case SearchSource.Music163:
 			{
 				using NetEaseMusicTagProvider netEaseProvider = new NetEaseMusicTagProvider(cancellation);
-				return netEaseProvider.SearchLyrics((trackInfo.Title + " " + trackInfo.Artist).Trim(), Math.Min(15, maxResults), useKnownMusicId ? trackInfo.LinkedMusicMetadata.musicId : 0L, existingLyrics, sourceOrder);
+				netEaseProvider.StatusReporter = statusReporter;
+				List<LyricSearchResult> lyrics = netEaseProvider.SearchLyrics((trackInfo.Title + " " + trackInfo.Artist).Trim(), Math.Min(15, maxResults), useKnownMusicId ? trackInfo.LinkedMusicMetadata.musicId : 0L, existingLyrics, sourceOrder);
+				transportSink?.Invoke(netEaseProvider.LastTransportResult);
+				return lyrics;
 			}
 			case SearchSource.QQ:
 			{
 				using QqMusicTagProvider qqProvider = new QqMusicTagProvider(cancellation);
-				return qqProvider.SearchLyrics((trackInfo.Title + " " + trackInfo.Artist).Trim(), Math.Min(15, maxResults), sourceOrder);
+				qqProvider.StatusReporter = statusReporter;
+				List<LyricSearchResult> lyrics = qqProvider.SearchLyrics((trackInfo.Title + " " + trackInfo.Artist).Trim(), Math.Min(15, maxResults), sourceOrder);
+				transportSink?.Invoke(qqProvider.LastTransportResult);
+				return lyrics;
 			}
 			case SearchSource.Kugou:
 			{
 				using KugouTagProvider kugouTagProvider = new KugouTagProvider(cancellation);
-				return kugouTagProvider.SearchLyrics((trackInfo.Title + " " + trackInfo.Artist).Trim(), Math.Min(5, maxResults), sourceOrder);
+				kugouTagProvider.StatusReporter = statusReporter;
+				List<LyricSearchResult> lyrics = kugouTagProvider.SearchLyrics((trackInfo.Title + " " + trackInfo.Artist).Trim(), Math.Min(5, maxResults), sourceOrder);
+				transportSink?.Invoke(kugouTagProvider.LastTransportResult);
+				return lyrics;
 			}
 			case SearchSource.Kuwo:
 			{
 				using KuwoTagProvider kuwoTagProvider = new KuwoTagProvider(cancellation);
-				return kuwoTagProvider.SearchLyrics((trackInfo.Title + " " + trackInfo.Artist).Trim(), Math.Min(5, maxResults), sourceOrder);
+				kuwoTagProvider.StatusReporter = statusReporter;
+				List<LyricSearchResult> lyrics = kuwoTagProvider.SearchLyrics((trackInfo.Title + " " + trackInfo.Artist).Trim(), Math.Min(5, maxResults), sourceOrder);
+				transportSink?.Invoke(kuwoTagProvider.LastTransportResult);
+				return lyrics;
 			}
 			default:
 				return new List<LyricSearchResult>();
 		}
 	}
 
-	private List<TrackSearchResult> SearchTrackCandidates(SearchSource searchSource, int sourceOrder, bool fromCandidateSearch)
+	// 记录本源一次搜索的结果:有结果即视为完成;0 结果且传输出错则记录错误(与封面源一致)。
+	private void RecordLyricSourceOutcome(SearchSource source, int resultCount, HttpResult transportResult)
 	{
-		return SearchTracksBySource(searchSource, trackInfo, sourceOrder, cancellationSource, fromCandidateSearch);
+		if (resultCount > 0)
+		{
+			lyricCompletedSources.Add(source);
+		}
+		else if (transportResult != null && !transportResult.IsSuccess)
+		{
+			lyricErrorBySource[source] = transportResult;
+		}
 	}
 
-	public static List<TrackSearchResult> SearchTracksBySource(SearchSource searchSource, TrackSearchContext trackInfo, int sourceOrder, CancellationTokenSource cancellation, bool fromCandidateSearch)
+	private List<TrackSearchResult> SearchTrackCandidates(SearchSource searchSource, int sourceOrder, bool fromCandidateSearch)
+	{
+		lastSourceTransportResult = null;
+		List<TrackSearchResult> tracks = SearchTracksBySource(searchSource, trackInfo, sourceOrder, cancellationSource, fromCandidateSearch, searchStatusReporter, result => lastSourceTransportResult = result);
+		RecordLyricSourceOutcome(searchSource, tracks?.Count ?? 0, lastSourceTransportResult);
+		return tracks;
+	}
+
+	public static List<TrackSearchResult> SearchTracksBySource(SearchSource searchSource, TrackSearchContext trackInfo, int sourceOrder, CancellationTokenSource cancellation, bool fromCandidateSearch, Action<SourceSearchStatus> statusReporter = null, Action<HttpResult> transportSink = null)
 	{
 		switch (searchSource)
 		{
 			case SearchSource.Music163:
 			{
 				using NetEaseMusicTagProvider netEaseProvider = new NetEaseMusicTagProvider(cancellation);
-				return netEaseProvider.SearchTracks((trackInfo.Title + " " + trackInfo.Artist).Trim(), 15, 0L, 0, sourceOrder, new List<TrackSearchResult>(), new List<TrackSearchResult>());
+				netEaseProvider.StatusReporter = statusReporter;
+				List<TrackSearchResult> tracks = netEaseProvider.SearchTracks((trackInfo.Title + " " + trackInfo.Artist).Trim(), 15, 0L, 0, sourceOrder, new List<TrackSearchResult>(), new List<TrackSearchResult>());
+				transportSink?.Invoke(netEaseProvider.LastTransportResult);
+				return tracks;
 			}
 			case SearchSource.QQ:
 			{
 				using QqMusicTagProvider qqProvider = new QqMusicTagProvider(cancellation);
-				return qqProvider.SearchTracks((trackInfo.Title + " " + trackInfo.Artist).Trim(), 15, 0, sourceOrder, new List<TrackSearchResult>(), new List<TrackSearchResult>());
+				qqProvider.StatusReporter = statusReporter;
+				List<TrackSearchResult> tracks = qqProvider.SearchTracks((trackInfo.Title + " " + trackInfo.Artist).Trim(), 15, 0, sourceOrder, new List<TrackSearchResult>(), new List<TrackSearchResult>());
+				transportSink?.Invoke(qqProvider.LastTransportResult);
+				return tracks;
 			}
 			case SearchSource.Kugou:
 			{
 				using KugouTagProvider kugouTagProvider = new KugouTagProvider(cancellation);
-				return kugouTagProvider.SearchTracks((trackInfo.Title + " " + trackInfo.Artist).Trim(), 5, 0, sourceOrder, new List<TrackSearchResult>(), new List<TrackSearchResult>());
+				kugouTagProvider.StatusReporter = statusReporter;
+				List<TrackSearchResult> tracks = kugouTagProvider.SearchTracks((trackInfo.Title + " " + trackInfo.Artist).Trim(), 5, 0, sourceOrder, new List<TrackSearchResult>(), new List<TrackSearchResult>());
+				transportSink?.Invoke(kugouTagProvider.LastTransportResult);
+				return tracks;
 			}
 			case SearchSource.Kuwo:
 			{
 				using KuwoTagProvider kuwoTagProvider = new KuwoTagProvider(cancellation);
-				return kuwoTagProvider.SearchTracks((trackInfo.Title + " " + trackInfo.Artist).Trim(), 5, 0, sourceOrder, new List<TrackSearchResult>(), new List<TrackSearchResult>());
+				kuwoTagProvider.StatusReporter = statusReporter;
+				List<TrackSearchResult> tracks = kuwoTagProvider.SearchTracks((trackInfo.Title + " " + trackInfo.Artist).Trim(), 5, 0, sourceOrder, new List<TrackSearchResult>(), new List<TrackSearchResult>());
+				transportSink?.Invoke(kuwoTagProvider.LastTransportResult);
+				return tracks;
 			}
 			default:
 				return new List<TrackSearchResult>();
@@ -455,6 +519,7 @@ internal class LyricSearchDialog : Form
 	{
 		LyricSearchSession searchSession = new LyricSearchSession(this);
 		CancellationToken cancellationToken = cancellationSource.Token;
+		BeginSearchStatus();
 		taskbarProgress.SetProgressState(TaskbarProgressBarStatus.Indeterminate);
 		try
 		{
@@ -470,6 +535,10 @@ internal class LyricSearchDialog : Form
 			{
 				AddLyricsToList(candidateLyrics);
 			}
+			if (!cancellationToken.IsCancellationRequested)
+			{
+				ReportFinalSearchOutcomes();
+			}
 		}
 		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 		{
@@ -482,8 +551,64 @@ internal class LyricSearchDialog : Form
 		{
 			if (!IsDisposed)
 			{
-				progressImage.Hide();
 				taskbarProgress.SetProgressState(TaskbarProgressBarStatus.NoProgress);
+				searchStatusIndicator.End();
+			}
+		}
+	}
+
+	// 本轮要搜索的已勾选源集合(与 LyricSearchSession 的遍历口径一致):
+	// 选定单源时仅该源,否则按排序取所有启用源。
+	private List<SearchSource> GetEnabledLyricSearchSources()
+	{
+		if (selectedSource.HasValue)
+		{
+			return new List<SearchSource> { selectedSource.Value };
+		}
+		return LyricSearchResult.GetSortedLyricSourceSettings().Where(sourceItem => sourceItem.Enabled).Select(sourceItem => sourceItem.SearchSource).ToList();
+	}
+
+	// 开始一轮搜索(UI 线程):清空上轮统计、建状态通道、先把各源标记为"搜索中"。
+	private void BeginSearchStatus()
+	{
+		lyricCompletedSources.Clear();
+		lyricErrorBySource.Clear();
+		// 状态通道:Progress<T> 在 UI 线程构造,后台 provider 的上报(如 QQ 限流重试)经此编组回 UI 线程。
+		Progress<SourceSearchStatus> statusProgress = new Progress<SourceSearchStatus>(searchStatusIndicator.Report);
+		searchStatusReporter = (SourceSearchStatus status) => ((IProgress<SourceSearchStatus>)statusProgress).Report(status);
+		searchStatusIndicator.Begin();
+		foreach (SearchSource source in GetEnabledLyricSearchSources())
+		{
+			searchStatusIndicator.Report(new SourceSearchStatus
+			{
+				Source = source,
+				Phase = SourceSearchPhase.Searching
+			});
+		}
+	}
+
+	// 搜索整体结束(UI 线程,await 后回到 UI 线程,后台写入的统计此时已可见):
+	// 始终无结果且末次传输出错的源标记 Error,其余标记 Completed。
+	private void ReportFinalSearchOutcomes()
+	{
+		foreach (SearchSource source in GetEnabledLyricSearchSources())
+		{
+			if (!lyricCompletedSources.Contains(source) && lyricErrorBySource.TryGetValue(source, out HttpResult error) && error != null && !error.IsSuccess)
+			{
+				searchStatusIndicator.Report(new SourceSearchStatus
+				{
+					Source = source,
+					Phase = SourceSearchPhase.Error,
+					ErrorCode = error.ErrorCode
+				});
+			}
+			else
+			{
+				searchStatusIndicator.Report(new SourceSearchStatus
+				{
+					Source = source,
+					Phase = SourceSearchPhase.Completed
+				});
 			}
 		}
 	}
@@ -555,15 +680,14 @@ internal class LyricSearchDialog : Form
 		artistColumn = new ColumnHeader();
 		albumColumn = new ColumnHeader();
 		lyricIconImages = new ImageList(components);
-		footerPanel = new FlowLayoutPanel();
+		footerPanel = new Panel();
 		buttonPanel = new FlowLayoutPanel();
 		okButton = new Button();
 		cancelButton = new Button();
-		progressImage = new PictureBox();
+		searchStatusLabel = new Label();
 		mainPanel.SuspendLayout();
 		footerPanel.SuspendLayout();
 		buttonPanel.SuspendLayout();
-		((ISupportInitialize)progressImage).BeginInit();
 		SuspendLayout();
 		mainPanel.Controls.Add(lyricListView);
 		mainPanel.Controls.Add(footerPanel);
@@ -602,15 +726,14 @@ internal class LyricSearchDialog : Form
 		lyricIconImages.ColorDepth = ColorDepth.Depth24Bit;
 		lyricIconImages.ImageSize = new Size(32, 32);
 		lyricIconImages.TransparentColor = Color.Transparent;
+		footerPanel.Controls.Add(searchStatusLabel);
 		footerPanel.Controls.Add(buttonPanel);
-		footerPanel.Controls.Add(progressImage);
 		footerPanel.Dock = DockStyle.Fill;
 		footerPanel.Location = new Point(0, 549);
 		footerPanel.Margin = new Padding(0);
 		footerPanel.Name = "flowLayoutPanel2";
 		footerPanel.Size = new Size(534, 60);
 		footerPanel.TabIndex = 7;
-		footerPanel.WrapContents = false;
 		buttonPanel.Controls.Add(okButton);
 		buttonPanel.Controls.Add(cancelButton);
 		buttonPanel.Location = new Point(0, 12);
@@ -634,14 +757,13 @@ internal class LyricSearchDialog : Form
 		cancelButton.Text = "Cancel";
 		cancelButton.UseVisualStyleBackColor = true;
 		cancelButton.Click += CancelSelection;
-		progressImage.Image = Resources.img_wait;
-		progressImage.Location = new Point(220, 13);
-		progressImage.Margin = new Padding(0, 13, 0, 0);
-		progressImage.Name = "pbProgress";
-		progressImage.Size = new Size(32, 32);
-		progressImage.SizeMode = PictureBoxSizeMode.Zoom;
-		progressImage.TabIndex = 7;
-		progressImage.TabStop = false;
+		searchStatusLabel.AutoSize = false;
+		searchStatusLabel.AutoEllipsis = true;
+		searchStatusLabel.Name = "searchStatusLabel";
+		searchStatusLabel.Size = new Size(200, 40);
+		searchStatusLabel.TextAlign = ContentAlignment.MiddleLeft;
+		searchStatusLabel.ForeColor = SystemColors.GrayText;
+		searchStatusLabel.Visible = false;
 		AutoScaleDimensions = new SizeF(96f, 96f);
 		AutoScaleMode = AutoScaleMode.Dpi;
 		base.ClientSize = new Size(684, 661);
@@ -655,7 +777,6 @@ internal class LyricSearchDialog : Form
 		mainPanel.ResumeLayout(performLayout: false);
 		footerPanel.ResumeLayout(performLayout: false);
 		buttonPanel.ResumeLayout(performLayout: false);
-		((ISupportInitialize)progressImage).EndInit();
 		ResumeLayout(performLayout: false);
 	}
 

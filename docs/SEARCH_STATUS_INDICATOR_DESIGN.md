@@ -238,3 +238,38 @@ SourceSearchStatus {
 - **UI 视觉**:状态标签宽度、两行高度、与按钮/转圈的相对位置、长文案(重试行)是否被 `AutoEllipsis` 合理截断或换行。`UpdateSearchDialogLayout` 保证 `buttonPanel.Location.X` 不变(label 宽 + buttonPanel 左边距 == 原居中起点)。
 - **真实联网行为**:各源完成/出错/QQ 限流重试倒计时、并行结果排序与限额、取消能否干净中断所有源。
 
+---
+
+## 12. 扩展到封面源 / 歌词源弹窗(2026-06-27)
+
+合并标签弹窗落地后,功能同样需覆盖封面搜索(`CoverSearchDialog`)与歌词搜索(`LyricSearchDialog`)。
+
+### 12.1 共享渲染器 `SearchStatusIndicator`
+为避免三处弹窗各自复制状态聚合 + 渲染 + 倒计时逻辑,抽出共享渲染器 `MusicTagWinApp.Web/SearchStatusIndicator.cs`:
+- 入参 `(Label, Func<bool> hasResults, IContainer)`;封装 §1 的单/双行规则、空结果态、QQ 重试逐秒倒计时(带 `Label.IsDisposed` 保护)。
+- 生命周期方法:`Begin()`(开搜清残留)、`End()`(收尾把非 Error 统一置 Completed)、`Reset()`(缓存命中等不联网路径)、`Report(status)`、`StopCountdown()`。
+- 源名中文映射(网易云/QQ/酷狗/酷我)收敛为静态方法。
+
+### 12.2 统一的底部布局(三弹窗一致)
+`footerPanel` 由 `FlowLayoutPanel` 改为普通 `Panel`,子控件**绝对定位**:按钮恒定居中(与状态标签显隐无关,修复"结果出来后按钮跳到右侧"),状态标签置于按钮右侧(原转圈位置)、垂直中线与按钮对齐。删除原转圈 `PictureBox`(封面 `progressPictureBox` / 歌词 `progressImage`)。
+
+### 12.3 封面源(`CoverSearchDialog`)
+- 串行搜索(未并行化,低风险);`CandidateSearchWorker` 开搜先对各启用源上报 `Searching`,各源跨多 pass 搜索,结束时按"有结果即 Completed / 始终 0 结果且末次传输出错即 Error"上报最终状态。
+- provider 实例方法(`SearchByAlbumAndArtist`/`SearchByTitleAndArtist`)内设 `provider.StatusReporter` 并捕获 `provider.LastTransportResult` 到 `lastSourceTransportResult`(串行单线程安全)。
+
+### 12.4 歌词源(`LyricSearchDialog`)与封面的差异
+- **无结果 `IProgress` 通道**:`StartLyricSearch` 是 `async void`,两段 `await Task.Run`(known-id 阶段 + candidate 阶段)。故 `Begin()`+各源 `Searching` 上报、最终结果上报均放在 `StartLyricSearch` 的 **UI 线程段**执行(await 后回到 UI 线程,后台写入的统计已可见),无需额外 marshaling;`End()` 在 finally 兜底。
+- **静态 provider 方法被 `AutoMatchTagsDialog` 复用**:`SearchLyricsBySource`/`SearchTracksBySource` 只**追加可选参数** `Action<SourceSearchStatus> statusReporter = null, Action<HttpResult> transportSink = null`(设 `StatusReporter` + 回填传输结果),`AutoMatchTagsDialog` 三处旧调用零影响。
+- 每源结果统计在实例转发器(`SearchLyricsFromSource`/`SearchTrackCandidates`)里经 `RecordLyricSourceOutcome` 记录;候选-track 模式以"搜到 track 即完成"为口径(下载歌词步骤不再单独判源成败)。
+- QQ 歌词路径(`SearchLyrics`/`SearchTracks`)本无重试,故 Retrying 行在歌词弹窗自然不出现;`StatusReporter` 仍接好以备将来。
+
+### 12.5 提交
+| 提交 | 内容 |
+|---|---|
+| `94eef7a` | 封面源状态标识 + 抽出共享渲染器 `SearchStatusIndicator` |
+| (本次) | 歌词源状态标识(复用共享渲染器,UI 线程上报最终结果) |
+
+### 12.6 仍待人工验证
+- 歌词/封面弹窗的状态标签视觉(同 §11 待验证项)。
+- 歌词两阶段中 known-id 占满限额导致 candidate 阶段跳过部分源时,这些源由 `End()` 兜底显示 Completed(非残留"正在搜索")。
+
