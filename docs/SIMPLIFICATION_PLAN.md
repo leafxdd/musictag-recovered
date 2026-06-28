@@ -118,10 +118,10 @@
 
 ### Tier B — 跨文件复用（中风险，需仔细验证）
 
-- [ ] **B1 ConfigDescriptorState 写标签核心（逐项 build+smoke）** —— `MusicTag.States/ConfigDescriptorState.cs`
-  - [ ] `SaveWithId3v2Version(Action writeBody)` 收敛 `SaveTagFields`/`SaveCurrentTagFile` 版本锁 / try / catch / finally（427-522）
-  - [ ] `AppendUtf8Blocks(...)` 统一 `FillRawFromXiph`/`FillRawFromApe` 的 UTF8 编码尾（799-848）
-  - [ ] `AddIfAbsent(key,factory)` 收敛 `LoadAudioProperties` 6 处惰性缓存（250-280）
+- [x] **B1 ConfigDescriptorState 写标签核心（逐项 build+smoke）** —— 3 项完成 `f04426e`（`MusicTag.States/ConfigDescriptorState.cs`）
+  - [x] `SaveWithId3v2Version(Action writeBody)` 收敛 `SaveTagFields`/`SaveCurrentTagFile` 版本锁 / try / catch / finally（body 作 Action 传入，公共 loadError 前导 + SetId3v2Version/Save/return 尾部留 helper）
+  - [x] `AppendUtf8Blocks(values,blocks,tagTypeName,ref tagType,ref stringType)` 统一 `FillRawFromXiph`/`FillRawFromApe` 的 UTF8 编码尾（仅 tagType 名不同）
+  - [x] `AddIfAbsent(key,factory)` 收敛 `LoadAudioProperties` 6 处惰性缓存（factory 仅 key 缺失时求值，装箱不变）
 
 - [ ] **B2 搜索对话框收敛到 `SearchStatusIndicator`（在线子系统）**
   - [ ] enum→provider 类型映射工厂 `CreateProvider(source,cts)` —— ⚠️（Codex 点 1）**置于 `MusicTagWinApp.Web` 独立小工厂（与 `SearchSource` 同处），不放进 `RemoteTagProviderBase`**：基类已在 `RemoteTagProviderBase.cs:234` 有 `!(this is QqMusicTagProvider)` 一处反向依赖，不再把它对全部 4 个具体 provider 的认知加宽。用它收敛 `CoverSearchDialog` 两处 `SearchCovers` + `LyricSearchDialog.DownloadLyricBySource` 三臂的 uniform-call switch（异构签名臂——NetEase 带 musicId、Kuwo `LoadLyricForTrack`——保留 typed local）
@@ -173,6 +173,7 @@
 - 2026-06-28 **A7 完成 `caa9123`**：`DatabaseMapper.FillAndCenterButtons` 收三 dialog 相同的 fill-list+center-buttons 布局块（各保留末尾列宽行）；`PictureFromTagsDialog.GetEmbeddedPictureData` 收两处 load+取列表+null 检查（调用点各保留 continue/return 早退与 `using` 生命周期）；`FindReplaceDialog.SyncControllerInputs` 收四按钮处理器的 SearchText/MatchCase 推送。Debug+Release 0 warn、smoke 通过。
 - 2026-06-28 **A3 完成 `cc1bc3c`**（7 项，纯 in-file 显示/UI/错误路由去重）：删 `FilterValueCollector`/`SelectedItemFilterValueCounter` 闭包类、两调用点复用 `AddSelectedFilterValues`；`Subscribe/UnsubscribeTagFieldTextHandlers` 收 6 订阅循环；`FormatCountDurationSize` 收 4 状态标签插值；`BuildBasicFileDisplayValues` 合并双分支；`GetLoadedFilePaths` LINQ 一行；`ConvertAllTagFields` 提工厂出循环（静态单例+纯函数等价）；`ReportAsyncOperationErrorIfNotCancellation` 收 13 取消感知 catch。Debug+Release 0 warn、smoke 通过。
 - 2026-06-28 **A3b 完成 `6b61728`**（3 项，写/重命名 UI 入口，Codex 拆出重验证）：`ConfirmAndSaveTagsWithOperation` 泛化 lyrics + 2 tag CHS/CHT 处理器、`ConfirmAndConvertSelectedFilenames` 合并 2 文件名处理器、`BuildBatchResultMessage` 收 4 处 save/rename/undo 结果消息（clear 变体保留 inline）。逐字节核对 + diff 读，Debug+Release 0 warn、smoke 通过；实跑 save/rename 无 smoke 覆盖。**Tier A 全部完成。**
+- 2026-06-28 **B1 完成 `f04426e`**（3 项，写标签核心）：`SaveWithId3v2Version(Action)` 收两 save 方法的版本锁/try/catch/finally；`AppendUtf8Blocks` 统一 Xiph/Ape 的 UTF8 尾；`AddIfAbsent` 收 LoadAudioProperties 6 惰性缓存。Debug+Release 0 warn、smoke 通过；写路径无 smoke 覆盖,等价靠脚手架同构/body 迁移分析。
 
 ---
 
