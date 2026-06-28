@@ -279,8 +279,7 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase
 	{
 		List<TrackSearchResult> tracks = new List<TrackSearchResult>();
 		List<NetEaseSongInfo> songs = ((knownSongId > 0L) ? LoadSongDetails(knownSongId) : SearchSongs(query, resultLimit));
-		Dictionary<string, TrackSearchResult> tracksById = new Dictionary<string, TrackSearchResult>();
-		List<string> trackIdsInOrder = new List<string>();
+		HashSet<string> seenTrackIds = new HashSet<string>();
 		HashSet<string> knownTrackIds = new HashSet<string>();
 		foreach (TrackSearchResult existingTrack in existingTracks)
 		{
@@ -356,15 +355,11 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase
 				return netEaseProvider.LoadLyrics(song);
 			};
 			track.LyricResult = lyric;
-			if (!tracksById.ContainsKey(track.SourceTrackId) && !knownTrackIds.Contains(track.SourceTrackId) && (knownSongId == 0L || track.Cover != null))
+			if (!seenTrackIds.Contains(track.SourceTrackId) && !knownTrackIds.Contains(track.SourceTrackId) && (knownSongId == 0L || track.Cover != null))
 			{
-				trackIdsInOrder.Add(track.SourceTrackId);
-				tracksById.Add(track.SourceTrackId, track);
+				seenTrackIds.Add(track.SourceTrackId);
+				tracks.Add(track);
 			}
-		}
-		foreach (string trackId in trackIdsInOrder)
-		{
-			tracks.Add(tracksById[trackId]);
 		}
 			int resultOrder = 0;
 			foreach (TrackSearchResult track in tracks)
