@@ -585,13 +585,9 @@ internal class AutoMatchTagsDialog : Form
 			{
 				if (sourceItem.Enabled && remainingResultsBySourceItem[sourceItem] > 0)
 				{
-					return GetSourceFromItem(sourceItem) == SearchSource.Music163;
+					return sourceItem.SearchSource == SearchSource.Music163;
 				}
 				return false;
-			}
-			internal static SearchSource GetSourceFromItem(object sourceItem)
-			{
-				return ((SourceItem)sourceItem).SearchSource;
 			}
 		}
 
@@ -752,6 +748,45 @@ internal class AutoMatchTagsDialog : Form
 			GetOwnerDialog().hasStartedParallelWorker = true;
 		}
 
+		private static bool IsSameTrackMetadata(TrackSearchResult first, TrackSearchResult second)
+		{
+			return first.Title == second.Title && first.Artist == second.Artist && first.Album == second.Album;
+		}
+
+		private bool SaveSidecarFiles(ConfigDescriptorState.PictureData downloadedCoverPicture)
+		{
+			bool allFileSavesSucceeded = true;
+			string coverSaveError;
+			if (shouldSaveCoverToFile && (coverSaveError = SaveCoverToFile(downloadedCoverPicture)) != null)
+			{
+				allFileSavesSucceeded = false;
+				RecordAutoMatchError(coverSaveError);
+			}
+			string lyricSaveError;
+			if (shouldSaveLyricToFile && (lyricSaveError = SaveLyricToFile()) != null)
+			{
+				allFileSavesSucceeded = false;
+				RecordAutoMatchError(lyricSaveError);
+			}
+			return allFileSavesSucceeded;
+		}
+
+		private void RunSourceSearchPass(MetadataSearchState metadataSearch, List<SourceItem> tagSources, bool secondary, ref int sourceOrderIndex)
+		{
+			if (!metadataSearch.rankedTracks.Any() && !GetCancellationSource().IsCancellationRequested && metadataSearch.remainingGlobalResults > 0)
+			{
+				metadataSearch.candidateTracks = new List<TrackSearchResult>();
+				foreach (SourceItem source in tagSources)
+				{
+					if (!GetCancellationSource().IsCancellationRequested && source.Enabled && source.IsSecondarySource == secondary && metadataSearch.remainingResultsBySource[source.SearchSource] > 0)
+					{
+						metadataSearch.candidateTracks.AddRange(CombinedTagSearchDialog.SearchTracksFromSource(source.SearchSource, useLinkedNetEaseId: false, metadataSearch.rankedTracks, sourceOrderIndex++, metadataSearch.searchContext, GetCancellationSource()));
+					}
+				}
+				metadataSearch.AddRankedCandidates(useProviderRanking: !secondary);
+			}
+		}
+
 		public void ProcessCurrentFile()
 		{
 			if (GetCancellationSource().IsCancellationRequested)
@@ -779,19 +814,7 @@ internal class AutoMatchTagsDialog : Form
 					}
 					else
 					{
-						bool allFileSavesSucceeded = true;
-						string coverSaveError;
-						if (shouldSaveCoverToFile && (coverSaveError = SaveCoverToFile(downloadedCoverPicture)) != null)
-						{
-							allFileSavesSucceeded = false;
-							RecordAutoMatchError(coverSaveError);
-						}
-						string lyricSaveError;
-						if (shouldSaveLyricToFile && (lyricSaveError = SaveLyricToFile()) != null)
-						{
-							allFileSavesSucceeded = false;
-							RecordAutoMatchError(lyricSaveError);
-						}
+						bool allFileSavesSucceeded = SaveSidecarFiles(downloadedCoverPicture);
 						if (allFileSavesSucceeded)
 						{
 							GetOwnerDialog().successCount++;
@@ -814,16 +837,7 @@ internal class AutoMatchTagsDialog : Form
 					{
 						GetOwnerDialog().successCount++;
 					}
-					string coverSaveError;
-					if (shouldSaveCoverToFile && (coverSaveError = SaveCoverToFile(downloadedCoverPicture)) != null)
-					{
-						RecordAutoMatchError(coverSaveError);
-					}
-					string lyricSaveError;
-					if (shouldSaveLyricToFile && (lyricSaveError = SaveLyricToFile()) != null)
-					{
-						RecordAutoMatchError(lyricSaveError);
-					}
+					SaveSidecarFiles(downloadedCoverPicture);
 				}
 			}
 			else
@@ -1066,30 +1080,8 @@ internal class AutoMatchTagsDialog : Form
 				metadataSearch.candidateTracks.AddRange(CombinedTagSearchDialog.SearchTracksFromSource(netEaseSource.SearchSource, useLinkedNetEaseId: false, metadataSearch.rankedTracks, sourceOrderIndex++, metadataSearch.searchContext, GetCancellationSource()));
 				metadataSearch.AddRankedCandidates(useProviderRanking: true);
 			}
-			if (!metadataSearch.rankedTracks.Any() && !GetCancellationSource().IsCancellationRequested && metadataSearch.remainingGlobalResults > 0)
-			{
-				metadataSearch.candidateTracks = new List<TrackSearchResult>();
-				foreach (SourceItem primarySource in tagSources)
-				{
-					if (!GetCancellationSource().IsCancellationRequested && primarySource.Enabled && !primarySource.IsSecondarySource && metadataSearch.remainingResultsBySource[primarySource.SearchSource] > 0)
-					{
-						metadataSearch.candidateTracks.AddRange(CombinedTagSearchDialog.SearchTracksFromSource(primarySource.SearchSource, useLinkedNetEaseId: false, metadataSearch.rankedTracks, sourceOrderIndex++, metadataSearch.searchContext, GetCancellationSource()));
-					}
-				}
-				metadataSearch.AddRankedCandidates(useProviderRanking: true);
-			}
-			if (!metadataSearch.rankedTracks.Any() && !GetCancellationSource().IsCancellationRequested && metadataSearch.remainingGlobalResults > 0)
-			{
-				metadataSearch.candidateTracks = new List<TrackSearchResult>();
-				foreach (SourceItem secondarySource in tagSources)
-				{
-					if (!GetCancellationSource().IsCancellationRequested && secondarySource.Enabled && secondarySource.IsSecondarySource && metadataSearch.remainingResultsBySource[secondarySource.SearchSource] > 0)
-					{
-						metadataSearch.candidateTracks.AddRange(CombinedTagSearchDialog.SearchTracksFromSource(secondarySource.SearchSource, useLinkedNetEaseId: false, metadataSearch.rankedTracks, sourceOrderIndex++, metadataSearch.searchContext, GetCancellationSource()));
-					}
-				}
-				metadataSearch.AddRankedCandidates(useProviderRanking: false);
-			}
+			RunSourceSearchPass(metadataSearch, tagSources, secondary: false, ref sourceOrderIndex);
+			RunSourceSearchPass(metadataSearch, tagSources, secondary: true, ref sourceOrderIndex);
 			if (metadataSearch.rankedTracks.Any())
 			{
 				TrackSearchResult bestTrack = metadataSearch.rankedTracks[0];
@@ -1103,7 +1095,7 @@ internal class AutoMatchTagsDialog : Form
 					if (!GetCancellationSource().IsCancellationRequested && !metadataSearch.resultValues.ContainsKey("lyric"))
 					{
 						TrackSearchResult alternateTrack = ((metadataSearch.rankedTracks.Count > 1) ? metadataSearch.rankedTracks[1] : null);
-						if (alternateTrack != null && alternateTrack.LyricResult != null && alternateTrack.Title == bestTrack.Title && alternateTrack.Artist == bestTrack.Artist && alternateTrack.Album == bestTrack.Album)
+						if (alternateTrack != null && alternateTrack.LyricResult != null && IsSameTrackMetadata(alternateTrack, bestTrack))
 						{
 							loadDeferredLyric(alternateTrack);
 						}
@@ -1119,7 +1111,7 @@ internal class AutoMatchTagsDialog : Form
 					if (!GetCancellationSource().IsCancellationRequested && !metadataSearch.resultValues.ContainsKey("coverFile"))
 					{
 						TrackSearchResult alternateTrack = ((metadataSearch.rankedTracks.Count > 1) ? metadataSearch.rankedTracks[1] : null);
-						if (alternateTrack != null && alternateTrack.Cover != null && alternateTrack.Title == bestTrack.Title && alternateTrack.Artist == bestTrack.Artist && alternateTrack.Album == bestTrack.Album && downloadCoverToTempFile(alternateTrack))
+						if (alternateTrack != null && alternateTrack.Cover != null && IsSameTrackMetadata(alternateTrack, bestTrack) && downloadCoverToTempFile(alternateTrack))
 						{
 							bestTrack = alternateTrack;
 						}
