@@ -9,6 +9,7 @@ using MusicTagWinApp.Instances;
 using MusicTagWinApp.Properties;
 using MusicTagWinApp.Web;
 using MusicTagWinApp.Writers;
+using Newtonsoft.Json.Linq;
 
 namespace MusicTag.Serialization;
 
@@ -272,6 +273,65 @@ internal abstract class RemoteTagProviderBase : IDisposable
 			using FileStream fileStream = new FileStream(filePath, FileMode.Create);
 			return (downloader.DownloadToStream(url, fileStream, 30000, timeout), fileStream.Length);
 		};
+	}
+
+	// 联网解析共用的 JToken 安全读取器(原各 provider 私有副本上提;详见 docs/SIMPLIFICATION_PLAN.md B3-2)。
+	// 语义:取字段时跳过 JSON null,缺失/类型不符一律回退为 ""、null 或 0。
+	protected static string GetStringOrEmpty(JToken token)
+	{
+		return token?.ToString() ?? "";
+	}
+
+	protected static JToken GetFirstField(JToken token, params string[] fieldNames)
+	{
+		if (token?.Type != JTokenType.Object)
+		{
+			return null;
+		}
+
+		foreach (string fieldName in fieldNames)
+		{
+			JToken field = token[fieldName];
+			if (field != null && field.Type != JTokenType.Null)
+			{
+				return field;
+			}
+		}
+		return null;
+	}
+
+	protected static string GetStringField(JToken token, string fieldName)
+	{
+		return GetStringOrEmpty(GetFirstField(token, fieldName));
+	}
+
+	protected static int? GetNullableIntField(JToken token, string fieldName)
+	{
+		JToken fieldValue = GetFirstField(token, fieldName);
+		if (fieldValue == null)
+		{
+			return null;
+		}
+
+		int intValue;
+		return int.TryParse(fieldValue.ToString(), out intValue) ? intValue : (int?)null;
+	}
+
+	protected static long GetLongField(JToken token, string fieldName)
+	{
+		return GetNullableLongField(token, fieldName) ?? 0L;
+	}
+
+	protected static long? GetNullableLongField(JToken token, string fieldName)
+	{
+		JToken fieldValue = GetFirstField(token, fieldName);
+		if (fieldValue == null)
+		{
+			return null;
+		}
+
+		long longValue;
+		return long.TryParse(fieldValue.ToString(), out longValue) ? longValue : (long?)null;
 	}
 }
 

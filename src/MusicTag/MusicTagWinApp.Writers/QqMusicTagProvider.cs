@@ -434,54 +434,6 @@ internal class QqMusicTagProvider : RemoteTagProviderBase
 		songInfo.Album.Name = TextEncodingService.DecodeBasicHtmlEntities(GetStringField(album, "name"));
 	}
 
-	private static string GetStringField(JToken token, string fieldName)
-	{
-		if (token?.Type != JTokenType.Object)
-		{
-			return "";
-		}
-		return token[fieldName]?.ToString() ?? "";
-	}
-
-	private static int? GetNullableIntField(JToken token, string fieldName)
-	{
-		if (token?.Type != JTokenType.Object)
-		{
-			return null;
-		}
-
-		JToken fieldValue = token[fieldName];
-		if (fieldValue == null)
-		{
-			return null;
-		}
-
-		int intValue;
-		return int.TryParse(fieldValue.ToString(), out intValue) ? intValue : (int?)null;
-	}
-
-	private static long GetLongField(JToken token, string fieldName)
-	{
-		return GetNullableLongField(token, fieldName) ?? 0L;
-	}
-
-	private static long? GetNullableLongField(JToken token, string fieldName)
-	{
-		if (token?.Type != JTokenType.Object)
-		{
-			return null;
-		}
-
-		JToken fieldValue = token[fieldName];
-		if (fieldValue == null)
-		{
-			return null;
-		}
-
-		long longValue;
-		return long.TryParse(fieldValue.ToString(), out longValue) ? longValue : (long?)null;
-	}
-
 	private LyricSearchResult CreateLyricResult(QqSongInfo songInfo, string responseBody)
 	{
 		LyricSearchResult lyric = null;

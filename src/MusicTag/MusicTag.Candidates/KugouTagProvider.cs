@@ -227,16 +227,6 @@ internal class KugouTagProvider : RemoteTagProviderBase
 		};
 	}
 
-	private static string GetStringField(JToken token, string fieldName)
-	{
-		if (token?.Type != JTokenType.Object)
-		{
-			return "";
-		}
-
-		return token[fieldName]?.ToString() ?? "";
-	}
-
 	private static int GetIntField(JToken token, string fieldName)
 	{
 		if (token?.Type != JTokenType.Object)

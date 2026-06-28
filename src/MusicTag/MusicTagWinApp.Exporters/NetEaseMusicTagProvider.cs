@@ -639,63 +639,6 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase
 		return null;
 	}
 
-	private static string GetStringOrEmpty(JToken token)
-	{
-		return token?.ToString() ?? "";
-	}
-
-	private static JToken GetFirstField(JToken token, params string[] fieldNames)
-	{
-		if (token?.Type != JTokenType.Object)
-		{
-			return null;
-		}
-
-		foreach (string fieldName in fieldNames)
-		{
-			JToken field = token[fieldName];
-			if (field != null && field.Type != JTokenType.Null)
-			{
-				return field;
-			}
-		}
-		return null;
-	}
-
-	private static string GetStringField(JToken token, string fieldName)
-	{
-		return GetStringOrEmpty(GetFirstField(token, fieldName));
-	}
-
-	private static int? GetNullableIntField(JToken token, string fieldName)
-	{
-		JToken fieldValue = GetFirstField(token, fieldName);
-		if (fieldValue == null)
-		{
-			return null;
-		}
-
-		int intValue;
-		return int.TryParse(fieldValue.ToString(), out intValue) ? intValue : (int?)null;
-	}
-
-	private static long GetLongField(JToken token, string fieldName)
-	{
-		return GetNullableLongField(token, fieldName) ?? 0L;
-	}
-
-	private static long? GetNullableLongField(JToken token, string fieldName)
-	{
-		JToken fieldValue = GetFirstField(token, fieldName);
-		if (fieldValue == null)
-		{
-			return null;
-		}
-
-		long longValue;
-		return long.TryParse(fieldValue.ToString(), out longValue) ? longValue : (long?)null;
-	}
-
 	private LyricSearchResult ParseLyricResponse(NetEaseSongInfo song, string responseBody)
 	{
 		LyricSearchResult lyric = null;
