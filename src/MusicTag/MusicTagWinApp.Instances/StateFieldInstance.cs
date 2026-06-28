@@ -642,6 +642,29 @@ internal class StateFieldInstance : Form
 		}
 	}
 
+	private static (string, bool) BuildBatchResultMessage(int totalCount, string completedMessage, int primaryCount, int failedCount, int skippedCount, int processedCount, string logText, bool includeSkippedBranch)
+	{
+		(string, bool) value = default((string, bool));
+		if (totalCount > 1)
+		{
+			value.Item1 = string.Format(completedMessage + "\n" + Resources.Msg_OK_Fail_Skip_Count, primaryCount, failedCount, skippedCount, processedCount) + "\n" + logText;
+		}
+		else if (primaryCount > 0)
+		{
+			value.Item1 = completedMessage + "\n" + logText;
+		}
+		else if (includeSkippedBranch && skippedCount > 0)
+		{
+			value.Item1 = Resources.Msg_Skipped + "\n" + logText;
+		}
+		else
+		{
+			value.Item1 = logText;
+			value.Item2 = true;
+		}
+		return value;
+	}
+
 	private static bool IsCancellationException(System.Exception exception, CancellationTokenSource cancellationSource)
 	{
 		if (cancellationSource == null || !cancellationSource.IsCancellationRequested)
@@ -5914,24 +5937,7 @@ internal class StateFieldInstance : Form
 					InvalidateFileRow(fileRow);
 				}
 			}
-			(string, bool) value = default((string, bool));
-			if (batchContext.renameItems.Length > 1)
-			{
-				value.Item1 = string.Format(Resources.Msg_SaveCompleted + "\n" + Resources.Msg_OK_Fail_Skip_Count, batchContext.renamedCount, batchContext.failedCount, batchContext.skippedCount, batchContext.processedCount) + "\n" + batchContext.messageLog.ToString();
-			}
-			else if (batchContext.renamedCount > 0)
-			{
-				value.Item1 = Resources.Msg_SaveCompleted + "\n" + batchContext.messageLog.ToString();
-			}
-			else if (batchContext.skippedCount > 0)
-			{
-				value.Item1 = Resources.Msg_Skipped + "\n" + batchContext.messageLog.ToString();
-			}
-			else
-			{
-				value.Item1 = batchContext.messageLog.ToString();
-				value.Item2 = true;
-			}
+			(string, bool) value = BuildBatchResultMessage(batchContext.renameItems.Length, Resources.Msg_SaveCompleted, batchContext.renamedCount, batchContext.failedCount, batchContext.skippedCount, batchContext.processedCount, batchContext.messageLog.ToString(), includeSkippedBranch: true);
 			batchContext.progressDialog.CloseAfterCompletion();
 			GC.Collect();
 			RefreshSelectedItems(showErrorMessageBox: false, showProgressDialog: true, refreshStatusAllInfo: true, previousMessage: value);
@@ -5967,24 +5973,7 @@ internal class StateFieldInstance : Form
 		try
 		{
 			await Task.Run((Action)saveTagsContext.SaveTags, saveTagsContext.cancellationSource.Token);
-			(string, bool) value = default((string, bool));
-			if (saveTagsContext.itemsToSave.Length > 1)
-			{
-				value.Item1 = string.Format(Resources.Msg_SaveCompleted + "\n" + Resources.Msg_OK_Fail_Skip_Count, saveTagsContext.savedCount, saveTagsContext.failedCount, saveTagsContext.skippedCount, saveTagsContext.processedCount) + "\n" + saveTagsContext.messageLog.ToString();
-			}
-			else if (saveTagsContext.savedCount > 0)
-			{
-				value.Item1 = Resources.Msg_SaveCompleted + "\n" + saveTagsContext.messageLog.ToString();
-			}
-			else if (saveTagsContext.skippedCount > 0)
-			{
-				value.Item1 = Resources.Msg_Skipped + "\n" + saveTagsContext.messageLog.ToString();
-			}
-			else
-			{
-				value.Item1 = saveTagsContext.messageLog.ToString();
-				value.Item2 = true;
-			}
+			(string, bool) value = BuildBatchResultMessage(saveTagsContext.itemsToSave.Length, Resources.Msg_SaveCompleted, saveTagsContext.savedCount, saveTagsContext.failedCount, saveTagsContext.skippedCount, saveTagsContext.processedCount, saveTagsContext.messageLog.ToString(), includeSkippedBranch: true);
 			saveTagsContext.progressDialog.CloseAfterCompletion();
 			GC.Collect();
 			RefreshSelectedItems(showErrorMessageBox: false, showProgressDialog: true, refreshStatusAllInfo: true, previousMessage: value);
@@ -6032,20 +6021,7 @@ internal class StateFieldInstance : Form
 				}
 				undoSaveTagsContext.processedCount++;
 			}
-			(string, bool) value = default((string, bool));
-			if (undoSaveTagsContext.undoTagSnapshots.Count > 1)
-			{
-				value.Item1 = string.Format(Resources.Msg_UndoCompleted + "\n" + Resources.Msg_OK_Fail_Skip_Count, undoSaveTagsContext.restoredCount, undoSaveTagsContext.failedCount, undoSaveTagsContext.skippedCount, undoSaveTagsContext.processedCount) + "\n" + undoSaveTagsContext.messageLog.ToString();
-			}
-			else if (undoSaveTagsContext.restoredCount > 0)
-			{
-				value.Item1 = Resources.Msg_UndoCompleted + "\n" + undoSaveTagsContext.messageLog.ToString();
-			}
-			else
-			{
-				value.Item1 = undoSaveTagsContext.messageLog.ToString();
-				value.Item2 = true;
-			}
+			(string, bool) value = BuildBatchResultMessage(undoSaveTagsContext.undoTagSnapshots.Count, Resources.Msg_UndoCompleted, undoSaveTagsContext.restoredCount, undoSaveTagsContext.failedCount, undoSaveTagsContext.skippedCount, undoSaveTagsContext.processedCount, undoSaveTagsContext.messageLog.ToString(), includeSkippedBranch: false);
 			undoSaveTagsContext.progressDialog.CloseAfterCompletion();
 			TagHistoryRepository.ClearUndoState();
 			RefreshItemsWithOptionalProgressDialog(refreshedItems.ToArray(), showErrorMessageBox: false, showProgressDialog: true, refreshStatusAllInfo: true, previousMessage: value, listForMirror: true);
@@ -6100,20 +6076,7 @@ internal class StateFieldInstance : Form
 				}
 				undoRenameContext.processedCount++;
 			}
-			(string, bool) value = default((string, bool));
-			if (undoRenameContext.renameUndoOperations.Count > 1)
-			{
-				value.Item1 = string.Format(Resources.Msg_UndoCompleted + "\n" + Resources.Msg_OK_Fail_Skip_Count, undoRenameContext.successCount, undoRenameContext.failedCount, undoRenameContext.skippedCount, undoRenameContext.processedCount) + "\n" + undoRenameContext.errorLog.ToString();
-			}
-			else if (undoRenameContext.successCount > 0)
-			{
-				value.Item1 = Resources.Msg_UndoCompleted + "\n" + undoRenameContext.errorLog.ToString();
-			}
-			else
-			{
-				value.Item1 = undoRenameContext.errorLog.ToString();
-				value.Item2 = true;
-			}
+			(string, bool) value = BuildBatchResultMessage(undoRenameContext.renameUndoOperations.Count, Resources.Msg_UndoCompleted, undoRenameContext.successCount, undoRenameContext.failedCount, undoRenameContext.skippedCount, undoRenameContext.processedCount, undoRenameContext.errorLog.ToString(), includeSkippedBranch: false);
 			undoRenameContext.progressDialog.CloseAfterCompletion();
 			TagHistoryRepository.ClearUndoState();
 			RefreshItemsWithOptionalProgressDialog(list.ToArray(), showErrorMessageBox: false, showProgressDialog: true, refreshStatusAllInfo: true, previousMessage: value, listForMirror: true);
@@ -6173,12 +6136,11 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	private void StartBatchLyricsOperation(string lyricsOperationResourceKey)
+	private void ConfirmAndSaveTagsWithOperation(string confirmLabelKey, Dictionary<string, object> comp)
 	{
 		int count = SelectedFileCount;
-		if (count != 0 && DatabaseMapper.ConfirmYesNo(string.Format(Resources.Msg_ConfirmSaveTags, count) + "(" + localizedResources.GetString(lyricsOperationResourceKey) + ")\n" + BuildSelectedFilePreview()))
+		if (count != 0 && DatabaseMapper.ConfirmYesNo(string.Format(Resources.Msg_ConfirmSaveTags, count) + "(" + localizedResources.GetString(confirmLabelKey) + ")\n" + BuildSelectedFilePreview()))
 		{
-			Dictionary<string, object> comp = new Dictionary<string, object> { { "lyrics_handle", lyricsOperationResourceKey } };
 			ProgressDialog progressDialog = new ProgressDialog(taskbarProgress);
 			SelectedListViewItemInfo[] selectedItems = CollectSelectedListViewItemInfos();
 			bool? canCancelReadOnly = ConfirmReadOnlyFileHandling(selectedItems);
@@ -6189,6 +6151,11 @@ internal class StateFieldInstance : Form
 				progressDialog.ShowDialogIfNotDisposed();
 			}
 		}
+	}
+
+	private void StartBatchLyricsOperation(string lyricsOperationResourceKey)
+	{
+		ConfirmAndSaveTagsWithOperation(lyricsOperationResourceKey, new Dictionary<string, object> { { "lyrics_handle", lyricsOperationResourceKey } });
 	}
 
 	private async void StartRemoveFiles(SelectedListViewItemInfo[] itemInfos, ProgressDialog progressDialog)
@@ -6535,66 +6502,34 @@ internal class StateFieldInstance : Form
 
 	private void ConvertSelectedTagsTraditionalToSimplified_Click(object sender, EventArgs e)
 	{
-		int count = SelectedFileCount;
-		if (count != 0 && DatabaseMapper.ConfirmYesNo(string.Format(Resources.Msg_ConfirmSaveTags, count) + "(" + localizedResources.GetString("menuStrip1.Batch.TagsChtToChs") + ")\n" + BuildSelectedFilePreview()))
-		{
-			Dictionary<string, object> comp = new Dictionary<string, object> { { "chscht_handle", false } };
-			ProgressDialog progressDialog = new ProgressDialog(taskbarProgress);
-			SelectedListViewItemInfo[] selectedItems = CollectSelectedListViewItemInfos();
-			bool? canCancelReadOnly = ConfirmReadOnlyFileHandling(selectedItems);
-			bool shouldCancelReadOnly = canCancelReadOnly == true;
-			if (canCancelReadOnly.HasValue)
-			{
-				StartCommonSaveTags(selectedItems, progressDialog, comp, shouldCancelReadOnly);
-				progressDialog.ShowDialogIfNotDisposed();
-			}
-		}
+		ConfirmAndSaveTagsWithOperation("menuStrip1.Batch.TagsChtToChs", new Dictionary<string, object> { { "chscht_handle", false } });
 	}
 
 	private void ConvertSelectedTagsSimplifiedToTraditional_Click(object sender, EventArgs e)
 	{
+		ConfirmAndSaveTagsWithOperation("menuStrip1.Batch.TagsChsToCht", new Dictionary<string, object> { { "chscht_handle", true } });
+	}
+
+	private void ConfirmAndConvertSelectedFilenames(string confirmLabelKey, bool isChsToCht)
+	{
 		int count = SelectedFileCount;
-		if (count == 0)
+		if (count != 0 && DatabaseMapper.ConfirmYesNo(string.Format(Resources.Msg_ConfirmRenameFiles, count) + "(" + localizedResources.GetString(confirmLabelKey) + ")\n" + BuildSelectedFilePreview()))
 		{
-			return;
-		}
-		if (!DatabaseMapper.ConfirmYesNo(string.Format(Resources.Msg_ConfirmSaveTags, count) + "(" + localizedResources.GetString("menuStrip1.Batch.TagsChsToCht") + ")\n" + BuildSelectedFilePreview()))
-		{
-			return;
-		}
-		Dictionary<string, object> comp = new Dictionary<string, object> { { "chscht_handle", true } };
-		ProgressDialog progressDialog = new ProgressDialog(taskbarProgress);
-		SelectedListViewItemInfo[] selectedItems = CollectSelectedListViewItemInfos();
-		bool? canCancelReadOnly = ConfirmReadOnlyFileHandling(selectedItems);
-		if (canCancelReadOnly.HasValue)
-		{
-			StartCommonSaveTags(selectedItems, progressDialog, comp, canCancelReadOnly == true);
+			ProgressDialog progressDialog = new ProgressDialog(taskbarProgress);
+			(string Path, string NewPath, int ListViewIndex)[] itemInfos = CollectSelectedListViewItemInfos().Select(CreateRenameItemInfo).ToArray();
+			StartRenameFiles(itemInfos, progressDialog, isChsToCht);
 			progressDialog.ShowDialogIfNotDisposed();
 		}
 	}
 
 	private void ConvertSelectedFilenamesTraditionalToSimplified_Click(object sender, EventArgs e)
 	{
-		int count = SelectedFileCount;
-		if (count != 0 && DatabaseMapper.ConfirmYesNo(string.Format(Resources.Msg_ConfirmRenameFiles, count) + "(" + localizedResources.GetString("menuStrip1.Batch.FilenameChtToChs") + ")\n" + BuildSelectedFilePreview()))
-		{
-			ProgressDialog progressDialog = new ProgressDialog(taskbarProgress);
-			(string Path, string NewPath, int ListViewIndex)[] itemInfos = CollectSelectedListViewItemInfos().Select(CreateRenameItemInfo).ToArray();
-			StartRenameFiles(itemInfos, progressDialog, isChsToCht: false);
-			progressDialog.ShowDialogIfNotDisposed();
-		}
+		ConfirmAndConvertSelectedFilenames("menuStrip1.Batch.FilenameChtToChs", isChsToCht: false);
 	}
 
 	private void ConvertSelectedFilenamesSimplifiedToTraditional_Click(object sender, EventArgs e)
 	{
-		int count = SelectedFileCount;
-		if (count != 0 && DatabaseMapper.ConfirmYesNo(string.Format(Resources.Msg_ConfirmRenameFiles, count) + "(" + localizedResources.GetString("menuStrip1.Batch.FilenameChsToCht") + ")\n" + BuildSelectedFilePreview()))
-		{
-			ProgressDialog progressDialog = new ProgressDialog(taskbarProgress);
-			(string Path, string NewPath, int ListViewIndex)[] itemInfos = CollectSelectedListViewItemInfos().Select(CreateRenameItemInfo).ToArray();
-			StartRenameFiles(itemInfos, progressDialog, isChsToCht: true);
-			progressDialog.ShowDialogIfNotDisposed();
-		}
+		ConfirmAndConvertSelectedFilenames("menuStrip1.Batch.FilenameChsToCht", isChsToCht: true);
 	}
 
 	private void OpenOptions_Click(object sender, EventArgs e)
