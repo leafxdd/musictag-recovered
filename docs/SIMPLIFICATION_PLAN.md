@@ -123,12 +123,12 @@
   - [x] `AppendUtf8Blocks(values,blocks,tagTypeName,ref tagType,ref stringType)` 统一 `FillRawFromXiph`/`FillRawFromApe` 的 UTF8 编码尾（仅 tagType 名不同）
   - [x] `AddIfAbsent(key,factory)` 收敛 `LoadAudioProperties` 6 处惰性缓存（factory 仅 key 缺失时求值，装箱不变）
 
-- [ ] **B2 搜索对话框收敛到 `SearchStatusIndicator`（在线子系统）**
-  - [ ] enum→provider 类型映射工厂 `CreateProvider(source,cts)` —— ⚠️（Codex 点 1）**置于 `MusicTagWinApp.Web` 独立小工厂（与 `SearchSource` 同处），不放进 `RemoteTagProviderBase`**：基类已在 `RemoteTagProviderBase.cs:234` 有 `!(this is QqMusicTagProvider)` 一处反向依赖，不再把它对全部 4 个具体 provider 的认知加宽。用它收敛 `CoverSearchDialog` 两处 `SearchCovers` + `LyricSearchDialog.DownloadLyricBySource` 三臂的 uniform-call switch（异构签名臂——NetEase 带 musicId、Kuwo `LoadLyricForTrack`——保留 typed local）
-  - [ ] `SearchStatusIndicator.LayoutFooterStatus(footer,buttons,label)`（页脚按钮+状态标签布局 ×3：`CoverSearchDialog:559-566`、`LyricSearchDialog:306-313`、`CombinedTagSearchDialog:607-614`）
-  - [ ] `SearchStatusIndicator.BeginReporting()`（`Progress<SourceSearchStatus>` 通道接线 ×3：`LyricSearchDialog:577-579`、`CoverSearchDialog:647-649`、`CombinedTagSearchDialog:935-937`）
-  - [ ] `SourceOutcomeTracker`（`MusicTagWinApp.Web`，Record + ReportFinal）收敛 Cover/Lyric 两份按源跟踪（`LyricSearchDialog:423-433,596-612` ≡ `CoverSearchDialog:188-211`）
-  - [ ] `CoverSearchDialog` 合并 `SearchByAlbumAndArtist`/`SearchByTitleAndArtist`→`SearchCoversBySource(source,query)`（574-640）
+- [x] **B2 搜索对话框收敛到 `SearchStatusIndicator`（在线子系统）** —— 4 项完成 `a906e4a`（B2-1 否决）；build+smoke 通过 + 5/5 对抗性验证 verdict 行为保留
+  - [ ] ~~enum→provider 类型映射工厂 `CreateProvider(source,cts)`~~ **否决（not-equivalent）**：`RemoteTagProviderBase` 不声明任何搜索方法（`SearchCovers`/`SearchLyrics`/`SearchTracks`/`LoadLyric(s)ForTrack` 全 concrete-only 且签名异构——NetEase 带 `long musicId` 5/7 参、Kuwo `LoadLyricForTrack` 单数名、Kugou 无 `SearchCovers`，且无共享接口）。基类型工厂返回值无法 uniform 调用任何搜索方法（CS1061）；强行用 `dynamic` 改绑定/异常语义、逐源 cast 等于原 switch 零简化；另封面 switch 仅 3 源而工厂 4 源（Kugou 域不匹配）。
+  - [x] `SearchStatusIndicator.LayoutFooterStatus(footer,buttons,label)` 收三 dialog 逐字节相同的页脚按钮+状态标签布局块（`public static`，加 `using System.Drawing;`）
+  - [x] `SearchStatusIndicator.BeginReporting()` 收三 dialog 相同的 `Progress<SourceSearchStatus>` 通道接线（实例方法，返回 reporter；SynchronizationContext 捕获等价已证）
+  - [x] `SourceOutcomeTracker`（`MusicTagWinApp.Web`，Record/Clear/BuildFinalStatus/ReportFinal）收敛 Cover（worker 字段，无 Clear）+ Lyric（dialog 字段，留 Clear）；**ReportFinal 接收调用方 enabled-source 序列**保证发射集不变；Combined 单发模型留原处
+  - [x] `CoverSearchDialog` 合并 `SearchByAlbumAndArtist`/`SearchByTitleAndArtist`→`SearchCoversBySource(source,query,existingCandidates)`（query 留 lambda 内延迟求值，3 参保留 worker `accumulatedCandidates`）
 
 - [ ] **B3 Provider 候选装配上提到 `RemoteTagProviderBase`（结构价值最大，拆 2–3 子提交）**
   - [ ] `BuildOrderedTracks<TSong>` / `BuildOrderedLyrics<TSong>` / `BuildDedupedCovers<TSong>`（含 SearchSource 过滤去重集、有序 Dictionary 物化、ResultOrder/SearchPass/SourceOrder 标注）—— 先 QQ/Kuwo/Kugou，NetEase 因额外 `(knownSongId==0||Cover!=null)` 谓词与 `EncodeMusicComment` 后步后续并入。⚠️（Codex 点 6）helper **只接收 songs + provider 构造/加载委托，不统一联网调用顺序与取消语义**：Tracks 骨架三家结构一致，Lyrics 因 Kuwo loader 不同经委托吸收，**Kugou 的反转取消控制流（`if-not-cancelled…continue; else break`）须先证语义等价再并入**
@@ -174,6 +174,7 @@
 - 2026-06-28 **A3 完成 `cc1bc3c`**（7 项，纯 in-file 显示/UI/错误路由去重）：删 `FilterValueCollector`/`SelectedItemFilterValueCounter` 闭包类、两调用点复用 `AddSelectedFilterValues`；`Subscribe/UnsubscribeTagFieldTextHandlers` 收 6 订阅循环；`FormatCountDurationSize` 收 4 状态标签插值；`BuildBasicFileDisplayValues` 合并双分支；`GetLoadedFilePaths` LINQ 一行；`ConvertAllTagFields` 提工厂出循环（静态单例+纯函数等价）；`ReportAsyncOperationErrorIfNotCancellation` 收 13 取消感知 catch。Debug+Release 0 warn、smoke 通过。
 - 2026-06-28 **A3b 完成 `6b61728`**（3 项，写/重命名 UI 入口，Codex 拆出重验证）：`ConfirmAndSaveTagsWithOperation` 泛化 lyrics + 2 tag CHS/CHT 处理器、`ConfirmAndConvertSelectedFilenames` 合并 2 文件名处理器、`BuildBatchResultMessage` 收 4 处 save/rename/undo 结果消息（clear 变体保留 inline）。逐字节核对 + diff 读，Debug+Release 0 warn、smoke 通过；实跑 save/rename 无 smoke 覆盖。**Tier A 全部完成。**
 - 2026-06-28 **B1 完成 `f04426e`**（3 项，写标签核心）：`SaveWithId3v2Version(Action)` 收两 save 方法的版本锁/try/catch/finally；`AppendUtf8Blocks` 统一 Xiph/Ape 的 UTF8 尾；`AddIfAbsent` 收 LoadAudioProperties 6 惰性缓存。Debug+Release 0 warn、smoke 通过；写路径无 smoke 覆盖,等价靠脚手架同构/body 迁移分析。
+- 2026-06-28 **B2 完成 `a906e4a`**（4 项,在线搜索弹窗收敛；B2-1 否决）：`SearchStatusIndicator.LayoutFooterStatus`（三 dialog 逐字节相同页脚块，+`using System.Drawing;`）、`BeginReporting()`（三处 `Progress<SourceSearchStatus>` 通道接线，SynchronizationContext 捕获等价）、`SourceOutcomeTracker`（新类收敛 Cover/Lyric 按源成败统计，`ReportFinal` 接 enabled-source 序列保发射集不变，Combined 单发模型留原处）、`SearchCoversBySource`（合并两 `SearchBy*` 封面方法，query 留 lambda 内延迟求值，3 参保留 `accumulatedCandidates`）。**B2-1 provider 工厂否决**：基类无搜索方法、签名异构，基类型无法 uniform 调用（CS1061），强行 `dynamic`/逐源 cast 改语义或零简化。两个 workflow：设计-等价分析（5 子项 + critic）→ 实现 → 对抗性验证（4 怀疑者 + holistic，**5/5 verdict 行为保留、0 真实差异**）。Debug+Release 0 warn、smoke 通过；联网写回路径无 smoke 覆盖,等价靠数据流 + 对抗验证。
 
 ---
 
