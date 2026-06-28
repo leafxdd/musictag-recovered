@@ -1,7 +1,6 @@
 using System;
 using System.ComponentModel;
 using System.Drawing;
-using System.Threading;
 using System.Timers;
 using System.Windows.Forms;
 using MusicTagWinApp.Instances;
@@ -14,9 +13,9 @@ internal class ProgressDialog : Form
 {
 	public delegate void ProgressDialogCallback();
 
-	private ProgressDialogCallback cancelRequestedHandlers;
+	public event ProgressDialogCallback CancelRequested;
 
-	private ProgressDialogCallback progressUpdateHandlers;
+	public event ProgressDialogCallback ProgressUpdate;
 
 	private readonly System.Timers.Timer updateTimer;
 
@@ -42,26 +41,6 @@ internal class ProgressDialog : Form
 		cancelButton.Text = Resources.Cancel;
 		updateTimer.AutoReset = true;
 		updateTimer.Elapsed += UpdateTimer_Elapsed;
-	}
-
-	public void AddCancelRequestedHandler(ProgressDialogCallback handler)
-	{
-		AddCallback(ref cancelRequestedHandlers, handler);
-	}
-
-	public void RemoveCancelRequestedHandler(ProgressDialogCallback handler)
-	{
-		RemoveCallback(ref cancelRequestedHandlers, handler);
-	}
-
-	public void AddProgressUpdateHandler(ProgressDialogCallback handler)
-	{
-		AddCallback(ref progressUpdateHandlers, handler);
-	}
-
-	public void RemoveProgressUpdateHandler(ProgressDialogCallback handler)
-	{
-		RemoveCallback(ref progressUpdateHandlers, handler);
 	}
 
 	public void ShowDialogIfNotDisposed()
@@ -150,30 +129,6 @@ internal class ProgressDialog : Form
 		base.Dispose(disposing);
 	}
 
-	private static void AddCallback(ref ProgressDialogCallback callback, ProgressDialogCallback handler)
-	{
-		ProgressDialogCallback previous;
-		ProgressDialogCallback updated;
-		do
-		{
-			previous = callback;
-			updated = (ProgressDialogCallback)Delegate.Combine(previous, handler);
-		}
-		while (Interlocked.CompareExchange(ref callback, updated, previous) != previous);
-	}
-
-	private static void RemoveCallback(ref ProgressDialogCallback callback, ProgressDialogCallback handler)
-	{
-		ProgressDialogCallback previous;
-		ProgressDialogCallback updated;
-		do
-		{
-			previous = callback;
-			updated = (ProgressDialogCallback)Delegate.Remove(previous, handler);
-		}
-		while (Interlocked.CompareExchange(ref callback, updated, previous) != previous);
-	}
-
 	private void SetProgressBarStyle(ProgressBarStyle style)
 	{
 		if (progressBar.Style != style)
@@ -184,7 +139,7 @@ internal class ProgressDialog : Form
 
 	private void CancelButton_Click(object sender, EventArgs e)
 	{
-		cancelRequestedHandlers?.Invoke();
+		CancelRequested?.Invoke();
 		cancelButton.Enabled = false;
 		updateTimer.Stop();
 	}
@@ -213,7 +168,7 @@ internal class ProgressDialog : Form
 	{
 		if (!isClosing && !IsDisposed)
 		{
-			progressUpdateHandlers?.Invoke();
+			ProgressUpdate?.Invoke();
 		}
 	}
 

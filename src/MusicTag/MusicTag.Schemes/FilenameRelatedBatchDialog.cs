@@ -1196,8 +1196,8 @@ internal class FilenameRelatedBatchDialog : Form
 			CancellationTokenSource = new CancellationTokenSource(),
 			CurrentFileName = null
 		};
-		progressDialog.AddCancelRequestedHandler(worker.Cancel);
-		progressDialog.AddProgressUpdateHandler(worker.UpdateProgress);
+		progressDialog.CancelRequested += worker.Cancel;
+		progressDialog.ProgressUpdate += worker.UpdateProgress;
 		worker.ReportFailure = worker.ReportRenameFailure;
 		(string msg, bool isErr) result = default((string, bool));
 		try
@@ -1228,8 +1228,8 @@ internal class FilenameRelatedBatchDialog : Form
 			CancellationTokenSource = new CancellationTokenSource(),
 			CurrentFileName = null
 		};
-		progressDialog.AddCancelRequestedHandler(worker.Cancel);
-		progressDialog.AddProgressUpdateHandler(worker.UpdateProgress);
+		progressDialog.CancelRequested += worker.Cancel;
+		progressDialog.ProgressUpdate += worker.UpdateProgress;
 		worker.ReportFailure = worker.ReportTagSaveFailure;
 		(string msg, bool isErr) result = default((string, bool));
 		try

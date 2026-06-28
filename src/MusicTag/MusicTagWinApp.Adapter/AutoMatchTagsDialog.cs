@@ -1407,8 +1407,8 @@ internal class AutoMatchTagsDialog : Form
 
 		internal void RegisterProgressCallbacks()
 		{
-			progressDialog.AddCancelRequestedHandler(Cancel);
-			progressDialog.AddProgressUpdateHandler(UpdateProgress);
+			progressDialog.CancelRequested += Cancel;
+			progressDialog.ProgressUpdate += UpdateProgress;
 		}
 
 		internal void Run()

@@ -4065,8 +4065,8 @@ internal class StateFieldInstance : Form
 		};
 		ProgressDialog.ProgressDialogCallback cancelRequestedHandler = fileCollector.Cancel;
 		ProgressDialog.ProgressDialogCallback progressUpdateHandler = fileCollector.ShowScanningProgress;
-		progressDialog.AddCancelRequestedHandler(cancelRequestedHandler);
-		progressDialog.AddProgressUpdateHandler(progressUpdateHandler);
+		progressDialog.CancelRequested += cancelRequestedHandler;
+		progressDialog.ProgressUpdate += progressUpdateHandler;
 		bool continueAddingFiles = false;
 		try
 		{
@@ -4083,8 +4083,8 @@ internal class StateFieldInstance : Form
 		}
 		finally
 		{
-			progressDialog.RemoveCancelRequestedHandler(cancelRequestedHandler);
-			progressDialog.RemoveProgressUpdateHandler(progressUpdateHandler);
+			progressDialog.CancelRequested -= cancelRequestedHandler;
+			progressDialog.ProgressUpdate -= progressUpdateHandler;
 			if (!continueAddingFiles)
 			{
 				progressDialog.CloseAfterCompletion();
@@ -4205,8 +4205,8 @@ internal class StateFieldInstance : Form
 			FileIconSize = new Size(fileTypeImageList.ImageSize.Width, fileTypeImageList.ImageSize.Height),
 			LoadErrors = new Page()
 		};
-		progressDialog.AddCancelRequestedHandler(addFilesWorker.Cancel);
-		progressDialog.AddProgressUpdateHandler(addFilesWorker.UpdateProgress);
+		progressDialog.CancelRequested += addFilesWorker.Cancel;
+		progressDialog.ProgressUpdate += addFilesWorker.UpdateProgress;
 		addFilesWorker.LoadedFilesProgress = new Progress<List<(ConfigDescriptorState TagFile, Dictionary<string, string> DisplayValues, string FilePath)>>(addFilesWorker.AddLoadedFilesToListView);
 		try
 		{
@@ -4293,8 +4293,8 @@ internal class StateFieldInstance : Form
 		refreshContext.processedCount = 0;
 		if (refreshContext.progressDialog != null)
 		{
-			refreshContext.progressDialog.AddCancelRequestedHandler(refreshContext.Cancel);
-			refreshContext.progressDialog.AddProgressUpdateHandler(refreshContext.UpdateProgress);
+			refreshContext.progressDialog.CancelRequested += refreshContext.Cancel;
+			refreshContext.progressDialog.ProgressUpdate += refreshContext.UpdateProgress;
 		}
 		refreshContext.progressReporter = new Progress<List<(SelectedListViewItemInfo, ConfigDescriptorState, Dictionary<string, string>)>>(refreshContext.ApplyRefreshedItems);
 		refreshContext.loadErrors = new Page();
@@ -5915,13 +5915,13 @@ internal class StateFieldInstance : Form
 		batchContext.renameItems = itemInfos;
 		batchContext.convertSimplifiedToTraditional = isChsToCht;
 		batchContext.cancellationSource = new CancellationTokenSource();
-		batchContext.progressDialog.AddCancelRequestedHandler(batchContext.Cancel);
+		batchContext.progressDialog.CancelRequested += batchContext.Cancel;
 		batchContext.renamedCount = 0;
 		batchContext.failedCount = 0;
 		batchContext.skippedCount = 0;
 		batchContext.processedCount = 0;
 		batchContext.currentFile = null;
-		batchContext.progressDialog.AddProgressUpdateHandler(batchContext.UpdateProgress);
+		batchContext.progressDialog.ProgressUpdate += batchContext.UpdateProgress;
 		batchContext.messageLog = new Page();
 		try
 		{
@@ -5962,13 +5962,13 @@ internal class StateFieldInstance : Form
 		saveTagsContext.canCancelReadOnly = canCancelFileReadonly;
 		saveTagsContext.shouldRefreshPictureResolution = needUpdatePictureResolution;
 		saveTagsContext.cancellationSource = new CancellationTokenSource();
-		saveTagsContext.progressDialog.AddCancelRequestedHandler(saveTagsContext.Cancel);
+		saveTagsContext.progressDialog.CancelRequested += saveTagsContext.Cancel;
 		saveTagsContext.savedCount = 0;
 		saveTagsContext.failedCount = 0;
 		saveTagsContext.skippedCount = 0;
 		saveTagsContext.processedCount = 0;
 		saveTagsContext.currentFile = null;
-		saveTagsContext.progressDialog.AddProgressUpdateHandler(saveTagsContext.UpdateProgress);
+		saveTagsContext.progressDialog.ProgressUpdate += saveTagsContext.UpdateProgress;
 		saveTagsContext.messageLog = new Page();
 		try
 		{
@@ -5993,14 +5993,14 @@ internal class StateFieldInstance : Form
 		UndoSaveTagsTaskContext undoSaveTagsContext = new UndoSaveTagsTaskContext();
 		undoSaveTagsContext.progressDialog = progressDialog;
 		undoSaveTagsContext.cancellationSource = new CancellationTokenSource();
-		undoSaveTagsContext.progressDialog.AddCancelRequestedHandler(undoSaveTagsContext.Cancel);
+		undoSaveTagsContext.progressDialog.CancelRequested += undoSaveTagsContext.Cancel;
 		undoSaveTagsContext.undoTagSnapshots = TagHistoryRepository.GetUndoTagSnapshots();
 		undoSaveTagsContext.restoredCount = 0;
 		undoSaveTagsContext.failedCount = 0;
 		undoSaveTagsContext.skippedCount = 0;
 		undoSaveTagsContext.processedCount = 0;
 		undoSaveTagsContext.currentFile = null;
-		undoSaveTagsContext.progressDialog.AddProgressUpdateHandler(undoSaveTagsContext.UpdateProgress);
+		undoSaveTagsContext.progressDialog.ProgressUpdate += undoSaveTagsContext.UpdateProgress;
 		undoSaveTagsContext.messageLog = new Page();
 		try
 		{
@@ -6042,14 +6042,14 @@ internal class StateFieldInstance : Form
 		undoRenameContext.progressDialog = progressDialog;
 		undoRenameContext.owner = this;
 		undoRenameContext.cancellationSource = new CancellationTokenSource();
-		undoRenameContext.progressDialog.AddCancelRequestedHandler(undoRenameContext.Cancel);
+		undoRenameContext.progressDialog.CancelRequested += undoRenameContext.Cancel;
 		undoRenameContext.renameUndoOperations = TagHistoryRepository.GetRenameUndoOperations();
 		undoRenameContext.successCount = 0;
 		undoRenameContext.failedCount = 0;
 		undoRenameContext.skippedCount = 0;
 		undoRenameContext.processedCount = 0;
 		undoRenameContext.currentFile = null;
-		undoRenameContext.progressDialog.AddProgressUpdateHandler(undoRenameContext.UpdateProgress);
+		undoRenameContext.progressDialog.ProgressUpdate += undoRenameContext.UpdateProgress;
 		undoRenameContext.errorLog = new Page();
 		try
 		{
@@ -6098,12 +6098,12 @@ internal class StateFieldInstance : Form
 		clearTagsContext.itemsToClear = itemInfos;
 		clearTagsContext.canCancelFileReadonly = canCancelFileReadonly;
 		clearTagsContext.cancellationSource = new CancellationTokenSource();
-		clearTagsContext.progressDialog.AddCancelRequestedHandler(clearTagsContext.Cancel);
+		clearTagsContext.progressDialog.CancelRequested += clearTagsContext.Cancel;
 		clearTagsContext.successCount = 0;
 		clearTagsContext.failedCount = 0;
 		clearTagsContext.processedCount = 0;
 		clearTagsContext.currentFile = null;
-		clearTagsContext.progressDialog.AddProgressUpdateHandler(clearTagsContext.UpdateProgress);
+		clearTagsContext.progressDialog.ProgressUpdate += clearTagsContext.UpdateProgress;
 		clearTagsContext.errorLog = new Page();
 		try
 		{
@@ -6165,10 +6165,10 @@ internal class StateFieldInstance : Form
 		deleteFilesContext.itemsToDelete = itemInfos;
 		deleteFilesContext.owner = this;
 		deleteFilesContext.cancellationSource = new CancellationTokenSource();
-		deleteFilesContext.progressDialog.AddCancelRequestedHandler(deleteFilesContext.Cancel);
+		deleteFilesContext.progressDialog.CancelRequested += deleteFilesContext.Cancel;
 		deleteFilesContext.processedCount = 0;
 		deleteFilesContext.currentFile = null;
-		deleteFilesContext.progressDialog.AddProgressUpdateHandler(deleteFilesContext.UpdateProgress);
+		deleteFilesContext.progressDialog.ProgressUpdate += deleteFilesContext.UpdateProgress;
 		deleteFilesContext.deletedCount = 0;
 		deleteFilesContext.failedCount = 0;
 		deleteFilesContext.errorLog = new Page();
@@ -6193,10 +6193,10 @@ internal class StateFieldInstance : Form
 		saveLrcContext.progressDialog = progressDialog;
 		saveLrcContext.itemsToSave = itemInfos;
 		saveLrcContext.cancellationSource = new CancellationTokenSource();
-		saveLrcContext.progressDialog.AddCancelRequestedHandler(saveLrcContext.Cancel);
+		saveLrcContext.progressDialog.CancelRequested += saveLrcContext.Cancel;
 		saveLrcContext.processedCount = 0;
 		saveLrcContext.currentFile = null;
-		saveLrcContext.progressDialog.AddProgressUpdateHandler(saveLrcContext.UpdateProgress);
+		saveLrcContext.progressDialog.ProgressUpdate += saveLrcContext.UpdateProgress;
 		saveLrcContext.savedCount = 0;
 		saveLrcContext.failedCount = 0;
 		saveLrcContext.skippedCount = 0;
@@ -6222,10 +6222,10 @@ internal class StateFieldInstance : Form
 		extractCoversContext.progressDialog = progressDialog;
 		extractCoversContext.itemsToExtract = itemInfos;
 		extractCoversContext.cancellationSource = new CancellationTokenSource();
-		extractCoversContext.progressDialog.AddCancelRequestedHandler(extractCoversContext.Cancel);
+		extractCoversContext.progressDialog.CancelRequested += extractCoversContext.Cancel;
 		extractCoversContext.processedCount = 0;
 		extractCoversContext.currentFile = null;
-		extractCoversContext.progressDialog.AddProgressUpdateHandler(extractCoversContext.UpdateProgress);
+		extractCoversContext.progressDialog.ProgressUpdate += extractCoversContext.UpdateProgress;
 		extractCoversContext.extractedCount = 0;
 		extractCoversContext.failedCount = 0;
 		extractCoversContext.skippedCount = 0;
