@@ -602,16 +602,7 @@ internal class CombinedTagSearchDialog : Form
 	{
 		searchResultsListView.Width = mainPanel.Width;
 		searchResultsListView.Height = mainPanel.Height - footerPanel.Height;
-		// footerPanel 为普通 Panel,子控件绝对定位:按钮恒定居中(与状态标签显隐无关),
-		// 状态标签置于按钮右侧、垂直中线与按钮对齐。详见 docs/SEARCH_STATUS_INDICATOR_DESIGN.md。
-		int buttonLeft = Math.Max(0, (footerPanel.Width - buttonPanel.Width) / 2);
-		int buttonTop = Math.Max(0, (footerPanel.Height - buttonPanel.Height) / 2);
-		buttonPanel.Location = new Point(buttonLeft, buttonTop);
-		int statusGap = 12;
-		int statusLeft = buttonPanel.Location.X + buttonPanel.Width + statusGap;
-		int statusTop = buttonPanel.Location.Y + buttonPanel.Height / 2 - searchStatusLabel.Height / 2;
-		searchStatusLabel.Location = new Point(statusLeft, statusTop);
-		searchStatusLabel.Width = Math.Max(0, footerPanel.Width - statusLeft - 8);
+		SearchStatusIndicator.LayoutFooterStatus(footerPanel, buttonPanel, searchStatusLabel);
 	}
 
 	private void SearchPanelSizeChanged(object sender, EventArgs args)
@@ -932,9 +923,7 @@ internal class CombinedTagSearchDialog : Form
 		trackSearchCoordinator.ProgressReporter = new Progress<List<TrackSearchResult>>(trackSearchCoordinator.OnSearchResultsReported);
 		// 状态通道:Progress<T> 在 UI 线程构造,Report 自动编组回 UI 线程;
 		// 后台搜索线程通过 searchStatusReporter 推送,UI 线程聚合渲染。
-		Progress<SourceSearchStatus> statusProgress = new Progress<SourceSearchStatus>(searchStatusIndicator.Report);
-		searchStatusReporter = (SourceSearchStatus status) => ((IProgress<SourceSearchStatus>)statusProgress).Report(status);
-		searchStatusIndicator.Begin();
+		searchStatusReporter = searchStatusIndicator.BeginReporting();
 		taskbarProgress.SetProgressState(TaskbarProgressBarStatus.Indeterminate);
 		try
 		{

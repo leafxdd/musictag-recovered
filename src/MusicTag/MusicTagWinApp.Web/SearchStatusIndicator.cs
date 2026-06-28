@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Drawing;
 using System.Windows.Forms;
 
 namespace MusicTagWinApp.Web;
@@ -50,6 +51,17 @@ internal sealed class SearchStatusIndicator
 		searchHasRun = true;
 		retryCountdownTimer.Stop();
 		Refresh();
+	}
+
+	// 开始一轮新搜索并建立状态上报通道(仅 UI 线程调用):在 UI 线程构造 Progress<T>
+	// 以捕获当前 SynchronizationContext,调用 Begin() 重置本轮状态,返回经 Progress
+	// 编组回 UI 线程的上报委托。三个搜索弹窗共用,替代各自的内联三行。
+	public Action<SourceSearchStatus> BeginReporting()
+	{
+		Progress<SourceSearchStatus> statusProgress = new Progress<SourceSearchStatus>(Report);
+		Action<SourceSearchStatus> reporter = (SourceSearchStatus status) => ((IProgress<SourceSearchStatus>)statusProgress).Report(status);
+		Begin();
+		return reporter;
 	}
 
 	// 搜索整体结束:任何仍处于"搜索中/重试中"的源都视为已完成,避免边角路径残留
@@ -224,6 +236,20 @@ internal sealed class SearchStatusIndicator
 	private static string FormatErrorCode(string errorCode)
 	{
 		return string.IsNullOrEmpty(errorCode) ? "未知" : errorCode;
+	}
+
+	// footerPanel 为普通 Panel,子控件绝对定位:按钮恒定居中(与状态标签显隐无关),
+	// 状态标签置于按钮右侧、垂直中线与按钮对齐。详见 docs/SEARCH_STATUS_INDICATOR_DESIGN.md。
+	public static void LayoutFooterStatus(Control footerPanel, Control buttonPanel, Control statusLabel)
+	{
+		int buttonLeft = Math.Max(0, (footerPanel.Width - buttonPanel.Width) / 2);
+		int buttonTop = Math.Max(0, (footerPanel.Height - buttonPanel.Height) / 2);
+		buttonPanel.Location = new Point(buttonLeft, buttonTop);
+		int statusGap = 12;
+		int statusLeft = buttonPanel.Location.X + buttonPanel.Width + statusGap;
+		int statusTop = buttonPanel.Location.Y + buttonPanel.Height / 2 - statusLabel.Height / 2;
+		statusLabel.Location = new Point(statusLeft, statusTop);
+		statusLabel.Width = Math.Max(0, footerPanel.Width - statusLeft - 8);
 	}
 
 	public static string GetSourceDisplayName(SearchSource source)

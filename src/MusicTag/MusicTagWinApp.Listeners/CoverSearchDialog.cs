@@ -40,9 +40,7 @@ internal class CoverSearchDialog : Form
 
 		private int remainingTotal;
 
-		private readonly HashSet<SearchSource> completedSources = new HashSet<SearchSource>();
-
-		private readonly Dictionary<SearchSource, HttpResult> errorBySource = new Dictionary<SearchSource, HttpResult>();
+		private readonly SourceOutcomeTracker outcomeTracker = new SourceOutcomeTracker();
 
 		public CandidateSearchWorker(CoverSearchDialog dialog, IProgress<List<CoverSearchResult>> progress)
 		{
@@ -86,7 +84,7 @@ internal class CoverSearchDialog : Form
 				{
 					if (CanSearch(sourceItem, isOtherSource: false))
 					{
-						SearchAndReport(sourceItem, "album/artist", () => dialog.SearchByAlbumAndArtist(sourceItem.SearchSource, accumulatedCandidates));
+						SearchAndReport(sourceItem, "album/artist", () => dialog.SearchCoversBySource(sourceItem.SearchSource, (dialog.GetCurrentTrack().Album + " " + dialog.GetCurrentTrack().Artist).Trim(), accumulatedCandidates));
 					}
 				}
 			}
@@ -97,7 +95,7 @@ internal class CoverSearchDialog : Form
 				{
 					if (CanSearch(sourceItem, isOtherSource: false))
 					{
-						SearchAndReport(sourceItem, "title/artist", () => dialog.SearchByTitleAndArtist(sourceItem.SearchSource, accumulatedCandidates));
+						SearchAndReport(sourceItem, "title/artist", () => dialog.SearchCoversBySource(sourceItem.SearchSource, (dialog.GetCurrentTrack().Title + " " + dialog.GetCurrentTrack().Artist).Trim(), accumulatedCandidates));
 					}
 				}
 			}
@@ -108,7 +106,7 @@ internal class CoverSearchDialog : Form
 				{
 					if (CanSearch(sourceItem, isOtherSource: true))
 					{
-						SearchAndReport(sourceItem, "album/artist", () => dialog.SearchByAlbumAndArtist(sourceItem.SearchSource, accumulatedCandidates));
+						SearchAndReport(sourceItem, "album/artist", () => dialog.SearchCoversBySource(sourceItem.SearchSource, (dialog.GetCurrentTrack().Album + " " + dialog.GetCurrentTrack().Artist).Trim(), accumulatedCandidates));
 					}
 				}
 			}
@@ -119,20 +117,16 @@ internal class CoverSearchDialog : Form
 				{
 					if (CanSearch(sourceItem, isOtherSource: true))
 					{
-						SearchAndReport(sourceItem, "title/artist", () => dialog.SearchByTitleAndArtist(sourceItem.SearchSource, accumulatedCandidates));
+						SearchAndReport(sourceItem, "title/artist", () => dialog.SearchCoversBySource(sourceItem.SearchSource, (dialog.GetCurrentTrack().Title + " " + dialog.GetCurrentTrack().Artist).Trim(), accumulatedCandidates));
 					}
 				}
 			}
 
 			if (!dialog.GetSearchCancellation().IsCancellationRequested)
 			{
-				foreach (SourceItem sourceItem in sources)
-				{
-					if (sourceItem.Enabled)
-					{
-						ReportFinalOutcome(sourceItem.SearchSource);
-					}
-				}
+				outcomeTracker.ReportFinal(
+					sources.Where(sourceItem => sourceItem.Enabled).Select(sourceItem => sourceItem.SearchSource),
+					status => dialog.searchStatusReporter?.Invoke(status));
 			}
 			return !dialog.GetSearchCancellation().IsCancellationRequested;
 		}
@@ -150,17 +144,17 @@ internal class CoverSearchDialog : Form
 
 			if (!string.IsNullOrWhiteSpace(dialog.GetCurrentTrack().Album) || !string.IsNullOrWhiteSpace(dialog.GetCurrentTrack().Artist))
 			{
-				SearchAndReport(sourceItem, "album/artist", () => dialog.SearchByAlbumAndArtist(preferredSource, accumulatedCandidates));
+				SearchAndReport(sourceItem, "album/artist", () => dialog.SearchCoversBySource(preferredSource, (dialog.GetCurrentTrack().Album + " " + dialog.GetCurrentTrack().Artist).Trim(), accumulatedCandidates));
 			}
 
 			if (dialog.GetCurrentTrack().Title != dialog.GetCurrentTrack().Album)
 			{
-				SearchAndReport(sourceItem, "title/artist", () => dialog.SearchByTitleAndArtist(preferredSource, accumulatedCandidates));
+				SearchAndReport(sourceItem, "title/artist", () => dialog.SearchCoversBySource(preferredSource, (dialog.GetCurrentTrack().Title + " " + dialog.GetCurrentTrack().Artist).Trim(), accumulatedCandidates));
 			}
 
 			if (!dialog.GetSearchCancellation().IsCancellationRequested)
 			{
-				ReportFinalOutcome(preferredSource);
+				outcomeTracker.ReportFinal(new[] { preferredSource }, status => dialog.searchStatusReporter?.Invoke(status));
 			}
 		}
 
@@ -184,32 +178,6 @@ internal class CoverSearchDialog : Form
 			});
 		}
 
-		// 记录本源一次搜索的结果:有结果即视为完成;0 结果且传输出错则记录错误。
-		private void RecordSourceOutcome(SearchSource source, int resultCount, HttpResult transportResult)
-		{
-			if (resultCount > 0)
-			{
-				completedSources.Add(source);
-			}
-			else if (transportResult != null && !transportResult.IsSuccess)
-			{
-				errorBySource[source] = transportResult;
-			}
-		}
-
-		// 搜索结束后上报本源最终状态:完成(有结果或无错空结果)/ 出错(始终无结果且有错)。
-		private void ReportFinalOutcome(SearchSource source)
-		{
-			if (!completedSources.Contains(source) && errorBySource.TryGetValue(source, out HttpResult error) && error != null && !error.IsSuccess)
-			{
-				ReportStatus(source, SourceSearchPhase.Error, error.ErrorCode);
-			}
-			else
-			{
-				ReportStatus(source, SourceSearchPhase.Completed);
-			}
-		}
-
 		private void SearchAndReport(SourceItem sourceItem, string searchKind, Func<List<CoverSearchResult>> search)
 		{
 			if (dialog.GetSearchCancellation().IsCancellationRequested || remainingTotal <= 0 || remainingBySource[sourceItem] <= 0)
@@ -229,11 +197,11 @@ internal class CoverSearchDialog : Form
 			catch (System.Exception ex)
 			{
 				Console.WriteLine($"Tag search error ({sourceItem.SearchSource}, {searchKind}): {ex.GetMessageChain()}");
-				RecordSourceOutcome(sourceItem.SearchSource, 0, dialog.lastSourceTransportResult);
+				outcomeTracker.Record(sourceItem.SearchSource, false, dialog.lastSourceTransportResult);
 				return;
 			}
 
-			RecordSourceOutcome(sourceItem.SearchSource, candidates.Count, dialog.lastSourceTransportResult);
+			outcomeTracker.Record(sourceItem.SearchSource, candidates.Count > 0, dialog.lastSourceTransportResult);
 			List<CoverSearchResult> selectedCandidates = candidates.Take(Math.Min(Math.Min(remainingTotal, candidates.Count), remainingBySource[sourceItem])).ToList();
 			if (selectedCandidates.Count == 0)
 			{
@@ -554,16 +522,7 @@ internal class CoverSearchDialog : Form
 	{
 		candidateListView.Width = mainLayoutPanel.Width;
 		candidateListView.Height = mainLayoutPanel.Height - footerPanel.Height;
-		// footerPanel 为普通 Panel,子控件绝对定位:按钮恒定居中(与状态标签显隐无关),
-		// 状态标签置于按钮右侧、垂直中线与按钮对齐。详见 docs/SEARCH_STATUS_INDICATOR_DESIGN.md。
-		int buttonLeft = Math.Max(0, (footerPanel.Width - buttonPanel.Width) / 2);
-		int buttonTop = Math.Max(0, (footerPanel.Height - buttonPanel.Height) / 2);
-		buttonPanel.Location = new Point(buttonLeft, buttonTop);
-		int statusGap = 12;
-		int statusLeft = buttonPanel.Location.X + buttonPanel.Width + statusGap;
-		int statusTop = buttonPanel.Location.Y + buttonPanel.Height / 2 - searchStatusLabel.Height / 2;
-		searchStatusLabel.Location = new Point(statusLeft, statusTop);
-		searchStatusLabel.Width = Math.Max(0, footerPanel.Width - statusLeft - 8);
+		SearchStatusIndicator.LayoutFooterStatus(footerPanel, buttonPanel, searchStatusLabel);
 	}
 
 	private void OnSearchDialogLayoutChanged(object sender, EventArgs e)
@@ -571,7 +530,7 @@ internal class CoverSearchDialog : Form
 		LayoutSearchDialog();
 	}
 
-	private List<CoverSearchResult> SearchByAlbumAndArtist(SearchSource source, List<CoverSearchResult> existingCandidates)
+	private List<CoverSearchResult> SearchCoversBySource(SearchSource source, string query, List<CoverSearchResult> existingCandidates)
 	{
 		lastSourceTransportResult = null;
 		switch (source)
@@ -580,7 +539,7 @@ internal class CoverSearchDialog : Form
 		{
 			using NetEaseMusicTagProvider netEaseProvider = new NetEaseMusicTagProvider(GetSearchCancellation());
 			netEaseProvider.StatusReporter = searchStatusReporter;
-			List<CoverSearchResult> covers = netEaseProvider.SearchCovers((GetCurrentTrack().Album + " " + GetCurrentTrack().Artist).Trim(), 15, existingCandidates);
+			List<CoverSearchResult> covers = netEaseProvider.SearchCovers(query, 15, existingCandidates);
 			lastSourceTransportResult = netEaseProvider.LastTransportResult;
 			return covers;
 		}
@@ -588,7 +547,7 @@ internal class CoverSearchDialog : Form
 		{
 			using QqMusicTagProvider qqProvider = new QqMusicTagProvider(GetSearchCancellation());
 			qqProvider.StatusReporter = searchStatusReporter;
-			List<CoverSearchResult> covers = qqProvider.SearchCovers((GetCurrentTrack().Album + " " + GetCurrentTrack().Artist).Trim(), 15, existingCandidates);
+			List<CoverSearchResult> covers = qqProvider.SearchCovers(query, 15, existingCandidates);
 			lastSourceTransportResult = qqProvider.LastTransportResult;
 			return covers;
 		}
@@ -598,41 +557,7 @@ internal class CoverSearchDialog : Form
 		{
 			using KuwoTagProvider kuwoTagProvider = new KuwoTagProvider(GetSearchCancellation());
 			kuwoTagProvider.StatusReporter = searchStatusReporter;
-			List<CoverSearchResult> covers = kuwoTagProvider.SearchCovers((GetCurrentTrack().Album + " " + GetCurrentTrack().Artist).Trim(), 5, existingCandidates);
-			lastSourceTransportResult = kuwoTagProvider.LastTransportResult;
-			return covers;
-		}
-		}
-	}
-
-	private List<CoverSearchResult> SearchByTitleAndArtist(SearchSource source, List<CoverSearchResult> existingCandidates)
-	{
-		lastSourceTransportResult = null;
-		switch (source)
-		{
-		case SearchSource.Music163:
-		{
-			using NetEaseMusicTagProvider netEaseProvider = new NetEaseMusicTagProvider(GetSearchCancellation());
-			netEaseProvider.StatusReporter = searchStatusReporter;
-			List<CoverSearchResult> covers = netEaseProvider.SearchCovers((GetCurrentTrack().Title + " " + GetCurrentTrack().Artist).Trim(), 15, existingCandidates);
-			lastSourceTransportResult = netEaseProvider.LastTransportResult;
-			return covers;
-		}
-		case SearchSource.QQ:
-		{
-			using QqMusicTagProvider qqProvider = new QqMusicTagProvider(GetSearchCancellation());
-			qqProvider.StatusReporter = searchStatusReporter;
-			List<CoverSearchResult> covers = qqProvider.SearchCovers((GetCurrentTrack().Title + " " + GetCurrentTrack().Artist).Trim(), 15, existingCandidates);
-			lastSourceTransportResult = qqProvider.LastTransportResult;
-			return covers;
-		}
-		default:
-			return new List<CoverSearchResult>();
-		case SearchSource.Kuwo:
-		{
-			using KuwoTagProvider kuwoTagProvider = new KuwoTagProvider(GetSearchCancellation());
-			kuwoTagProvider.StatusReporter = searchStatusReporter;
-			List<CoverSearchResult> covers = kuwoTagProvider.SearchCovers((GetCurrentTrack().Title + " " + GetCurrentTrack().Artist).Trim(), 5, existingCandidates);
+			List<CoverSearchResult> covers = kuwoTagProvider.SearchCovers(query, 5, existingCandidates);
 			lastSourceTransportResult = kuwoTagProvider.LastTransportResult;
 			return covers;
 		}
@@ -644,9 +569,7 @@ internal class CoverSearchDialog : Form
 		SetCachedCandidates(new List<CoverSearchResult>());
 		IProgress<List<CoverSearchResult>> progress = new Progress<List<CoverSearchResult>>(OnSearchCandidatesFound);
 		// 状态通道:Progress<T> 在 UI 线程构造,Report 自动编组回 UI 线程。
-		Progress<SourceSearchStatus> statusProgress = new Progress<SourceSearchStatus>(searchStatusIndicator.Report);
-		searchStatusReporter = (SourceSearchStatus status) => ((IProgress<SourceSearchStatus>)statusProgress).Report(status);
-		searchStatusIndicator.Begin();
+		searchStatusReporter = searchStatusIndicator.BeginReporting();
 		CandidateSearchWorker searchWorker = new CandidateSearchWorker(this, progress);
 
 		GetTaskbarProgress().SetProgressState(TaskbarProgressBarStatus.Indeterminate);

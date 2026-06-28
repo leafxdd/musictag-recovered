@@ -237,9 +237,7 @@ internal class LyricSearchDialog : Form
 
 	// 本轮各源最终结果统计(后台搜索线程串行写入,await 后由 UI 线程读取):
 	// 有结果即视为完成;0 结果且末次传输出错则记录错误,供搜索结束时上报 Error。
-	private readonly HashSet<SearchSource> lyricCompletedSources = new HashSet<SearchSource>();
-
-	private readonly Dictionary<SearchSource, HttpResult> lyricErrorBySource = new Dictionary<SearchSource, HttpResult>();
+	private readonly SourceOutcomeTracker outcomeTracker = new SourceOutcomeTracker();
 
 	public void SetTrackInfo(TrackSearchContext trackSearchContext)
 	{
@@ -301,16 +299,7 @@ internal class LyricSearchDialog : Form
 	{
 		lyricListView.Width = mainPanel.Width;
 		lyricListView.Height = mainPanel.Height - footerPanel.Height;
-		// footerPanel 为普通 Panel,子控件绝对定位:按钮恒定居中(与状态标签显隐无关),
-		// 状态标签置于按钮右侧、垂直中线与按钮对齐。详见 docs/SEARCH_STATUS_INDICATOR_DESIGN.md。
-		int buttonLeft = Math.Max(0, (footerPanel.Width - buttonPanel.Width) / 2);
-		int buttonTop = Math.Max(0, (footerPanel.Height - buttonPanel.Height) / 2);
-		buttonPanel.Location = new Point(buttonLeft, buttonTop);
-		int statusGap = 12;
-		int statusLeft = buttonPanel.Location.X + buttonPanel.Width + statusGap;
-		int statusTop = buttonPanel.Location.Y + buttonPanel.Height / 2 - searchStatusLabel.Height / 2;
-		searchStatusLabel.Location = new Point(statusLeft, statusTop);
-		searchStatusLabel.Width = Math.Max(0, footerPanel.Width - statusLeft - 8);
+		SearchStatusIndicator.LayoutFooterStatus(footerPanel, buttonPanel, searchStatusLabel);
 	}
 
 	protected override void OnShown(EventArgs e)
@@ -374,7 +363,7 @@ internal class LyricSearchDialog : Form
 	{
 		lastSourceTransportResult = null;
 		List<LyricSearchResult> lyrics = SearchLyricsBySource(searchSource, useKnownMusicId, trackInfo, int.MaxValue, existingLyrics, sourceOrder, cancellationSource, searchCandidateTracks, searchStatusReporter, result => lastSourceTransportResult = result);
-		RecordLyricSourceOutcome(searchSource, lyrics?.Count ?? 0, lastSourceTransportResult);
+		outcomeTracker.Record(searchSource, (lyrics?.Count ?? 0) > 0, lastSourceTransportResult);
 		return lyrics;
 	}
 
@@ -419,24 +408,11 @@ internal class LyricSearchDialog : Form
 		}
 	}
 
-	// 记录本源一次搜索的结果:有结果即视为完成;0 结果且传输出错则记录错误(与封面源一致)。
-	private void RecordLyricSourceOutcome(SearchSource source, int resultCount, HttpResult transportResult)
-	{
-		if (resultCount > 0)
-		{
-			lyricCompletedSources.Add(source);
-		}
-		else if (transportResult != null && !transportResult.IsSuccess)
-		{
-			lyricErrorBySource[source] = transportResult;
-		}
-	}
-
 	private List<TrackSearchResult> SearchTrackCandidates(SearchSource searchSource, int sourceOrder, bool fromCandidateSearch)
 	{
 		lastSourceTransportResult = null;
 		List<TrackSearchResult> tracks = SearchTracksBySource(searchSource, trackInfo, sourceOrder, cancellationSource, fromCandidateSearch, searchStatusReporter, result => lastSourceTransportResult = result);
-		RecordLyricSourceOutcome(searchSource, tracks?.Count ?? 0, lastSourceTransportResult);
+		outcomeTracker.Record(searchSource, (tracks?.Count ?? 0) > 0, lastSourceTransportResult);
 		return tracks;
 	}
 
@@ -571,12 +547,9 @@ internal class LyricSearchDialog : Form
 	// 开始一轮搜索(UI 线程):清空上轮统计、建状态通道、先把各源标记为"搜索中"。
 	private void BeginSearchStatus()
 	{
-		lyricCompletedSources.Clear();
-		lyricErrorBySource.Clear();
+		outcomeTracker.Clear();
 		// 状态通道:Progress<T> 在 UI 线程构造,后台 provider 的上报(如 QQ 限流重试)经此编组回 UI 线程。
-		Progress<SourceSearchStatus> statusProgress = new Progress<SourceSearchStatus>(searchStatusIndicator.Report);
-		searchStatusReporter = (SourceSearchStatus status) => ((IProgress<SourceSearchStatus>)statusProgress).Report(status);
-		searchStatusIndicator.Begin();
+		searchStatusReporter = searchStatusIndicator.BeginReporting();
 		foreach (SearchSource source in GetEnabledLyricSearchSources())
 		{
 			searchStatusIndicator.Report(new SourceSearchStatus
@@ -591,26 +564,7 @@ internal class LyricSearchDialog : Form
 	// 始终无结果且末次传输出错的源标记 Error,其余标记 Completed。
 	private void ReportFinalSearchOutcomes()
 	{
-		foreach (SearchSource source in GetEnabledLyricSearchSources())
-		{
-			if (!lyricCompletedSources.Contains(source) && lyricErrorBySource.TryGetValue(source, out HttpResult error) && error != null && !error.IsSuccess)
-			{
-				searchStatusIndicator.Report(new SourceSearchStatus
-				{
-					Source = source,
-					Phase = SourceSearchPhase.Error,
-					ErrorCode = error.ErrorCode
-				});
-			}
-			else
-			{
-				searchStatusIndicator.Report(new SourceSearchStatus
-				{
-					Source = source,
-					Phase = SourceSearchPhase.Completed
-				});
-			}
-		}
+		outcomeTracker.ReportFinal(GetEnabledLyricSearchSources(), searchStatusIndicator.Report);
 	}
 
 	private void AddLyricsToList(List<LyricSearchResult> lyricsToAdd = null)
