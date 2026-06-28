@@ -91,10 +91,10 @@
   - [ ] `CreateMergedProcessor(lyric,translated)` ×2 静态下载包装（674-678,702-706）
   - [ ] ⚠️（altitude）LRC 元数据描述符表统一 parse / emit / merge 三处（93-152,287-337,470-481）—— **保留 `Substring` 截断怪癖，勿换正则**；`offset` 仍特例（仅 parse+apply）
 
-- [ ] **A6 ListView 控件 / 列**
-  - [ ] `SortableTextComparer`（`Func<ListViewItem,string>` 选择器 + `SortOrder`）把 3 个 IComparer 嵌套类收敛为 1，连带删 3 个死构造器（`MusicTagWinApp.Roles/EditableListView.cs:30-113`；保留 559-573 比较器选择分支不动）
-  - [ ] `DrawCenteredImage(g,image,bounds,x)` 上提到基类 `MusicTagWinApp.Stubs/DrawableListViewSubItem.cs`，统一 4 处居中绘图（ImageSubItem / ImageListSubItem / CheckBoxSubItem / EditableListView 封面分支）
-  - [ ] `MoveSelectedColumn(delta)` 合并上移 / 下移镜像对（`MusicTagWinApp.Common/CustomColumnsDialog.cs:357-399`）
+- [x] **A6 ListView 控件 / 列** —— items 1+3 完成 `48aa162`；item 2 推迟
+  - [x] `SortableTextComparer`（`Func<ListViewItem,string>` 选择器 + `SortOrder`）把 3 个 IComparer 嵌套类收敛为 1，连带删 3 个死构造器（`MusicTagWinApp.Roles/EditableListView.cs:30-113`；保留 559-573 比较器选择分支不动）
+  - [ ] ⏸ **推迟**（跨 5 文件，需逐点像素等价 + 手动 UI 说明） `DrawCenteredImage(g,image,bounds,x)` 上提到基类 `MusicTagWinApp.Stubs/DrawableListViewSubItem.cs`，统一 4 处居中绘图（ImageSubItem / ImageListSubItem / CheckBoxSubItem / EditableListView 封面分支）
+  - [x] `MoveSelectedColumn(delta)` 合并上移 / 下移镜像对（`MusicTagWinApp.Common/CustomColumnsDialog.cs:357-399`）
 
 - [ ] **A7 杂项对话框**
   - [ ] `FillAndCenterButtons(list,mainPanel,buttonPanel)` 共享布局 helper ×3（`MusicTagWinApp.Common/DirectoryManagerDialog.cs:88-91`、`MusicTag.Importers/CombinedTagOverwriteOptionsDialog.cs:83-86`、`MusicTag.Consumers/CharacterSetSelectionDialog.cs:125-128`）
@@ -165,6 +165,7 @@
 - 2026-06-28 **A1 完成 `ea1e618`**：删 `LimitedConcurrencyTaskScheduler.cs`（123 行）+ `ImageComboBox.cs`（165 行）+ `EditableListView` 不可达 ImageComboBox 分支与 2 个仅其调用的 helper + 2 个 orphan using；删 `Resources.cs` 4 个死 `Enum_*` 访问器（`.resx` 键留）。Debug+Release 0 warn、smoke 通过；仅暂存 4 个代码文件。
 - 2026-06-28 **A2 完成 `de1af6b`**：`DatabaseMapper.GetLogSubdirectory` 收敛 7 个 `Get*LogDirectory`、`ComputeMd5HashString(string)` 委托 byte[] 重载；`TagHistoryRepository.ExecuteNonQueryLogged` 收敛 3 个 CRUD 包装、2 处 catch 改 `MarkTransactionFailed()`。仅暂存 2 个数据层文件。Debug+Release 0 warn、smoke 通过。
 - 2026-06-28 **A4 部分完成 `e7afa05`**：⭐ `ResolveNonInstrumentalCandidate` 收敛 `PromoteBestMatch` 7 处 instrumental 三元式（净 −14 行）；其余 3 子项（CompareScoresDescending / ReplaceFullWidthPunctuation / memoize）评估后**否决**（语义不等价 / 双实现风险 / 越界优化，详见 A4 批次）。Debug+Release 0 warn、smoke 通过；仅暂存 `TrackSearchResult.cs`。
+- 2026-06-28 **A6 部分完成 `48aa162`**：`EditableListView` 3 个 `IComparer` 嵌套类（+3 死构造器）收敛为 `SortableTextComparer`（`Func<object,string>` 选择器，调用点传 lambda；列号支用不可变 `e.Column`）；`CustomColumnsDialog` 上/下移镜像对合并为 `MoveSelectedColumn(delta)`（瘦事件处理器保留供 designer 按名接线）。item 2（`DrawCenteredImage` 跨 5 文件居中绘图上提）**推迟**（需逐点像素等价 + 手动 UI 说明）。净 −72 行，Debug+Release 0 warn、smoke 通过。
 
 ---
 
