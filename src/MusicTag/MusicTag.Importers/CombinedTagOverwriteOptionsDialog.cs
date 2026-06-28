@@ -80,10 +80,7 @@ internal class CombinedTagOverwriteOptionsDialog : Form
 
 	private void LayoutControls()
 	{
-		optionListView.Width = mainPanel.Width;
-		optionListView.Height = mainPanel.Height - buttonPanel.Height - buttonPanel.Margin.Top - buttonPanel.Margin.Bottom;
-		int horizontalMargin = (mainPanel.Width - buttonPanel.Width) / 2;
-		buttonPanel.Margin = new Padding(horizontalMargin, buttonPanel.Margin.Top, horizontalMargin, buttonPanel.Margin.Bottom);
+		DatabaseMapper.FillAndCenterButtons(optionListView, mainPanel, buttonPanel);
 		optionListView.Columns[0].Width = optionListView.ClientSize.Width;
 	}
 

@@ -85,10 +85,7 @@ internal class DirectoryManagerDialog : Form
 
 	private void LayoutControls()
 	{
-		directoryListView.Width = mainPanel.Width;
-		directoryListView.Height = mainPanel.Height - buttonPanel.Height - buttonPanel.Margin.Top - buttonPanel.Margin.Bottom;
-		int horizontalMargin = (mainPanel.Width - buttonPanel.Width) / 2;
-		buttonPanel.Margin = new Padding(horizontalMargin, buttonPanel.Margin.Top, horizontalMargin, buttonPanel.Margin.Bottom);
+		DatabaseMapper.FillAndCenterButtons(directoryListView, mainPanel, buttonPanel);
 		directoryColumn.Width = directoryListView.ClientSize.Width;
 	}
 

@@ -209,6 +209,17 @@ internal class PictureFromTagsDialog : Form
 		}
 	}
 
+	private static List<ConfigDescriptorState.PictureData> GetEmbeddedPictureData(ConfigDescriptorState state)
+	{
+		if (!state.IsLoadedSuccessfully())
+		{
+			return null;
+		}
+
+		state.LoadAllPictures();
+		return state["allpicturedata"] as List<ConfigDescriptorState.PictureData>;
+	}
+
 	private void CollectEmbeddedPictures(IProgress<List<(string, Image, string, int)>> progress, CancellationToken cancellationToken)
 	{
 		foreach (string audioFilePath in GetAudioFilePaths() ?? new List<string>())
@@ -224,13 +235,7 @@ internal class PictureFromTagsDialog : Form
 			}
 
 			using ConfigDescriptorState configDescriptorState = new ConfigDescriptorState(audioFilePath);
-			if (!configDescriptorState.IsLoadedSuccessfully())
-			{
-				continue;
-			}
-
-			configDescriptorState.LoadAllPictures();
-			List<ConfigDescriptorState.PictureData> pictureData = configDescriptorState["allpicturedata"] as List<ConfigDescriptorState.PictureData>;
+			List<ConfigDescriptorState.PictureData> pictureData = GetEmbeddedPictureData(configDescriptorState);
 			if (pictureData == null)
 			{
 				continue;
@@ -317,12 +322,7 @@ internal class PictureFromTagsDialog : Form
 		}
 		var (audioFilePath, selectedImageIndex) = ((string, int))pictureListView.SelectedItems[0].Tag;
 		using ConfigDescriptorState configDescriptorState = new ConfigDescriptorState(audioFilePath);
-		if (!configDescriptorState.IsLoadedSuccessfully())
-		{
-			return;
-		}
-		configDescriptorState.LoadAllPictures();
-		List<ConfigDescriptorState.PictureData> embeddedPictures = configDescriptorState["allpicturedata"] as List<ConfigDescriptorState.PictureData>;
+		List<ConfigDescriptorState.PictureData> embeddedPictures = GetEmbeddedPictureData(configDescriptorState);
 		if (embeddedPictures == null)
 		{
 			return;

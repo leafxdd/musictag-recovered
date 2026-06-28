@@ -122,10 +122,7 @@ internal class CharacterSetSelectionDialog : Form
 
 	private void UpdateLayoutForSize()
 	{
-		encodingListView.Width = mainPanel.Width;
-		encodingListView.Height = mainPanel.Height - buttonPanel.Height - buttonPanel.Margin.Top - buttonPanel.Margin.Bottom;
-		int horizontalMargin = (mainPanel.Width - buttonPanel.Width) / 2;
-		buttonPanel.Margin = new Padding(horizontalMargin, buttonPanel.Margin.Top, horizontalMargin, buttonPanel.Margin.Bottom);
+		DatabaseMapper.FillAndCenterButtons(encodingListView, mainPanel, buttonPanel);
 		encodingListView.Columns[1].Width = encodingListView.ClientSize.Width - encodingListView.Columns[0].Width;
 	}
 

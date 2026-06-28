@@ -136,31 +136,33 @@ internal class FindReplaceDialog : Form
 		replaceAllButton.Enabled = hasSearchText;
 	}
 
-	private void FindPreviousButton_Click(object sender, EventArgs e)
+	private void SyncControllerInputs()
 	{
 		FindReplaceController.SearchText = findWhatTextBox.Text;
 		FindReplaceController.MatchCase = matchCaseCheckBox.Checked;
+	}
+
+	private void FindPreviousButton_Click(object sender, EventArgs e)
+	{
+		SyncControllerInputs();
 		FindReplaceController.FindPrevious();
 	}
 
 	private void FindNextButton_Click(object sender, EventArgs e)
 	{
-		FindReplaceController.SearchText = findWhatTextBox.Text;
-		FindReplaceController.MatchCase = matchCaseCheckBox.Checked;
+		SyncControllerInputs();
 		FindReplaceController.FindNext();
 	}
 
 	private void ReplaceButton_Click(object sender, EventArgs e)
 	{
-		FindReplaceController.SearchText = findWhatTextBox.Text;
-		FindReplaceController.MatchCase = matchCaseCheckBox.Checked;
+		SyncControllerInputs();
 		FindReplaceController.ReplaceCurrentAndFindNext(replaceWithTextBox.Text);
 	}
 
 	private void ReplaceAllButton_Click(object sender, EventArgs e)
 	{
-		FindReplaceController.SearchText = findWhatTextBox.Text;
-		FindReplaceController.MatchCase = matchCaseCheckBox.Checked;
+		SyncControllerInputs();
 		FindReplaceController.ReplaceAll(replaceWithTextBox.Text);
 	}
 

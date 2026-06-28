@@ -763,6 +763,14 @@ internal static class DatabaseMapper
 		return (int)Math.Ceiling(scaledValue);
 	}
 
+	public static void FillAndCenterButtons(Control listControl, Control mainPanel, Control buttonPanel)
+	{
+		listControl.Width = mainPanel.Width;
+		listControl.Height = mainPanel.Height - buttonPanel.Height - buttonPanel.Margin.Top - buttonPanel.Margin.Bottom;
+		int horizontalMargin = (mainPanel.Width - buttonPanel.Width) / 2;
+		buttonPanel.Margin = new Padding(horizontalMargin, buttonPanel.Margin.Top, horizontalMargin, buttonPanel.Margin.Bottom);
+	}
+
 	public static bool ContainsChinese(string text)
 	{
 		return Regex.Match(text, "[\\u4e00-\\u9fa5]").Success;
