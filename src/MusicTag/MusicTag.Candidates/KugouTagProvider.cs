@@ -18,17 +18,6 @@ namespace MusicTag.Candidates;
 
 internal class KugouTagProvider : RemoteTagProviderBase
 {
-	private sealed class SearchResultDetailLoader
-	{
-		public KugouSongInfo SearchResult;
-
-		internal LyricSearchResult Load(CancellationTokenSource cancellationTokenSource)
-		{
-			using KugouTagProvider kugouTagProvider = new KugouTagProvider(cancellationTokenSource);
-			return kugouTagProvider.LoadLyrics(SearchResult);
-		}
-	}
-
 	private const string songSearchUrlTemplate = "http://mobilecdn.kugou.com/api/v3/search/song?format=json&keyword={0}&page=1&pagesize={1}&showtype=1";
 
 	private const string lyricUrlTemplate = "https://m3ws.kugou.com/api/v1/krc/get_krc?keyword={0}&hash={1}&timelength={2}";
@@ -141,30 +130,29 @@ internal class KugouTagProvider : RemoteTagProviderBase
 				knownTrackIds.Add(track.SourceTrackId);
 			}
 		}
-		using (IEnumerator<KugouSongInfo> songEnumerator = songs.GetEnumerator())
+		foreach (KugouSongInfo song in songs)
 		{
-			while (songEnumerator.MoveNext())
+			TrackSearchResult track = new TrackSearchResult();
+			track.SearchSource = GetSource();
+			track.SourceTrackId = song.AudioId;
+			track.Title = song.Title;
+			track.Artist = song.Artist;
+			track.Album = song.Album;
+			track.KugouHash = song.Hash;
+			track.KugouDurationMs = song.DurationMs;
+			LyricSearchResult lyric = new LyricSearchResult();
+			lyric.LyricUrl = string.Format(lyricUrlTemplate, BuildEncodedLyricKeyword(song.Artist, song.Title), song.Hash, song.DurationMs);
+			lyric.SearchSource = GetSource();
+			lyric.DeferredLyricLoader = cancellation =>
 			{
-				SearchResultDetailLoader searchResultDetailLoader = new SearchResultDetailLoader();
-				searchResultDetailLoader.SearchResult = songEnumerator.Current;
-				TrackSearchResult track = new TrackSearchResult();
-				track.SearchSource = GetSource();
-				track.SourceTrackId = searchResultDetailLoader.SearchResult.AudioId;
-				track.Title = searchResultDetailLoader.SearchResult.Title;
-				track.Artist = searchResultDetailLoader.SearchResult.Artist;
-				track.Album = searchResultDetailLoader.SearchResult.Album;
-				track.KugouHash = searchResultDetailLoader.SearchResult.Hash;
-				track.KugouDurationMs = searchResultDetailLoader.SearchResult.DurationMs;
-				LyricSearchResult lyric = new LyricSearchResult();
-				lyric.LyricUrl = string.Format(lyricUrlTemplate, BuildEncodedLyricKeyword(searchResultDetailLoader.SearchResult.Artist, searchResultDetailLoader.SearchResult.Title), searchResultDetailLoader.SearchResult.Hash, searchResultDetailLoader.SearchResult.DurationMs);
-				lyric.SearchSource = GetSource();
-				lyric.DeferredLyricLoader = searchResultDetailLoader.Load;
-				track.LyricResult = lyric;
-				if (!tracksById.ContainsKey(track.SourceTrackId) && !knownTrackIds.Contains(track.SourceTrackId))
-				{
-					trackIdsInOrder.Add(track.SourceTrackId);
-					tracksById.Add(track.SourceTrackId, track);
-				}
+				using KugouTagProvider kugouTagProvider = new KugouTagProvider(cancellation);
+				return kugouTagProvider.LoadLyrics(song);
+			};
+			track.LyricResult = lyric;
+			if (!tracksById.ContainsKey(track.SourceTrackId) && !knownTrackIds.Contains(track.SourceTrackId))
+			{
+				trackIdsInOrder.Add(track.SourceTrackId);
+				tracksById.Add(track.SourceTrackId, track);
 			}
 		}
 		foreach (string trackId in trackIdsInOrder)
