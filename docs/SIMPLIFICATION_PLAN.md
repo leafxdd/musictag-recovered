@@ -246,3 +246,70 @@
 | 6 B3 保 provider 调用顺序 | ✅ 与原 finding 一致（helper 收委托） | **采纳** | B3 加“不统一联网顺序 / 取消语义”，Kugou 反转取消流须先证等价 |
 
 执行顺序建议与仓库状态提醒均合理，已纳入验证协议的提交卫生条款。**Codex 审阅无误报、无需推翻任何结论**；唯点 1 / 点 5 对计划现状有轻微误读（已分别标注），不影响其建议的有效性。
+
+---
+
+## Codex 完成项复审（2026-06-29）
+
+范围：复审当前已勾选完成的 A1-A9 已执行子项、B1-B4 已执行子项，以及 B3 follow-up `d0e53c1`。未勾选项按用户说明视作 deferred/rejected，不按“漏做”处理。
+
+### 结论
+
+- 未发现需要立即回滚或阻断继续工作的实质性 bug。
+- 已重新运行 `.\scripts\Verify-Build.ps1 -RunSmokeTests`，Debug/Release 构建和 3 个 smoke 通过。
+- 仍需承认原计划中的覆盖缺口：写标签、重命名、在线搜索、provider 真实联网结果排序/下载路径仍没有 smoke 覆盖，本次复审主要靠 CodeGraph + 提交前后对照 + 数据流阅读，不能替代端到端手动验证。
+
+### 已复审的高风险点
+
+- **B1 写标签核心**：`SaveWithId3v2Version(Action)` 保留 `loadError = null`、body、`SetId3v2Version()`、`tagFile.Save()`、catch/finally 恢复全局 ID3v2 设置的顺序。`SaveCurrentTagFile` 的空 body 仍走同一保存尾部；未看到顺序回归。
+- **A3b 写/重命名 UI 入口**：`ConfirmAndSaveTagsWithOperation` 与旧三处理器的确认文案、只读处理、`StartCommonSaveTags` 调用形状一致；`StartRenameFiles` 使用 `Resources.Msg_SaveCompleted` 是旧代码已有行为，不是本次合并新引入的文案错误。
+- **B2 搜索状态收敛**：`BeginReporting()`、`LayoutFooterStatus()`、`SourceOutcomeTracker.ReportFinal(...)` 的调用方仍由各 dialog 提供 enabled-source 序列；Cover preferred-source 和 normal-source 两条路径均只 report 对应源集合，未发现额外源被错误标 Completed/Error。
+- **B3 provider helper**：`BuildOrderedTracks` / `BuildOrderedLyrics` / `BuildDedupedCovers` 没有发起网络请求，只接收已拉取 songs 和构造/加载委托，符合“不统一联网顺序”的约束。`BuildDedupedCovers` 增加 `string.IsNullOrWhiteSpace(coverUrl)` 过滤：NetEase 原本已有该过滤；QQ/Kuwo 原循环无显式过滤，但 QQ parse 要求 album mid 非空，Kuwo fallback cover URL 由 detail URL 模板生成，当前看不到可达差异。建议保留这条为手动联网验证关注点。
+- **B4 ProgressDialog 事件现代化**：调用点已变为 `+=` / `-=`，事件触发仍在 Cancel 按钮和 timer marshaled UI 回调；当前代码没有后台线程订阅/退订事件的直接路径，Claude 关于可达处等价的论证可以接受。
+- **A5/A6/A8 小项抽查**：`LyricTextProcessor.AppendTimestamp` 只包住原 `omitTimestamps` 守卫；`AbsorbTranslatedLines` 保留目标行缺失时创建、已有译文回填到原文的顺序。`EditableListView.SortableTextComparer` 保留 `decimal.TryParse` / `DateTime.TryParse` 当前区域性比较。`TextBoxFindReplaceController.ReplaceAll` 使用初始 `sourceText` 做计数和批量替换，单匹配分支仍走 `Paste`，未看到行为面扩大。
+
+### 已完成项剩余风险
+
+- Provider 相关提交虽然通过 build/smoke，但真实网络响应、空字段、限流、解析失败、下载 404 等路径仍需人工或录制响应 fixture 验证。
+- A3b/B1 写标签路径没有 smoke 真实写文件覆盖；建议至少手动覆盖“保存标签成功、只读文件取消/允许、撤销保存、批量重命名成功/跳过/失败”各一例。
+- B3 的 `BuildDedupedCovers` 空白 URL 过滤对 QQ/Kuwo 目前看不可达，但如果上游 API 返回特殊空 album mid 或空 track id，应确认 UI 是否期望显示失败占位候选。
+
+## Codex 对 deferred/rejected 项的后续建议（2026-06-29）
+
+在“允许大范围重构”的条件下，Claude 的推迟/否决多数仍是合理的；它们不是不能做，而是不适合继续以“纯等价小简化”方式做。建议下一轮改成“先建 characterization，再做结构迁移”的模式。
+
+- **A5 LRC 元数据描述符表**：可以做，但要先为 parse / emit / merge 建金样本。样本必须覆盖 `ar/ti/al/by/offset/re/ve/total`、未知 tag、重复 tag、空值、`offset` 只 parse+apply 不 emit 的特例，以及当前 `Substring` 截断怪癖。实现上可用 descriptor table，但 descriptor 必须允许 per-field parse/emit/merge 策略，而不是一张简单 key->property 表。
+- **A8 `FilenameRelatedBatchDialog.ChangeTags` 常量提升**：不要先碰保存循环。先把 pattern-to-regex 编译步骤抽成不可变 `FilenameTagPatternPlan`，用一批文件名/模式样本验证 captures 与 tag changes 完全一致；尤其不要把当前手写 escape 链直接替换成 `Regex.Escape`，因为字符集和替换顺序可能改变语义。验证后再把 plan 移出 per-file 循环。
+- **A9 move-method 到 `MetadataSearchState`**：可以推进，但不应只移动一个大方法。先把 `MetadataSearchState` 的职责边界固定为“候选累计、limit 消耗、ranked extraction”，再用小步骤迁移纯数据操作；保留 owner/dialog 依赖在外层。方法名已陈旧时，先按当前代码重新命名目标行为，避免按旧计划机械移动。
+- **B2 provider 工厂**：不建议做“返回 `RemoteTagProviderBase` 的统一工厂”。若要大改，先定义显式能力接口，例如 `ITrackSearchProvider` / `ILyricSearchProvider` / `ICoverSearchProvider` / `ITrackLyricLoader`，并让每个 provider 只实现真实支持的能力；调用方按能力分派。这样可以消除 switch，但会是架构改造，不是 helper 提取。
+- **B3 caveat**：这不是任务项。后续真正值得做的是 provider fixture 测试：把 QQ/NetEase/Kugou/Kuwo 的典型响应、空响应、解析失败、限流响应落成样本，验证 `SearchTracks/SearchLyrics/SearchCovers` 的候选数、顺序、SourceOrder/SearchPass/ResultOrder、URL、错误状态。
+- **Tier C / StateFieldInstance**：可以拆，但必须分阶段。优先抽可独立测试的 batch runner skeleton：`BatchOperationContext` 只管 cancel/progress/error-log/close-dialog；每个具体 task 仍保留自己的业务 body。`CoverPreviewController`、VirtualMode 选择模型、Designer partial 应分三批，不要和 batch runner 混在一起。
+- **Tier C / DatabaseMapper**：建议做命名空间级拆分，但保持 public facade 一轮不动。先新建 `ImageUtilities`、`LogPathService`、`DialogService`、`PathUtilities`，让 `DatabaseMapper` 委托过去；下一轮再逐步改调用点。这样可以控制 blast radius。
+- **Tier C / TagHistoryRepository UndoStore**：可抽，但需要先记录事务边界和进程级静态状态。`UndoStore` 应只管理内存 undo 栈和 spill-to-disk，SQLite/history transaction 仍留在 repository，避免把持久化和撤销状态同时迁移。
+- **Tier C / ConfigDescriptorState 字段词汇表**：可以用 descriptor table，但 descriptor 需要支持真实不对称：`ReadFieldText` 的 `trackstr/discstr` 派生、ID3v2 不覆盖 comment/lyrics 普通 text frame、Xiph/Ape field id 差异、读写类型不同。建议先加内部 snapshot 测试，再迁移一个字段族。
+- **Tier C / CombinedTagSearchDialog**：建议先抽封面下载/缩略图子系统，因为它和 `CoverSearchDialog` 的重叠更可验证；track-search 三元组可后置。抽出后用 UI 手动验证“列表增量显示、封面加载失败占位、取消关闭、缓存复用”。
+- **OptionsDialog / AutoMatchWorker 大拆分**：如果真的要做，先禁止行为重写，只做 presenter/service seam：OptionsDialog 保留 designer 和控件事件，抽纯 load/save mapping service；AutoMatchWorker 先抽 immutable input/result DTO，再迁移 worker body。没有 UI 手动验证清单前不建议动。
+
+---
+
+## Claude 复核 Codex 完成项复审 + Phase 2 启动（2026-06-29）
+
+6 路并行验证 workflow（每路独立对照源码 + git 历史核验一条 Codex 声明）+ critic 综合 → **Codex 的「完成项复审」与「后续建议」两节全部属实（critic: fully-correct，6/6 验证点 correct，0 误报）**。
+
+| 验证点 | Codex 声明 | 核验结论 |
+|---|---|---|
+| V1 封面过滤 | `BuildDedupedCovers` 给 QQ/Kuwo 新增 `IsNullOrWhiteSpace` 过滤（NetEase 原有），当前不可达 | ✅ `git show 95b8066~1` 证 QQ/Kuwo 原循环无空白跳过；两源封面 URL 均非空模板字面量（`string.Format` 不返 null）+ QQ 解析 guard 要求 `Mid.Any()` → delta 不可达，保留为联网手验关注点 |
+| V2 重命名文案 | `StartRenameFiles` 用 `Msg_SaveCompleted` 是原反编译行为，非 A3b 引入 | ✅ `git log -S` 证该串 `406ce91`（初始恢复）入档、非 `6b61728`；无 `Msg_RenameCompleted` 资源 |
+| V3 B1 顺序 | `SaveWithId3v2Version` 保 null/body/SetVersion/Save/catch/finally 顺序 | ✅ 空 body 仍走同尾；逐字节核对 |
+| V4 B2 ReportFinal | 只发射调用方给的 enabled-source 集 | ✅ Cover preferred/normal 两路各只报自身源集 |
+| V5 小项 | AppendTimestamp/AbsorbTranslatedLines/SortableTextComparer/ReplaceAll 忠实无扩大 | ✅ 4 项逐一核对 |
+| V6 后续建议前提 | A9 方法名陈旧；DatabaseMapper ~50 方法无一 DB；provider 异构 | ✅（且更强）`ExtractResultsFromRankedTracks` 全库不存在（仅 `SearchAutoMatchMetadata` 内 inline 块 ~1085-1169）；DatabaseMapper 实为 ~72-75 方法、零 DB 访问；4 provider 无能力接口、Kugou 无 `SearchCovers`、NetEase 带 `knownSongId`、Kuwo loader 单数名 |
+
+唯三处「轻微」均**强化而非削弱** Codex：V1 QQ 模板字面量本身即保非空（不必靠 guard）；V5 SortableText 逻辑在 `CompareSortableText` 助手内；V6「~50」低估为 ~72、且能力接口仍需逐方法签名调和。
+
+**Phase 2 行动项**（critic 汇总，按 Codex「先 characterization 再结构迁移」路线）：
+- 🔴 触 provider / 写标签 / 重命名结构迁移前，先落 characterization/fixture（典型/空/解析失败/限流响应 → 断言候选数 / 顺序 / URL / 错误态）+ 手动写路径覆盖。
+- 🟡 A8 勿用 `Regex.Escape` 换手写转义链；A9 按当前代码重命名目标（inline 块在 `SearchAutoMatchMetadata`，计划行号 `1093-1176` 已陈旧）；B2 能力接口仍需逐方法签名调和。
+- 🟢 保留 `BuildDedupedCovers` 空白过滤为联网手验关注点。
+
+**Phase 2 首批选定：`DatabaseMapper` 命名空间级拆分**（Tier C / DatabaseMapper，行 287）——blast-radius 最小（非写、非联网、纯工具方法），新类置同命名空间 `MusicTagWinApp.Instances` 使扩展方法（`GetMessageChain`/`GetStringRespectingUtf16Bom`）移动对调用点透明，非扩展方法调用点 `DatabaseMapper.X→NewClass.X` 由编译器强校验完整性（漏一处即 CS0117）。
