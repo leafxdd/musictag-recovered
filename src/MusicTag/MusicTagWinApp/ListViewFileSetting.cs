@@ -19,21 +19,7 @@ internal class ListViewFileSetting
 	[MethodImpl(MethodImplOptions.Synchronized)]
 	public void AddForDir(ListViewFileSettingFileInfo fileInfo)
 	{
-		ClearForAnyFile();
-		if (listDirMap.TryGetValue(fileInfo.DirPath, out ListViewFileSettingFileInfo existingFileInfo))
-		{
-			existingFileInfo.IncludeSubDir = fileInfo.IncludeSubDir;
-			existingFileInfo.Disabled = false;
-			return;
-		}
-
-		ListViewFileSettingFileInfo directoryFileInfo = new ListViewFileSettingFileInfo
-		{
-			DirPath = fileInfo.DirPath,
-			IncludeSubDir = fileInfo.IncludeSubDir
-		};
-		listDirMap.Add(fileInfo.DirPath, directoryFileInfo);
-		List.Add(directoryFileInfo);
+		AddForDir(fileInfo.DirPath, fileInfo.IncludeSubDir);
 	}
 
 	[MethodImpl(MethodImplOptions.Synchronized)]

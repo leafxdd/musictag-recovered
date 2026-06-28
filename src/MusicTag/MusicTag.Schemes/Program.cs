@@ -27,12 +27,6 @@ internal static class Program
 	[STAThread]
 	private static void Main(string[] args)
 	{
-		RunApplication(args);
-	}
-
-	[STAThread]
-	private static void RunApplication(string[] args)
-	{
 		if (TryFindExistingInstance(out IntPtr existingWindowHandle))
 		{
 			if (existingWindowHandle != IntPtr.Zero)

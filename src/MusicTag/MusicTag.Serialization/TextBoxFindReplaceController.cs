@@ -70,12 +70,13 @@ internal sealed class TextBoxFindReplaceController
 			return;
 		}
 
+		string sourceText = textBox.Text;
 		int matchCount = 0;
 		int startIndex = 0;
 		int singleMatchIndex = 0;
 		while (true)
 		{
-			startIndex = textBox.Text.IndexOf(SearchText, startIndex, GetStringComparison());
+			startIndex = sourceText.IndexOf(SearchText, startIndex, GetStringComparison());
 			if (startIndex < 0)
 			{
 				break;
@@ -104,7 +105,7 @@ internal sealed class TextBoxFindReplaceController
 
 		// 用 SelectAll + Paste 写回(可撤销),与单匹配分支一致;
 		// 直接给 textBox.Text 赋值会清空撤销缓冲区,导致整批替换无法 Ctrl+Z 撤销。
-		string replacedText = ReplaceAllMatches(textBox.Text, replacementText);
+		string replacedText = ReplaceAllMatches(sourceText, replacementText);
 		textBox.SelectAll();
 		textBox.Paste(replacedText);
 		textBox.SelectionStart = 0;

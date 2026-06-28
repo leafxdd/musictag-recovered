@@ -127,15 +127,7 @@ internal class SourceOrderControl : UserControl
 		}
 
 		ListViewItem selectedItem = sourceListView.SelectedItems[0];
-		if (selectedItem.Index <= 0)
-		{
-			return;
-		}
-
-		ListViewItem previousItem = sourceListView.Items[selectedItem.Index - 1];
-		SourceItem selectedSource = selectedItem.Tag as SourceItem;
-		SourceItem previousSource = previousItem.Tag as SourceItem;
-		if (selectedSource.IsSecondarySource && !previousSource.IsSecondarySource)
+		if (!CanMoveUp(selectedItem))
 		{
 			return;
 		}
@@ -158,15 +150,7 @@ internal class SourceOrderControl : UserControl
 		}
 
 		ListViewItem selectedItem = sourceListView.SelectedItems[0];
-		if (selectedItem.Index >= sourceListView.Items.Count - 1)
-		{
-			return;
-		}
-
-		ListViewItem nextItem = sourceListView.Items[selectedItem.Index + 1];
-		SourceItem selectedSource = selectedItem.Tag as SourceItem;
-		SourceItem nextSource = nextItem.Tag as SourceItem;
-		if (!selectedSource.IsSecondarySource && nextSource.IsSecondarySource)
+		if (!CanMoveDown(selectedItem))
 		{
 			return;
 		}
