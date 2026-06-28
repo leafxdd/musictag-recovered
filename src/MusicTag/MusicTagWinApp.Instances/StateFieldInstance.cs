@@ -634,6 +634,14 @@ internal class StateFieldInstance : Form
 		DatabaseMapper.ShowErrorMessage(displayException.GetMessageChain());
 	}
 
+	private void ReportAsyncOperationErrorIfNotCancellation(System.Exception exception, CancellationTokenSource cancellationSource, string context)
+	{
+		if (!IsCancellationException(exception, cancellationSource))
+		{
+			ReportAsyncOperationError(exception, context);
+		}
+	}
+
 	private static bool IsCancellationException(System.Exception exception, CancellationTokenSource cancellationSource)
 	{
 		if (cancellationSource == null || !cancellationSource.IsCancellationRequested)
@@ -675,30 +683,6 @@ internal class StateFieldInstance : Form
 			comboBox.Text = "";
 			valueCounts.Clear();
 			filterOptions.Clear();
-		}
-	}
-
-	private sealed class FilterValueCollector
-	{
-		public FileRow fileRow;
-
-		public FileListFilterContext filterContext;
-
-		internal void CountFilterValue(KeyValuePair<string, (Dictionary<string, int>, List<(string, bool)>)> filterState)
-		{
-			string key = filterState.Key;
-			var (valueCounts, filterOptions) = filterState.Value;
-			string filterValue = filterContext.owner.GetSelectedFilterValue(fileRow, key);
-			if (valueCounts.TryGetValue(filterValue, out var count))
-			{
-				count++;
-				valueCounts[filterValue] = count;
-			}
-			else
-			{
-				valueCounts.Add(filterValue, 1);
-				filterOptions.Add((filterValue, false));
-			}
 		}
 	}
 
@@ -854,31 +838,6 @@ internal class StateFieldInstance : Form
 			LyricSearchResult loadedLyric = lyricResult.DeferredLyricLoader(cancellationSource);
 			return loadedLyric?.GetFormattedLyricText() ?? "";
 		}
-	}
-
-	private sealed class SelectedItemFilterValueCounter
-	{
-		public FileRow fileRow;
-
-		public StateFieldInstance owner;
-
-		internal void CountFilterValue(KeyValuePair<string, (Dictionary<string, int>, List<(string, bool)>)> filterState)
-		{
-			string key = filterState.Key;
-			var (valueCounts, filterOptions) = filterState.Value;
-			string filterValue = owner.GetSelectedFilterValue(fileRow, key);
-			if (valueCounts.TryGetValue(filterValue, out var count))
-			{
-				count++;
-				valueCounts[filterValue] = count;
-			}
-			else
-			{
-				valueCounts.Add(filterValue, 1);
-				filterOptions.Add((filterValue, false));
-			}
-		}
-
 	}
 
 	private sealed class CoverTypeMenuContext
@@ -3990,12 +3949,7 @@ internal class StateFieldInstance : Form
 
 	private HashSet<string> GetLoadedFilePaths()
 	{
-		HashSet<string> filePaths = new HashSet<string>();
-		foreach (var cachedItem in cachedFileListItems)
-		{
-			filePaths.Add(cachedItem.FilePath);
-		}
-		return filePaths;
+		return new HashSet<string>(cachedFileListItems.Select(cachedItem => cachedItem.FilePath));
 	}
 
 	private void ClearLoadedFileList()
@@ -4102,10 +4056,7 @@ internal class StateFieldInstance : Form
 		}
 		catch (System.Exception ex)
 		{
-			if (!IsCancellationException(ex, fileCollector.CancellationTokenSource))
-			{
-				ReportAsyncOperationError(ex, nameof(StartAddAnyFiles));
-			}
+			ReportAsyncOperationErrorIfNotCancellation(ex, fileCollector.CancellationTokenSource, nameof(StartAddAnyFiles));
 		}
 		finally
 		{
@@ -4157,12 +4108,17 @@ internal class StateFieldInstance : Form
 
 	private IEnumerable<FileRow> SelectedFileRows => visibleRows.Where(r => selectedVisibleRows.Contains(r));
 
+	private static string FormatCountDurationSize(int count, long durationMs, long fileSizeBytes)
+	{
+		return $"{count} ({ConfigDescriptorState.FormatDurationHms(durationMs)} | {DatabaseMapper.FormatFileSize(fileSizeBytes)})";
+	}
+
 	private void RefreshStatusLabelsFromCachedTotals()
 	{
 		(long selectedDurationMs, long selectedFileSizeBytes) = GetCachedDurationAndFileSize(selectedFilesStatusLabel.Tag);
-		selectedFilesStatusLabel.Text = $"{SelectedFileCount} ({ConfigDescriptorState.FormatDurationHms(selectedDurationMs)} | {DatabaseMapper.FormatFileSize(selectedFileSizeBytes)})";
+		selectedFilesStatusLabel.Text = FormatCountDurationSize(SelectedFileCount, selectedDurationMs, selectedFileSizeBytes);
 		(long allDurationMs, long allFileSizeBytes) = GetCachedDurationAndFileSize(totalFilesStatusLabel.Tag);
-		totalFilesStatusLabel.Text = $"{visibleRows.Count} ({ConfigDescriptorState.FormatDurationHms(allDurationMs)} | {DatabaseMapper.FormatFileSize(allFileSizeBytes)})";
+		totalFilesStatusLabel.Text = FormatCountDurationSize(visibleRows.Count, allDurationMs, allFileSizeBytes);
 	}
 
 	private static (long DurationMs, long FileSizeBytes) GetCachedDurationAndFileSize(object cachedValue)
@@ -4205,10 +4161,10 @@ internal class StateFieldInstance : Form
 					selectedFileSizeBytes += itemFileSizeBytes;
 				}
 			}
-			totalFilesStatusLabel.Text = $"{visibleRows.Count} ({ConfigDescriptorState.FormatDurationHms(allDurationMs)} | {DatabaseMapper.FormatFileSize(allFileSizeBytes)})";
+			totalFilesStatusLabel.Text = FormatCountDurationSize(visibleRows.Count, allDurationMs, allFileSizeBytes);
 			totalFilesStatusLabel.Tag = (allDurationMs, allFileSizeBytes);
 		}
-		selectedFilesStatusLabel.Text = $"{SelectedFileCount} ({ConfigDescriptorState.FormatDurationHms(selectedDurationMs)} | {DatabaseMapper.FormatFileSize(selectedFileSizeBytes)})";
+		selectedFilesStatusLabel.Text = FormatCountDurationSize(SelectedFileCount, selectedDurationMs, selectedFileSizeBytes);
 		selectedFilesStatusLabel.Tag = (selectedDurationMs, selectedFileSizeBytes);
 	}
 
@@ -4242,10 +4198,7 @@ internal class StateFieldInstance : Form
 		}
 		catch (System.Exception ex)
 		{
-			if (!IsCancellationException(ex, addFilesWorker.CancellationTokenSource))
-			{
-				ReportAsyncOperationError(ex, nameof(StartAddFiles));
-			}
+			ReportAsyncOperationErrorIfNotCancellation(ex, addFilesWorker.CancellationTokenSource, nameof(StartAddFiles));
 		}
 		finally
 		{
@@ -4296,23 +4249,11 @@ internal class StateFieldInstance : Form
 
 	private Dictionary<string, string> BuildBasicFileDisplayValues(FileInfo fileInfo)
 	{
-		if (fileInfo.Exists)
-		{
-			return new Dictionary<string, string>
-			{
-				{ "filename", fileInfo.Name },
-				{ "filedir", fileInfo.DirectoryName },
-				{
-					"updatetime",
-					fileInfo.LastWriteTime.ToString("yyyy/MM/dd HH:mm:ss")
-				}
-			};
-		}
 		return new Dictionary<string, string>
 		{
 			{ "filename", fileInfo.Name },
 			{ "filedir", fileInfo.DirectoryName },
-			{ "updatetime", "" }
+			{ "updatetime", fileInfo.Exists ? fileInfo.LastWriteTime.ToString("yyyy/MM/dd HH:mm:ss") : "" }
 		};
 	}
 
@@ -4343,10 +4284,7 @@ internal class StateFieldInstance : Form
 		}
 		catch (System.Exception ex)
 		{
-			if (!IsCancellationException(ex, refreshContext.cancellationSource))
-			{
-				ReportAsyncOperationError(ex, nameof(StartRefreshItems));
-			}
+			ReportAsyncOperationErrorIfNotCancellation(ex, refreshContext.cancellationSource, nameof(StartRefreshItems));
 		}
 		finally
 		{
@@ -4472,6 +4410,22 @@ internal class StateFieldInstance : Form
 		{
 			selectedFilter.Item1.Clear();
 			selectedFilter.Item2.Clear();
+		}
+	}
+
+	private void SubscribeTagFieldTextHandlers()
+	{
+		foreach (KeyValuePair<string, (Label, EventHandler)> handlerEntry in tagFieldTextHandlers)
+		{
+			tagComboBoxes[handlerEntry.Key].TextChanged += handlerEntry.Value.Item2;
+		}
+	}
+
+	private void UnsubscribeTagFieldTextHandlers()
+	{
+		foreach (KeyValuePair<string, (Label, EventHandler)> handlerEntry in tagFieldTextHandlers)
+		{
+			tagComboBoxes[handlerEntry.Key].TextChanged -= handlerEntry.Value.Item2;
 		}
 	}
 
@@ -4657,10 +4611,7 @@ internal class StateFieldInstance : Form
 		bool textHandlersResubscribed = false;
 		try
 		{
-			foreach (KeyValuePair<string, (Label, EventHandler)> handlerEntry in tagFieldTextHandlers)
-			{
-				tagComboBoxes[handlerEntry.Key].TextChanged -= handlerEntry.Value.Item2;
-			}
+			UnsubscribeTagFieldTextHandlers();
 			tagComboBoxes.ForEachItem(activeFilterContext.ResetFilterComboState);
 			if (activeFilterContext.filterText.Any())
 			{
@@ -4697,18 +4648,13 @@ internal class StateFieldInstance : Form
 				for (int index = 0; index < cachedFileListItems.Count; index++)
 				{
 					FileRow fileRow = cachedFileListItems[index];
-					FilterValueCollector selectedFilterRestorer = new FilterValueCollector
-					{
-						filterContext = activeFilterContext,
-						fileRow = fileRow
-					};
 					if (fileRow.IsHidden)
 					{
 						fileRow.IsHidden = false;
 					}
 					else if (fileRow.Selected)
 					{
-						selectedFilterValueStates.ForEachItem(selectedFilterRestorer.CountFilterValue);
+						AddSelectedFilterValues(fileRow);
 					}
 				}
 			}
@@ -4716,10 +4662,7 @@ internal class StateFieldInstance : Form
 			RebuildVisibleRows();
 			RestoreDgvSelectionFromModel();
 			lastFileListFilterText = activeFilterContext.filterText;
-			foreach (KeyValuePair<string, (Label, EventHandler)> handlerEntry in tagFieldTextHandlers)
-			{
-				tagComboBoxes[handlerEntry.Key].TextChanged += handlerEntry.Value.Item2;
-			}
+			SubscribeTagFieldTextHandlers();
 			textHandlersResubscribed = true;
 			ScheduleSelectionStatusUpdate(refreshStatusAllInfo: false);
 			if (SelectedFileCount == 1)
@@ -4741,10 +4684,7 @@ internal class StateFieldInstance : Form
 			// 异常路径下也必须重订 TextChanged,否则字段变更监听会永久脱落。
 			if (!textHandlersResubscribed)
 			{
-				foreach (KeyValuePair<string, (Label, EventHandler)> handlerEntry in tagFieldTextHandlers)
-				{
-					tagComboBoxes[handlerEntry.Key].TextChanged += handlerEntry.Value.Item2;
-				}
+				SubscribeTagFieldTextHandlers();
 			}
 			tagComboBoxes.Values.ForEachItem(EndComboBoxUpdate);
 		}
@@ -4996,10 +4936,7 @@ internal class StateFieldInstance : Form
 		}
 		catch (System.Exception ex)
 		{
-			if (!IsCancellationException(ex, lyricDownloadContext.cancellationSource))
-			{
-				ReportAsyncOperationError(ex, nameof(StartDownloadLyric));
-			}
+			ReportAsyncOperationErrorIfNotCancellation(ex, lyricDownloadContext.cancellationSource, nameof(StartDownloadLyric));
 		}
 		finally
 		{
@@ -5015,10 +4952,7 @@ internal class StateFieldInstance : Form
 		try
 		{
 		fileListView.Focus();
-		foreach (KeyValuePair<string, (Label, EventHandler)> handlerEntry in tagFieldTextHandlers)
-		{
-			tagComboBoxes[handlerEntry.Key].TextChanged -= handlerEntry.Value.Item2;
-		}
+		UnsubscribeTagFieldTextHandlers();
 		tagComboBoxes.ForEachItem(ClearTagFieldSelectionState);
 
 		foreach (FileRow fileRow in visibleRows)
@@ -5041,19 +4975,11 @@ internal class StateFieldInstance : Form
 				continue;
 			}
 
-			SelectedItemFilterValueCounter selectedItemCounter = new SelectedItemFilterValueCounter
-			{
-				owner = this,
-				fileRow = fileRow
-			};
-			selectedFilterValueStates.ForEachItem(selectedItemCounter.CountFilterValue);
+			AddSelectedFilterValues(fileRow);
 		}
 		RestoreDgvSelectionFromModel();
 
-		foreach (KeyValuePair<string, (Label, EventHandler)> handlerEntry in tagFieldTextHandlers)
-		{
-			tagComboBoxes[handlerEntry.Key].TextChanged += handlerEntry.Value.Item2;
-		}
+		SubscribeTagFieldTextHandlers();
 		textHandlersResubscribed = true;
 		if (SelectedFileCount == 1)
 		{
@@ -5079,10 +5005,7 @@ internal class StateFieldInstance : Form
 			// 异常路径下也必须重订 TextChanged 并结束更新,否则监听脱落、组合框停留在 BeginUpdate。
 			if (!textHandlersResubscribed)
 			{
-				foreach (KeyValuePair<string, (Label, EventHandler)> handlerEntry in tagFieldTextHandlers)
-				{
-					tagComboBoxes[handlerEntry.Key].TextChanged += handlerEntry.Value.Item2;
-				}
+				SubscribeTagFieldTextHandlers();
 			}
 			tagComboBoxes.Values.ForEachItem(EndComboBoxUpdate);
 		}
@@ -5591,10 +5514,7 @@ internal class StateFieldInstance : Form
 		}
 		catch (System.Exception ex)
 		{
-			if (!IsCancellationException(ex, releaseYearContext.cancellationSource))
-			{
-				ReportAsyncOperationError(ex, nameof(StartSearchYearLookup));
-			}
+			ReportAsyncOperationErrorIfNotCancellation(ex, releaseYearContext.cancellationSource, nameof(StartSearchYearLookup));
 		}
 		finally
 		{
@@ -6018,10 +5938,7 @@ internal class StateFieldInstance : Form
 		}
 		catch (System.Exception ex)
 		{
-			if (!IsCancellationException(ex, batchContext.cancellationSource))
-			{
-				ReportAsyncOperationError(ex, nameof(StartRenameFiles));
-			}
+			ReportAsyncOperationErrorIfNotCancellation(ex, batchContext.cancellationSource, nameof(StartRenameFiles));
 		}
 		finally
 		{
@@ -6074,10 +5991,7 @@ internal class StateFieldInstance : Form
 		}
 		catch (System.Exception ex)
 		{
-			if (!IsCancellationException(ex, saveTagsContext.cancellationSource))
-			{
-				ReportAsyncOperationError(ex, nameof(StartCommonSaveTags));
-			}
+			ReportAsyncOperationErrorIfNotCancellation(ex, saveTagsContext.cancellationSource, nameof(StartCommonSaveTags));
 		}
 		finally
 		{
@@ -6138,10 +6052,7 @@ internal class StateFieldInstance : Form
 		}
 		catch (System.Exception ex)
 		{
-			if (!IsCancellationException(ex, undoSaveTagsContext.cancellationSource))
-			{
-				ReportAsyncOperationError(ex, nameof(StartUndoSaveTags));
-			}
+			ReportAsyncOperationErrorIfNotCancellation(ex, undoSaveTagsContext.cancellationSource, nameof(StartUndoSaveTags));
 		}
 		finally
 		{
@@ -6209,10 +6120,7 @@ internal class StateFieldInstance : Form
 		}
 		catch (System.Exception ex)
 		{
-			if (!IsCancellationException(ex, undoRenameContext.cancellationSource))
-			{
-				ReportAsyncOperationError(ex, nameof(StartUndoRename));
-			}
+			ReportAsyncOperationErrorIfNotCancellation(ex, undoRenameContext.cancellationSource, nameof(StartUndoRename));
 		}
 		finally
 		{
@@ -6257,10 +6165,7 @@ internal class StateFieldInstance : Form
 		}
 		catch (System.Exception ex)
 		{
-			if (!IsCancellationException(ex, clearTagsContext.cancellationSource))
-			{
-				ReportAsyncOperationError(ex, nameof(StartClearTags));
-			}
+			ReportAsyncOperationErrorIfNotCancellation(ex, clearTagsContext.cancellationSource, nameof(StartClearTags));
 		}
 		finally
 		{
@@ -6307,10 +6212,7 @@ internal class StateFieldInstance : Form
 		}
 		catch (System.Exception ex)
 		{
-			if (!IsCancellationException(ex, deleteFilesContext.cancellationSource))
-			{
-				ReportAsyncOperationError(ex, nameof(StartRemoveFiles));
-			}
+			ReportAsyncOperationErrorIfNotCancellation(ex, deleteFilesContext.cancellationSource, nameof(StartRemoveFiles));
 		}
 		finally
 		{
@@ -6339,10 +6241,7 @@ internal class StateFieldInstance : Form
 		}
 		catch (System.Exception ex)
 		{
-			if (!IsCancellationException(ex, saveLrcContext.cancellationSource))
-			{
-				ReportAsyncOperationError(ex, nameof(StartSaveLrcFiles));
-			}
+			ReportAsyncOperationErrorIfNotCancellation(ex, saveLrcContext.cancellationSource, nameof(StartSaveLrcFiles));
 		}
 		finally
 		{
@@ -6371,10 +6270,7 @@ internal class StateFieldInstance : Form
 		}
 		catch (System.Exception ex)
 		{
-			if (!IsCancellationException(ex, extractCoversContext.cancellationSource))
-			{
-				ReportAsyncOperationError(ex, nameof(StartExtractCovers));
-			}
+			ReportAsyncOperationErrorIfNotCancellation(ex, extractCoversContext.cancellationSource, nameof(StartExtractCovers));
 		}
 		finally
 		{
@@ -6420,20 +6316,22 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	private void ConvertTagsTraditionalToSimplified_Click(object sender, EventArgs e)
+	private void ConvertAllTagFields(ChineseTextConverter converter)
 	{
 		foreach (ComboBox comboBox in tagComboBoxes.Values)
 		{
-			comboBox.Text = ChineseTextConverter.TraditionalToSimplified().ConvertText(comboBox.Text);
+			comboBox.Text = converter.ConvertText(comboBox.Text);
 		}
+	}
+
+	private void ConvertTagsTraditionalToSimplified_Click(object sender, EventArgs e)
+	{
+		ConvertAllTagFields(ChineseTextConverter.TraditionalToSimplified());
 	}
 
 	private void ConvertTagsSimplifiedToTraditional_Click(object sender, EventArgs e)
 	{
-		foreach (ComboBox comboBox in tagComboBoxes.Values)
-		{
-			comboBox.Text = ChineseTextConverter.SimplifiedToTraditional().ConvertText(comboBox.Text);
-		}
+		ConvertAllTagFields(ChineseTextConverter.SimplifiedToTraditional());
 	}
 
 	private void RestoreTagsFromHistory_Click(object sender, EventArgs e)
