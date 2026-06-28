@@ -102,8 +102,7 @@ internal static class DatabaseMapper
 	
 	public static string ComputeMd5HashString(string text, string encodingName = "UniCode")
 	{
-		byte[] bytes = Encoding.GetEncoding(encodingName).GetBytes(text);
-		return BitConverter.ToString(new MD5CryptoServiceProvider().ComputeHash(bytes));
+		return ComputeMd5HashString(Encoding.GetEncoding(encodingName).GetBytes(text));
 	}
 
 	public static Bitmap ScaleImage(Image image, float scale, InterpolationMode interpolationMode = InterpolationMode.HighQualityBicubic)
@@ -281,40 +280,24 @@ internal static class DatabaseMapper
 		return GetApplicationDirectory() + "temp\\Undo\\";
 	}
 
-	public static string GetSaveTagsLogDirectory()
+	private static string GetLogSubdirectory(string subdirectory)
 	{
-		return EnsureDirectoryExists(GetApplicationDirectory() + "temp\\Log\\SaveTags") + "\\";
+		return EnsureDirectoryExists(GetApplicationDirectory() + "temp\\Log\\" + subdirectory) + "\\";
 	}
 
-	public static string GetClearTagsLogDirectory()
-	{
-		return EnsureDirectoryExists(GetApplicationDirectory() + "temp\\Log\\ClearTags") + "\\";
-	}
+	public static string GetSaveTagsLogDirectory() => GetLogSubdirectory("SaveTags");
 
-	public static string GetSaveLyricsLogDirectory()
-	{
-		return EnsureDirectoryExists(GetApplicationDirectory() + "temp\\Log\\SaveLrcFiles") + "\\";
-	}
+	public static string GetClearTagsLogDirectory() => GetLogSubdirectory("ClearTags");
 
-	public static string GetSaveCoversLogDirectory()
-	{
-		return EnsureDirectoryExists(GetApplicationDirectory() + "temp\\Log\\SaveCovers") + "\\";
-	}
+	public static string GetSaveLyricsLogDirectory() => GetLogSubdirectory("SaveLrcFiles");
 
-	public static string GetAutoMatchLogDirectory()
-	{
-		return EnsureDirectoryExists(GetApplicationDirectory() + "temp\\Log\\AutoMatchTags") + "\\";
-	}
+	public static string GetSaveCoversLogDirectory() => GetLogSubdirectory("SaveCovers");
 
-	public static string GetRenameLogDirectory()
-	{
-		return EnsureDirectoryExists(GetApplicationDirectory() + "temp\\Log\\Rename") + "\\";
-	}
+	public static string GetAutoMatchLogDirectory() => GetLogSubdirectory("AutoMatchTags");
 
-	public static string GetExceptionLogDirectory()
-	{
-		return EnsureDirectoryExists(GetApplicationDirectory() + "temp\\Log\\Exception\\" + ApplicationInfoService.GetFileVersion()) + "\\";
-	}
+	public static string GetRenameLogDirectory() => GetLogSubdirectory("Rename");
+
+	public static string GetExceptionLogDirectory() => GetLogSubdirectory("Exception\\" + ApplicationInfoService.GetFileVersion());
 
 	public static string GetStartupLogFileName()
 	{

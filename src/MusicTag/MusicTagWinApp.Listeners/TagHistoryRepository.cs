@@ -244,7 +244,7 @@ internal class TagHistoryRepository : IDisposable
 		}
 		catch
 		{
-			transactionFailed = currentTransaction != null;
+			MarkTransactionFailed();
 			throw;
 		}
 	}
@@ -258,7 +258,7 @@ internal class TagHistoryRepository : IDisposable
 		}
 		catch
 		{
-			transactionFailed = currentTransaction != null;
+			MarkTransactionFailed();
 			throw;
 		}
 	}
@@ -333,43 +333,32 @@ internal class TagHistoryRepository : IDisposable
 		return new List<ConfigDescriptorState>();
 	}
 
-	public static int UpdateHistoryFilePath(string oldPath, string newPath, TagHistoryRepository tagHistory)
+	private static int ExecuteNonQueryLogged(TagHistoryRepository tagHistory, string failTag, string commandText, params object[] commandParameterValues)
 	{
 		try
 		{
-			return tagHistory.ExecuteNonQuery("update tagshistory set filepath = ? where filepath = ?", newPath, oldPath);
+			return tagHistory.ExecuteNonQuery(commandText, commandParameterValues);
 		}
 		catch (Exception ex)
 		{
-			Console.WriteLine("UpdateFilePath fail:" + ex.Message);
+			Console.WriteLine(failTag + " fail:" + ex.Message);
 		}
 		return -1;
+	}
+
+	public static int UpdateHistoryFilePath(string oldPath, string newPath, TagHistoryRepository tagHistory)
+	{
+		return ExecuteNonQueryLogged(tagHistory, "UpdateFilePath", "update tagshistory set filepath = ? where filepath = ?", newPath, oldPath);
 	}
 
 	public static int DeleteHistoryByFilePath(string filePath, TagHistoryRepository tagHistory)
 	{
-		try
-		{
-			return tagHistory.ExecuteNonQuery("delete from tagshistory where filepath = ?", filePath);
-		}
-		catch (Exception ex)
-		{
-			Console.WriteLine("DeleteTagsHistoryByFilePath fail:" + ex.Message);
-		}
-		return -1;
+		return ExecuteNonQueryLogged(tagHistory, "DeleteTagsHistoryByFilePath", "delete from tagshistory where filepath = ?", filePath);
 	}
 
 	public static int DeleteHistoryBySerial(string serial, TagHistoryRepository tagHistory)
 	{
-		try
-		{
-			return tagHistory.ExecuteNonQuery("delete from tagshistory where serial = ?", serial);
-		}
-		catch (Exception ex)
-		{
-			Console.WriteLine("DeleteTagsHistory fail:" + ex.Message);
-		}
-		return -1;
+		return ExecuteNonQueryLogged(tagHistory, "DeleteTagsHistory", "delete from tagshistory where serial = ?", serial);
 	}
 
 	public static int ClearAllHistory()
