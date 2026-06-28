@@ -242,7 +242,7 @@ internal class FilenameRelatedBatchDialog : Form
 										{
 											sourceLrcPath = null;
 										}
-										sourceImagePath = DatabaseMapper.FindExistingSiblingImageFile(originalPath);
+										sourceImagePath = ImageUtilities.FindExistingSiblingImageFile(originalPath);
 									}
 									string destinationAudioPath = Path.GetDirectoryName(originalPath) + "\\" + newFilename + Path.GetExtension(originalPath);
 									if (File.Exists(destinationAudioPath) && !string.Equals(newFilename, Path.GetFileNameWithoutExtension(originalPath), StringComparison.OrdinalIgnoreCase))
@@ -889,10 +889,10 @@ internal class FilenameRelatedBatchDialog : Form
 
 	private void InitializeCaptureGroupList()
 	{
-		captureGroupRowHeightImageList.ImageSize = new Size(1, DatabaseMapper.ScaleByDpi(23f));
+		captureGroupRowHeightImageList.ImageSize = new Size(1, ImageUtilities.ScaleByDpi(23f));
 		foreach (ColumnHeader column in captureGroupListView.Columns)
 		{
-			column.Width = DatabaseMapper.ScaleByDpi(column.Width);
+			column.Width = ImageUtilities.ScaleByDpi(column.Width);
 		}
 		object[] captureGroupOptions = new string[8]
 		{
@@ -962,7 +962,7 @@ internal class FilenameRelatedBatchDialog : Form
 	{
 		int patternButtonLeftMargin = (patternCommandRowPanel.Width - patternButtonPanel.Width) / 2;
 		patternButtonPanel.Margin = new Padding(patternButtonLeftMargin, patternButtonPanel.Margin.Top, 0, patternButtonPanel.Margin.Bottom);
-		customPatternTextBox.Width = patternOptionsPanel.Width - customPatternRadioButton.Width - customPatternRadioButton.Margin.Left - customPatternRadioButton.Margin.Right - customPatternTextBox.Margin.Left - customPatternTextBox.Margin.Right - DatabaseMapper.ScaleByDpi(20f);
+		customPatternTextBox.Width = patternOptionsPanel.Width - customPatternRadioButton.Width - customPatternRadioButton.Margin.Left - customPatternRadioButton.Margin.Right - customPatternTextBox.Margin.Left - customPatternTextBox.Margin.Right - ImageUtilities.ScaleByDpi(20f);
 		int regexButtonLeftMargin = (regexCommandRowPanel.Width - regexButtonPanel.Width) / 2;
 		regexButtonPanel.Margin = new Padding(regexButtonLeftMargin, regexButtonPanel.Margin.Top, 0, regexButtonPanel.Margin.Bottom);
 
@@ -996,10 +996,10 @@ internal class FilenameRelatedBatchDialog : Form
 		}
 		regexPatternTextBox.Width = regexPatternGroupBox.Width - regexPatternGroupBox.Padding.Left * 2 - regexPatternTextBox.Margin.Left * 2;
 		captureGroupListView.Width = captureGroupPanel.Width;
-		captureGroupListView.Height = captureGroupPanel.Height - clearCaptureGroupsButton.Height - DatabaseMapper.ScaleByDpi(3f);
+		captureGroupListView.Height = captureGroupPanel.Height - clearCaptureGroupsButton.Height - ImageUtilities.ScaleByDpi(3f);
 		clearCaptureGroupsButton.Margin = new Padding(captureGroupPanel.Width - clearCaptureGroupsButton.Width, clearCaptureGroupsButton.Margin.Top, 0, 0);
 		regexExampleTextBox.Width = regexExampleGroupBox.Width - regexExampleGroupBox.Padding.Left * 2 - regexExampleTextBox.Margin.Left * 2;
-		regexExampleTextBox.Height = regexExampleGroupBox.Height - regexExampleGroupBox.Padding.Top * 2 - regexExampleTextBox.Margin.Top * 2 - DatabaseMapper.ScaleByDpi(5f);
+		regexExampleTextBox.Height = regexExampleGroupBox.Height - regexExampleGroupBox.Padding.Top * 2 - regexExampleTextBox.Margin.Top * 2 - ImageUtilities.ScaleByDpi(5f);
 	}
 
 	private void ConfirmPatternSettings(object sender, EventArgs e)

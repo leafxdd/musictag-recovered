@@ -131,19 +131,19 @@ internal class LyricEditorDialog : Form
 		InitializeLocalizedText();
 		FontAwesome.Properties searchIconProperties = new FontAwesome.Properties
 		{
-			Size = DatabaseMapper.ScaleByDpi(24f),
+			Size = ImageUtilities.ScaleByDpi(24f),
 			ShowBorder = false
 		};
 		FontAwesome.Properties saveIconProperties = new FontAwesome.Properties
 		{
-			Size = DatabaseMapper.ScaleByDpi(21f),
+			Size = ImageUtilities.ScaleByDpi(21f),
 			ShowBorder = false
 		};
 		searchButton.Image = FontAwesome.Type.Search.AsImage(searchIconProperties);
-		searchButton.Size = new Size(DatabaseMapper.ScaleByDpi(100f), DatabaseMapper.ScaleByDpi(35f));
+		searchButton.Size = new Size(ImageUtilities.ScaleByDpi(100f), ImageUtilities.ScaleByDpi(35f));
 		searchButton.AutoSize = false;
 		saveAsLrcButton.Image = FontAwesome.Type.FloppyO.AsImage(saveIconProperties);
-		saveAsLrcButton.Size = new Size(DatabaseMapper.ScaleByDpi(120f), DatabaseMapper.ScaleByDpi(35f));
+		saveAsLrcButton.Size = new Size(ImageUtilities.ScaleByDpi(120f), ImageUtilities.ScaleByDpi(35f));
 		saveAsLrcButton.AutoSize = false;
 		foreach (SourceItem sourceItem in LyricSearchResult.GetLyricSourceSettings())
 		{
@@ -151,7 +151,7 @@ internal class LyricEditorDialog : Form
 			menuItem.Tag = sourceItem.SearchSource;
 			menuItem.Click += SearchLyric_Click;
 		}
-		progressPictureBox.Image = DatabaseMapper.LoadResourceBitmap("img_wait");
+		progressPictureBox.Image = ImageUtilities.LoadResourceBitmap("img_wait");
 		UpdateEditorLayout();
 		findReplaceController = new TextBoxFindReplaceController(lyricTextBox);
 	}

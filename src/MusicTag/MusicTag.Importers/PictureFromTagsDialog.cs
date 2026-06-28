@@ -110,12 +110,12 @@ internal class PictureFromTagsDialog : Form
 	private void InitializeImageList()
 	{
 		pictureImageList.Images.Clear();
-		pictureImageList.ImageSize = new Size(DatabaseMapper.ScaleByDpi(pictureImageList.ImageSize.Width), DatabaseMapper.ScaleByDpi(pictureImageList.ImageSize.Height));
+		pictureImageList.ImageSize = new Size(ImageUtilities.ScaleByDpi(pictureImageList.ImageSize.Width), ImageUtilities.ScaleByDpi(pictureImageList.ImageSize.Height));
 		pictureImageList.ColorDepth = ColorDepth.Depth24Bit;
 		pictureImageList.TransparentColor = Color.Transparent;
-		pictureImageList.Images.Add("loading", DatabaseMapper.LoadResourceBitmap("loading", pictureImageList.ImageSize));
-		pictureImageList.Images.Add("download_failed", DatabaseMapper.LoadResourceBitmap("download_failed", pictureImageList.ImageSize));
-		progressPictureBox.Image = DatabaseMapper.LoadResourceBitmap("img_wait");
+		pictureImageList.Images.Add("loading", ImageUtilities.LoadResourceBitmap("loading", pictureImageList.ImageSize));
+		pictureImageList.Images.Add("download_failed", ImageUtilities.LoadResourceBitmap("download_failed", pictureImageList.ImageSize));
+		progressPictureBox.Image = ImageUtilities.LoadResourceBitmap("img_wait");
 	}
 
 	protected override void OnShown(EventArgs e)
@@ -347,7 +347,7 @@ internal class PictureFromTagsDialog : Form
 
 	private static void OpenCoverImage(ConfigDescriptorState.PictureData pictureData)
 	{
-		string extension = DatabaseMapper.GetImageExtensionForMimeType(pictureData.MimeType, "");
+		string extension = ImageUtilities.GetImageExtensionForMimeType(pictureData.MimeType, "");
 		string tempCoverPath = PathFileUtilities.GetPictureCacheDirectory() + "tempcover" + extension;
 		File.WriteAllBytes(tempCoverPath, pictureData.ImageBytes);
 		Process.Start(tempCoverPath);
@@ -509,7 +509,7 @@ internal class PictureFromTagsDialog : Form
 
 	private void ExtractCover(ConfigDescriptorState.PictureData pictureData)
 	{
-		string fileFilter = DatabaseMapper.GetImageFileDialogFilterForMimeType(pictureData.MimeType);
+		string fileFilter = ImageUtilities.GetImageFileDialogFilterForMimeType(pictureData.MimeType);
 		if (!string.IsNullOrWhiteSpace(fileFilter))
 		{
 			saveCoverDialog.Filter = fileFilter;

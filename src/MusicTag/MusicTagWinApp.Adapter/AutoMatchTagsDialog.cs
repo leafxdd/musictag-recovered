@@ -239,7 +239,7 @@ internal class AutoMatchTagsDialog : Form
 						worker.shouldSaveCoverToTag = true;
 					}
 				}
-				if ((coverSetting.writeMode == "SaveToFile" || coverSetting.writeMode == "SaveToTagAndFile") && (DatabaseMapper.FindExistingSiblingImageFile(filePath) == null || coverSetting.overwrite))
+				if ((coverSetting.writeMode == "SaveToFile" || coverSetting.writeMode == "SaveToTagAndFile") && (ImageUtilities.FindExistingSiblingImageFile(filePath) == null || coverSetting.overwrite))
 				{
 					worker.shouldSaveCoverToFile = true;
 				}
@@ -992,8 +992,8 @@ internal class AutoMatchTagsDialog : Form
 		{
 			try
 			{
-				string imageExtension = DatabaseMapper.GetImageExtensionForMimeType(picture.MimeType, ".jpg");
-				string existingCoverPath = DatabaseMapper.FindExistingSiblingImageFile(GetCurrentFilePath());
+				string imageExtension = ImageUtilities.GetImageExtensionForMimeType(picture.MimeType, ".jpg");
+				string existingCoverPath = ImageUtilities.FindExistingSiblingImageFile(GetCurrentFilePath());
 				string newCoverPath = PathFileUtilities.GetSiblingPathWithExtension(GetCurrentFilePath(), imageExtension);
 				bool shouldDeleteOriginalCover = existingCoverPath != null && newCoverPath != existingCoverPath;
 				File.WriteAllBytes(newCoverPath, picture.ImageBytes);
@@ -1629,10 +1629,10 @@ internal class AutoMatchTagsDialog : Form
 	private void InitializeMatchConditionList()
 	{
 		MatchConditionListBuilder listBuilder = new MatchConditionListBuilder(this);
-		rowImageList.ImageSize = new Size(1, DatabaseMapper.ScaleByDpi(40f));
+		rowImageList.ImageSize = new Size(1, ImageUtilities.ScaleByDpi(40f));
 		foreach (ColumnHeader column in tagListView.Columns)
 		{
-			column.Width = DatabaseMapper.ScaleByDpi(column.Width);
+			column.Width = ImageUtilities.ScaleByDpi(column.Width);
 		}
 		try
 		{
@@ -1657,11 +1657,11 @@ internal class AutoMatchTagsDialog : Form
 		string language = StateFieldInstance.CurrentLanguageCode;
 		if (language != "zh-CHS" && language != "zh-CHT")
 		{
-			overwriteColumn.Width = DatabaseMapper.ScaleByDpi(80f);
+			overwriteColumn.Width = ImageUtilities.ScaleByDpi(80f);
 		}
 		else
 		{
-			overwriteColumn.Width = DatabaseMapper.ScaleByDpi(55f);
+			overwriteColumn.Width = ImageUtilities.ScaleByDpi(55f);
 		}
 	}
 
@@ -1700,8 +1700,8 @@ internal class AutoMatchTagsDialog : Form
 		args.DrawDefault = false;
 		args.DrawBackground();
 		bool isChecked = args.Header.Tag is bool value && value;
-		CheckBoxRenderer.DrawCheckBox(args.Graphics, new Point(args.Bounds.Left + 4, args.Bounds.Top + DatabaseMapper.ScaleByDpi(4f)), isChecked ? CheckBoxState.CheckedNormal : CheckBoxState.UncheckedNormal);
-		int textX = args.Bounds.Left + DatabaseMapper.ScaleByDpi(16f) + 4;
+		CheckBoxRenderer.DrawCheckBox(args.Graphics, new Point(args.Bounds.Left + 4, args.Bounds.Top + ImageUtilities.ScaleByDpi(4f)), isChecked ? CheckBoxState.CheckedNormal : CheckBoxState.UncheckedNormal);
+		int textX = args.Bounds.Left + ImageUtilities.ScaleByDpi(16f) + 4;
 		int textWidth = args.Bounds.Right - textX;
 		if (textWidth <= 0)
 		{

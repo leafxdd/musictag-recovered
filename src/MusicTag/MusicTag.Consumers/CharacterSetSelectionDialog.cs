@@ -45,11 +45,11 @@ internal class CharacterSetSelectionDialog : Form
 		cancelButton.Text = Resources.Cancel;
 		encodingListView.SmallImageList = new ImageList(components)
 		{
-			ImageSize = new Size(1, DatabaseMapper.ScaleByDpi(32f))
+			ImageSize = new Size(1, ImageUtilities.ScaleByDpi(32f))
 		};
 		foreach (ColumnHeader columnHeader in encodingListView.Columns)
 		{
-			columnHeader.Width = DatabaseMapper.ScaleByDpi(columnHeader.Width);
+			columnHeader.Width = ImageUtilities.ScaleByDpi(columnHeader.Width);
 		}
 	}
 

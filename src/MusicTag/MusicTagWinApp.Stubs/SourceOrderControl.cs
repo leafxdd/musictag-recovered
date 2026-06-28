@@ -71,7 +71,7 @@ internal class SourceOrderControl : UserControl
 	{
 		FontAwesome.Properties iconProperties = new FontAwesome.Properties
 		{
-			Size = DatabaseMapper.ScaleByDpi(20f),
+			Size = ImageUtilities.ScaleByDpi(20f),
 			ShowBorder = false
 		};
 		moveUpButton.Image = FontAwesome.Type.AngleUp.AsImage(iconProperties);
@@ -82,9 +82,9 @@ internal class SourceOrderControl : UserControl
 
 	private void ScaleButtonSizes()
 	{
-		buttonPanel.Width = DatabaseMapper.ScaleByDpi(buttonPanel.Width);
-		moveUpButton.Size = new Size(DatabaseMapper.ScaleByDpi(moveUpButton.Size.Width), DatabaseMapper.ScaleByDpi(moveUpButton.Size.Height));
-		moveDownButton.Size = new Size(DatabaseMapper.ScaleByDpi(moveDownButton.Size.Width), DatabaseMapper.ScaleByDpi(moveDownButton.Size.Height));
+		buttonPanel.Width = ImageUtilities.ScaleByDpi(buttonPanel.Width);
+		moveUpButton.Size = new Size(ImageUtilities.ScaleByDpi(moveUpButton.Size.Width), ImageUtilities.ScaleByDpi(moveUpButton.Size.Height));
+		moveDownButton.Size = new Size(ImageUtilities.ScaleByDpi(moveDownButton.Size.Width), ImageUtilities.ScaleByDpi(moveDownButton.Size.Height));
 	}
 
 	private void SourceOrderControl_Load(object sender, EventArgs e)
@@ -116,7 +116,7 @@ internal class SourceOrderControl : UserControl
 		sourceListView.Width = mainPanel.Width - buttonPanel.Width - buttonPanel.Margin.Left - buttonPanel.Margin.Right;
 		sourceListView.Height = mainPanel.Height;
 		buttonPanel.Height = mainPanel.Height;
-		moveUpButton.Margin = new Padding(0, buttonPanel.Height - moveUpButton.Height - moveDownButton.Height - DatabaseMapper.ScaleByDpi(10f), 0, 0);
+		moveUpButton.Margin = new Padding(0, buttonPanel.Height - moveUpButton.Height - moveDownButton.Height - ImageUtilities.ScaleByDpi(10f), 0, 0);
 	}
 
 	private void MoveUpButton_Click(object sender, EventArgs e)

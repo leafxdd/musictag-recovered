@@ -319,7 +319,7 @@ internal class EditableListView : HeaderAwareListView
 		catch (System.Exception)
 		{
 		}
-		CheckBoxRenderer.DrawCheckBox(e.Graphics, new Point(e.Bounds.Left + 4, e.Bounds.Top + DatabaseMapper.ScaleByDpi(4f)), isChecked ? CheckBoxState.CheckedNormal : CheckBoxState.UncheckedNormal);
+		CheckBoxRenderer.DrawCheckBox(e.Graphics, new Point(e.Bounds.Left + 4, e.Bounds.Top + ImageUtilities.ScaleByDpi(4f)), isChecked ? CheckBoxState.CheckedNormal : CheckBoxState.UncheckedNormal);
 	}
 
 	private void DrawCustomSubItem(object sender, DrawListViewSubItemEventArgs e)

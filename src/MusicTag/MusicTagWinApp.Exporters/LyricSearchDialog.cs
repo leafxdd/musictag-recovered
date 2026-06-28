@@ -274,14 +274,14 @@ internal class LyricSearchDialog : Form
 	private void InitializeImagesAndColumns()
 	{
 		lyricIconImages.Images.Clear();
-		lyricIconImages.ImageSize = new Size(DatabaseMapper.ScaleByDpi(lyricIconImages.ImageSize.Width), DatabaseMapper.ScaleByDpi(lyricIconImages.ImageSize.Height));
+		lyricIconImages.ImageSize = new Size(ImageUtilities.ScaleByDpi(lyricIconImages.ImageSize.Width), ImageUtilities.ScaleByDpi(lyricIconImages.ImageSize.Height));
 		lyricIconImages.ColorDepth = ColorDepth.Depth24Bit;
 		lyricIconImages.TransparentColor = Color.Transparent;
-		lyricIconImages.Images.Add("fileext_lrc.png", DatabaseMapper.LoadResourceBitmap("fileext_lrc", lyricIconImages.ImageSize));
-		lyricIconImages.Images.Add("fileext_txt.png", DatabaseMapper.LoadResourceBitmap("fileext_txt", lyricIconImages.ImageSize));
+		lyricIconImages.Images.Add("fileext_lrc.png", ImageUtilities.LoadResourceBitmap("fileext_lrc", lyricIconImages.ImageSize));
+		lyricIconImages.Images.Add("fileext_txt.png", ImageUtilities.LoadResourceBitmap("fileext_txt", lyricIconImages.ImageSize));
 		foreach (ColumnHeader item in lyricListView.Columns)
 		{
-			item.Width = DatabaseMapper.ScaleByDpi(item.Width);
+			item.Width = ImageUtilities.ScaleByDpi(item.Width);
 		}
 	}
 

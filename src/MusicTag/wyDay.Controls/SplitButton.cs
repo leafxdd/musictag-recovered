@@ -11,7 +11,7 @@ public class SplitButton : Button
 {
 	private PushButtonState buttonState;
 
-	private static readonly int SplitSectionWidth = DatabaseMapper.ScaleByDpi(18f);
+	private static readonly int SplitSectionWidth = ImageUtilities.ScaleByDpi(18f);
 
 	private static int borderInset;
 
@@ -370,9 +370,9 @@ public class SplitButton : Button
 		point.X += arrowBounds.Width % 2;
 		Point[] array = new Point[3]
 		{
-			new Point(point.X - DatabaseMapper.ScaleByDpi(2f), point.Y - DatabaseMapper.ScaleByDpi(1f)),
-			new Point(point.X + DatabaseMapper.ScaleByDpi(3f, roundUp: true), point.Y - DatabaseMapper.ScaleByDpi(1f)),
-			new Point(point.X, point.Y + DatabaseMapper.ScaleByDpi(2f, roundUp: true))
+			new Point(point.X - ImageUtilities.ScaleByDpi(2f), point.Y - ImageUtilities.ScaleByDpi(1f)),
+			new Point(point.X + ImageUtilities.ScaleByDpi(3f, roundUp: true), point.Y - ImageUtilities.ScaleByDpi(1f)),
+			new Point(point.X, point.Y + ImageUtilities.ScaleByDpi(2f, roundUp: true))
 		};
 		if (!base.Enabled)
 		{

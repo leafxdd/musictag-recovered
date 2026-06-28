@@ -494,7 +494,7 @@ internal class TagHistoryRepository : IDisposable
 					for (int i = 0; i < pictures.Count; i++)
 					{
 						ConfigDescriptorState.PictureData picture = pictures[i];
-						string picturePath = string.Format("{0}{1}-{2}{3}", PathFileUtilities.GetUndoTempDirectory(), count, i, DatabaseMapper.GetImageExtensionForMimeType(picture.MimeType, ".jpg"));
+						string picturePath = string.Format("{0}{1}-{2}{3}", PathFileUtilities.GetUndoTempDirectory(), count, i, ImageUtilities.GetImageExtensionForMimeType(picture.MimeType, ".jpg"));
 						File.WriteAllBytes(picturePath, picture.ImageBytes);
 						picture.ImageBytes = null;
 						picturePaths.Add(picturePath);

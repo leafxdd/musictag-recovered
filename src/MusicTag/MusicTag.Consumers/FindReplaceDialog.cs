@@ -73,7 +73,7 @@ internal class FindReplaceDialog : Form
 
 		FontAwesome.Properties fontProperties = new FontAwesome.Properties
 		{
-			Size = DatabaseMapper.ScaleByDpi(20f),
+			Size = ImageUtilities.ScaleByDpi(20f),
 			ShowBorder = false
 		};
 		findPreviousButton.Image = FontAwesome.Type.AngleUp.AsImage(fontProperties);
@@ -86,13 +86,13 @@ internal class FindReplaceDialog : Form
 
 	private void ApplyScaledLayout()
 	{
-		findWhatLabel.Width = DatabaseMapper.ScaleByDpi(100f);
+		findWhatLabel.Width = ImageUtilities.ScaleByDpi(100f);
 		replaceWithLabel.Width = findWhatLabel.Width;
-		findWhatTextBox.Width = DatabaseMapper.ScaleByDpi(250f);
+		findWhatTextBox.Width = ImageUtilities.ScaleByDpi(250f);
 		replaceWithTextBox.Width = findWhatTextBox.Width;
-		findPreviousButton.Width = DatabaseMapper.ScaleByDpi(31f);
+		findPreviousButton.Width = ImageUtilities.ScaleByDpi(31f);
 		findNextButton.Width = findPreviousButton.Width;
-		replaceButton.Width = DatabaseMapper.ScaleByDpi(77f);
+		replaceButton.Width = ImageUtilities.ScaleByDpi(77f);
 		replaceAllButton.Width = replaceButton.Width;
 		cancelButton.Width = replaceButton.Width;
 
@@ -104,8 +104,8 @@ internal class FindReplaceDialog : Form
 		replaceAllButton.Margin = new Padding(replaceButton.Location.X, 0, 0, 0);
 		cancelButton.Margin = new Padding(replaceButton.Location.X - matchCaseCheckBox.Width, 0, 0, 0);
 
-		Width = findNextButton.Location.X + findNextButton.Width + DatabaseMapper.ScaleByDpi(50f);
-		Height = optionsRowPanel.Location.Y + optionsRowPanel.Height + DatabaseMapper.ScaleByDpi(60f);
+		Width = findNextButton.Location.X + findNextButton.Width + ImageUtilities.ScaleByDpi(50f);
+		Height = optionsRowPanel.Location.Y + optionsRowPanel.Height + ImageUtilities.ScaleByDpi(60f);
 	}
 
 	private void FindReplaceDialog_Load(object sender, EventArgs e)

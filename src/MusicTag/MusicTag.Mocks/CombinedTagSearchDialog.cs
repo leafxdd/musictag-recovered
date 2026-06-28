@@ -184,7 +184,7 @@ internal class CombinedTagSearchDialog : Form
 			{
 				using Bitmap bitmap = new Bitmap(LocalCoverPath);
 				LoadTask.OriginalImageSize = bitmap.Size;
-				return DatabaseMapper.ResizeImageToFit(bitmap, LoadTask.Request.Owner.coverImageList.ImageSize, centerOnCanvas: true);
+				return ImageUtilities.ResizeImageToFit(bitmap, LoadTask.Request.Owner.coverImageList.ImageSize, centerOnCanvas: true);
 			}
 			catch (System.Exception ex)
 			{
@@ -520,23 +520,23 @@ internal class CombinedTagSearchDialog : Form
 	private void InitializeResultListImagesAndScaling()
 	{
 		coverImageList.Images.Clear();
-		coverImageList.ImageSize = new Size(DatabaseMapper.ScaleByDpi(coverImageList.ImageSize.Width), DatabaseMapper.ScaleByDpi(coverImageList.ImageSize.Height));
+		coverImageList.ImageSize = new Size(ImageUtilities.ScaleByDpi(coverImageList.ImageSize.Width), ImageUtilities.ScaleByDpi(coverImageList.ImageSize.Height));
 		coverImageList.ColorDepth = ColorDepth.Depth24Bit;
 		coverImageList.TransparentColor = Color.Transparent;
-		coverImageList.Images.Add("download_failed", DatabaseMapper.LoadResourceBitmap("download_failed", coverImageList.ImageSize));
-		coverImageList.Images.Add("image_not_found", DatabaseMapper.LoadResourceBitmap("imagenotfound", coverImageList.ImageSize));
-		coverImageList.Images.Add("loading", DatabaseMapper.LoadResourceBitmap("downloading", coverImageList.ImageSize));
+		coverImageList.Images.Add("download_failed", ImageUtilities.LoadResourceBitmap("download_failed", coverImageList.ImageSize));
+		coverImageList.Images.Add("image_not_found", ImageUtilities.LoadResourceBitmap("imagenotfound", coverImageList.ImageSize));
+		coverImageList.Images.Add("loading", ImageUtilities.LoadResourceBitmap("downloading", coverImageList.ImageSize));
 		foreach (ColumnHeader column in searchResultsListView.Columns)
 		{
-			column.Width = DatabaseMapper.ScaleByDpi(column.Width);
+			column.Width = ImageUtilities.ScaleByDpi(column.Width);
 		}
 		okSplitButton.AutoSize = false;
 		FontAwesome.Properties fontProperties = new FontAwesome.Properties
 		{
-			Size = DatabaseMapper.ScaleByDpi(24f),
+			Size = ImageUtilities.ScaleByDpi(24f),
 			ShowBorder = false
 		};
-		okSplitButton.Size = new Size(DatabaseMapper.ScaleByDpi(100f), DatabaseMapper.ScaleByDpi(35f));
+		okSplitButton.Size = new Size(ImageUtilities.ScaleByDpi(100f), ImageUtilities.ScaleByDpi(35f));
 		okSplitButton.Image = FontAwesome.Type.Check.AsImage(fontProperties);
 	}
 
@@ -1155,7 +1155,7 @@ internal class CombinedTagSearchDialog : Form
 
 	private static void OpenCoverImage(ConfigDescriptorState.PictureData pictureData)
 	{
-		string extension = DatabaseMapper.GetImageExtensionForMimeType(pictureData.MimeType, "");
+		string extension = ImageUtilities.GetImageExtensionForMimeType(pictureData.MimeType, "");
 		string tempCoverPath = PathFileUtilities.GetPictureCacheDirectory() + "tempcover" + extension;
 		File.WriteAllBytes(tempCoverPath, pictureData.ImageBytes);
 		Process.Start(tempCoverPath);
@@ -1355,7 +1355,7 @@ internal class CombinedTagSearchDialog : Form
 
 	private void ExtractCoverImage(ConfigDescriptorState.PictureData imageData)
 	{
-		string filter = DatabaseMapper.GetImageFileDialogFilterForMimeType(imageData.MimeType);
+		string filter = ImageUtilities.GetImageFileDialogFilterForMimeType(imageData.MimeType);
 		if (!string.IsNullOrWhiteSpace(filter))
 		{
 			saveCoverDialog.Filter = filter;

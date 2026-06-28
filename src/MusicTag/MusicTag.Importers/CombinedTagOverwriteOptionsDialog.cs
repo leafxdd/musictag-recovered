@@ -65,7 +65,7 @@ internal class CombinedTagOverwriteOptionsDialog : Form
 		cancelButton.Text = Resources.Cancel;
 		optionListView.SmallImageList = new ImageList
 		{
-			ImageSize = new Size(1, DatabaseMapper.ScaleByDpi(32f))
+			ImageSize = new Size(1, ImageUtilities.ScaleByDpi(32f))
 		};
 		foreach (KeyValuePair<string, bool> option in GetOverwriteOptions())
 		{
@@ -125,9 +125,9 @@ internal class CombinedTagOverwriteOptionsDialog : Form
 		e.DrawDefault = false;
 		e.DrawBackground();
 		bool isChecked = itemColumn.Tag is bool checkedValue && checkedValue;
-		Point checkBoxLocation = new Point(e.Bounds.Left + 4, e.Bounds.Top + DatabaseMapper.ScaleByDpi(4f));
+		Point checkBoxLocation = new Point(e.Bounds.Left + 4, e.Bounds.Top + ImageUtilities.ScaleByDpi(4f));
 		CheckBoxRenderer.DrawCheckBox(e.Graphics, checkBoxLocation, isChecked ? CheckBoxState.CheckedNormal : CheckBoxState.UncheckedNormal);
-		int textX = e.Bounds.Left + DatabaseMapper.ScaleByDpi(16f) + 4;
+		int textX = e.Bounds.Left + ImageUtilities.ScaleByDpi(16f) + 4;
 		int textWidth = e.Bounds.Right - textX;
 		if (textWidth <= 0)
 		{

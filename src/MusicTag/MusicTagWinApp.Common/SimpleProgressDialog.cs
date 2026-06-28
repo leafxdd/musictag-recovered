@@ -27,7 +27,7 @@ internal class SimpleProgressDialog : Form
 		InitializeComponent();
 		this.taskbarProgress = taskbarProgress;
 		cancelButton.Text = Resources.Cancel;
-		progressImage.Image = DatabaseMapper.LoadResourceBitmap("img_wait");
+		progressImage.Image = ImageUtilities.LoadResourceBitmap("img_wait");
 	}
 
 	public void SetMessage(string message)
@@ -53,7 +53,7 @@ internal class SimpleProgressDialog : Form
 	public void SetCancelButtonHidden(bool hidden = true)
 	{
 		cancelButton.Visible = !hidden;
-		Height = DatabaseMapper.ScaleByDpi(cancelButton.Visible ? 100 : 60, roundUp: true);
+		Height = ImageUtilities.ScaleByDpi(cancelButton.Visible ? 100 : 60, roundUp: true);
 	}
 
 	protected override void OnShown(EventArgs e)

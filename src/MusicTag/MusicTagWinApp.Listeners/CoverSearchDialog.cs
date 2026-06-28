@@ -330,7 +330,7 @@ internal class CoverSearchDialog : Form
 			{
 				using Bitmap bitmap = new Bitmap(coverPath);
 				OriginalSize = bitmap.Size;
-				return DatabaseMapper.ResizeImageToFit(bitmap, dialog.candidateImageList.ImageSize, centerOnCanvas: true);
+				return ImageUtilities.ResizeImageToFit(bitmap, dialog.candidateImageList.ImageSize, centerOnCanvas: true);
 			}
 			catch (System.Exception ex)
 			{
@@ -342,7 +342,7 @@ internal class CoverSearchDialog : Form
 
 	private static void OpenCoverImage(ConfigDescriptorState.PictureData pictureData)
 	{
-		string fileExtension = DatabaseMapper.GetImageExtensionForMimeType(pictureData.MimeType, "");
+		string fileExtension = ImageUtilities.GetImageExtensionForMimeType(pictureData.MimeType, "");
 		string tempCoverPath = PathFileUtilities.GetPictureCacheDirectory() + "tempcover" + fileExtension;
 		File.WriteAllBytes(tempCoverPath, pictureData.ImageBytes);
 		Process.Start(tempCoverPath);
@@ -473,12 +473,12 @@ internal class CoverSearchDialog : Form
 	private void InitializeCandidateImages()
 	{
 		candidateImageList.Images.Clear();
-		candidateImageList.ImageSize = new Size(DatabaseMapper.ScaleByDpi(candidateImageList.ImageSize.Width), DatabaseMapper.ScaleByDpi(candidateImageList.ImageSize.Height));
+		candidateImageList.ImageSize = new Size(ImageUtilities.ScaleByDpi(candidateImageList.ImageSize.Width), ImageUtilities.ScaleByDpi(candidateImageList.ImageSize.Height));
 		candidateImageList.ColorDepth = ColorDepth.Depth24Bit;
 		candidateImageList.TransparentColor = Color.Transparent;
-		candidateImageList.Images.Add("loading", DatabaseMapper.LoadResourceBitmap("loading", candidateImageList.ImageSize));
-		candidateImageList.Images.Add("download_failed", DatabaseMapper.LoadResourceBitmap("download_failed", candidateImageList.ImageSize));
-		candidateImageList.Images.Add("image_not_found", DatabaseMapper.LoadResourceBitmap("imagenotfound", candidateImageList.ImageSize));
+		candidateImageList.Images.Add("loading", ImageUtilities.LoadResourceBitmap("loading", candidateImageList.ImageSize));
+		candidateImageList.Images.Add("download_failed", ImageUtilities.LoadResourceBitmap("download_failed", candidateImageList.ImageSize));
+		candidateImageList.Images.Add("image_not_found", ImageUtilities.LoadResourceBitmap("imagenotfound", candidateImageList.ImageSize));
 	}
 
 	protected override void OnShown(EventArgs i)
@@ -930,7 +930,7 @@ internal class CoverSearchDialog : Form
 
 	private void SaveCoverImage(ConfigDescriptorState.PictureData pictureData)
 	{
-		string imageFilter = DatabaseMapper.GetImageFileDialogFilterForMimeType(pictureData.MimeType);
+		string imageFilter = ImageUtilities.GetImageFileDialogFilterForMimeType(pictureData.MimeType);
 		if (!string.IsNullOrWhiteSpace(imageFilter))
 		{
 			coverSaveDialog.Filter = imageFilter;

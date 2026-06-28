@@ -45,7 +45,7 @@ internal class DirectoryManagerDialog : Form
 		deleteMenuItem.Text = Resources.DeleteItems;
 		directoryListView.SmallImageList = new ImageList(components)
 		{
-			ImageSize = new Size(1, DatabaseMapper.ScaleByDpi(32f))
+			ImageSize = new Size(1, ImageUtilities.ScaleByDpi(32f))
 		};
 	}
 

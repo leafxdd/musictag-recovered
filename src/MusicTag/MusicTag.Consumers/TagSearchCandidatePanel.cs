@@ -79,13 +79,13 @@ internal class TagSearchCandidatePanel : UserControl
 
 	private void ScaleChildHeights()
 	{
-		sourceLabel.Height = DatabaseMapper.ScaleByDpi(sourceLabel.Height);
-		pictureSizeLabel.Height = DatabaseMapper.ScaleByDpi(pictureSizeLabel.Height);
-		yearLabel.Height = DatabaseMapper.ScaleByDpi(yearLabel.Height);
-		trackLabel.Height = DatabaseMapper.ScaleByDpi(trackLabel.Height);
-		genreLabel.Height = DatabaseMapper.ScaleByDpi(genreLabel.Height);
-		lyricPictureBox.Height = DatabaseMapper.ScaleByDpi(lyricPictureBox.Height);
-		lyricPictureBox.Margin = new Padding(0, DatabaseMapper.ScaleByDpi(lyricPictureBox.Margin.Top), 0, 0);
+		sourceLabel.Height = ImageUtilities.ScaleByDpi(sourceLabel.Height);
+		pictureSizeLabel.Height = ImageUtilities.ScaleByDpi(pictureSizeLabel.Height);
+		yearLabel.Height = ImageUtilities.ScaleByDpi(yearLabel.Height);
+		trackLabel.Height = ImageUtilities.ScaleByDpi(trackLabel.Height);
+		genreLabel.Height = ImageUtilities.ScaleByDpi(genreLabel.Height);
+		lyricPictureBox.Height = ImageUtilities.ScaleByDpi(lyricPictureBox.Height);
+		lyricPictureBox.Margin = new Padding(0, ImageUtilities.ScaleByDpi(lyricPictureBox.Margin.Top), 0, 0);
 	}
 
 	private void SetLabelValue(Label label, string value)
@@ -104,7 +104,7 @@ internal class TagSearchCandidatePanel : UserControl
 		trackLabel.Visible = HasText(trackLabel.Text);
 		genreLabel.Visible = HasText(genreLabel.Text);
 		lyricPictureBox.Visible = HasText(lyricPictureBox.Tag as string);
-		lyricPictureBox.Image = DatabaseMapper.LoadResourceBitmap("ly");
+		lyricPictureBox.Image = ImageUtilities.LoadResourceBitmap("ly");
 		UpdateContentHeight();
 	}
 

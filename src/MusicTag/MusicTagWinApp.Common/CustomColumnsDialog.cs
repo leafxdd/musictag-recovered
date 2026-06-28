@@ -89,7 +89,7 @@ internal class CustomColumnsDialog : Form
 		cancelButton.Text = Resources.Cancel;
 		columnListView.SmallImageList = new ImageList(components)
 		{
-			ImageSize = new Size(1, DatabaseMapper.ScaleByDpi(32f))
+			ImageSize = new Size(1, ImageUtilities.ScaleByDpi(32f))
 		};
 
 		List<ColumnHeaderInfo> columns = new List<ColumnHeaderInfo>(GetColumnHeaderSettings());
@@ -146,91 +146,91 @@ internal class CustomColumnsDialog : Form
 		{
 			{
 				"filename",
-				DatabaseMapper.ScaleByDpi(150f)
+				ImageUtilities.ScaleByDpi(150f)
 			},
 			{
 				"filedir",
-				DatabaseMapper.ScaleByDpi(100f)
+				ImageUtilities.ScaleByDpi(100f)
 			},
 			{
 				"tagtypes",
-				DatabaseMapper.ScaleByDpi(100f)
+				ImageUtilities.ScaleByDpi(100f)
 			},
 			{
 				"title",
-				DatabaseMapper.ScaleByDpi(100f)
+				ImageUtilities.ScaleByDpi(100f)
 			},
 			{
 				"artist",
-				DatabaseMapper.ScaleByDpi(100f)
+				ImageUtilities.ScaleByDpi(100f)
 			},
 			{
 				"album",
-				DatabaseMapper.ScaleByDpi(100f)
+				ImageUtilities.ScaleByDpi(100f)
 			},
 			{
 				"albumartist",
-				DatabaseMapper.ScaleByDpi(100f)
+				ImageUtilities.ScaleByDpi(100f)
 			},
 			{
 				"year",
-				DatabaseMapper.ScaleByDpi(100f)
+				ImageUtilities.ScaleByDpi(100f)
 			},
 			{
 				"trackstr",
-				DatabaseMapper.ScaleByDpi(100f)
+				ImageUtilities.ScaleByDpi(100f)
 			},
 			{
 				"discstr",
-				DatabaseMapper.ScaleByDpi(100f)
+				ImageUtilities.ScaleByDpi(100f)
 			},
 			{
 				"genre",
-				DatabaseMapper.ScaleByDpi(100f)
+				ImageUtilities.ScaleByDpi(100f)
 			},
 			{
 				"composer",
-				DatabaseMapper.ScaleByDpi(100f)
+				ImageUtilities.ScaleByDpi(100f)
 			},
 			{
 				"lyricist",
-				DatabaseMapper.ScaleByDpi(100f)
+				ImageUtilities.ScaleByDpi(100f)
 			},
 			{
 				"comment",
-				DatabaseMapper.ScaleByDpi(100f)
+				ImageUtilities.ScaleByDpi(100f)
 			},
 			{
 				"haspicture",
-				DatabaseMapper.ScaleByDpi(70f)
+				ImageUtilities.ScaleByDpi(70f)
 			},
 			{
 				"lyrics",
-				DatabaseMapper.ScaleByDpi(100f)
+				ImageUtilities.ScaleByDpi(100f)
 			},
 			{
 				"bitpersample",
-				DatabaseMapper.ScaleByDpi(80f)
+				ImageUtilities.ScaleByDpi(80f)
 			},
 			{
 				"channels",
-				DatabaseMapper.ScaleByDpi(80f)
+				ImageUtilities.ScaleByDpi(80f)
 			},
 			{
 				"samplerate",
-				DatabaseMapper.ScaleByDpi(90f)
+				ImageUtilities.ScaleByDpi(90f)
 			},
 			{
 				"bitrate",
-				DatabaseMapper.ScaleByDpi(80f)
+				ImageUtilities.ScaleByDpi(80f)
 			},
 			{
 				"durationinms",
-				DatabaseMapper.ScaleByDpi(80f)
+				ImageUtilities.ScaleByDpi(80f)
 			},
 			{
 				"updatetime",
-				DatabaseMapper.ScaleByDpi(135f)
+				ImageUtilities.ScaleByDpi(135f)
 			}
 		};
 	}
@@ -350,7 +350,7 @@ internal class CustomColumnsDialog : Form
 
 	private void UpdateLayout(object sender, EventArgs e)
 	{
-		columnListView.Size = new Size(DatabaseMapper.ScaleByDpi(180f), ClientSize.Height);
+		columnListView.Size = new Size(ImageUtilities.ScaleByDpi(180f), ClientSize.Height);
 		columnListView.Columns[0].Width = columnListView.ClientSize.Width;
 	}
 

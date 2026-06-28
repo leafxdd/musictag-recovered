@@ -277,7 +277,7 @@ internal class OptionsDialog : Form
 		base.Width = MinimumSize.Width;
 		base.Height = MinimumSize.Height;
 		sourceOrderPanel.WrapContents = false;
-		mainSplitContainer.SplitterDistance = DatabaseMapper.ScaleByDpi(120f);
+		mainSplitContainer.SplitterDistance = ImageUtilities.ScaleByDpi(120f);
 		AddSourceTreeNodes();
 		InitializeNetworkOptionControls();
 		ApplyLocalizedText();
@@ -313,7 +313,7 @@ internal class OptionsDialog : Form
 		Label qqCookieLabel = new Label
 		{
 			AutoSize = true,
-			Margin = new Padding(DatabaseMapper.ScaleByDpi(3f), DatabaseMapper.ScaleByDpi(8f), DatabaseMapper.ScaleByDpi(3f), 0),
+			Margin = new Padding(ImageUtilities.ScaleByDpi(3f), ImageUtilities.ScaleByDpi(8f), ImageUtilities.ScaleByDpi(3f), 0),
 			Name = "lblQQMusicCookie",
 			Text = GetDialogText("lblQQMusicCookie", "QQ 音乐 Cookie（可留空；登录后填入有助于降低被限流的概率）:")
 		};
@@ -322,23 +322,23 @@ internal class OptionsDialog : Form
 			Multiline = true,
 			ScrollBars = ScrollBars.Vertical,
 			WordWrap = true,
-			Width = DatabaseMapper.ScaleByDpi(390f),
-			Height = DatabaseMapper.ScaleByDpi(54f),
-			Margin = new Padding(DatabaseMapper.ScaleByDpi(6f), DatabaseMapper.ScaleByDpi(4f), 0, DatabaseMapper.ScaleByDpi(4f)),
+			Width = ImageUtilities.ScaleByDpi(390f),
+			Height = ImageUtilities.ScaleByDpi(54f),
+			Margin = new Padding(ImageUtilities.ScaleByDpi(6f), ImageUtilities.ScaleByDpi(4f), 0, ImageUtilities.ScaleByDpi(4f)),
 			Name = "tbQQMusicCookie"
 		};
 
 		Label customUserAgentLabel = new Label
 		{
 			AutoSize = true,
-			Margin = new Padding(DatabaseMapper.ScaleByDpi(3f), DatabaseMapper.ScaleByDpi(10f), DatabaseMapper.ScaleByDpi(3f), 0),
+			Margin = new Padding(ImageUtilities.ScaleByDpi(3f), ImageUtilities.ScaleByDpi(10f), ImageUtilities.ScaleByDpi(3f), 0),
 			Name = "lblCustomUserAgent",
 			Text = GetDialogText("lblCustomUserAgent", "自定义 User-Agent（可留空；留空时使用内置默认 UA）:")
 		};
 		customUserAgentTextBox = new TextBox
 		{
-			Width = DatabaseMapper.ScaleByDpi(390f),
-			Margin = new Padding(DatabaseMapper.ScaleByDpi(6f), DatabaseMapper.ScaleByDpi(4f), 0, 0),
+			Width = ImageUtilities.ScaleByDpi(390f),
+			Margin = new Padding(ImageUtilities.ScaleByDpi(6f), ImageUtilities.ScaleByDpi(4f), 0, 0),
 			Name = "tbCustomUserAgent"
 		};
 
@@ -351,8 +351,8 @@ internal class OptionsDialog : Form
 		{
 			AutoSize = true,
 			AutoSizeMode = AutoSizeMode.GrowAndShrink,
-			Margin = new Padding(0, DatabaseMapper.ScaleByDpi(10f), 0, 0),
-			Padding = new Padding(DatabaseMapper.ScaleByDpi(5f)),
+			Margin = new Padding(0, ImageUtilities.ScaleByDpi(10f), 0, 0),
+			Padding = new Padding(ImageUtilities.ScaleByDpi(5f)),
 			Name = "gbNetworkOptions",
 			Text = GetDialogText("gbNetworkOptions", "联网请求设置")
 		};
@@ -691,7 +691,7 @@ internal class OptionsDialog : Form
 		coverSourceLimitTrackBar.Width = availableWebSearchLimitWidth;
 		lyricSourceLimitTrackBar.Width = availableWebSearchLimitWidth;
 		tagSourceLimitTrackBar.Width = availableWebSearchLimitWidth;
-		webSearchLimitGroupBox.Height = tagSourceLimitTrackBar.Location.Y + tagSourceLimitTrackBar.Height + DatabaseMapper.ScaleByDpi(20f);
+		webSearchLimitGroupBox.Height = tagSourceLimitTrackBar.Location.Y + tagSourceLimitTrackBar.Height + ImageUtilities.ScaleByDpi(20f);
 	}
 
 	private void SaveOptionsAndClose(object sender, EventArgs e)

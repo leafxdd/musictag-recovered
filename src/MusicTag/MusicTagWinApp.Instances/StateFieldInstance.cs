@@ -491,7 +491,7 @@ internal class StateFieldInstance : Form
 
 		private void AddFileTypeIcon(string extension, string filePath)
 		{
-			using Icon smallFileIcon = DatabaseMapper.GetSmallFileIcon(filePath);
+			using Icon smallFileIcon = ImageUtilities.GetSmallFileIcon(filePath);
 			Bitmap sourceIcon = smallFileIcon.ToBitmap();
 			try
 			{
@@ -938,7 +938,7 @@ internal class StateFieldInstance : Form
 
 		internal bool EncodeCurrentImageAsJpeg(long quality)
 		{
-			byte[] jpegBytes = DatabaseMapper.EncodeJpeg(workingImage, quality);
+			byte[] jpegBytes = ImageUtilities.EncodeJpeg(workingImage, quality);
 			if (jpegBytes != null)
 			{
 				compressionItem.pictureData.ImageBytes = jpegBytes;
@@ -952,7 +952,7 @@ internal class StateFieldInstance : Form
 
 		internal bool ScaleCurrentImageAndEncode()
 		{
-			Bitmap bitmap = DatabaseMapper.ScaleImage(workingImage, 0.75f);
+			Bitmap bitmap = ImageUtilities.ScaleImage(workingImage, 0.75f);
 			if (bitmap == null)
 			{
 				return false;
@@ -964,7 +964,7 @@ internal class StateFieldInstance : Form
 
 		internal bool ResizeCurrentImageAndEncode(int maxSideLength, long quality)
 		{
-			Bitmap bitmap = DatabaseMapper.ResizeImageToFit(workingImage, new Size(maxSideLength, maxSideLength));
+			Bitmap bitmap = ImageUtilities.ResizeImageToFit(workingImage, new Size(maxSideLength, maxSideLength));
 			if (bitmap != null)
 			{
 				workingImage.Dispose();
@@ -2298,7 +2298,7 @@ internal class StateFieldInstance : Form
 								}
 								if (pictureData.MimeType != null && pictureData.Width > 0 && pictureData.Height > 0)
 								{
-									string imageExtension = DatabaseMapper.GetImageExtensionForMimeType(pictureData.MimeType, ".jpg");
+									string imageExtension = ImageUtilities.GetImageExtensionForMimeType(pictureData.MimeType, ".jpg");
 									File.WriteAllBytes(PathFileUtilities.GetSiblingPathWithExtension(errorRecorder.FilePath, imageExtension), array);
 									extractedCount++;
 								}
@@ -3208,56 +3208,56 @@ internal class StateFieldInstance : Form
 
 	private void ApplyToolbarImagesAndScaling()
 	{
-		if (DatabaseMapper.GetDpiScale() == 1f)
+		if (ImageUtilities.GetDpiScale() == 1f)
 		{
 			return;
 		}
-		Image image = (changeDirectoryToolStripButton.Image = DatabaseMapper.LoadResourceBitmap("chgDirToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		Image image = (changeDirectoryToolStripButton.Image = ImageUtilities.LoadResourceBitmap("chgDirToolStripMenuItem_Image", scaleSmallIconForDpi: true));
 		changeDirectoryMenuItem.Image = image;
-		addDirectoriesToolStripButton.Image = image = DatabaseMapper.LoadResourceBitmap("addDirsToolStripMenuItem_Image", scaleSmallIconForDpi: true);
+		addDirectoriesToolStripButton.Image = image = ImageUtilities.LoadResourceBitmap("addDirsToolStripMenuItem_Image", scaleSmallIconForDpi: true);
 		addDirectoryMenuItem.Image = image;
-		image = (manageDirectoriesToolStripButton.Image = DatabaseMapper.LoadResourceBitmap("manageDirsToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		image = (manageDirectoriesToolStripButton.Image = ImageUtilities.LoadResourceBitmap("manageDirsToolStripMenuItem_Image", scaleSmallIconForDpi: true));
 		manageDirectoriesMenuItem.Image = image;
-		image = (saveTagsToolStripButton.Image = DatabaseMapper.LoadResourceBitmap("saveToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		image = (saveTagsToolStripButton.Image = ImageUtilities.LoadResourceBitmap("saveToolStripMenuItem_Image", scaleSmallIconForDpi: true));
 		saveTagsMenuItem.Image = image;
-		removeTagsToolStripButton.Image = image = DatabaseMapper.LoadResourceBitmap("removeTagToolStripMenuItem_Image", scaleSmallIconForDpi: true);
+		removeTagsToolStripButton.Image = image = ImageUtilities.LoadResourceBitmap("removeTagToolStripMenuItem_Image", scaleSmallIconForDpi: true);
 		removeTagsMenuItem.Image = image;
-		image = (undoToolStripButton.Image = DatabaseMapper.LoadResourceBitmap("undoToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		image = (undoToolStripButton.Image = ImageUtilities.LoadResourceBitmap("undoToolStripMenuItem_Image", scaleSmallIconForDpi: true));
 		undoMenuItem.Image = image;
-		readTagsToolStripButton.Image = image = DatabaseMapper.LoadResourceBitmap("readTagsToolStripMenuItem_Image", scaleSmallIconForDpi: true);
+		readTagsToolStripButton.Image = image = ImageUtilities.LoadResourceBitmap("readTagsToolStripMenuItem_Image", scaleSmallIconForDpi: true);
 		readTagsMenuItem.Image = image;
-		image = (characterSetToolStripButton.Image = DatabaseMapper.LoadResourceBitmap("characterSetToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		image = (characterSetToolStripButton.Image = ImageUtilities.LoadResourceBitmap("characterSetToolStripMenuItem_Image", scaleSmallIconForDpi: true));
 		characterSetMenuItem.Image = image;
-		image = (chineseConversionToolStripDropDownButton.Image = DatabaseMapper.LoadResourceBitmap("chschtToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		image = (chineseConversionToolStripDropDownButton.Image = ImageUtilities.LoadResourceBitmap("chschtToolStripMenuItem_Image", scaleSmallIconForDpi: true));
 		chineseConversionMenuItem.Image = image;
-		image = (tagHistoryToolStripButton.Image = DatabaseMapper.LoadResourceBitmap("tagsHistoryToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		image = (tagHistoryToolStripButton.Image = ImageUtilities.LoadResourceBitmap("tagsHistoryToolStripMenuItem_Image", scaleSmallIconForDpi: true));
 		tagHistoryMenuItem.Image = image;
-		exitMenuItem.Image = DatabaseMapper.LoadResourceBitmap("exitToolStripMenuItem_Image", scaleSmallIconForDpi: true);
-		image = (selectAllFilesToolStripButton.Image = DatabaseMapper.LoadResourceBitmap("selallfilesToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		exitMenuItem.Image = ImageUtilities.LoadResourceBitmap("exitToolStripMenuItem_Image", scaleSmallIconForDpi: true);
+		image = (selectAllFilesToolStripButton.Image = ImageUtilities.LoadResourceBitmap("selallfilesToolStripMenuItem_Image", scaleSmallIconForDpi: true));
 		selectAllFilesMenuItem.Image = image;
-		image = (unselectAllFilesToolStripButton.Image = DatabaseMapper.LoadResourceBitmap("unselectAllToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		image = (unselectAllFilesToolStripButton.Image = ImageUtilities.LoadResourceBitmap("unselectAllToolStripMenuItem_Image", scaleSmallIconForDpi: true));
 		unselectAllFilesMenuItem.Image = image;
-		refreshToolStripButton.Image = image = DatabaseMapper.LoadResourceBitmap("refreshToolStripMenuItem_Image", scaleSmallIconForDpi: true);
+		refreshToolStripButton.Image = image = ImageUtilities.LoadResourceBitmap("refreshToolStripMenuItem_Image", scaleSmallIconForDpi: true);
 		refreshMenuItem.Image = image;
-		image = (coverSourceToolStripSplitButton.Image = DatabaseMapper.LoadResourceBitmap("picSrcToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		image = (coverSourceToolStripSplitButton.Image = ImageUtilities.LoadResourceBitmap("picSrcToolStripMenuItem_Image", scaleSmallIconForDpi: true));
 		coverSourceMenuItem.Image = image;
-		image = (lyricSourceToolStripSplitButton.Image = DatabaseMapper.LoadResourceBitmap("lyricSrcToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		image = (lyricSourceToolStripSplitButton.Image = ImageUtilities.LoadResourceBitmap("lyricSrcToolStripMenuItem_Image", scaleSmallIconForDpi: true));
 		lyricSourceMenuItem.Image = image;
-		image = (combinedTagSourceToolStripSplitButton.Image = DatabaseMapper.LoadResourceBitmap("combTagsSrcToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		image = (combinedTagSourceToolStripSplitButton.Image = ImageUtilities.LoadResourceBitmap("combTagsSrcToolStripMenuItem_Image", scaleSmallIconForDpi: true));
 		combinedTagSourceMenuItem.Image = image;
-		image = (batchAutoMatchTagsToolStripButton.Image = DatabaseMapper.LoadResourceBitmap("batchAutoMatchTagsToolStripButton_Image", scaleSmallIconForDpi: true));
+		image = (batchAutoMatchTagsToolStripButton.Image = ImageUtilities.LoadResourceBitmap("batchAutoMatchTagsToolStripButton_Image", scaleSmallIconForDpi: true));
 		batchAutoMatchTagsMenuItem.Image = image;
-		image = (batchExtractCoverToolStripButton.Image = DatabaseMapper.LoadResourceBitmap("batchExtractCoverToolStripButton_Image", scaleSmallIconForDpi: true));
+		image = (batchExtractCoverToolStripButton.Image = ImageUtilities.LoadResourceBitmap("batchExtractCoverToolStripButton_Image", scaleSmallIconForDpi: true));
 		batchExtractCoverMenuItem.Image = image;
-		image = (batchSaveAsLrcToolStripSplitButton.Image = DatabaseMapper.LoadResourceBitmap("batchSaveAsLrcFileToolStripSplitButton_Image", scaleSmallIconForDpi: true));
+		image = (batchSaveAsLrcToolStripSplitButton.Image = ImageUtilities.LoadResourceBitmap("batchSaveAsLrcFileToolStripSplitButton_Image", scaleSmallIconForDpi: true));
 		saveLyricsMenuItem.Image = image;
-		image = (batchChineseConversionToolStripDropDownButton.Image = DatabaseMapper.LoadResourceBitmap("chschtToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		image = (batchChineseConversionToolStripDropDownButton.Image = ImageUtilities.LoadResourceBitmap("chschtToolStripMenuItem_Image", scaleSmallIconForDpi: true));
 		batchChineseConversionMenuItem.Image = image;
-		image = (batchFilenameRelatedToolStripButton.Image = DatabaseMapper.LoadResourceBitmap("batchFilenameRelToolStripButton_Image", scaleSmallIconForDpi: true));
+		image = (batchFilenameRelatedToolStripButton.Image = ImageUtilities.LoadResourceBitmap("batchFilenameRelToolStripButton_Image", scaleSmallIconForDpi: true));
 		batchFilenameRelatedMenuItem.Image = image;
-		image = (optionsToolStripButton.Image = DatabaseMapper.LoadResourceBitmap("optionsToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		image = (optionsToolStripButton.Image = ImageUtilities.LoadResourceBitmap("optionsToolStripMenuItem_Image", scaleSmallIconForDpi: true));
 		optionsMenuItem.Image = image;
-		Size scaledImageSize = new Size(DatabaseMapper.ScaleByDpi(16f), DatabaseMapper.ScaleByDpi(16f));
+		Size scaledImageSize = new Size(ImageUtilities.ScaleByDpi(16f), ImageUtilities.ScaleByDpi(16f));
 		coverContextMenu.ImageScalingSize = scaledImageSize;
 		fileListItemContextMenu.ImageScalingSize = scaledImageSize;
 		mainToolStrip.ImageScalingSize = scaledImageSize;
@@ -3267,16 +3267,16 @@ internal class StateFieldInstance : Form
 			toolStripItem.AutoSize = false;
 			if (toolStripItem is ToolStripSplitButton toolStripSplitButton)
 			{
-				toolStripSplitButton.Size = new Size(DatabaseMapper.ScaleByDpi(32f), DatabaseMapper.ScaleByDpi(22f));
-				toolStripSplitButton.DropDownButtonWidth = DatabaseMapper.ScaleByDpi(11f);
+				toolStripSplitButton.Size = new Size(ImageUtilities.ScaleByDpi(32f), ImageUtilities.ScaleByDpi(22f));
+				toolStripSplitButton.DropDownButtonWidth = ImageUtilities.ScaleByDpi(11f);
 			}
 			else if (toolStripItem is ToolStripButton toolStripButton)
 			{
-				toolStripButton.Size = new Size(DatabaseMapper.ScaleByDpi(23f), DatabaseMapper.ScaleByDpi(22f));
+				toolStripButton.Size = new Size(ImageUtilities.ScaleByDpi(23f), ImageUtilities.ScaleByDpi(22f));
 			}
 			else if (toolStripItem is ToolStripSeparator toolStripSeparator)
 			{
-				toolStripSeparator.Size = new Size(DatabaseMapper.ScaleByDpi(6f), DatabaseMapper.ScaleByDpi(25f));
+				toolStripSeparator.Size = new Size(ImageUtilities.ScaleByDpi(6f), ImageUtilities.ScaleByDpi(25f));
 			}
 		}
 	}
@@ -3287,9 +3287,9 @@ internal class StateFieldInstance : Form
 		{
 			Owner = this
 		};
-		mainSplitContainer.Panel1MinSize = DatabaseMapper.ScaleByDpi(320f);
+		mainSplitContainer.Panel1MinSize = ImageUtilities.ScaleByDpi(320f);
 		FontAwesome.SetFontFileDirectory(PathFileUtilities.GetApplicationDirectory() + "font");
-		FontAwesome.DefaultProperties.Size = DatabaseMapper.ScaleByDpi(18f);
+		FontAwesome.DefaultProperties.Size = ImageUtilities.ScaleByDpi(18f);
 		FontAwesome.DefaultProperties.ShowBorder = false;
 
 		Image editEncodingImage = FontAwesome.Type.Wrench.AsImage();
@@ -3338,7 +3338,7 @@ internal class StateFieldInstance : Form
 		previousCoverButton.Text = "";
 		nextCoverButton.Text = "";
 		editLyricsButton.Text = "";
-		coverPictureBox.Image = DatabaseMapper.LoadCachedResourceBitmap("no_cover", new Size(DatabaseMapper.ScaleByDpi(96f), DatabaseMapper.ScaleByDpi(96f)));
+		coverPictureBox.Image = ImageUtilities.LoadCachedResourceBitmap("no_cover", new Size(ImageUtilities.ScaleByDpi(96f), ImageUtilities.ScaleByDpi(96f)));
 		coverPictureBox.SizeMode = PictureBoxSizeMode.CenterImage;
 		overwriteCoverCheckBox.Checked = Settings.Default.OverwritePictureboxPicture;
 	}
@@ -3368,8 +3368,8 @@ internal class StateFieldInstance : Form
 		filterTypeDropDownButton.Text = Resources.ResourceManager.GetString(selectedFilterType);
 		filterMenuItems.Cast<ToolStripMenuItem>().First(menuItem => menuItem.Tag as string == selectedFilterType).Checked = true;
 		filterTextBox.Text = filterListViewKeyword;
-		filterTypeDropDownButton.Width = DatabaseMapper.ScaleByDpi(100f);
-		selectedFilesStatusLabel.Width = DatabaseMapper.ScaleByDpi(190f);
+		filterTypeDropDownButton.Width = ImageUtilities.ScaleByDpi(100f);
+		selectedFilesStatusLabel.Width = ImageUtilities.ScaleByDpi(190f);
 	}
 
 	private void FilterListViewTypeMenuItem_Click(object sender, EventArgs e)
@@ -3642,10 +3642,10 @@ internal class StateFieldInstance : Form
 			fileListView.Columns[columnInfo.Name].DisplayIndex = order++;
 		}
 		fileTypeImageList.ColorDepth = ColorDepth.Depth32Bit;
-		fileTypeImageList.ImageSize = new Size(DatabaseMapper.ScaleByDpi(20f), DatabaseMapper.ScaleByDpi(20f));
+		fileTypeImageList.ImageSize = new Size(ImageUtilities.ScaleByDpi(20f), ImageUtilities.ScaleByDpi(20f));
 		fileListIconSize = fileTypeImageList.ImageSize.Width;
-		fileListIconPadding = DatabaseMapper.ScaleByDpi(2f);
-		fileListView.RowTemplate.Height = Math.Max(DatabaseMapper.ScaleByDpi(22f), fileTypeImageList.ImageSize.Height + fileListIconPadding);
+		fileListIconPadding = ImageUtilities.ScaleByDpi(2f);
+		fileListView.RowTemplate.Height = Math.Max(ImageUtilities.ScaleByDpi(22f), fileTypeImageList.ImageSize.Height + fileListIconPadding);
 	}
 
 	private static DataGridViewContentAlignment MapColumnAlignment(HorizontalAlignment textAlign)
@@ -3686,7 +3686,7 @@ internal class StateFieldInstance : Form
 		fileListView.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
 		fileListView.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.White;
 		fileListView.ColumnHeadersDefaultCellStyle.SelectionForeColor = SystemColors.ControlText;
-		fileListView.ColumnHeadersHeight = Math.Max(fileListView.ColumnHeadersHeight, DatabaseMapper.ScaleByDpi(24f));
+		fileListView.ColumnHeadersHeight = Math.Max(fileListView.ColumnHeadersHeight, ImageUtilities.ScaleByDpi(24f));
 	}
 
 	// 依 cachedFileListItems(主表 = 显示顺序)的 IsHidden 重建可见行集合与下标反查,并把 RowCount 同步给 DGV。
@@ -3929,17 +3929,17 @@ internal class StateFieldInstance : Form
 		artistRowPanel.Width = tagPanelWidth;
 		titleRowPanel.Width = tagPanelWidth;
 
-		trackDiscGroupPanel.Width = titleRowPanel.Width - titleEncodingButton.Width - DatabaseMapper.ScaleByDpi(5f);
-		int tagPairHeight = trackLabel.Height + trackRowPanel.Height + DatabaseMapper.ScaleByDpi(6f, roundUp: true);
+		trackDiscGroupPanel.Width = titleRowPanel.Width - titleEncodingButton.Width - ImageUtilities.ScaleByDpi(5f);
+		int tagPairHeight = trackLabel.Height + trackRowPanel.Height + ImageUtilities.ScaleByDpi(6f, roundUp: true);
 		discColumnPanel.Height = tagPairHeight;
 		trackColumnPanel.Height = tagPairHeight;
 		trackDiscGroupPanel.Height = tagPairHeight;
 		trackRowPanel.Width = trackDiscGroupPanel.Width / 2;
 		trackColumnPanel.Width = trackRowPanel.Width;
-		discRowPanel.Width = trackDiscGroupPanel.Width / 2 - DatabaseMapper.ScaleByDpi(5f);
+		discRowPanel.Width = trackDiscGroupPanel.Width / 2 - ImageUtilities.ScaleByDpi(5f);
 		discColumnPanel.Width = discRowPanel.Width;
-		discColumnPanel.Margin = new Padding(DatabaseMapper.ScaleByDpi(5f), 0, 0, 0);
-		overwriteCoverCheckBox.Margin = new Padding((statusLabelsPanel.Width - overwriteCoverCheckBox.Width) / 2, DatabaseMapper.ScaleByDpi(50f), 0, 0);
+		discColumnPanel.Margin = new Padding(ImageUtilities.ScaleByDpi(5f), 0, 0, 0);
+		overwriteCoverCheckBox.Margin = new Padding((statusLabelsPanel.Width - overwriteCoverCheckBox.Width) / 2, ImageUtilities.ScaleByDpi(50f), 0, 0);
 
 		int coverPanelSize = coverPanel.Width - statusLabelsPanel.Width;
 		int availableHeight = tagEditorPanel.Height;
@@ -3957,9 +3957,9 @@ internal class StateFieldInstance : Form
 			}
 		}
 
-		if (coverPanelSize > DatabaseMapper.ScaleByDpi(500f))
+		if (coverPanelSize > ImageUtilities.ScaleByDpi(500f))
 		{
-			coverPanelSize = DatabaseMapper.ScaleByDpi(500f);
+			coverPanelSize = ImageUtilities.ScaleByDpi(500f);
 		}
 		coverPictureBox.Height = coverPanelSize;
 		coverPictureBox.Width = coverPanelSize;
@@ -4844,7 +4844,7 @@ internal class StateFieldInstance : Form
 
 	private Image GetNoCoverPreviewImage()
 	{
-		return DatabaseMapper.LoadCachedResourceBitmap("no_cover", new Size(DatabaseMapper.ScaleByDpi(96f), DatabaseMapper.ScaleByDpi(96f)));
+		return ImageUtilities.LoadCachedResourceBitmap("no_cover", new Size(ImageUtilities.ScaleByDpi(96f), ImageUtilities.ScaleByDpi(96f)));
 	}
 
 	private void SetCoverPreviewImage(Image image)
@@ -5580,7 +5580,7 @@ internal class StateFieldInstance : Form
 			ConfigDescriptorState.PictureData pictureInfo = (selectedTagState["allpicturedata"] as List<ConfigDescriptorState.PictureData>)[currentCoverIndex];
 			if (pictureInfo.MimeType != null && pictureInfo.Width > 0 && pictureInfo.Height > 0)
 			{
-				string extension = DatabaseMapper.GetImageExtensionForMimeType(pictureInfo.MimeType, "");
+				string extension = ImageUtilities.GetImageExtensionForMimeType(pictureInfo.MimeType, "");
 				string tempCoverPath = (string)PathFileUtilities.GetPictureCacheDirectory() + "tempcover" + extension;
 				File.WriteAllBytes(tempCoverPath, pictureInfo.ImageBytes);
 				Process.Start(tempCoverPath);
@@ -5629,7 +5629,7 @@ internal class StateFieldInstance : Form
 			}
 			else if (columnHeaderInfo.width == 0)
 			{
-				columnHeaderInfo.width = DatabaseMapper.ScaleByDpi(100f);
+				columnHeaderInfo.width = ImageUtilities.ScaleByDpi(100f);
 			}
 		}
 	}
@@ -6421,7 +6421,7 @@ internal class StateFieldInstance : Form
 			}
 			string directoryName = Path.GetDirectoryName(selectedTagState.GetFilePath());
 			string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(selectedTagState.GetFilePath());
-			string defaultCoverPath = directoryName + "\\" + fileNameWithoutExtension + DatabaseMapper.GetImageExtensionForMimeType(selectedCover.MimeType, ".jpg");
+			string defaultCoverPath = directoryName + "\\" + fileNameWithoutExtension + ImageUtilities.GetImageExtensionForMimeType(selectedCover.MimeType, ".jpg");
 			if (!showSaveDialog && !File.Exists(defaultCoverPath))
 			{
 				File.WriteAllBytes(defaultCoverPath, selectedCover.ImageBytes);
@@ -6429,7 +6429,7 @@ internal class StateFieldInstance : Form
 				return;
 			}
 
-			string filter = DatabaseMapper.GetImageFileDialogFilterForMimeType(selectedCover.MimeType);
+			string filter = ImageUtilities.GetImageFileDialogFilterForMimeType(selectedCover.MimeType);
 			if (!string.IsNullOrWhiteSpace(filter))
 			{
 				extractCoverSaveFileDialog.Filter = filter;
@@ -6973,7 +6973,7 @@ internal class StateFieldInstance : Form
 
 	private void FilterBar_SizeChanged(object sender, EventArgs e)
 	{
-		filterTextBox.Width = fileFilterStatusStrip.Width - filterStatusLabel.Width - filterTypeDropDownButton.Width - DatabaseMapper.ScaleByDpi(4f);
+		filterTextBox.Width = fileFilterStatusStrip.Width - filterStatusLabel.Width - filterTypeDropDownButton.Width - ImageUtilities.ScaleByDpi(4f);
 	}
 
 	private void FilterInput_TextChanged(object sender, EventArgs e)
@@ -8639,7 +8639,7 @@ internal class StateFieldInstance : Form
 
 	private void ResizeStatusLabels()
 	{
-		Size statusLabelSize = new Size(statusLabelsPanel.Width - statusLabelsPanel.Padding.Left - statusLabelsPanel.Padding.Right, DatabaseMapper.ScaleByDpi(20f));
+		Size statusLabelSize = new Size(statusLabelsPanel.Width - statusLabelsPanel.Padding.Left - statusLabelsPanel.Padding.Right, ImageUtilities.ScaleByDpi(20f));
 		coverPictureTypeLabel.Size = statusLabelSize;
 		coverFileSizeLabel.Size = statusLabelSize;
 		coverDimensionsLabel.Size = statusLabelSize;

@@ -365,7 +365,7 @@ internal class ConfigDescriptorState : IDisposable
 		{
 			using MemoryStream memoryStream = new MemoryStream(pictureData.ImageBytes);
 			using Image image = Image.FromStream(memoryStream);
-			ImageCodecInfo imageCodecInfo = DatabaseMapper.GetImageDecoderByFormatId(image.RawFormat.Guid);
+			ImageCodecInfo imageCodecInfo = ImageUtilities.GetImageDecoderByFormatId(image.RawFormat.Guid);
 			if (imageCodecInfo != null && imageCodecInfo.MimeType != null)
 			{
 				pictureData.MimeType = imageCodecInfo.MimeType;
