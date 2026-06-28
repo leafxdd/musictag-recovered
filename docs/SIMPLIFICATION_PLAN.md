@@ -91,9 +91,9 @@
   - [ ] `CreateMergedProcessor(lyric,translated)` ×2 静态下载包装（674-678,702-706）
   - [ ] ⚠️（altitude）LRC 元数据描述符表统一 parse / emit / merge 三处（93-152,287-337,470-481）—— **保留 `Substring` 截断怪癖，勿换正则**；`offset` 仍特例（仅 parse+apply）
 
-- [x] **A6 ListView 控件 / 列** —— items 1+3 完成 `48aa162`；item 2 推迟
+- [x] **A6 ListView 控件 / 列** —— 完成：items 1+3 `48aa162`，item 2 `67f3132`
   - [x] `SortableTextComparer`（`Func<ListViewItem,string>` 选择器 + `SortOrder`）把 3 个 IComparer 嵌套类收敛为 1，连带删 3 个死构造器（`MusicTagWinApp.Roles/EditableListView.cs:30-113`；保留 559-573 比较器选择分支不动）
-  - [ ] ⏸ **推迟**（跨 5 文件，需逐点像素等价 + 手动 UI 说明） `DrawCenteredImage(g,image,bounds,x)` 上提到基类 `MusicTagWinApp.Stubs/DrawableListViewSubItem.cs`，统一 4 处居中绘图（ImageSubItem / ImageListSubItem / CheckBoxSubItem / EditableListView 封面分支）
+  - [x] ✅ `67f3132`（4 处中心数学逐字节核验相同，可证像素等价） `DrawCenteredImage(g,image,bounds,x)` 上提到基类 `MusicTagWinApp.Stubs/DrawableListViewSubItem.cs`，统一 4 处居中绘图（ImageSubItem / ImageListSubItem / CheckBoxSubItem / EditableListView 封面分支）
   - [x] `MoveSelectedColumn(delta)` 合并上移 / 下移镜像对（`MusicTagWinApp.Common/CustomColumnsDialog.cs:357-399`）
 
 - [ ] **A7 杂项对话框**
@@ -101,13 +101,13 @@
   - [ ] `GetEmbeddedPictureData(state)` ×2（`MusicTag.Importers/PictureFromTagsDialog.cs:226-237,319-329`）
   - [ ] `SyncControllerInputs()` ×4 按钮处理器（`MusicTag.Consumers/FindReplaceDialog.cs:139-165`）
 
-- [ ] **A8 其余 in-file 小项**
-  - [ ] （效率）`TextBoxFindReplaceController.ReplaceAll` 提取 `textBox.Text` 本地量，消除 per-match 重读（`MusicTag.Serialization/TextBoxFindReplaceController.cs:73-107`）
-  - [ ] （效率）`FilenameRelatedBatchDialog.ChangeTags` 把批常量 regex/pattern 提出 per-file 循环（`MusicTag.Schemes/FilenameRelatedBatchDialog.cs:407,430-486`）
-  - [ ] `SourceOrderControl` 移动处理器复用既有 `CanMoveUp`/`CanMoveDown`（`MusicTagWinApp.Stubs/SourceOrderControl.cs:122-182`）
-  - [ ] `ListViewFileSetting.AddForDir(fileInfo)` 委托给路径重载（`MusicTagWinApp/ListViewFileSetting.cs:19-57`）
-  - [ ] `Program.Main` inline `RunApplication`（`MusicTag.Schemes/Program.cs:27-51`）
-  - [ ] ⚠️ `TagTextEncoding` 用 "=>" 拆分替换两个 switch 阶梯（`MusicTag.Serialization/TagTextEncoding.cs:201-244`）—— **对全 10 个注册名 + "GB"→"GB18030" 特例核对**
+- [x] **A8 其余 in-file 小项** —— 4 项完成 `0eaefa6`；ChangeTags 推迟、TagTextEncoding 否决
+  - [x] （效率）`TextBoxFindReplaceController.ReplaceAll` 提取 `textBox.Text` 本地量，消除 per-match 重读（`MusicTag.Serialization/TextBoxFindReplaceController.cs:73-107`）
+  - [ ] ⏸ **推迟**（写路径，需拆常量/逐文件用法） （效率）`FilenameRelatedBatchDialog.ChangeTags` 把批常量 regex/pattern 提出 per-file 循环（`MusicTag.Schemes/FilenameRelatedBatchDialog.cs:407,430-486`）
+  - [x] `SourceOrderControl` 移动处理器复用既有 `CanMoveUp`/`CanMoveDown`（`MusicTagWinApp.Stubs/SourceOrderControl.cs:122-182`）
+  - [x] `ListViewFileSetting.AddForDir(fileInfo)` 委托给路径重载（`MusicTagWinApp/ListViewFileSetting.cs:19-57`）
+  - [x] `Program.Main` inline `RunApplication`（`MusicTag.Schemes/Program.cs:27-51`）
+  - [x] ❌ **否决**（switch `default` 分支用不同输入：源用 `NormalizeEncodingName(stringType)`、目标返回整名；未注册含 `=>` 名不等价） ~~`TagTextEncoding` 用 "=>" 拆分替换两个 switch 阶梯~~（`MusicTag.Serialization/TagTextEncoding.cs:201-244`）—— **对全 10 个注册名 + "GB"→"GB18030" 特例核对**
 
 - [ ] **A9 AutoMatchTagsDialog（未测试热点，逐项验证）** —— `MusicTagWinApp.Adapter/AutoMatchTagsDialog.cs`
   - [ ] `RunSourceSearchPass(...)` 收敛主 / 次源搜索两 pass（1069-1092；用 `IsSecondarySource == secondary`，ref 线程化 `sourceOrderIndex`）
@@ -166,6 +166,8 @@
 - 2026-06-28 **A2 完成 `de1af6b`**：`DatabaseMapper.GetLogSubdirectory` 收敛 7 个 `Get*LogDirectory`、`ComputeMd5HashString(string)` 委托 byte[] 重载；`TagHistoryRepository.ExecuteNonQueryLogged` 收敛 3 个 CRUD 包装、2 处 catch 改 `MarkTransactionFailed()`。仅暂存 2 个数据层文件。Debug+Release 0 warn、smoke 通过。
 - 2026-06-28 **A4 部分完成 `e7afa05`**：⭐ `ResolveNonInstrumentalCandidate` 收敛 `PromoteBestMatch` 7 处 instrumental 三元式（净 −14 行）；其余 3 子项（CompareScoresDescending / ReplaceFullWidthPunctuation / memoize）评估后**否决**（语义不等价 / 双实现风险 / 越界优化，详见 A4 批次）。Debug+Release 0 warn、smoke 通过；仅暂存 `TrackSearchResult.cs`。
 - 2026-06-28 **A6 部分完成 `48aa162`**：`EditableListView` 3 个 `IComparer` 嵌套类（+3 死构造器）收敛为 `SortableTextComparer`（`Func<object,string>` 选择器，调用点传 lambda；列号支用不可变 `e.Column`）；`CustomColumnsDialog` 上/下移镜像对合并为 `MoveSelectedColumn(delta)`（瘦事件处理器保留供 designer 按名接线）。item 2（`DrawCenteredImage` 跨 5 文件居中绘图上提）**推迟**（需逐点像素等价 + 手动 UI 说明）。净 −72 行，Debug+Release 0 warn、smoke 通过。
+- 2026-06-28 **A6 item 2 完成 `67f3132`**：`DrawCenteredImage` 上提到基类 `DrawableListViewSubItem`，统一 4 处(ImageSubItem/ImageListSubItem/CheckBoxSubItem/EditableListView 封面)居中绘图——4 处中心数学逐字节相同,可证像素等价。A6 全批完成。Debug+Release 0 warn、smoke 通过。
+- 2026-06-28 **A8 部分完成 `0eaefa6`**：`ListViewFileSetting.AddForDir(fileInfo)` 委托路径重载、`Program.Main` 内联 `RunApplication`、`ReplaceAll` 提取 `textBox.Text` 本地量、`SourceOrderControl` 移动处理器复用 `CanMove*`。`ChangeTags` 批常量提循环**推迟**（写路径）、`TagTextEncoding` "=>" 拆分**否决**（switch default 用不同输入，未注册含 => 名不等价）。Debug+Release 0 warn、smoke 通过。
 
 ---
 
