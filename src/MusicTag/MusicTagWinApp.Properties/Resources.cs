@@ -161,14 +161,6 @@ internal class Resources
 
 	internal static string EncodingLabel => ResourceManager.GetString("EncodingLabel", resourceCulture);
 
-	internal static string Enum_Kugou => ResourceManager.GetString("Enum_Kugou", resourceCulture);
-
-	internal static string Enum_Kuwo => ResourceManager.GetString("Enum_Kuwo", resourceCulture);
-
-	internal static string Enum_Music163 => ResourceManager.GetString("Enum_Music163", resourceCulture);
-
-	internal static string Enum_Xiami => ResourceManager.GetString("Enum_Xiami", resourceCulture);
-
 	internal static string Error => ResourceManager.GetString("Error", resourceCulture);
 
 	internal static Bitmap exitToolStripMenuItem_Image => (Bitmap)ResourceManager.GetObject("exitToolStripMenuItem_Image", resourceCulture);

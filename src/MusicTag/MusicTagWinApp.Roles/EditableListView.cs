@@ -5,10 +5,8 @@ using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using System.Windows.Forms.VisualStyles;
-using MusicTag.Bridges;
 using MusicTag.Candidates;
 using MusicTag.Consumers;
-using MusicTag.Services;
 using MusicTagWinApp.Common;
 using MusicTagWinApp.Containers;
 using MusicTagWinApp.Exporters;
@@ -351,82 +349,9 @@ internal class EditableListView : HeaderAwareListView
 		{
 			return;
 		}
-		if (editor.GetType() == typeof(ImageComboBox))
-		{
-			object selectedItem = ((ImageComboBox)editor).SelectedItem;
-			if (selectedItem.GetType() == typeof(ImageComboBox.SingleImageItem))
-			{
-				ApplySingleImageSelection((ImageComboBox.SingleImageItem)selectedItem);
-			}
-			else if (selectedItem.GetType() == typeof(ImageComboBox.ImageListItem))
-			{
-				ApplyImageListSelection((ImageComboBox.ImageListItem)selectedItem);
-			}
-		}
 		activeSubItem.Text = comboBox.Text;
 		comboBox.Visible = false;
 		activeItem.Tag = null;
-	}
-
-	private void ApplySingleImageSelection(ImageComboBox.SingleImageItem selectedImage)
-	{
-		if (activeColumnIndex == 0)
-		{
-			if (activeItem.GetType() == typeof(CoverImageListViewItem))
-			{
-				((CoverImageListViewItem)activeItem).CoverImage = selectedImage.Image;
-			}
-			else if (activeItem.GetType() == typeof(MultiValueListViewItem))
-			{
-				MultiValueListViewItem imageListItem = (MultiValueListViewItem)activeItem;
-				imageListItem.Values.Clear();
-				imageListItem.Values.AddRange(new object[1] { selectedImage.Image });
-			}
-			return;
-		}
-		if (activeSubItem.GetType() == typeof(ImageSubItem))
-		{
-			((ImageSubItem)activeSubItem).IconImage = selectedImage.Image;
-		}
-		else if (activeSubItem.GetType() == typeof(ImageListSubItem))
-		{
-			ImageListSubItem imageListSubItem = (ImageListSubItem)activeSubItem;
-			imageListSubItem.Images.Clear();
-			imageListSubItem.Images.Add(selectedImage.Image);
-			imageListSubItem.SortValue = selectedImage.SortValue;
-		}
-	}
-
-	private void ApplyImageListSelection(ImageComboBox.ImageListItem selectedImages)
-	{
-		if (activeColumnIndex == 0)
-		{
-			if (activeItem.GetType() == typeof(CoverImageListViewItem))
-			{
-				((CoverImageListViewItem)activeItem).CoverImage = (Image)selectedImages.Images[0];
-			}
-			else if (activeItem.GetType() == typeof(MultiValueListViewItem))
-			{
-				MultiValueListViewItem imageListItem = (MultiValueListViewItem)activeItem;
-				imageListItem.Values.Clear();
-				imageListItem.Values.AddRange(selectedImages.Images);
-			}
-			return;
-		}
-		if (activeSubItem.GetType() == typeof(ImageSubItem))
-		{
-			if (selectedImages.Images != null)
-			{
-				((ImageSubItem)activeSubItem).IconImage = (Image)selectedImages.Images[0];
-			}
-		}
-		else if (activeSubItem.GetType() == typeof(ImageListSubItem))
-		{
-			ImageListSubItem imageListSubItem = (ImageListSubItem)activeSubItem;
-			imageListSubItem.Images.Clear();
-			imageListSubItem.Images.AddRange((ICollection)selectedImages.Images);
-			imageListSubItem.SortValue = selectedImages.SortValue;
-		}
 	}
 
 	private void InvalidateHoveredItem(object sender, MouseEventArgs e)
