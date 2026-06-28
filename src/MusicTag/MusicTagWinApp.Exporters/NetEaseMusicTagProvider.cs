@@ -89,7 +89,14 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase
 	{
 	}
 
-	private List<NetEaseSongInfo> SearchSongs(string query, int resultLimit)
+	// 网易云加密 POST 体:把 BuildEncryptedRequest 产出的 a/b 字段编码进 params/encSecKey 模板(原三处逐字节相同)。
+	private static string BuildEncryptedPostBody(JObject encryptedRequest)
+	{
+		return string.Format(encryptedPostDataFormat, DatabaseMapper.UrlEncodeUtf8(encryptedRequest["a"].ToString()), DatabaseMapper.UrlEncodeUtf8(encryptedRequest["b"].ToString()));
+	}
+
+	// 歌曲查询 POST 公共骨架(SearchSongs / LoadSongDetails 同构,仅 endpoint / payload / 日志标签不同)。
+	private List<NetEaseSongInfo> PostSongQuery(string endpoint, JObject payload, string errorLogTag)
 	{
 		if (cancellationSource.IsCancellationRequested)
 		{
@@ -97,51 +104,59 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase
 		}
 		try
 		{
-			JObject encryptedRequest = NetEaseCrypto.BuildEncryptedRequest(new JObject
-			{
-				{ "s", query },
-				{ "type", 1 },
-				{ "limit", resultLimit },
-				{ "total", "true" },
-				{ "offset", 0 }
-			}.ToString(Formatting.None));
-			string responseBody = PostString(songSearchEndpoint, string.Format(encryptedPostDataFormat, DatabaseMapper.UrlEncodeUtf8(encryptedRequest["a"].ToString()), DatabaseMapper.UrlEncodeUtf8(encryptedRequest["b"].ToString())));
+			JObject encryptedRequest = NetEaseCrypto.BuildEncryptedRequest(payload.ToString(Formatting.None));
+			string responseBody = PostString(endpoint, BuildEncryptedPostBody(encryptedRequest));
 			return (!cancellationSource.IsCancellationRequested) ? ParseSongSearchResponse(responseBody) : new List<NetEaseSongInfo>();
 		}
 		catch (Exception ex)
 		{
-			Console.WriteLine("SearchMusic error:" + ex.GetMessageChain());
+			Console.WriteLine(errorLogTag + " error:" + ex.GetMessageChain());
 			return new List<NetEaseSongInfo>();
 		}
 	}
 
+	// 发行年份格式化(GetAlbumReleaseYear / SearchTracks 同构):有效 publishTime → "yyyy",无效或异常 → null。
+	private static string FormatPublishYear(long? publishTime)
+	{
+		long publishTimeValue = publishTime.GetValueOrDefault();
+		if (publishTime.HasValue && publishTimeValue > 0L)
+		{
+			try
+			{
+				return DatabaseMapper.UnixMillisecondsToDateTime(publishTimeValue).ToString("yyyy", CultureInfo.InvariantCulture);
+			}
+			catch (Exception)
+			{
+			}
+		}
+		return null;
+	}
+
+	private List<NetEaseSongInfo> SearchSongs(string query, int resultLimit)
+	{
+		return PostSongQuery(songSearchEndpoint, new JObject
+		{
+			{ "s", query },
+			{ "type", 1 },
+			{ "limit", resultLimit },
+			{ "total", "true" },
+			{ "offset", 0 }
+		}, "SearchMusic");
+	}
+
 	private List<NetEaseSongInfo> LoadSongDetails(long songId)
 	{
-		if (cancellationSource.IsCancellationRequested)
+		return PostSongQuery(songDetailsEndpoint, new JObject
 		{
-			return new List<NetEaseSongInfo>();
-		}
-		try
-		{
-			JObject encryptedRequest = NetEaseCrypto.BuildEncryptedRequest(new JObject
 			{
+				"c",
+				new JArray(new JObject
 				{
-					"c",
-					new JArray(new JObject
-					{
-						{ "id", songId },
-						{ "v", 0 }
-					}).ToString(Formatting.None)
-				}
-			}.ToString(Formatting.None));
-			string responseBody = PostString(songDetailsEndpoint, string.Format(encryptedPostDataFormat, DatabaseMapper.UrlEncodeUtf8(encryptedRequest["a"].ToString()), DatabaseMapper.UrlEncodeUtf8(encryptedRequest["b"].ToString())));
-			return (!cancellationSource.IsCancellationRequested) ? ParseSongSearchResponse(responseBody) : new List<NetEaseSongInfo>();
-		}
-		catch (Exception ex)
-		{
-			Console.WriteLine("SearchSongDetail error:" + ex.GetMessageChain());
-			return new List<NetEaseSongInfo>();
-		}
+					{ "id", songId },
+					{ "v", 0 }
+				}).ToString(Formatting.None)
+			}
+		}, "SearchSongDetail");
 	}
 
 	private NetEaseAlbumInfo LoadAlbumDetails(long albumId)
@@ -162,13 +177,7 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase
 				{ "private_cloud", "true" }
 			}.ToString(Formatting.None));
 			using HttpClient albumClient = CreateAlbumHttpClient();
-			string albumResponse = PostString(
-				string.Format(albumDetailsEndpointFormat, albumId),
-				string.Format(
-					encryptedPostDataFormat,
-					DatabaseMapper.UrlEncodeUtf8(encryptedRequest["a"].ToString()),
-					DatabaseMapper.UrlEncodeUtf8(encryptedRequest["b"].ToString())),
-				albumClient);
+			string albumResponse = PostString(string.Format(albumDetailsEndpointFormat, albumId), BuildEncryptedPostBody(encryptedRequest), albumClient);
 			return (!cancellationSource.IsCancellationRequested) ? ParseAlbumResponse(albumResponse) : null;
 		}
 		catch (Exception ex)
@@ -261,18 +270,7 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase
 		}
 		if (albumInfo != null)
 		{
-			long? publishTime = albumInfo.PublishTime;
-			long publishTimeValue = publishTime.GetValueOrDefault();
-			if (publishTime.HasValue && publishTimeValue > 0L)
-			{
-				try
-				{
-					return DatabaseMapper.UnixMillisecondsToDateTime(publishTimeValue).ToString("yyyy", CultureInfo.InvariantCulture);
-				}
-				catch (Exception)
-				{
-				}
-			}
+			return FormatPublishYear(albumInfo.PublishTime);
 		}
 		return null;
 	}
@@ -308,18 +306,7 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase
 			track.Album = song.Album.Name;
 			track.Comment = (Settings.Default.CommentTagWrite163Key ? song.CommentJson : song.GetAliasCommentText());
 			track.NetEaseAlbumId = song.Album.Id.ToString();
-			long? publishTime = song.Album.PublishTime;
-			long publishTimeValue = publishTime.GetValueOrDefault();
-			if (publishTime.HasValue && publishTimeValue > 0L)
-			{
-				try
-				{
-					track.Year = DatabaseMapper.UnixMillisecondsToDateTime(publishTimeValue).ToString("yyyy", CultureInfo.InvariantCulture);
-				}
-				catch (Exception)
-				{
-				}
-			}
+			track.Year = FormatPublishYear(song.Album.PublishTime);
 			if (song.TrackNumber.HasValue && song.TrackNumber.Value > 0)
 			{
 				track.Track = song.TrackNumber.Value;
