@@ -364,13 +364,17 @@ namespace MusicTag.Composer;
 		}
 		StringBuilder lineBuilder = new StringBuilder();
 		LyricLine line = currentLine.Value;
+		void AppendTimestamp(long timestampKey)
+		{
+			if (!omitTimestamps)
+			{
+				lineBuilder.Append(FormatTimestamp(timestampKey, useThreeDigitMilliseconds: false));
+			}
+		}
 		switch (lyricFormat)
 		{
 		default:
-			if (!omitTimestamps)
-			{
-				lineBuilder.Append(FormatTimestamp(currentLine.Key, useThreeDigitMilliseconds: false));
-			}
+			AppendTimestamp(currentLine.Key);
 			lineBuilder.Append(line.OriginalText);
 			if (!string.IsNullOrWhiteSpace(line.TranslatedText))
 			{
@@ -402,41 +406,26 @@ namespace MusicTag.Composer;
 		case 2:
 			if (previousLine.HasValue && previousLine?.Value.TranslatedText != null)
 			{
-				if (!omitTimestamps)
-				{
-					lineBuilder.Append(FormatTimestamp(currentLine.Key - 10L, useThreeDigitMilliseconds: false));
-				}
+				AppendTimestamp(currentLine.Key - 10L);
 				lineBuilder.Append(previousLine?.Value.TranslatedText + "\n");
 			}
-			if (!omitTimestamps)
-			{
-				lineBuilder.Append(FormatTimestamp(currentLine.Key, useThreeDigitMilliseconds: false));
-			}
+			AppendTimestamp(currentLine.Key);
 			lineBuilder.Append(line.OriginalText + "\n");
 			if (isLastLine && line.TranslatedText != null)
 			{
-				if (!omitTimestamps)
-				{
-					lineBuilder.Append(FormatTimestamp(currentLine.Key + 10000L, useThreeDigitMilliseconds: false));
-				}
+				AppendTimestamp(currentLine.Key + 10000L);
 				lineBuilder.Append(line.TranslatedText + "\n");
 			}
 			break;
 		case 1:
 			if (!removeBlankLines || !string.IsNullOrWhiteSpace(line.OriginalText))
 			{
-				if (!omitTimestamps)
-				{
-					lineBuilder.Append(FormatTimestamp(currentLine.Key, useThreeDigitMilliseconds: false));
-				}
+				AppendTimestamp(currentLine.Key);
 				lineBuilder.Append(line.OriginalText + "\n");
 			}
 			if (line.TranslatedText != null)
 			{
-				if (!omitTimestamps)
-				{
-					lineBuilder.Append(FormatTimestamp(currentLine.Key, useThreeDigitMilliseconds: false));
-				}
+				AppendTimestamp(currentLine.Key);
 				lineBuilder.Append(line.TranslatedText + "\n");
 			}
 			break;
@@ -444,7 +433,7 @@ namespace MusicTag.Composer;
 		return lineBuilder.ToString();
 	}
 
-	public string MergeTranslatedLyric(LyricTextProcessor translatedLyric)
+	private void AbsorbTranslatedLines(LyricTextProcessor translatedLyric)
 	{
 		foreach (KeyValuePair<long, LyricLine> translatedEntry in translatedLyric.linesByTimestamp)
 		{
@@ -467,6 +456,11 @@ namespace MusicTag.Composer;
 			}
 			targetLine.TranslatedText = translationText;
 		}
+	}
+
+	public string MergeTranslatedLyric(LyricTextProcessor translatedLyric)
+	{
+		AbsorbTranslatedLines(translatedLyric);
 		Title = MergeMetadataValue(Title, translatedLyric.Title);
 		Artist = MergeMetadataValue(Artist, translatedLyric.Artist);
 		Album = MergeMetadataValue(Album, translatedLyric.Album);
@@ -501,26 +495,7 @@ namespace MusicTag.Composer;
 
 	public (string, string) AlignAndSplitTranslatedLyric(LyricTextProcessor translatedLyric)
 	{
-		foreach (KeyValuePair<long, LyricLine> translatedEntry in translatedLyric.linesByTimestamp)
-		{
-			long timestamp = translatedEntry.Key;
-			LyricLine translatedLine = translatedEntry.Value;
-			linesByTimestamp.TryGetValue(timestamp, out var targetLine);
-			string translatedText = (translatedLine.OriginalText + ((translatedLine.TranslatedText != null) ? (" " + translatedLine.TranslatedText) : "")).Trim();
-			if (!string.IsNullOrWhiteSpace(translatedText))
-			{
-				if (targetLine == null)
-				{
-					targetLine = new LyricLine("");
-					linesByTimestamp.Add(timestamp, targetLine);
-				}
-				if (targetLine.TranslatedText != null)
-				{
-					targetLine.OriginalText = targetLine.OriginalText + " " + targetLine.TranslatedText;
-				}
-				targetLine.TranslatedText = translatedText;
-			}
-		}
+		AbsorbTranslatedLines(translatedLyric);
 		long[] timestampKeys = linesByTimestamp.Keys.ToArray();
 		int keyIndex;
 		for (keyIndex = 1; keyIndex < timestampKeys.Length - 1; keyIndex++)
@@ -665,17 +640,23 @@ namespace MusicTag.Composer;
 		return lyricText;
 	}
 
+	private static LyricTextProcessor CreateMergedProcessor(string lyricText, string translatedLyricText)
+	{
+		LyricTextProcessor lyricProcessor = new LyricTextProcessor(lyricText);
+		if (!string.IsNullOrEmpty(translatedLyricText))
+		{
+			lyricProcessor.MergeTranslatedLyric(new LyricTextProcessor(translatedLyricText));
+		}
+		return lyricProcessor;
+	}
+
 	public static string RemoveTimestampsFromDownloadedLyrics(string lyricText, string translatedLyricText, bool preferTranslatedOnly)
 	{
 		if (!string.IsNullOrEmpty(lyricText))
 		{
 			if (!preferTranslatedOnly)
 			{
-				LyricTextProcessor lyricProcessor = new LyricTextProcessor(lyricText);
-				if (!string.IsNullOrEmpty(translatedLyricText))
-				{
-					lyricProcessor.MergeTranslatedLyric(new LyricTextProcessor(translatedLyricText));
-				}
+				LyricTextProcessor lyricProcessor = CreateMergedProcessor(lyricText, translatedLyricText);
 				string lyricWithoutTimestamps = lyricProcessor.RemoveTimestampTags();
 				if (!string.IsNullOrEmpty(lyricWithoutTimestamps))
 				{
@@ -699,11 +680,7 @@ namespace MusicTag.Composer;
 	{
 		if (!string.IsNullOrEmpty(lyricText) && !preferTranslatedOnly)
 		{
-			LyricTextProcessor lyricProcessor = new LyricTextProcessor(lyricText);
-			if (!string.IsNullOrEmpty(translatedLyricText))
-			{
-				lyricProcessor.MergeTranslatedLyric(new LyricTextProcessor(translatedLyricText));
-			}
+			LyricTextProcessor lyricProcessor = CreateMergedProcessor(lyricText, translatedLyricText);
 			string reformattedLyric = lyricProcessor.ReformatLyricText(removeBlankLines, removeHeaderTags);
 			if (!string.IsNullOrEmpty(reformattedLyric))
 			{
