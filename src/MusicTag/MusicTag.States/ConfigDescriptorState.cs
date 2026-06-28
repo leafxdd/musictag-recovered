@@ -250,32 +250,25 @@ internal class ConfigDescriptorState : IDisposable
 	public void LoadAudioProperties()
 	{
 		TagLib.Properties properties = tagFile.Properties;
-		if (!TagValues.ContainsKey("bitpersample"))
+		AddIfAbsent("bitpersample", delegate
 		{
 			int bitsPerSample = (properties != null) ? properties.BitsPerSample : 0;
 			// Native reports 16 for lossy formats (where bit depth is meaningless and
 			// TagLibSharp returns 0); lossless formats carry a real value. Preserve that.
-			TagValues.Add("bitpersample", (bitsPerSample > 0) ? bitsPerSample : 16);
-		}
-		if (!TagValues.ContainsKey("channels"))
+			return (bitsPerSample > 0) ? bitsPerSample : 16;
+		});
+		AddIfAbsent("channels", () => (properties != null) ? properties.AudioChannels : 0);
+		AddIfAbsent("samplerate", () => (properties != null) ? properties.AudioSampleRate : 0);
+		AddIfAbsent("bitrate", () => (properties != null) ? properties.AudioBitrate : 0);
+		AddIfAbsent("durationinms", () => (properties != null) ? (int)properties.Duration.TotalMilliseconds : 0);
+		AddIfAbsent("hasvideotrack", () => properties != null && (properties.MediaTypes & TagLib.MediaTypes.Video) != 0);
+	}
+
+	private void AddIfAbsent(string key, Func<object> valueFactory)
+	{
+		if (!TagValues.ContainsKey(key))
 		{
-			TagValues.Add("channels", (properties != null) ? properties.AudioChannels : 0);
-		}
-		if (!TagValues.ContainsKey("samplerate"))
-		{
-			TagValues.Add("samplerate", (properties != null) ? properties.AudioSampleRate : 0);
-		}
-		if (!TagValues.ContainsKey("bitrate"))
-		{
-			TagValues.Add("bitrate", (properties != null) ? properties.AudioBitrate : 0);
-		}
-		if (!TagValues.ContainsKey("durationinms"))
-		{
-			TagValues.Add("durationinms", (properties != null) ? (int)properties.Duration.TotalMilliseconds : 0);
-		}
-		if (!TagValues.ContainsKey("hasvideotrack"))
-		{
-			TagValues.Add("hasvideotrack", properties != null && (properties.MediaTypes & TagLib.MediaTypes.Video) != 0);
+			TagValues.Add(key, valueFactory());
 		}
 	}
 
@@ -424,7 +417,7 @@ internal class ConfigDescriptorState : IDisposable
 		return false;
 	}
 
-	public bool SaveTagFields()
+	private bool SaveWithId3v2Version(Action writeBody)
 	{
 		lock (id3v2VersionLock)
 		{
@@ -433,51 +426,7 @@ internal class ConfigDescriptorState : IDisposable
 			try
 			{
 				loadError = null;
-				TagLib.Tag tag = tagFile.Tag;
-				// Same fixed field order as the former native m0 string[12] contract.
-				tag.Title = TagValues["title"] as string;
-				tag.Performers = ToSingleValue(TagValues["artist"] as string);
-				tag.Album = TagValues["album"] as string;
-				SetYear(tag, TagValues["year"] as string);
-				SetTrack(tag, TagValues["trackstr"] as string);
-				SetDisc(tag, TagValues["discstr"] as string);
-				tag.Genres = ToSingleValue(TagValues["genre"] as string);
-				tag.AlbumArtists = ToSingleValue(TagValues["albumartist"] as string);
-				tag.Composers = ToSingleValue(TagValues["composer"] as string);
-				// Match the original native m0 behavior: it cleared ALL comment frames before
-				// writing the new value, so a netease "163 key" COMM (which carries a non-empty
-				// description) does NOT survive a comment edit. TagLib's Tag.Comment setter only
-				// replaces the default (empty-description) COMM, so clear the rest explicitly to
-				// stay behavior-equivalent (verified: original native write drops the 163 key).
-				if (tagFile.GetTag(TagLib.TagTypes.Id3v2, create: false) is TagLib.Id3v2.Tag id3v2ForComment)
-				{
-					id3v2ForComment.RemoveFrames("COMM");
-				}
-				tag.Comment = TagValues["comment"] as string;
-				WriteLyricist(TagValues["lyricist"] as string);
-				tag.Lyrics = TagValues["lyrics"] as string;
-				if (TagValues.TryGetValue("allpicturedata", out var value))
-				{
-					List<PictureData> pictures = value as List<PictureData>;
-					List<TagLib.IPicture> tagLibPictures = new List<TagLib.IPicture>();
-					foreach (PictureData picture in pictures)
-					{
-						if (picture.MimeType == null || picture.Width == 0 || picture.Height == 0)
-						{
-							using (LoadPictureImage(picture))
-							{
-							}
-						}
-						TagLib.Picture tagLibPicture = new TagLib.Picture(new TagLib.ByteVector(picture.ImageBytes))
-						{
-							Type = NameToPictureType(picture.PictureType),
-							MimeType = picture.MimeType,
-							Description = ""
-						};
-						tagLibPictures.Add(tagLibPicture);
-					}
-					tag.Pictures = tagLibPictures.ToArray();
-				}
+				writeBody();
 				SetId3v2Version();
 				tagFile.Save();
 				return true;
@@ -495,30 +444,63 @@ internal class ConfigDescriptorState : IDisposable
 		}
 	}
 
+	public bool SaveTagFields()
+	{
+		return SaveWithId3v2Version(delegate
+		{
+			TagLib.Tag tag = tagFile.Tag;
+			// Same fixed field order as the former native m0 string[12] contract.
+			tag.Title = TagValues["title"] as string;
+			tag.Performers = ToSingleValue(TagValues["artist"] as string);
+			tag.Album = TagValues["album"] as string;
+			SetYear(tag, TagValues["year"] as string);
+			SetTrack(tag, TagValues["trackstr"] as string);
+			SetDisc(tag, TagValues["discstr"] as string);
+			tag.Genres = ToSingleValue(TagValues["genre"] as string);
+			tag.AlbumArtists = ToSingleValue(TagValues["albumartist"] as string);
+			tag.Composers = ToSingleValue(TagValues["composer"] as string);
+			// Match the original native m0 behavior: it cleared ALL comment frames before
+			// writing the new value, so a netease "163 key" COMM (which carries a non-empty
+			// description) does NOT survive a comment edit. TagLib's Tag.Comment setter only
+			// replaces the default (empty-description) COMM, so clear the rest explicitly to
+			// stay behavior-equivalent (verified: original native write drops the 163 key).
+			if (tagFile.GetTag(TagLib.TagTypes.Id3v2, create: false) is TagLib.Id3v2.Tag id3v2ForComment)
+			{
+				id3v2ForComment.RemoveFrames("COMM");
+			}
+			tag.Comment = TagValues["comment"] as string;
+			WriteLyricist(TagValues["lyricist"] as string);
+			tag.Lyrics = TagValues["lyrics"] as string;
+			if (TagValues.TryGetValue("allpicturedata", out var value))
+			{
+				List<PictureData> pictures = value as List<PictureData>;
+				List<TagLib.IPicture> tagLibPictures = new List<TagLib.IPicture>();
+				foreach (PictureData picture in pictures)
+				{
+					if (picture.MimeType == null || picture.Width == 0 || picture.Height == 0)
+					{
+						using (LoadPictureImage(picture))
+						{
+						}
+					}
+					TagLib.Picture tagLibPicture = new TagLib.Picture(new TagLib.ByteVector(picture.ImageBytes))
+					{
+						Type = NameToPictureType(picture.PictureType),
+						MimeType = picture.MimeType,
+						Description = ""
+					};
+					tagLibPictures.Add(tagLibPicture);
+				}
+				tag.Pictures = tagLibPictures.ToArray();
+			}
+		});
+	}
+
 	public bool SaveCurrentTagFile()
 	{
-		lock (id3v2VersionLock)
+		return SaveWithId3v2Version(delegate
 		{
-			byte previousDefaultVersion = TagLib.Id3v2.Tag.DefaultVersion;
-			bool previousForceDefaultVersion = TagLib.Id3v2.Tag.ForceDefaultVersion;
-			try
-			{
-				loadError = null;
-				SetId3v2Version();
-				tagFile.Save();
-				return true;
-			}
-			catch (Exception ex)
-			{
-				loadError = string.IsNullOrWhiteSpace(ex.Message) ? Resources.Msg_SaveFail : ex.Message;
-				return false;
-			}
-			finally
-			{
-				TagLib.Id3v2.Tag.DefaultVersion = previousDefaultVersion;
-				TagLib.Id3v2.Tag.ForceDefaultVersion = previousForceDefaultVersion;
-			}
-		}
+		});
 	}
 
 	public bool TryGetRawValue(string key, out object value)
@@ -796,6 +778,19 @@ internal class ConfigDescriptorState : IDisposable
 		return found;
 	}
 
+	private static void AppendUtf8Blocks(string[] values, List<byte[]> blocks, string tagTypeName, ref string tagType, ref string stringType)
+	{
+		tagType = tagTypeName;
+		stringType = "UTF8";
+		foreach (string value in values)
+		{
+			if (!string.IsNullOrEmpty(value))
+			{
+				blocks.Add(Encoding.UTF8.GetBytes(value));
+			}
+		}
+	}
+
 	private static void FillRawFromXiph(TagLib.Ogg.XiphComment tag, string field, List<byte[]> blocks, ref string tagType, ref string stringType)
 	{
 		string fieldId = XiphFieldId(field);
@@ -808,15 +803,7 @@ internal class ConfigDescriptorState : IDisposable
 		{
 			return;
 		}
-		tagType = "Vorbis Comment";
-		stringType = "UTF8";
-		foreach (string value in values)
-		{
-			if (!string.IsNullOrEmpty(value))
-			{
-				blocks.Add(Encoding.UTF8.GetBytes(value));
-			}
-		}
+		AppendUtf8Blocks(values, blocks, "Vorbis Comment", ref tagType, ref stringType);
 	}
 
 	private static void FillRawFromApe(TagLib.Ape.Tag tag, string field, List<byte[]> blocks, ref string tagType, ref string stringType)
@@ -836,15 +823,7 @@ internal class ConfigDescriptorState : IDisposable
 		{
 			return;
 		}
-		tagType = "APE";
-		stringType = "UTF8";
-		foreach (string value in values)
-		{
-			if (!string.IsNullOrEmpty(value))
-			{
-				blocks.Add(Encoding.UTF8.GetBytes(value));
-			}
-		}
+		AppendUtf8Blocks(values, blocks, "APE", ref tagType, ref stringType);
 	}
 
 	private static string Id3v2FrameId(string field)
