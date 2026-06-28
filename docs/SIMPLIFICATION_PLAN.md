@@ -63,21 +63,21 @@
   - [x] `ComputeMd5HashString(string)` 委托 byte[] 重载（`DatabaseMapper.cs:103-107`）
   - [x] 两处 catch 改调既有 `MarkTransactionFailed()`（`TagHistoryRepository.cs:247,261`）
 
-- [ ] **A3 StateFieldInstance 纯 in-file 去重（无写 / 重命名副作用，仅 UI / 显示 / 错误路由）** —— `MusicTagWinApp.Instances/StateFieldInstance.cs`
-  - [ ] 复用既有 `AddSelectedFilterValues`，删 2 个 filter-tally 闭包类 `FilterValueCollector`/`SelectedItemFilterValueCounter`（681-882，调用点 4682/4700-4711/5044-5049）
-  - [ ] `Subscribe/UnsubscribeTagFieldTextHandlers` 收敛 6 处订阅循环（4660-4663 等，至 5082-5085）
-  - [ ] `FormatCountDurationSize(count,ms,bytes)` ×4（4163,4165,4208,4211）
-  - [ ] `BuildBasicFileDisplayValues` 合并双分支字典（4297-4317）
-  - [ ] `GetLoadedFilePaths` 改一行 LINQ（3991-3999）
-  - [ ] `ConvertAllTagFields(converter)` 把 `ChineseTextConverter` 工厂提出循环（6423-6437；仅改编辑框内存文本，需用户另存才落盘）
-  - [ ] `ReportAsyncOperationErrorIfNotCancellation(ex,cts,name)` 收敛 13 处取消感知 catch（6021 等，全类；仅统一各 runner 的 catch，happy-path 不变）
+- [x] **A3 StateFieldInstance 纯 in-file 去重（无写 / 重命名副作用，仅 UI / 显示 / 错误路由）** —— 7 项完成 `cc1bc3c`（`MusicTagWinApp.Instances/StateFieldInstance.cs`）
+  - [x] 复用既有 `AddSelectedFilterValues`，删 2 个 filter-tally 闭包类 `FilterValueCollector`/`SelectedItemFilterValueCounter`（两调用点改 `AddSelectedFilterValues(fileRow)`；等价证明：`GetSelectedFilterValue` 已把空白归一化为 ""，故 `AddSelectedFilterValue` 的 `IsNullOrWhiteSpace` 守卫在此为 no-op，且 `activeFilterContext.owner == this`）
+  - [x] `Subscribe/UnsubscribeTagFieldTextHandlers` 收敛 6 处订阅循环（4 个 `+=` / 2 个 `-=`）
+  - [x] `FormatCountDurationSize(count,ms,bytes)` ×4 状态标签插值
+  - [x] `BuildBasicFileDisplayValues` 合并双分支字典（updatetime 三元，`!Exists` 时短路不取 LastWriteTime）
+  - [x] `GetLoadedFilePaths` 改一行 LINQ（`new HashSet<string>(...Select(...))`）
+  - [x] `ConvertAllTagFields(converter)` 把 `ChineseTextConverter` 工厂提出循环（工厂返回静态 readonly 单例 + `ConvertText` 纯函数 → 复用等价；仅改编辑框内存文本，需用户另存才落盘）
+  - [x] `ReportAsyncOperationErrorIfNotCancellation(ex,cts,name)` 收敛 13 处取消感知 catch（全类各 runner 的 catch，happy-path 不变）
 
-- [ ] **A3b（Codex 点 2）写标签 / 重命名 UI 入口 + 结果文案去重（从 A3 拆出，单独成批、重验证）** —— `StateFieldInstance.cs`
-  - 这些处理器**确实进入写 / 重命名路径**（已核实 `StartCommonSaveTags` @6283/6650/6673、`StartRenameFiles` @6685/6697），故不与纯 in-file 去重混批。
-  - [ ] `ConfirmAndSaveTagsWithOperation(labelKey,comp)` 泛化 `StartBatchLyricsOperation` + 2 个 CHS/CHT 标签处理器（6271,6638,6656 → 均调 `StartCommonSaveTags`）
-  - [ ] `ConfirmAndConvertSelectedFilenames(menuKey,isChsToCht)` 合并文件名 CHS/CHT 两处理器（6678-6700 → 均调 `StartRenameFiles`）
-  - [ ] ⚠️ `BuildBatchResultMessage(...)` 收敛 5 处批结果消息装配（5986-6014 等，至 6243-6253，位于 save/rename/undo/clear runner）—— **用户可见文案，逐分支逐字节核对**；`StartClearTags` 变体可留 inline
-  - 验证：确认文案 / 选中文件预览 / 只读文件处理 / 取消分支 / 进度弹窗 / 实际 save+rename 路径与每分支结果文案逐字节不变 + 手动验证说明
+- [x] **A3b（Codex 点 2）写标签 / 重命名 UI 入口 + 结果文案去重（从 A3 拆出，单独成批、重验证）** —— 3 项完成 `6b61728`（`StateFieldInstance.cs`）
+  - 这些处理器**确实进入写 / 重命名路径**（已核实 `StartCommonSaveTags`、`StartRenameFiles`），故不与纯 in-file 去重混批。
+  - [x] `ConfirmAndSaveTagsWithOperation(labelKey,comp)` 泛化 `StartBatchLyricsOperation` + 2 个 CHS/CHT 标签处理器（均调 `StartCommonSaveTags`；SimplifiedToTraditional 的早退式写法折叠进同一 `count!=0 && Confirm` 守卫，comp 改由调用方构造——无副作用常量字典，提前 vs 延迟分配不可观测）
+  - [x] `ConfirmAndConvertSelectedFilenames(menuKey,isChsToCht)` 合并文件名 CHS/CHT 两处理器（均调 `StartRenameFiles`）
+  - [x] ⚠️ `BuildBatchResultMessage(total,completedMsg,primary,failed,skipped,processed,log,includeSkippedBranch)` 收敛 4 处 save/rename/undo 结果消息装配；`includeSkippedBranch` 区分 save/rename 4 分支（含 `Msg_Skipped`）与 undo 3 分支；`StartClearTags` 变体（`Msg_CleartagsCompleted`+`Msg_OK_Fail_Count`、primary 分支裸消息）保留 inline——**用户可见文案逐字节核对**
+  - 验证：diff 读 + Debug+Release 0 warn + smoke；确认文案 / 选中文件预览 / 只读处理 / 取消分支 / 进度弹窗 / 每分支结果文案逐字节不变（实际 save+rename 运行路径无 smoke 覆盖，等价靠逐字节分析）
 
 - [x] **A4 结果模型 / 相似度** —— 仅执行 ⭐ Item 1；其余 3 项评估后**否决**（`MusicTagWinApp.Roles/TrackSearchResult.cs`）
   - [x] ⭐ `ResolveNonInstrumentalCandidate` 收敛 `PromoteBestMatch` 7 处 instrumental 解析三元式（5 处自兜底 `?? 候选` + 2 处 `!= null` 守卫）—— **✅ 完成 `e7afa05`**（净 −14 行）。命名取 `ResolveNonInstrumentalCandidate`（返回可空三元结果，自兜底点内联 `?? 候选`）；**513 行有意不动**：判定原 `currentBest.Title` 却以当前 `results[0]` 为回溯种子（中途 `MoveTrackToFront` 已重排），判定实体≠回溯种子，不符助手契约
@@ -171,6 +171,8 @@
 - 2026-06-28 **A5 部分完成 `e8bd2b1`**：`AbsorbTranslatedLines` 收两译文吸收循环、`FormatLyricLine` 6 处时间戳守卫→局部函数 `AppendTimestamp`、`CreateMergedProcessor` 收两下载包装。LRC 描述符表统一（altitude）**推迟**。Debug+Release 0 warn、smoke 通过。
 - 2026-06-28 **A9 4 项完成 `4bb28c6`**：`IsSameTrackMetadata` 收 lyric/cover 两处 Title/Artist/Album 三元等值；`SaveSidecarFiles` 统一封面+歌词侧车保存两块（file-only 分支保留 allSucceeded→success/failed 计数，tag-save 后分支忽略返回值）；`RunSourceSearchPass` 合并主/次源搜索两 pass（`IsSecondarySource==secondary` + `useProviderRanking:!secondary`，`sourceOrderIndex` 经 `ref` 线程化保序）；inline 并删 `GetSourceFromItem` forwarder。`ExtractResultsFromRankedTracks` move-method（altitude）推迟。Debug+Release 0 warn、smoke 通过。
 - 2026-06-28 **A7 完成 `caa9123`**：`DatabaseMapper.FillAndCenterButtons` 收三 dialog 相同的 fill-list+center-buttons 布局块（各保留末尾列宽行）；`PictureFromTagsDialog.GetEmbeddedPictureData` 收两处 load+取列表+null 检查（调用点各保留 continue/return 早退与 `using` 生命周期）；`FindReplaceDialog.SyncControllerInputs` 收四按钮处理器的 SearchText/MatchCase 推送。Debug+Release 0 warn、smoke 通过。
+- 2026-06-28 **A3 完成 `cc1bc3c`**（7 项，纯 in-file 显示/UI/错误路由去重）：删 `FilterValueCollector`/`SelectedItemFilterValueCounter` 闭包类、两调用点复用 `AddSelectedFilterValues`；`Subscribe/UnsubscribeTagFieldTextHandlers` 收 6 订阅循环；`FormatCountDurationSize` 收 4 状态标签插值；`BuildBasicFileDisplayValues` 合并双分支；`GetLoadedFilePaths` LINQ 一行；`ConvertAllTagFields` 提工厂出循环（静态单例+纯函数等价）；`ReportAsyncOperationErrorIfNotCancellation` 收 13 取消感知 catch。Debug+Release 0 warn、smoke 通过。
+- 2026-06-28 **A3b 完成 `6b61728`**（3 项，写/重命名 UI 入口，Codex 拆出重验证）：`ConfirmAndSaveTagsWithOperation` 泛化 lyrics + 2 tag CHS/CHT 处理器、`ConfirmAndConvertSelectedFilenames` 合并 2 文件名处理器、`BuildBatchResultMessage` 收 4 处 save/rename/undo 结果消息（clear 变体保留 inline）。逐字节核对 + diff 读，Debug+Release 0 warn、smoke 通过；实跑 save/rename 无 smoke 覆盖。**Tier A 全部完成。**
 
 ---
 
