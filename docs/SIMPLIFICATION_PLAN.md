@@ -85,21 +85,21 @@
   - [x] ❌ **否决** `ReplaceFullWidthPunctuation`：`NormalizeForMatch`（`.Replace` 单字符链）与 `NormalizeSimilarityTextCandidates`（`Regex` on `string[]`）是两套并行实现、跨上下文调用，Regex↔`.Replace` 等价性 + `string[]` 适配风险高收益低
   - [x] ❌ **否决**（效率）memoize `NormalizeForMatch`：属**性能优化非可读性简化**，引入缓存状态，超出本轮"行为保留简化"范围
 
-- [ ] **A5 歌词处理** —— `MusicTag.Composer/LyricTextProcessor.cs`
-  - [ ] `AbsorbTranslatedLines(translated)` 收敛 `MergeTranslatedLyric`/`AlignAndSplitTranslatedLyric` 两处译文吸收循环（449-469,504-523）
-  - [ ] `AppendTimestamp(t)` 局部函数收敛 `FormatLyricLine` 6 处守卫 append（354-445）
-  - [ ] `CreateMergedProcessor(lyric,translated)` ×2 静态下载包装（674-678,702-706）
-  - [ ] ⚠️（altitude）LRC 元数据描述符表统一 parse / emit / merge 三处（93-152,287-337,470-481）—— **保留 `Substring` 截断怪癖，勿换正则**；`offset` 仍特例（仅 parse+apply）
+- [x] **A5 歌词处理** —— 3 项完成 `e8bd2b1`；LRC 表（altitude）推迟
+  - [x] `AbsorbTranslatedLines(translated)` 收敛 `MergeTranslatedLyric`/`AlignAndSplitTranslatedLyric` 两处译文吸收循环（449-469,504-523）
+  - [x] `AppendTimestamp(t)` 局部函数收敛 `FormatLyricLine` 6 处守卫 append（354-445）
+  - [x] `CreateMergedProcessor(lyric,translated)` ×2 静态下载包装（674-678,702-706）
+  - [ ] ⏸ **推迟**（altitude，高风险，留待）⚠️（altitude）LRC 元数据描述符表统一 parse / emit / merge 三处（93-152,287-337,470-481）—— **保留 `Substring` 截断怪癖，勿换正则**；`offset` 仍特例（仅 parse+apply）
 
 - [x] **A6 ListView 控件 / 列** —— 完成：items 1+3 `48aa162`，item 2 `67f3132`
   - [x] `SortableTextComparer`（`Func<ListViewItem,string>` 选择器 + `SortOrder`）把 3 个 IComparer 嵌套类收敛为 1，连带删 3 个死构造器（`MusicTagWinApp.Roles/EditableListView.cs:30-113`；保留 559-573 比较器选择分支不动）
   - [x] ✅ `67f3132`（4 处中心数学逐字节核验相同，可证像素等价） `DrawCenteredImage(g,image,bounds,x)` 上提到基类 `MusicTagWinApp.Stubs/DrawableListViewSubItem.cs`，统一 4 处居中绘图（ImageSubItem / ImageListSubItem / CheckBoxSubItem / EditableListView 封面分支）
   - [x] `MoveSelectedColumn(delta)` 合并上移 / 下移镜像对（`MusicTagWinApp.Common/CustomColumnsDialog.cs:357-399`）
 
-- [ ] **A7 杂项对话框**
-  - [ ] `FillAndCenterButtons(list,mainPanel,buttonPanel)` 共享布局 helper ×3（`MusicTagWinApp.Common/DirectoryManagerDialog.cs:88-91`、`MusicTag.Importers/CombinedTagOverwriteOptionsDialog.cs:83-86`、`MusicTag.Consumers/CharacterSetSelectionDialog.cs:125-128`）
-  - [ ] `GetEmbeddedPictureData(state)` ×2（`MusicTag.Importers/PictureFromTagsDialog.cs:226-237,319-329`）
-  - [ ] `SyncControllerInputs()` ×4 按钮处理器（`MusicTag.Consumers/FindReplaceDialog.cs:139-165`）
+- [x] **A7 杂项对话框** —— 3 项完成 `caa9123`
+  - [x] `FillAndCenterButtons(list,mainPanel,buttonPanel)` 共享布局 helper ×3（`MusicTagWinApp.Common/DirectoryManagerDialog.cs`、`MusicTag.Importers/CombinedTagOverwriteOptionsDialog.cs`、`MusicTag.Consumers/CharacterSetSelectionDialog.cs`）—— 落点 `DatabaseMapper`（紧邻 `ScaleByDpi`，三 dialog 既有共享 UI 工具集中地；各保留自身末尾列宽行）
+  - [x] `GetEmbeddedPictureData(state)` ×2（`MusicTag.Importers/PictureFromTagsDialog.cs`）—— 两调用点保留各自早退（loop `continue` vs 方法 `return`）与 `using` 生命周期
+  - [x] `SyncControllerInputs()` ×4 按钮处理器（`MusicTag.Consumers/FindReplaceDialog.cs`）
 
 - [x] **A8 其余 in-file 小项** —— 4 项完成 `0eaefa6`；ChangeTags 推迟、TagTextEncoding 否决
   - [x] （效率）`TextBoxFindReplaceController.ReplaceAll` 提取 `textBox.Text` 本地量，消除 per-match 重读（`MusicTag.Serialization/TextBoxFindReplaceController.cs:73-107`）
@@ -109,12 +109,12 @@
   - [x] `Program.Main` inline `RunApplication`（`MusicTag.Schemes/Program.cs:27-51`）
   - [x] ❌ **否决**（switch `default` 分支用不同输入：源用 `NormalizeEncodingName(stringType)`、目标返回整名；未注册含 `=>` 名不等价） ~~`TagTextEncoding` 用 "=>" 拆分替换两个 switch 阶梯~~（`MusicTag.Serialization/TagTextEncoding.cs:201-244`）—— **对全 10 个注册名 + "GB"→"GB18030" 特例核对**
 
-- [ ] **A9 AutoMatchTagsDialog（未测试热点，逐项验证）** —— `MusicTagWinApp.Adapter/AutoMatchTagsDialog.cs`
-  - [ ] `RunSourceSearchPass(...)` 收敛主 / 次源搜索两 pass（1069-1092；用 `IsSecondarySource == secondary`，ref 线程化 `sourceOrderIndex`）
-  - [ ] `SaveSidecarFiles(coverPicture)` ×2 封面+歌词侧车保存块（782-794,817-826）
-  - [ ] `IsSameTrackMetadata(a,b)` ×2 best/alternate 严格等值检查（1105-1106,1121-1122）
-  - [ ] inline `GetSourceFromItem`（584-595，单点 object 参数误导，唯一允许的 forwarder 例外）
-  - [ ] （altitude）`ExtractResultsFromRankedTracks(...)` move-method 到 `MetadataSearchState`（1093-1176）
+- [x] **A9 AutoMatchTagsDialog（未测试热点，逐项验证）** —— 4 项完成 `4bb28c6`；ExtractResultsFromRankedTracks（altitude）推迟（`MusicTagWinApp.Adapter/AutoMatchTagsDialog.cs`）
+  - [x] `RunSourceSearchPass(...)` 收敛主 / 次源搜索两 pass（1069-1092；用 `IsSecondarySource == secondary`，ref 线程化 `sourceOrderIndex`，`useProviderRanking:!secondary`）
+  - [x] `SaveSidecarFiles(coverPicture)` ×2 封面+歌词侧车保存块（file-only 分支保留 allSucceeded→success/failed 计数；tag-save 后分支忽略返回值，与原同）
+  - [x] `IsSameTrackMetadata(a,b)` ×2 best/alternate 严格等值检查
+  - [x] inline `GetSourceFromItem`（单点 object 参数误导，唯一允许的 forwarder 例外；已并入 `IsNetEaseSourceAvailable` 并删除）
+  - [ ] ⏸ **推迟**（altitude）`ExtractResultsFromRankedTracks(...)` move-method 到 `MetadataSearchState`（1093-1176）
 
 ### Tier B — 跨文件复用（中风险，需仔细验证）
 
@@ -168,6 +168,9 @@
 - 2026-06-28 **A6 部分完成 `48aa162`**：`EditableListView` 3 个 `IComparer` 嵌套类（+3 死构造器）收敛为 `SortableTextComparer`（`Func<object,string>` 选择器，调用点传 lambda；列号支用不可变 `e.Column`）；`CustomColumnsDialog` 上/下移镜像对合并为 `MoveSelectedColumn(delta)`（瘦事件处理器保留供 designer 按名接线）。item 2（`DrawCenteredImage` 跨 5 文件居中绘图上提）**推迟**（需逐点像素等价 + 手动 UI 说明）。净 −72 行，Debug+Release 0 warn、smoke 通过。
 - 2026-06-28 **A6 item 2 完成 `67f3132`**：`DrawCenteredImage` 上提到基类 `DrawableListViewSubItem`，统一 4 处(ImageSubItem/ImageListSubItem/CheckBoxSubItem/EditableListView 封面)居中绘图——4 处中心数学逐字节相同,可证像素等价。A6 全批完成。Debug+Release 0 warn、smoke 通过。
 - 2026-06-28 **A8 部分完成 `0eaefa6`**：`ListViewFileSetting.AddForDir(fileInfo)` 委托路径重载、`Program.Main` 内联 `RunApplication`、`ReplaceAll` 提取 `textBox.Text` 本地量、`SourceOrderControl` 移动处理器复用 `CanMove*`。`ChangeTags` 批常量提循环**推迟**（写路径）、`TagTextEncoding` "=>" 拆分**否决**（switch default 用不同输入，未注册含 => 名不等价）。Debug+Release 0 warn、smoke 通过。
+- 2026-06-28 **A5 部分完成 `e8bd2b1`**：`AbsorbTranslatedLines` 收两译文吸收循环、`FormatLyricLine` 6 处时间戳守卫→局部函数 `AppendTimestamp`、`CreateMergedProcessor` 收两下载包装。LRC 描述符表统一（altitude）**推迟**。Debug+Release 0 warn、smoke 通过。
+- 2026-06-28 **A9 4 项完成 `4bb28c6`**：`IsSameTrackMetadata` 收 lyric/cover 两处 Title/Artist/Album 三元等值；`SaveSidecarFiles` 统一封面+歌词侧车保存两块（file-only 分支保留 allSucceeded→success/failed 计数，tag-save 后分支忽略返回值）；`RunSourceSearchPass` 合并主/次源搜索两 pass（`IsSecondarySource==secondary` + `useProviderRanking:!secondary`，`sourceOrderIndex` 经 `ref` 线程化保序）；inline 并删 `GetSourceFromItem` forwarder。`ExtractResultsFromRankedTracks` move-method（altitude）推迟。Debug+Release 0 warn、smoke 通过。
+- 2026-06-28 **A7 完成 `caa9123`**：`DatabaseMapper.FillAndCenterButtons` 收三 dialog 相同的 fill-list+center-buttons 布局块（各保留末尾列宽行）；`PictureFromTagsDialog.GetEmbeddedPictureData` 收两处 load+取列表+null 检查（调用点各保留 continue/return 早退与 `using` 生命周期）；`FindReplaceDialog.SyncControllerInputs` 收四按钮处理器的 SearchText/MatchCase 推送。Debug+Release 0 warn、smoke 通过。
 
 ---
 
