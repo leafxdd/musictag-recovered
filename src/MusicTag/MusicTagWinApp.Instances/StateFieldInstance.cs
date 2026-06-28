@@ -1183,7 +1183,7 @@ internal class StateFieldInstance : Form
 						string destinationPath = Path.Combine(directoryName, text);
 						try
 						{
-							DatabaseMapper.MoveFileAllowingCaseOnlyRename(renameFailureRecorder.CurrentPath, destinationPath);
+							PathFileUtilities.MoveFileAllowingCaseOnlyRename(renameFailureRecorder.CurrentPath, destinationPath);
 							TagHistoryRepository.UpdateHistoryFilePath(renameFailureRecorder.CurrentPath, destinationPath, tagHistoryRepository);
 							TagHistoryRepository.AddRenameUndoRecord(renameFailureRecorder.CurrentPath, destinationPath);
 							renameItems[processedCount].NewPath = destinationPath;
@@ -1306,7 +1306,7 @@ internal class StateFieldInstance : Form
 					failureReporter.fileContext = fileContext;
 					try
 					{
-						DatabaseMapper.ClearReadOnlyIfAllowed(currentFile, canCancelReadOnly);
+						PathFileUtilities.ClearReadOnlyIfAllowed(currentFile, canCancelReadOnly);
 						lastWriteTime = currentFile.LastWriteTime;
 						failureReporter.tagState = new ConfigDescriptorState(failureReporter.fileContext.filePath);
 						Action<string> action = failureReporter.ReportFailure;
@@ -1401,7 +1401,7 @@ internal class StateFieldInstance : Form
 									try
 									{
 										string saveLrcFileDefaultEncoding = Settings.Default.SaveLrcFileDefaultEncoding;
-										File.WriteAllText(DatabaseMapper.BuildLyricSavePath(failureReporter.fileContext.filePath, failureReporter.tagState), lyricsText, Encoding.GetEncoding(saveLrcFileDefaultEncoding));
+										File.WriteAllText(PathFileUtilities.BuildLyricSavePath(failureReporter.fileContext.filePath, failureReporter.tagState), lyricsText, Encoding.GetEncoding(saveLrcFileDefaultEncoding));
 									}
 									catch (System.Exception ex)
 									{
@@ -1685,7 +1685,7 @@ internal class StateFieldInstance : Form
 					try
 					{
 						string saveLrcFileDefaultEncoding = Settings.Default.SaveLrcFileDefaultEncoding;
-						File.WriteAllText(DatabaseMapper.BuildLyricSavePath(failureReporter.fileContext.filePath, failureReporter.tagState), lyricsText, Encoding.GetEncoding(saveLrcFileDefaultEncoding));
+						File.WriteAllText(PathFileUtilities.BuildLyricSavePath(failureReporter.fileContext.filePath, failureReporter.tagState), lyricsText, Encoding.GetEncoding(saveLrcFileDefaultEncoding));
 					}
 					catch (System.Exception ex)
 					{
@@ -1811,7 +1811,7 @@ internal class StateFieldInstance : Form
 					{
 						try
 						{
-							DatabaseMapper.MoveFileAllowingCaseOnlyRename(errorRecorder.CurrentPath, originalPath);
+							PathFileUtilities.MoveFileAllowingCaseOnlyRename(errorRecorder.CurrentPath, originalPath);
 							owner.FileSettings.UpdateForAnyFile(errorRecorder.CurrentPath, originalPath);
 							TagHistoryRepository.UpdateHistoryFilePath(errorRecorder.CurrentPath, originalPath, tagHistoryRepository);
 							successCount++;
@@ -1923,7 +1923,7 @@ internal class StateFieldInstance : Form
 					failureReporter.FileContext = tagSaveFileContext;
 					try
 					{
-						DatabaseMapper.ClearReadOnlyIfAllowed(currentFile, canCancelFileReadonly);
+						PathFileUtilities.ClearReadOnlyIfAllowed(currentFile, canCancelFileReadonly);
 						lastWriteTime = currentFile.LastWriteTime;
 						failureReporter.TagFile = new ConfigDescriptorState(failureReporter.FileContext.FilePath);
 						Action<string> action = failureReporter.ReportFailure;
@@ -2176,7 +2176,7 @@ internal class StateFieldInstance : Form
 							try
 							{
 								string saveLrcFileDefaultEncoding = Settings.Default.SaveLrcFileDefaultEncoding;
-								File.WriteAllText(DatabaseMapper.BuildLyricSavePath(errorRecorder.filePath, configDescriptorState), text, Encoding.GetEncoding(saveLrcFileDefaultEncoding));
+								File.WriteAllText(PathFileUtilities.BuildLyricSavePath(errorRecorder.filePath, configDescriptorState), text, Encoding.GetEncoding(saveLrcFileDefaultEncoding));
 								savedCount++;
 							}
 							catch (System.Exception ex)
@@ -2211,7 +2211,7 @@ internal class StateFieldInstance : Form
 		{
 			if (itemsToSave.Length > 1)
 			{
-				DatabaseMapper.ShowInformationMessage(string.Format(Resources.Msg_SaveLrcFilesComplete1, DatabaseMapper.GetLyricSaveDirectoryDisplayName()) + "\n" + string.Format(Resources.Msg_OK_Fail_Skip_Count, savedCount, failedCount, skippedCount, processedCount) + "\n" + errorLog.ToString());
+				DatabaseMapper.ShowInformationMessage(string.Format(Resources.Msg_SaveLrcFilesComplete1, PathFileUtilities.GetLyricSaveDirectoryDisplayName()) + "\n" + string.Format(Resources.Msg_OK_Fail_Skip_Count, savedCount, failedCount, skippedCount, processedCount) + "\n" + errorLog.ToString());
 				return;
 			}
 			if (savedCount <= 0)
@@ -2219,7 +2219,7 @@ internal class StateFieldInstance : Form
 				DatabaseMapper.ShowErrorMessage(errorLog.ToString());
 				return;
 			}
-			DatabaseMapper.ShowInformationMessage(string.Format(Resources.Msg_SaveLrcFilesComplete1, DatabaseMapper.GetLyricSaveDirectoryDisplayName()));
+			DatabaseMapper.ShowInformationMessage(string.Format(Resources.Msg_SaveLrcFilesComplete1, PathFileUtilities.GetLyricSaveDirectoryDisplayName()));
 		}
 	}
 
@@ -2299,7 +2299,7 @@ internal class StateFieldInstance : Form
 								if (pictureData.MimeType != null && pictureData.Width > 0 && pictureData.Height > 0)
 								{
 									string imageExtension = DatabaseMapper.GetImageExtensionForMimeType(pictureData.MimeType, ".jpg");
-									File.WriteAllBytes(DatabaseMapper.GetSiblingPathWithExtension(errorRecorder.FilePath, imageExtension), array);
+									File.WriteAllBytes(PathFileUtilities.GetSiblingPathWithExtension(errorRecorder.FilePath, imageExtension), array);
 									extractedCount++;
 								}
 								else
@@ -3288,7 +3288,7 @@ internal class StateFieldInstance : Form
 			Owner = this
 		};
 		mainSplitContainer.Panel1MinSize = DatabaseMapper.ScaleByDpi(320f);
-		FontAwesome.SetFontFileDirectory(DatabaseMapper.GetApplicationDirectory() + "font");
+		FontAwesome.SetFontFileDirectory(PathFileUtilities.GetApplicationDirectory() + "font");
 		FontAwesome.DefaultProperties.Size = DatabaseMapper.ScaleByDpi(18f);
 		FontAwesome.DefaultProperties.ShowBorder = false;
 
@@ -5581,7 +5581,7 @@ internal class StateFieldInstance : Form
 			if (pictureInfo.MimeType != null && pictureInfo.Width > 0 && pictureInfo.Height > 0)
 			{
 				string extension = DatabaseMapper.GetImageExtensionForMimeType(pictureInfo.MimeType, "");
-				string tempCoverPath = (string)DatabaseMapper.GetPictureCacheDirectory() + "tempcover" + extension;
+				string tempCoverPath = (string)PathFileUtilities.GetPictureCacheDirectory() + "tempcover" + extension;
 				File.WriteAllBytes(tempCoverPath, pictureInfo.ImageBytes);
 				Process.Start(tempCoverPath);
 			}
@@ -6351,8 +6351,8 @@ internal class StateFieldInstance : Form
 			{
 				LyricSaveFileDialog lyricSaveDialog = new LyricSaveFileDialog();
 				FileInfo fileInfo = new FileInfo(selectedTagState.GetFilePath());
-				lyricSaveDialog.InitialDirectory = DatabaseMapper.GetLyricSaveDirectory(fileInfo.FullName);
-				lyricSaveDialog.FileName = DatabaseMapper.BuildLyricFileName(fileInfo.FullName, selectedTagState);
+				lyricSaveDialog.InitialDirectory = PathFileUtilities.GetLyricSaveDirectory(fileInfo.FullName);
+				lyricSaveDialog.FileName = PathFileUtilities.BuildLyricFileName(fileInfo.FullName, selectedTagState);
 				string defaultLrcPath = lyricSaveDialog.InitialDirectory + "\\" + lyricSaveDialog.FileName;
 				if (File.Exists(defaultLrcPath))
 				{
@@ -6887,7 +6887,7 @@ internal class StateFieldInstance : Form
 			}
 
 			editContext.NewPath = Path.Combine(fileInfo.DirectoryName, editContext.RequestedFileName);
-			DatabaseMapper.MoveFileAllowingCaseOnlyRename(editContext.OriginalPath, editContext.NewPath);
+			PathFileUtilities.MoveFileAllowingCaseOnlyRename(editContext.OriginalPath, editContext.NewPath);
 			row.FilePath = editContext.NewPath;
 			InvalidateFileRow(row);
 			FileSettings.UpdateForAnyFile(editContext.OriginalPath, editContext.NewPath);

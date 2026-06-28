@@ -78,7 +78,7 @@ internal class CombinedTagSearchDialog : Form
 			CoverDownloadFile coverDownload = new CoverDownloadFile
 			{
 				LoadTask = this,
-				LocalCoverPath = Request.CoverResult.LocalCoverPath ?? DatabaseMapper.GetPictureCacheDirectory() + TextUtilities.ComputeMd5HashString(Request.CoverResult.CoverUrl, "UTF-8").Replace("-", ""),
+				LocalCoverPath = Request.CoverResult.LocalCoverPath ?? PathFileUtilities.GetPictureCacheDirectory() + TextUtilities.ComputeMd5HashString(Request.CoverResult.CoverUrl, "UTF-8").Replace("-", ""),
 				DownloadedBytes = 0L
 			};
 			Request.CoverResult.LocalCoverPath = coverDownload.LocalCoverPath;
@@ -595,7 +595,7 @@ internal class CombinedTagSearchDialog : Form
 		{
 			selectedCoverPath = GetSelectedTrackResult().Cover?.LocalCoverPath;
 		}
-		DatabaseMapper.TrimDirectorySize(DatabaseMapper.GetPictureCacheDirectory(), selectedCoverPath, 31457280L, 62914560L);
+		PathFileUtilities.TrimDirectorySize(PathFileUtilities.GetPictureCacheDirectory(), selectedCoverPath, 31457280L, 62914560L);
 	}
 
 	private void UpdateSearchDialogLayout()
@@ -1156,7 +1156,7 @@ internal class CombinedTagSearchDialog : Form
 	private static void OpenCoverImage(ConfigDescriptorState.PictureData pictureData)
 	{
 		string extension = DatabaseMapper.GetImageExtensionForMimeType(pictureData.MimeType, "");
-		string tempCoverPath = DatabaseMapper.GetPictureCacheDirectory() + "tempcover" + extension;
+		string tempCoverPath = PathFileUtilities.GetPictureCacheDirectory() + "tempcover" + extension;
 		File.WriteAllBytes(tempCoverPath, pictureData.ImageBytes);
 		Process.Start(tempCoverPath);
 	}

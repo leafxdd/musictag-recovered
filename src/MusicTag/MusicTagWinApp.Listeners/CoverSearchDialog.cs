@@ -242,7 +242,7 @@ internal class CoverSearchDialog : Form
 
 		public Image Load()
 		{
-			coverPath = candidate.LocalCoverPath ?? (DatabaseMapper.GetPictureCacheDirectory() + TextUtilities.ComputeMd5HashString(candidate.CoverUrl, "UTF-8").Replace("-", ""));
+			coverPath = candidate.LocalCoverPath ?? (PathFileUtilities.GetPictureCacheDirectory() + TextUtilities.ComputeMd5HashString(candidate.CoverUrl, "UTF-8").Replace("-", ""));
 			candidate.LocalCoverPath = coverPath;
 
 			if (!TryReserveCoverPath())
@@ -343,7 +343,7 @@ internal class CoverSearchDialog : Form
 	private static void OpenCoverImage(ConfigDescriptorState.PictureData pictureData)
 	{
 		string fileExtension = DatabaseMapper.GetImageExtensionForMimeType(pictureData.MimeType, "");
-		string tempCoverPath = DatabaseMapper.GetPictureCacheDirectory() + "tempcover" + fileExtension;
+		string tempCoverPath = PathFileUtilities.GetPictureCacheDirectory() + "tempcover" + fileExtension;
 		File.WriteAllBytes(tempCoverPath, pictureData.ImageBytes);
 		Process.Start(tempCoverPath);
 	}
@@ -515,7 +515,7 @@ internal class CoverSearchDialog : Form
 		{
 			preservedCoverPath = GetSelectedCandidate().LocalCoverPath;
 		}
-		DatabaseMapper.TrimDirectorySize(DatabaseMapper.GetPictureCacheDirectory(), preservedCoverPath, 31457280L, 62914560L);
+		PathFileUtilities.TrimDirectorySize(PathFileUtilities.GetPictureCacheDirectory(), preservedCoverPath, 31457280L, 62914560L);
 	}
 
 	private void LayoutSearchDialog()

@@ -348,7 +348,7 @@ internal class PictureFromTagsDialog : Form
 	private static void OpenCoverImage(ConfigDescriptorState.PictureData pictureData)
 	{
 		string extension = DatabaseMapper.GetImageExtensionForMimeType(pictureData.MimeType, "");
-		string tempCoverPath = DatabaseMapper.GetPictureCacheDirectory() + "tempcover" + extension;
+		string tempCoverPath = PathFileUtilities.GetPictureCacheDirectory() + "tempcover" + extension;
 		File.WriteAllBytes(tempCoverPath, pictureData.ImageBytes);
 		Process.Start(tempCoverPath);
 	}

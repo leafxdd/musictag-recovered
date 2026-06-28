@@ -13,7 +13,6 @@ using System.Windows.Forms;
 using MusicTag.Readers;
 using MusicTag.Schemes;
 using MusicTag.Services;
-using MusicTag.States;
 using MusicTagWinApp.Containers;
 using MusicTagWinApp.Properties;
 
@@ -122,90 +121,9 @@ internal static class DatabaseMapper
 		return ImageCodecInfo.GetImageDecoders().First(decoder => decoder.FormatID == formatId);
 	}
 
-	public static void DeleteOldestFilesUpToSize(string directoryPath, string preservedPath, long bytesToDelete)
-	{
-		try
-		{
-			List<string> filePaths = Directory.GetFiles(directoryPath).ToList();
-			filePaths.Sort(CompareFileLastWriteTime);
-			string preservedFullPath = !string.IsNullOrWhiteSpace(preservedPath) ? Path.GetFullPath(preservedPath) : null;
-			foreach (string filePath in filePaths)
-			{
-				FileInfo fileInfo = new FileInfo(filePath);
-				if (bytesToDelete <= 0L || (preservedFullPath != null && preservedFullPath == fileInfo.FullName))
-				{
-					break;
-				}
-				bytesToDelete -= fileInfo.Length;
-				File.Delete(filePath);
-			}
-		}
-		catch (Exception ex)
-		{
-			Console.WriteLine("delete files " + directoryPath + " error:" + ex.Message);
-		}
-	}
-
-	public static void TrimDirectorySize(string directoryPath, string preservedPath, long targetSizeBytes, long maxSizeBytes)
-	{
-		try
-		{
-			long totalSize = 0L;
-			foreach (string fileName in Directory.GetFiles(directoryPath))
-			{
-				totalSize += new FileInfo(fileName).Length;
-			}
-			if (totalSize > maxSizeBytes)
-			{
-				long bytesToDelete = (long)Math.Floor((double)(totalSize - targetSizeBytes) / (double)targetSizeBytes) * targetSizeBytes;
-				DeleteOldestFilesUpToSize(directoryPath, preservedPath, bytesToDelete);
-			}
-		}
-		catch (Exception ex)
-		{
-			Console.WriteLine("deletefiles " + directoryPath + " fail, error:" + ex.Message);
-		}
-	}
-
-	private static int CompareFileLastWriteTime(string leftPath, string rightPath)
-	{
-		DateTime leftLastWriteTime = new FileInfo(leftPath).LastWriteTime;
-		DateTime rightLastWriteTime = new FileInfo(rightPath).LastWriteTime;
-		return leftLastWriteTime.CompareTo(rightLastWriteTime);
-	}
-
-	public static string EnsureDirectoryExists(string directoryPath)
-	{
-		if (!Directory.Exists(directoryPath))
-		{
-			Directory.CreateDirectory(directoryPath);
-		}
-		return directoryPath;
-	}
-
-	public static string GetApplicationDirectory()
-	{
-		return Path.GetDirectoryName(Application.ExecutablePath) + "\\";
-	}
-
-	public static string GetPictureCacheDirectory()
-	{
-		return EnsureDirectoryExists(GetApplicationDirectory() + "temp\\PictureCache") + "\\";
-	}
-
-	public static string GetUndoTempDirectory()
-	{
-		return EnsureDirectoryExists(GetApplicationDirectory() + "temp\\Undo") + "\\";
-	}
-
-	public static string GetUndoTempDirectoryPath()
-	{
-		return GetApplicationDirectory() + "temp\\Undo\\";
-	}
-
 	private static string GetLogSubdirectory(string subdirectory)
 	{
-		return EnsureDirectoryExists(GetApplicationDirectory() + "temp\\Log\\" + subdirectory) + "\\";
+		return PathFileUtilities.EnsureDirectoryExists(PathFileUtilities.GetApplicationDirectory() + "temp\\Log\\" + subdirectory) + "\\";
 	}
 
 	public static string GetSaveTagsLogDirectory() => GetLogSubdirectory("SaveTags");
@@ -346,50 +264,6 @@ internal static class DatabaseMapper
 		return "";
 	}
 
-	public static string GetSiblingPathWithExtension(string filePath, string extension)
-	{
-		return Path.GetDirectoryName(filePath) + "\\" + Path.GetFileNameWithoutExtension(filePath) + extension;
-	}
-
-	public static void MoveFileAllowingCaseOnlyRename(string sourcePath, string destinationPath)
-	{
-		if (string.Equals(sourcePath, destinationPath, StringComparison.OrdinalIgnoreCase) && !string.Equals(sourcePath, destinationPath, StringComparison.Ordinal))
-		{
-			string destinationDirectory = Path.GetDirectoryName(destinationPath);
-			if (string.IsNullOrWhiteSpace(destinationDirectory))
-			{
-				// 拒绝相对路径:否则临时文件会落到当前工作目录而非源文件所在目录。
-				throw new ArgumentException("Case-only rename requires an absolute destination path.", nameof(destinationPath));
-			}
-			string tempPath;
-			do
-			{
-				tempPath = Path.Combine(destinationDirectory, Path.GetRandomFileName());
-			}
-			while (File.Exists(tempPath));
-
-			File.Move(sourcePath, tempPath);
-			try
-			{
-				File.Move(tempPath, destinationPath);
-			}
-			catch
-			{
-				// 第二步失败时把文件回滚到原名,避免遗留为随机临时名导致原文件名永久丢失。
-				try
-				{
-					File.Move(tempPath, sourcePath);
-				}
-				catch
-				{
-				}
-				throw;
-			}
-			return;
-		}
-
-		File.Move(sourcePath, destinationPath);
-	}
 	
 	public static string FindExistingSiblingImageFile(string filePath)
 	{
@@ -397,7 +271,7 @@ internal static class DatabaseMapper
 				foreach (var value in imageMimeMappings.Values)
 		{
 			string item = value.ext;
-			text = GetSiblingPathWithExtension(filePath, item);
+			text = PathFileUtilities.GetSiblingPathWithExtension(filePath, item);
 			if (File.Exists(text))
 			{
 				return text;
@@ -465,103 +339,6 @@ internal static class DatabaseMapper
 	public static void SetTextBoxCueBanner(Control control, string text)
 	{
 		NativeMethods.SendStringMessage(control.Handle, 5377, IntPtr.Zero, text);
-	}
-
-	public static string GetLyricSaveDirectory(string audioFilePath)
-	{
-		string text = Settings.Default.SaveLrcDirectory.Trim();
-		if (!string.IsNullOrWhiteSpace(text) && Directory.Exists(text))
-		{
-			return text;
-		}
-		return Path.GetDirectoryName(audioFilePath);
-	}
-
-	public static string GetLyricSaveDirectoryDisplayName()
-	{
-		string configuredDirectory = Settings.Default.SaveLrcDirectory.Trim();
-		if (!string.IsNullOrWhiteSpace(configuredDirectory) && Directory.Exists(configuredDirectory))
-		{
-			return configuredDirectory;
-		}
-		return Resources.Msg_TheLocalDir;
-	}
-
-	public static string BuildLyricFileName(string audioFilePath, ConfigDescriptorState tagState)
-	{
-		string saveLrcFilenameFormat = Settings.Default.SaveLrcFilenameFormat;
-		if (saveLrcFilenameFormat == "Title_Artist")
-		{
-			if (tagState["title"] is string title && !string.IsNullOrWhiteSpace(title) && tagState["artist"] is string artist && !string.IsNullOrWhiteSpace(artist))
-			{
-				return title + " - " + artist + ".lrc";
-			}
-			return null;
-		}
-		if (saveLrcFilenameFormat == "Artist_Title")
-		{
-			if (tagState["title"] is string title && !string.IsNullOrWhiteSpace(title) && tagState["artist"] is string artist && !string.IsNullOrWhiteSpace(artist))
-			{
-				return artist + " - " + title + ".lrc";
-			}
-			return null;
-		}
-		return Path.GetFileNameWithoutExtension(audioFilePath) + ".lrc";
-	}
-
-	public static string BuildLyricSavePath(string audioFilePath, ConfigDescriptorState tagState)
-	{
-		string text;
-		if ((text = BuildLyricFileName(audioFilePath, tagState)) == null)
-		{
-			return null;
-		}
-			return GetLyricSaveDirectory(audioFilePath) + "\\" + text;
-	}
-
-	public static string BuildLyricSavePath(string audioFilePath, string title, string artist)
-	{
-		ConfigDescriptorState configDescriptorState = new ConfigDescriptorState();
-		configDescriptorState["title"] = title;
-		configDescriptorState["artist"] = artist;
-		return BuildLyricSavePath(audioFilePath, configDescriptorState);
-	}
-
-	public static string FindExistingLyricFile(string audioFilePath, ConfigDescriptorState tagState, bool allowLocalFallback)
-	{
-			string proxy = BuildLyricSavePath(audioFilePath, tagState);
-		if (proxy != null && File.Exists(proxy))
-		{
-			return proxy;
-		}
-		if (allowLocalFallback && !string.IsNullOrWhiteSpace(Settings.Default.SaveLrcDirectory))
-		{
-				string text = GetSiblingPathWithExtension(audioFilePath, ".lrc");
-			if (text != null && File.Exists(text))
-			{
-				return text;
-			}
-		}
-		return null;
-	}
-
-	public static void ClearReadOnlyIfAllowed(FileInfo fileInfo, bool allowChange)
-	{
-		if (!allowChange)
-		{
-			return;
-		}
-		try
-		{
-			if (fileInfo.Exists && fileInfo.IsReadOnly)
-			{
-					fileInfo.IsReadOnly = false;
-			}
-		}
-			catch (Exception exception)
-			{
-				Console.WriteLine("CancelFileReadonly " + exception.GetMessageChain());
-			}
 	}
 
 	public static SizeF GetSystemDpi()

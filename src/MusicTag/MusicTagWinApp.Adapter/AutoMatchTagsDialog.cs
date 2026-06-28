@@ -136,7 +136,7 @@ internal class AutoMatchTagsDialog : Form
 			string newTempPath;
 			while (true)
 			{
-				newTempPath = DatabaseMapper.GetPictureCacheDirectory() + "tempCover" + ((suffix <= 0) ? "" : suffix.ToString());
+				newTempPath = PathFileUtilities.GetPictureCacheDirectory() + "tempCover" + ((suffix <= 0) ? "" : suffix.ToString());
 				if (!leasesByPath.ContainsKey(newTempPath))
 				{
 					break;
@@ -259,7 +259,7 @@ internal class AutoMatchTagsDialog : Form
 						worker.shouldSaveLyricToTag = true;
 					}
 				}
-				if ((lyricSetting.writeMode == "SaveToFile" || lyricSetting.writeMode == "SaveToTagAndFile") && (DatabaseMapper.FindExistingLyricFile(filePath, textTagUpdateFilter.loadedTag.tagFile, allowLocalFallback: false) == null || lyricSetting.overwrite))
+				if ((lyricSetting.writeMode == "SaveToFile" || lyricSetting.writeMode == "SaveToTagAndFile") && (PathFileUtilities.FindExistingLyricFile(filePath, textTagUpdateFilter.loadedTag.tagFile, allowLocalFallback: false) == null || lyricSetting.overwrite))
 				{
 					worker.shouldSaveLyricToFile = true;
 				}
@@ -921,7 +921,7 @@ internal class AutoMatchTagsDialog : Form
 		private string SaveTagsToFile(ConfigDescriptorState.PictureData coverPicture)
 		{
 			FileInfo fileInfo = new FileInfo(GetCurrentFilePath());
-			DatabaseMapper.ClearReadOnlyIfAllowed(fileInfo, CanCancelReadonlyFile());
+			PathFileUtilities.ClearReadOnlyIfAllowed(fileInfo, CanCancelReadonlyFile());
 			DateTime lastWriteTime = fileInfo.LastWriteTime;
 			string saveError;
 			TagSaveContext tagSaveContext = new TagSaveContext();
@@ -994,7 +994,7 @@ internal class AutoMatchTagsDialog : Form
 			{
 				string imageExtension = DatabaseMapper.GetImageExtensionForMimeType(picture.MimeType, ".jpg");
 				string existingCoverPath = DatabaseMapper.FindExistingSiblingImageFile(GetCurrentFilePath());
-				string newCoverPath = DatabaseMapper.GetSiblingPathWithExtension(GetCurrentFilePath(), imageExtension);
+				string newCoverPath = PathFileUtilities.GetSiblingPathWithExtension(GetCurrentFilePath(), imageExtension);
 				bool shouldDeleteOriginalCover = existingCoverPath != null && newCoverPath != existingCoverPath;
 				File.WriteAllBytes(newCoverPath, picture.ImageBytes);
 				if (shouldDeleteOriginalCover)
@@ -1013,7 +1013,7 @@ internal class AutoMatchTagsDialog : Form
 		{
 			try
 			{
-				File.WriteAllText(DatabaseMapper.BuildLyricSavePath(GetCurrentFilePath(), lyricTitle, lyricArtist), downloadedLyricText, Encoding.GetEncoding(Settings.Default.SaveLrcFileDefaultEncoding));
+				File.WriteAllText(PathFileUtilities.BuildLyricSavePath(GetCurrentFilePath(), lyricTitle, lyricArtist), downloadedLyricText, Encoding.GetEncoding(Settings.Default.SaveLrcFileDefaultEncoding));
 				return null;
 			}
 			catch (Exception ex)

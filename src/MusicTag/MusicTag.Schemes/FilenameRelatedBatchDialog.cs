@@ -237,7 +237,7 @@ internal class FilenameRelatedBatchDialog : Form
 									string sourceImagePath = null;
 									if (Owner.renameRelatedFiles)
 									{
-										sourceLrcPath = DatabaseMapper.GetSiblingPathWithExtension(originalPath, ".lrc");
+										sourceLrcPath = PathFileUtilities.GetSiblingPathWithExtension(originalPath, ".lrc");
 										if (!File.Exists(sourceLrcPath))
 										{
 											sourceLrcPath = null;
@@ -261,7 +261,7 @@ internal class FilenameRelatedBatchDialog : Form
 									string destinationLrcPath = null;
 									if (sourceLrcPath != null)
 									{
-										destinationLrcPath = DatabaseMapper.GetSiblingPathWithExtension(destinationAudioPath, ".lrc");
+										destinationLrcPath = PathFileUtilities.GetSiblingPathWithExtension(destinationAudioPath, ".lrc");
 										if (File.Exists(destinationLrcPath) && !string.Equals(destinationLrcPath, sourceLrcPath, StringComparison.OrdinalIgnoreCase))
 										{
 											destinationLrcPath = null;
@@ -270,7 +270,7 @@ internal class FilenameRelatedBatchDialog : Form
 									string destinationImagePath = null;
 									if (sourceImagePath != null)
 									{
-										destinationImagePath = DatabaseMapper.GetSiblingPathWithExtension(destinationAudioPath, Path.GetExtension(sourceImagePath));
+										destinationImagePath = PathFileUtilities.GetSiblingPathWithExtension(destinationAudioPath, Path.GetExtension(sourceImagePath));
 										if (File.Exists(destinationImagePath) && !string.Equals(destinationImagePath, sourceImagePath, StringComparison.OrdinalIgnoreCase))
 										{
 											destinationImagePath = null;
@@ -281,7 +281,7 @@ internal class FilenameRelatedBatchDialog : Form
 									{
 										try
 										{
-											DatabaseMapper.MoveFileAllowingCaseOnlyRename(originalPath, destinationAudioPath);
+											PathFileUtilities.MoveFileAllowingCaseOnlyRename(originalPath, destinationAudioPath);
 											// 音频本体已移动到新路径,内部状态必须立即无条件回写,
 											// 否则列表/历史/撤销会指向已不存在的旧路径(文件"失踪")。
 											RenameItems[index] = (path: originalPath, _: destinationAudioPath, lvIndex: listViewIndex);
@@ -294,7 +294,7 @@ internal class FilenameRelatedBatchDialog : Form
 											{
 												try
 												{
-													DatabaseMapper.MoveFileAllowingCaseOnlyRename(sourceLrcPath, destinationLrcPath);
+													PathFileUtilities.MoveFileAllowingCaseOnlyRename(sourceLrcPath, destinationLrcPath);
 												}
 												catch (Exception lrcEx)
 												{
@@ -305,7 +305,7 @@ internal class FilenameRelatedBatchDialog : Form
 											{
 												try
 												{
-													DatabaseMapper.MoveFileAllowingCaseOnlyRename(sourceImagePath, destinationImagePath);
+													PathFileUtilities.MoveFileAllowingCaseOnlyRename(sourceImagePath, destinationImagePath);
 												}
 												catch (Exception imageEx)
 												{
@@ -416,7 +416,7 @@ internal class FilenameRelatedBatchDialog : Form
 					ConfigDescriptorState tagState = null;
 					try
 					{
-						DatabaseMapper.ClearReadOnlyIfAllowed(fileInfo, CanCancelReadOnly);
+						PathFileUtilities.ClearReadOnlyIfAllowed(fileInfo, CanCancelReadOnly);
 						lastWriteTime = fileInfo.LastWriteTime;
 						tagState = new ConfigDescriptorState(filePath);
 						if (tagState.IsLoadedSuccessfully())

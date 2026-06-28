@@ -347,10 +347,10 @@ internal class LyricEditorDialog : Form
 			FileInfo fileInfo = new FileInfo(GetSearchContext().FilePath);
 			if (fileInfo.Exists)
 			{
-				lyricSaveDialog.InitialDirectory = DatabaseMapper.GetLyricSaveDirectory(fileInfo.FullName);
+				lyricSaveDialog.InitialDirectory = PathFileUtilities.GetLyricSaveDirectory(fileInfo.FullName);
 			}
 
-			lyricSaveDialog.FileName = DatabaseMapper.BuildLyricFileName(fileInfo.FullName, GetSearchContext().TagState);
+			lyricSaveDialog.FileName = PathFileUtilities.BuildLyricFileName(fileInfo.FullName, GetSearchContext().TagState);
 			string defaultSavePath = lyricSaveDialog.InitialDirectory + "\\" + lyricSaveDialog.FileName;
 			if (!File.Exists(defaultSavePath))
 			{
@@ -417,7 +417,7 @@ internal class LyricEditorDialog : Form
 
 	public static string ImportLrcText(string audioFilePath, ConfigDescriptorState tagState, OpenFileDialog openFileDialog)
 	{
-		string lrcFilePath = DatabaseMapper.FindExistingLyricFile(audioFilePath, tagState, allowLocalFallback: true);
+		string lrcFilePath = PathFileUtilities.FindExistingLyricFile(audioFilePath, tagState, allowLocalFallback: true);
 		if ((lrcFilePath == null || !File.Exists(lrcFilePath)) && openFileDialog != null)
 		{
 			openFileDialog.Filter = "lrc file (*.lrc)|*.lrc";

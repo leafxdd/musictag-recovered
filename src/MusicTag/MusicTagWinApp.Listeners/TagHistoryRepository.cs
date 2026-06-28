@@ -39,7 +39,7 @@ internal class TagHistoryRepository : IDisposable
 		}
 	}
 
-	private static readonly string databasePath = DatabaseMapper.GetApplicationDirectory() + Assembly.GetExecutingAssembly().GetName().Name + ".db";
+	private static readonly string databasePath = PathFileUtilities.GetApplicationDirectory() + Assembly.GetExecutingAssembly().GetName().Name + ".db";
 
 	private const int CurrentDatabaseVersion = 1;
 
@@ -470,7 +470,7 @@ internal class TagHistoryRepository : IDisposable
 			{
 				if (undoPayloadByteCount + lyrics.Length * 2 > MaxInMemoryUndoPayloadBytes)
 				{
-					string lyricsPath = $"{DatabaseMapper.GetUndoTempDirectory()}{count}.lrc";
+					string lyricsPath = $"{PathFileUtilities.GetUndoTempDirectory()}{count}.lrc";
 					File.WriteAllText(lyricsPath, lyrics);
 					tags.RemoveRawValue("lyrics");
 					tags["lyrics_path"] = lyricsPath;
@@ -494,7 +494,7 @@ internal class TagHistoryRepository : IDisposable
 					for (int i = 0; i < pictures.Count; i++)
 					{
 						ConfigDescriptorState.PictureData picture = pictures[i];
-						string picturePath = string.Format("{0}{1}-{2}{3}", DatabaseMapper.GetUndoTempDirectory(), count, i, DatabaseMapper.GetImageExtensionForMimeType(picture.MimeType, ".jpg"));
+						string picturePath = string.Format("{0}{1}-{2}{3}", PathFileUtilities.GetUndoTempDirectory(), count, i, DatabaseMapper.GetImageExtensionForMimeType(picture.MimeType, ".jpg"));
 						File.WriteAllBytes(picturePath, picture.ImageBytes);
 						picture.ImageBytes = null;
 						picturePaths.Add(picturePath);
@@ -553,9 +553,9 @@ internal class TagHistoryRepository : IDisposable
 		{
 			bool shouldCollectGarbage = undoTags.Any() || renameUndoOperations.Any();
 			undoTags.Clear();
-			if (Directory.Exists(DatabaseMapper.GetUndoTempDirectoryPath()))
+			if (Directory.Exists(PathFileUtilities.GetUndoTempDirectoryPath()))
 			{
-				Directory.GetFiles(DatabaseMapper.GetUndoTempDirectoryPath()).ForEachItem(DeleteUndoTempFile);
+				Directory.GetFiles(PathFileUtilities.GetUndoTempDirectoryPath()).ForEachItem(DeleteUndoTempFile);
 			}
 			renameUndoOperations.Clear();
 			undoPayloadByteCount = 0L;

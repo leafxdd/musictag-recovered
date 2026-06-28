@@ -7,7 +7,7 @@ namespace MusicTagWinApp;
 
 	internal class AppSettingData
 	{
-		public static readonly string AppSettingDataPath = DatabaseMapper.GetApplicationDirectory() + Assembly.GetExecutingAssembly().GetName().Name + ".dat";
+		public static readonly string AppSettingDataPath = PathFileUtilities.GetApplicationDirectory() + Assembly.GetExecutingAssembly().GetName().Name + ".dat";
 
 		public ListViewFileSetting ListViewFileSetting { get; set; }
 
