@@ -164,7 +164,7 @@ internal static class Program
 	{
 		lock (exceptionLogLock)
 		{
-			DatabaseMapper.WriteExceptionDetails(exception, exceptionSource);
+			LogService.WriteExceptionDetails(exception, exceptionSource);
 		}
 	}
 }

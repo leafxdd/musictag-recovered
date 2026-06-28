@@ -630,7 +630,7 @@ internal class StateFieldInstance : Form
 	private void ReportAsyncOperationError(System.Exception exception, string context)
 	{
 		System.Exception displayException = UnwrapAsyncOperationException(exception);
-		DatabaseMapper.WriteExceptionDetails(displayException, context);
+		LogService.WriteExceptionDetails(displayException, context);
 		DatabaseMapper.ShowErrorMessage(displayException.GetMessageChain());
 	}
 
@@ -1218,7 +1218,7 @@ internal class StateFieldInstance : Form
 		internal void ReportFailure(string message)
 		{
 			string text = message ?? Resources.Msg_SaveFail;
-			DatabaseMapper.WriteRenameLog(CurrentPath + ": " + text);
+			LogService.WriteRenameLog(CurrentPath + ": " + text);
 			batchContext.messageLog.AddLine(batchContext.currentFile.Name);
 			batchContext.messageLog.AddLine(text);
 		}
@@ -1278,7 +1278,7 @@ internal class StateFieldInstance : Form
 				CompressPictures(pictures, useRestoreLimits: false);
 				if (pictures.Exists(HasPictureProcessingFailure))
 				{
-					DatabaseMapper.WriteSaveTagsLog(Resources.Msg_CompressPictureFail);
+					LogService.WriteSaveTagsLog(Resources.Msg_CompressPictureFail);
 					messageLog.AddLine(Resources.Msg_CompressPictureFail);
 					return;
 				}
@@ -1434,7 +1434,7 @@ internal class StateFieldInstance : Form
 					}
 					catch (System.Exception ex)
 					{
-						DatabaseMapper.WriteSaveTagsLog(fileContext.filePath + ": " + ex.Message);
+						LogService.WriteSaveTagsLog(fileContext.filePath + ": " + ex.Message);
 						messageLog.AddLine(currentFile.Name);
 						messageLog.AddLine(ex.Message);
 						failedCount++;
@@ -1454,7 +1454,7 @@ internal class StateFieldInstance : Form
 						}
 						catch (System.Exception ex2)
 						{
-							DatabaseMapper.WriteSaveTagsLog(fileContext.filePath + ": " + ex2.Message);
+							LogService.WriteSaveTagsLog(fileContext.filePath + ": " + ex2.Message);
 							messageLog.AddLine(currentFile.Name);
 							messageLog.AddLine(ex2.Message);
 						}
@@ -1553,7 +1553,7 @@ internal class StateFieldInstance : Form
 			{
 				text = tagState.GetLoadError();
 			}
-			DatabaseMapper.WriteSaveTagsLog(fileContext.filePath + ": " + text);
+			LogService.WriteSaveTagsLog(fileContext.filePath + ": " + text);
 			fileContext.batchContext.messageLog.AddLine(fileContext.batchContext.currentFile.Name);
 			fileContext.batchContext.messageLog.AddLine(text);
 		}
@@ -1664,7 +1664,7 @@ internal class StateFieldInstance : Form
 						}
 						catch (System.Exception ex)
 						{
-							DatabaseMapper.WriteSaveTagsLog(fileContext.filePath + ": " + ex.Message);
+							LogService.WriteSaveTagsLog(fileContext.filePath + ": " + ex.Message);
 							messageLog.AddLine(currentFile.Name);
 							messageLog.AddLine(ex.Message);
 						}
@@ -1732,7 +1732,7 @@ internal class StateFieldInstance : Form
 				errorMessage = saveError;
 			}
 
-			DatabaseMapper.WriteSaveTagsLog(fileContext.filePath + ": " + errorMessage);
+			LogService.WriteSaveTagsLog(fileContext.filePath + ": " + errorMessage);
 			fileContext.taskContext.messageLog.AddLine(fileContext.taskContext.currentFile.Name);
 			fileContext.taskContext.messageLog.AddLine(errorMessage);
 		}
@@ -1848,7 +1848,7 @@ internal class StateFieldInstance : Form
 
 		internal void RecordError(string errorMessage)
 		{
-			DatabaseMapper.WriteSaveTagsLog(CurrentPath + ": " + errorMessage);
+			LogService.WriteSaveTagsLog(CurrentPath + ": " + errorMessage);
 			TaskContext.errorLog.AddLine(TaskContext.currentFile.Name);
 			TaskContext.errorLog.AddLine(errorMessage);
 		}
@@ -1962,7 +1962,7 @@ internal class StateFieldInstance : Form
 					}
 					catch (System.Exception ex)
 					{
-						DatabaseMapper.WriteClearTagsLog(tagSaveFileContext.FilePath + ": " + ex.Message);
+						LogService.WriteClearTagsLog(tagSaveFileContext.FilePath + ": " + ex.Message);
 						errorLog.AddLine(currentFile.Name);
 						errorLog.AddLine(ex.Message);
 						failedCount++;
@@ -1983,7 +1983,7 @@ internal class StateFieldInstance : Form
 						}
 						catch (System.Exception ex)
 						{
-							DatabaseMapper.WriteClearTagsLog(tagSaveFileContext.FilePath + ": " + ex.Message);
+							LogService.WriteClearTagsLog(tagSaveFileContext.FilePath + ": " + ex.Message);
 							errorLog.AddLine(currentFile.Name);
 							errorLog.AddLine(ex.Message);
 						}
@@ -2019,7 +2019,7 @@ internal class StateFieldInstance : Form
 			{
 				message = fallbackMessage ?? Resources.Msg_SaveFail;
 			}
-			DatabaseMapper.WriteClearTagsLog(FileContext.FilePath + ": " + message);
+			LogService.WriteClearTagsLog(FileContext.FilePath + ": " + message);
 			FileContext.Owner.errorLog.AddLine(FileContext.Owner.currentFile.Name);
 			FileContext.Owner.errorLog.AddLine(message);
 		}
@@ -2232,7 +2232,7 @@ internal class StateFieldInstance : Form
 		internal void RecordError(string errorMessage)
 		{
 			string message = string.IsNullOrWhiteSpace(errorMessage) ? Resources.Msg_SaveFail : errorMessage;
-			DatabaseMapper.WriteSaveLyricsLog(filePath + ": " + message);
+			LogService.WriteSaveLyricsLog(filePath + ": " + message);
 			taskContext.errorLog.AddLine(taskContext.currentFile.Name);
 			taskContext.errorLog.AddLine(message);
 		}
@@ -2357,7 +2357,7 @@ internal class StateFieldInstance : Form
 		internal void RecordError(string errorMessage)
 		{
 			string text = string.IsNullOrWhiteSpace(errorMessage) ? Resources.Msg_SaveFail : errorMessage;
-			DatabaseMapper.WriteSaveCoversLog(FilePath + ": " + text);
+			LogService.WriteSaveCoversLog(FilePath + ": " + text);
 			TaskContext.errorLog.AddLine(TaskContext.currentFile.Name);
 			TaskContext.errorLog.AddLine(text);
 		}
@@ -6683,7 +6683,7 @@ internal class StateFieldInstance : Form
 			catch (System.Exception ex)
 			{
 				// 配置无法读取时落盘日志便于诊断(WinForms 无控制台,Console 输出不可见)。
-				DatabaseMapper.WriteExceptionDetails(ex, "StateFieldInstance.LoadAppSettingData");
+				LogService.WriteExceptionDetails(ex, "StateFieldInstance.LoadAppSettingData");
 				if (ex is Newtonsoft.Json.JsonException)
 				{
 					// 格式不兼容(如旧版本二进制 .dat 用新版 JSON 解析失败)无法自行恢复:
@@ -6747,7 +6747,7 @@ internal class StateFieldInstance : Form
 		}
 		catch (System.Exception ex)
 		{
-			DatabaseMapper.WriteExceptionDetails(ex, "StateFieldInstance.StartSaveAppSettingData");
+			LogService.WriteExceptionDetails(ex, "StateFieldInstance.StartSaveAppSettingData");
 		}
 		finally
 		{

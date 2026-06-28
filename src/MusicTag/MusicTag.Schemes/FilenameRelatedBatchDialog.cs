@@ -184,7 +184,7 @@ internal class FilenameRelatedBatchDialog : Form
 		internal void ReportRenameFailure(string path, string message)
 		{
 			string failureMessage = string.IsNullOrWhiteSpace(message) ? Resources.Msg_SaveFail : message;
-			DatabaseMapper.WriteRenameLog(path + ": " + failureMessage);
+			LogService.WriteRenameLog(path + ": " + failureMessage);
 			Owner.batchMessages.AddLine(Path.GetFileName(path));
 			Owner.batchMessages.AddLine(failureMessage);
 		}
@@ -393,7 +393,7 @@ internal class FilenameRelatedBatchDialog : Form
 		internal void ReportTagSaveFailure(string path, string message)
 		{
 			string failureMessage = string.IsNullOrWhiteSpace(message) ? Resources.Msg_SaveFail : message;
-			DatabaseMapper.WriteSaveTagsLog(path + ": " + failureMessage);
+			LogService.WriteSaveTagsLog(path + ": " + failureMessage);
 			Owner.batchMessages.AddLine(Path.GetFileName(path));
 			Owner.batchMessages.AddLine(failureMessage);
 		}

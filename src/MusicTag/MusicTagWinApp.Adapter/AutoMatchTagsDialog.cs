@@ -858,7 +858,7 @@ internal class AutoMatchTagsDialog : Form
 		private void RecordAutoMatchError(string errorMessage)
 		{
 			string message = string.IsNullOrWhiteSpace(errorMessage) ? Resources.Msg_SaveFail : errorMessage;
-			DatabaseMapper.WriteAutoMatchLog(GetCurrentFilePath() + ": " + message);
+			LogService.WriteAutoMatchLog(GetCurrentFilePath() + ": " + message);
 			GetOwnerDialog().autoMatchLog.AddLine(Path.GetFileName(GetCurrentFilePath()));
 			GetOwnerDialog().autoMatchLog.AddLine(message);
 		}
@@ -1818,7 +1818,7 @@ internal class AutoMatchTagsDialog : Form
 		}
 		catch (Exception ex)
 		{
-			DatabaseMapper.WriteAutoMatchLog(ex.Message);
+			LogService.WriteAutoMatchLog(ex.Message);
 			autoMatchLog.AddLine(ex.Message);
 			result = (autoMatchLog.ToString(), true);
 		}
