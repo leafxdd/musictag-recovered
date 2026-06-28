@@ -260,12 +260,7 @@ namespace MusicTagWinApp.Roles;
 				string artistRankedCandidateAlbum = NormalizeForMatch(artistRankedCandidate.Album);
 				if (ContainsEitherWay(artistRankedCandidateCompositeTitle, targetTitle) && artistRankedCandidateAlbum.Any() && targetAlbum.Any() && ContainsEitherWay(artistRankedCandidateAlbum, targetAlbum))
 				{
-					TrackSearchResult candidateToPromoteByAlbum = (IsCandidateInstrumentalVariant(targetTitle, artistRankedCandidateTitle) ? FindNonInstrumentalBaseTrack(results, artistRankedCandidate) : artistRankedCandidate);
-					if (candidateToPromoteByAlbum == null)
-					{
-						candidateToPromoteByAlbum = artistRankedCandidate;
-					}
-					MoveTrackToFront(results, candidateToPromoteByAlbum);
+					MoveTrackToFront(results, ResolveNonInstrumentalCandidate(results, artistRankedCandidate, artistRankedCandidateTitle, targetTitle) ?? artistRankedCandidate);
 					promoted = true;
 					break;
 				}
@@ -281,12 +276,7 @@ namespace MusicTagWinApp.Roles;
 					string titleCandidateTitle = NormalizeForMatch(titleCandidate.Title);
 					if (ContainsEitherWay(NormalizeForMatch(DatabaseMapper.CoalesceNonBlank(titleCandidate.OriginalTitle, titleCandidate.Title)), targetTitle))
 					{
-						TrackSearchResult candidateToPromoteByTitle = (IsCandidateInstrumentalVariant(targetTitle, titleCandidateTitle) ? FindNonInstrumentalBaseTrack(results, titleCandidate) : titleCandidate);
-						if (candidateToPromoteByTitle == null)
-						{
-							candidateToPromoteByTitle = titleCandidate;
-						}
-						MoveTrackToFront(results, candidateToPromoteByTitle);
+						MoveTrackToFront(results, ResolveNonInstrumentalCandidate(results, titleCandidate, titleCandidateTitle, targetTitle) ?? titleCandidate);
 						promoted = true;
 						break;
 					}
@@ -343,12 +333,7 @@ namespace MusicTagWinApp.Roles;
 					string artistAlbumCandidateAlbum = NormalizeForMatch(artistAlbumCandidate.Album);
 					if (artistAlbumCandidateAlbum.Any() && ContainsEitherWay(artistAlbumCandidateCompositeTitle, targetTitle) && ContainsEitherWay(artistAlbumCandidateAlbum, targetAlbum))
 					{
-						TrackSearchResult candidateToPromoteByArtistAlbum = (IsCandidateInstrumentalVariant(targetTitle, artistAlbumCandidateTitle) ? FindNonInstrumentalBaseTrack(results, artistAlbumCandidate) : artistAlbumCandidate);
-						if (candidateToPromoteByArtistAlbum == null)
-						{
-							candidateToPromoteByArtistAlbum = artistAlbumCandidate;
-						}
-						MoveTrackToFront(results, candidateToPromoteByArtistAlbum);
+						MoveTrackToFront(results, ResolveNonInstrumentalCandidate(results, artistAlbumCandidate, artistAlbumCandidateTitle, targetTitle) ?? artistAlbumCandidate);
 						promoted = true;
 						break;
 					}
@@ -365,12 +350,7 @@ namespace MusicTagWinApp.Roles;
 					string primaryCandidateTitle = NormalizeForMatch(primaryCandidate.Title);
 					if (ContainsEitherWay(NormalizeForMatch(DatabaseMapper.CoalesceNonBlank(primaryCandidate.OriginalTitle, primaryCandidate.Title)), targetTitle))
 					{
-						TrackSearchResult candidateToPromoteFromPrimaryList = (IsCandidateInstrumentalVariant(targetTitle, primaryCandidateTitle) ? FindNonInstrumentalBaseTrack(results, primaryCandidate) : primaryCandidate);
-						if (candidateToPromoteFromPrimaryList == null)
-						{
-							candidateToPromoteFromPrimaryList = primaryCandidate;
-						}
-						MoveTrackToFront(results, candidateToPromoteFromPrimaryList);
+						MoveTrackToFront(results, ResolveNonInstrumentalCandidate(results, primaryCandidate, primaryCandidateTitle, targetTitle) ?? primaryCandidate);
 						promoted = true;
 						break;
 					}
@@ -380,12 +360,7 @@ namespace MusicTagWinApp.Roles;
 			if (!promoted && artistRankedBestCandidate != currentBest && artistRankedBestCandidate.ArtistSimilarityScore >= StrongSimilarityThreshold && !ContainsEitherWay(currentBestCompositeTitle, targetTitle) && currentBest.TitleSimilarityScore < StrongSimilarityThreshold)
 			{
 				string artistRankedBestTitle = NormalizeForMatch(artistRankedBestCandidate.Title);
-				TrackSearchResult candidateToPromoteFromArtistRank = (IsCandidateInstrumentalVariant(targetTitle, artistRankedBestTitle) ? FindNonInstrumentalBaseTrack(results, artistRankedBestCandidate) : artistRankedBestCandidate);
-				if (candidateToPromoteFromArtistRank == null)
-				{
-					candidateToPromoteFromArtistRank = artistRankedBestCandidate;
-				}
-				MoveTrackToFront(results, candidateToPromoteFromArtistRank);
+				MoveTrackToFront(results, ResolveNonInstrumentalCandidate(results, artistRankedBestCandidate, artistRankedBestTitle, targetTitle) ?? artistRankedBestCandidate);
 				promoted = true;
 			}
 			bool currentBestAlreadyMatches;
@@ -409,7 +384,7 @@ namespace MusicTagWinApp.Roles;
 						{
 							continue;
 						}
-						TrackSearchResult candidateToPromoteFromAlbumMatch = (IsCandidateInstrumentalVariant(targetTitle, albumMatchCandidateTitle) ? FindNonInstrumentalBaseTrack(results, albumMatchCandidate) : albumMatchCandidate);
+						TrackSearchResult candidateToPromoteFromAlbumMatch = ResolveNonInstrumentalCandidate(results, albumMatchCandidate, albumMatchCandidateTitle, targetTitle);
 						if (candidateToPromoteFromAlbumMatch != null)
 						{
 							if (albumMatchCandidateTitle != currentBestTitle || albumMatchCandidateArtist != currentBestArtist || albumMatchCandidateAlbum != currentBestAlbum)
@@ -443,7 +418,7 @@ namespace MusicTagWinApp.Roles;
 						bool earlyPassArtistIsAcceptable = ContainsEitherWay(earlyPassCandidateArtist, targetArtist) || currentBest.ArtistSimilarityScore < LooseSimilarityThreshold || earlyPassCandidate.ArtistSimilarityScore >= currentBest.ArtistSimilarityScore;
 						if (earlyPassTitleMatchesTarget && (currentBestTitleMatchIsWeak || earlyPassTitleMatchIsStrong) && earlyPassArtistIsAcceptable)
 						{
-							TrackSearchResult candidateToPromoteFromEarlyPass = (IsCandidateInstrumentalVariant(targetTitle, earlyPassCandidateTitle) ? FindNonInstrumentalBaseTrack(results, earlyPassCandidate) : earlyPassCandidate);
+							TrackSearchResult candidateToPromoteFromEarlyPass = ResolveNonInstrumentalCandidate(results, earlyPassCandidate, earlyPassCandidateTitle, targetTitle);
 							if (candidateToPromoteFromEarlyPass != null)
 							{
 								MoveTrackToFront(results, candidateToPromoteFromEarlyPass);
@@ -635,6 +610,17 @@ namespace MusicTagWinApp.Roles;
 			}
 		}
 		return null;
+	}
+
+	// 候选若是伴奏/纯音乐变体,则回溯其非伴奏母版(可能为 null);否则原样返回候选。
+	// 抽取自 PromoteBestMatch 中 7 处重复三元判定:5 处带 "?? 候选" 自兜底,2 处用 != null 守卫。
+	private static TrackSearchResult ResolveNonInstrumentalCandidate(List<TrackSearchResult> results, TrackSearchResult candidate, string candidateNormalizedTitle, string targetTitle)
+	{
+		if (!IsCandidateInstrumentalVariant(targetTitle, candidateNormalizedTitle))
+		{
+			return candidate;
+		}
+		return FindNonInstrumentalBaseTrack(results, candidate);
 	}
 
 	public static void SortByArtistSimilarity(List<TrackSearchResult> tracks)
