@@ -25,83 +25,21 @@ internal class EditableListView : HeaderAwareListView
 		public EmbeddedControlSubItem SubItem;
 	}
 
-	private class DrawableSubItemSortValueComparer : IComparer
+	private class SortableTextComparer : IComparer
 	{
-		private int columnIndex;
+		private readonly Func<object, string> keySelector;
 
-		private SortOrder sortOrder;
+		private readonly SortOrder sortOrder;
 
-		public DrawableSubItemSortValueComparer()
+		public SortableTextComparer(Func<object, string> keySelector, SortOrder sortOrder)
 		{
-			columnIndex = 0;
-			sortOrder = SortOrder.Ascending;
-		}
-
-		public DrawableSubItemSortValueComparer(int columnIndex, SortOrder sortOrder)
-		{
-			this.columnIndex = columnIndex;
+			this.keySelector = keySelector;
 			this.sortOrder = sortOrder;
 		}
 
 		public int Compare(object left, object right)
 		{
-			string leftSortValue = ((DrawableListViewSubItem)((ListViewItem)left).SubItems[columnIndex]).SortValue;
-			string rightSortValue = ((DrawableListViewSubItem)((ListViewItem)right).SubItems[columnIndex]).SortValue;
-			int compareResult = CompareSortableText(leftSortValue, rightSortValue);
-			if (sortOrder == SortOrder.Descending)
-			{
-				compareResult *= -1;
-			}
-			return compareResult;
-		}
-	}
-
-	private class ItemTextComparer : IComparer
-	{
-		private SortOrder sortOrder;
-
-		public ItemTextComparer()
-		{
-			sortOrder = SortOrder.Ascending;
-		}
-
-		public ItemTextComparer(SortOrder sortOrder)
-		{
-			this.sortOrder = sortOrder;
-		}
-
-		public int Compare(object left, object right)
-		{
-			string leftText = ((ListViewItem)left).Text;
-			string rightText = ((ListViewItem)right).Text;
-			int compareResult = CompareSortableText(leftText, rightText);
-			if (sortOrder == SortOrder.Descending)
-			{
-				compareResult *= -1;
-			}
-			return compareResult;
-		}
-	}
-
-	private class AssociatedValueComparer : IComparer
-	{
-		private SortOrder sortOrder;
-
-		public AssociatedValueComparer()
-		{
-			sortOrder = SortOrder.Ascending;
-		}
-
-		public AssociatedValueComparer(SortOrder sortOrder)
-		{
-			this.sortOrder = sortOrder;
-		}
-
-		public int Compare(object left, object right)
-		{
-			string leftValue = ((AssociatedValueListViewItem)left).AssociatedValue;
-			string rightValue = ((AssociatedValueListViewItem)right).AssociatedValue;
-			int compareResult = CompareSortableText(leftValue, rightValue);
+			int compareResult = CompareSortableText(keySelector(left), keySelector(right));
 			if (sortOrder == SortOrder.Descending)
 			{
 				compareResult *= -1;
@@ -485,16 +423,16 @@ internal class EditableListView : HeaderAwareListView
 		{
 			if (base.Items[0].GetType() == typeof(AssociatedValueListViewItem))
 			{
-					base.ListViewItemSorter = new ItemTextComparer(base.Sorting);
+					base.ListViewItemSorter = new SortableTextComparer(item => ((ListViewItem)item).Text, base.Sorting);
 			}
 			else
 			{
-					base.ListViewItemSorter = new AssociatedValueComparer(base.Sorting);
+					base.ListViewItemSorter = new SortableTextComparer(item => ((AssociatedValueListViewItem)item).AssociatedValue, base.Sorting);
 			}
 		}
 		else
 		{
-			base.ListViewItemSorter = new DrawableSubItemSortValueComparer(e.Column, base.Sorting);
+			base.ListViewItemSorter = new SortableTextComparer(item => ((DrawableListViewSubItem)((ListViewItem)item).SubItems[e.Column]).SortValue, base.Sorting);
 		}
 	}
 

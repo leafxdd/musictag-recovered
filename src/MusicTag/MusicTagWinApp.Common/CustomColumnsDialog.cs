@@ -356,27 +356,15 @@ internal class CustomColumnsDialog : Form
 
 	private void MoveSelectedColumnUp(object sender, EventArgs e)
 	{
-		if (columnListView.SelectedItems.Count <= 0)
-		{
-			return;
-		}
-
-		ListViewItem selectedItem = columnListView.SelectedItems[0];
-		if (selectedItem.Index <= 0)
-		{
-			return;
-		}
-
-		int newIndex = selectedItem.Index - 1;
-		columnListView.Items.Remove(selectedItem);
-		columnListView.Items.Insert(newIndex, selectedItem);
-		if (columnListView.GetItemRect(newIndex).Top <= columnListView.ClientRectangle.Top)
-		{
-			columnListView.EnsureVisible(newIndex);
-		}
+		MoveSelectedColumn(-1);
 	}
 
 	private void MoveSelectedColumnDown(object sender, EventArgs e)
+	{
+		MoveSelectedColumn(1);
+	}
+
+	private void MoveSelectedColumn(int delta)
 	{
 		if (columnListView.SelectedItems.Count <= 0)
 		{
@@ -384,15 +372,17 @@ internal class CustomColumnsDialog : Form
 		}
 
 		ListViewItem selectedItem = columnListView.SelectedItems[0];
-		if (selectedItem.Index >= columnListView.Items.Count - 1)
+		int newIndex = selectedItem.Index + delta;
+		if (newIndex < 0 || newIndex >= columnListView.Items.Count)
 		{
 			return;
 		}
 
-		int newIndex = selectedItem.Index + 1;
 		columnListView.Items.Remove(selectedItem);
 		columnListView.Items.Insert(newIndex, selectedItem);
-		if (columnListView.GetItemRect(newIndex).Bottom >= columnListView.ClientRectangle.Bottom)
+		Rectangle movedItemRect = columnListView.GetItemRect(newIndex);
+		bool reachedViewportEdge = (delta < 0) ? (movedItemRect.Top <= columnListView.ClientRectangle.Top) : (movedItemRect.Bottom >= columnListView.ClientRectangle.Bottom);
+		if (reachedViewportEdge)
 		{
 			columnListView.EnsureVisible(newIndex);
 		}
