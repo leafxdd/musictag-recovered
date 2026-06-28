@@ -69,25 +69,7 @@ internal class KugouTagProvider : RemoteTagProviderBase
 
 	public List<LyricSearchResult> SearchLyrics(string query, int resultLimit, int sourceOrder)
 	{
-		List<LyricSearchResult> lyrics = new List<LyricSearchResult>();
-		IEnumerable<KugouSongInfo> songs = SearchSongs(query, resultLimit).Take(resultLimit);
-		int resultIndex = 0;
-		foreach (KugouSongInfo song in songs)
-		{
-			if (!cancellationSource.IsCancellationRequested)
-			{
-				LyricSearchResult lyric = LoadLyrics(song);
-				if (lyric != null)
-				{
-					lyric.ResultOrder = resultIndex++;
-					lyric.SourceOrder = sourceOrder;
-					lyrics.Add(lyric);
-				}
-				continue;
-			}
-			break;
-		}
-		return lyrics;
+		return BuildOrderedLyrics<KugouSongInfo>(SearchSongs(query, resultLimit).Take(resultLimit), LoadLyrics, sourceOrder);
 	}
 
 	private LyricSearchResult LoadLyrics(KugouSongInfo song)
@@ -111,62 +93,29 @@ internal class KugouTagProvider : RemoteTagProviderBase
 
 	public List<TrackSearchResult> SearchTracks(string query, int resultLimit, int searchPass, int sourceOrder, List<TrackSearchResult> existingTracks, List<TrackSearchResult> previousResults)
 	{
-		List<TrackSearchResult> tracks = new List<TrackSearchResult>();
-		IEnumerable<KugouSongInfo> songs = SearchSongs(query, resultLimit).Take(resultLimit);
-		Dictionary<string, TrackSearchResult> tracksById = new Dictionary<string, TrackSearchResult>();
-		List<string> trackIdsInOrder = new List<string>();
-		HashSet<string> knownTrackIds = new HashSet<string>();
-		foreach (TrackSearchResult track in existingTracks)
+		return BuildOrderedTracks<KugouSongInfo>(SearchSongs(query, resultLimit).Take(resultLimit), BuildTrackResult, searchPass, sourceOrder, existingTracks, previousResults);
+	}
+
+	private TrackSearchResult BuildTrackResult(KugouSongInfo song)
+	{
+		TrackSearchResult track = new TrackSearchResult();
+		track.SearchSource = GetSource();
+		track.SourceTrackId = song.AudioId;
+		track.Title = song.Title;
+		track.Artist = song.Artist;
+		track.Album = song.Album;
+		track.KugouHash = song.Hash;
+		track.KugouDurationMs = song.DurationMs;
+		LyricSearchResult lyric = new LyricSearchResult();
+		lyric.LyricUrl = string.Format(lyricUrlTemplate, BuildEncodedLyricKeyword(song.Artist, song.Title), song.Hash, song.DurationMs);
+		lyric.SearchSource = GetSource();
+		lyric.DeferredLyricLoader = cancellation =>
 		{
-			if (track.SearchSource == GetSource() && !knownTrackIds.Contains(track.SourceTrackId))
-			{
-				knownTrackIds.Add(track.SourceTrackId);
-			}
-		}
-		foreach (TrackSearchResult track in previousResults)
-		{
-			if (track.SearchSource == GetSource() && !knownTrackIds.Contains(track.SourceTrackId))
-			{
-				knownTrackIds.Add(track.SourceTrackId);
-			}
-		}
-		foreach (KugouSongInfo song in songs)
-		{
-			TrackSearchResult track = new TrackSearchResult();
-			track.SearchSource = GetSource();
-			track.SourceTrackId = song.AudioId;
-			track.Title = song.Title;
-			track.Artist = song.Artist;
-			track.Album = song.Album;
-			track.KugouHash = song.Hash;
-			track.KugouDurationMs = song.DurationMs;
-			LyricSearchResult lyric = new LyricSearchResult();
-			lyric.LyricUrl = string.Format(lyricUrlTemplate, BuildEncodedLyricKeyword(song.Artist, song.Title), song.Hash, song.DurationMs);
-			lyric.SearchSource = GetSource();
-			lyric.DeferredLyricLoader = cancellation =>
-			{
-				using KugouTagProvider kugouTagProvider = new KugouTagProvider(cancellation);
-				return kugouTagProvider.LoadLyrics(song);
-			};
-			track.LyricResult = lyric;
-			if (!tracksById.ContainsKey(track.SourceTrackId) && !knownTrackIds.Contains(track.SourceTrackId))
-			{
-				trackIdsInOrder.Add(track.SourceTrackId);
-				tracksById.Add(track.SourceTrackId, track);
-			}
-		}
-		foreach (string trackId in trackIdsInOrder)
-		{
-			tracks.Add(tracksById[trackId]);
-		}
-		int resultIndex = 0;
-		foreach (TrackSearchResult track in tracks)
-		{
-			track.ResultOrder = resultIndex++;
-			track.SearchPass = searchPass;
-			track.SourceOrder = sourceOrder;
-		}
-		return tracks;
+			using KugouTagProvider kugouTagProvider = new KugouTagProvider(cancellation);
+			return kugouTagProvider.LoadLyrics(song);
+		};
+		track.LyricResult = lyric;
+		return track;
 	}
 
 	private List<KugouSongInfo> ParseSongSearchResponse(string responseBody)

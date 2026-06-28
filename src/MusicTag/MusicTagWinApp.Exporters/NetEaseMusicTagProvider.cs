@@ -205,39 +205,17 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase
 
 	public List<CoverSearchResult> SearchCovers(string query, int resultLimit, List<CoverSearchResult> existingCovers)
 	{
-		List<CoverSearchResult> covers = new List<CoverSearchResult>();
-		HashSet<string> addedCoverUrls = new HashSet<string>();
-		foreach (NetEaseSongInfo song in SearchSongs(query, resultLimit))
-		{
-			if (cancellationSource.IsCancellationRequested)
-			{
-				break;
-			}
-			string coverUrl = song.Album.CoverUrl;
-			if (string.IsNullOrWhiteSpace(coverUrl) || addedCoverUrls.Contains(coverUrl))
-			{
-				continue;
-			}
-			bool isNewCover = true;
-			foreach (CoverSearchResult existingCover in existingCovers)
-			{
-				if (existingCover.CoverUrl == coverUrl)
-				{
-					isNewCover = false;
-					break;
-				}
-			}
-			if (isNewCover)
-			{
-				CoverSearchResult cover = new CoverSearchResult();
-				cover.CoverUrl = coverUrl;
-				cover.SearchSource = GetSource();
-				cover.CoverDownloader = CreateCoverDownloader<NetEaseMusicTagProvider>(coverUrl);
-				covers.Add(cover);
-				addedCoverUrls.Add(coverUrl);
-			}
-		}
-		return covers;
+		return BuildDedupedCovers<NetEaseSongInfo>(SearchSongs(query, resultLimit), BuildCoverResult, existingCovers);
+	}
+
+	private CoverSearchResult BuildCoverResult(NetEaseSongInfo song)
+	{
+		string coverUrl = song.Album.CoverUrl;
+		CoverSearchResult cover = new CoverSearchResult();
+		cover.CoverUrl = coverUrl;
+		cover.SearchSource = GetSource();
+		cover.CoverDownloader = CreateCoverDownloader<NetEaseMusicTagProvider>(coverUrl);
+		return cover;
 	}
 
 	public string GetAlbumReleaseYear(long albumId)

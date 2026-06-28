@@ -71,72 +71,18 @@ internal class KuwoTagProvider : RemoteTagProviderBase
 
 	public List<TrackSearchResult> SearchTracks(string query, int maxResults, int searchPass, int sourceOrder, List<TrackSearchResult> previousResults, List<TrackSearchResult> currentResults)
 	{
-		List<TrackSearchResult> results = new List<TrackSearchResult>();
-		List<KuwoSongInfo> songs = SearchSongs(query, maxResults);
-		Dictionary<string, TrackSearchResult> tracksById = new Dictionary<string, TrackSearchResult>();
-		List<string> orderedTrackIds = new List<string>();
-		HashSet<string> skippedTrackIds = new HashSet<string>();
-
-		foreach (TrackSearchResult existingTrack in previousResults.Concat(currentResults))
-		{
-			if (existingTrack.SearchSource == GetSource())
-			{
-				skippedTrackIds.Add(existingTrack.SourceTrackId);
-			}
-		}
-
-		foreach (KuwoSongInfo song in songs)
-		{
-			TrackSearchResult track = CreateTrackResult(song);
-			if (tracksById.ContainsKey(track.SourceTrackId) || skippedTrackIds.Contains(track.SourceTrackId))
-			{
-				continue;
-			}
-
-			orderedTrackIds.Add(track.SourceTrackId);
-			tracksById.Add(track.SourceTrackId, track);
-		}
-
-		foreach (string trackId in orderedTrackIds)
-		{
-			results.Add(tracksById[trackId]);
-		}
-
-		for (int index = 0; index < results.Count; index++)
-		{
-			results[index].ResultOrder = index;
-			results[index].SearchPass = searchPass;
-			results[index].SourceOrder = sourceOrder;
-		}
-
-		return results;
+		return BuildOrderedTracks<KuwoSongInfo>(SearchSongs(query, maxResults), CreateTrackResult, searchPass, sourceOrder, previousResults, currentResults);
 	}
 
 	public List<LyricSearchResult> SearchLyrics(string query, int maxResults, int sourceOrder)
 	{
-		List<LyricSearchResult> lyrics = new List<LyricSearchResult>();
-		int resultOrder = 0;
+		return BuildOrderedLyrics<KuwoSongInfo>(SearchSongs(query, maxResults), LoadSongLyric, sourceOrder);
+	}
 
-		foreach (KuwoSongInfo song in SearchSongs(query, maxResults))
-		{
-			if (cancellationSource.IsCancellationRequested)
-			{
-				break;
-			}
-
-			LoadSongDetails(song);
-			LyricSearchResult lyric = song.LoadedLyric;
-			if (lyric == null)
-			{
-				continue;
-			}
-
-			lyric.ResultOrder = resultOrder++;
-			lyric.SourceOrder = sourceOrder;
-			lyrics.Add(lyric);
-		}
-
-		return lyrics;
+	private LyricSearchResult LoadSongLyric(KuwoSongInfo song)
+	{
+		LoadSongDetails(song);
+		return song.LoadedLyric;
 	}
 
 	public LyricSearchResult LoadLyricForTrack(TrackSearchResult track)
@@ -155,27 +101,7 @@ internal class KuwoTagProvider : RemoteTagProviderBase
 
 	public List<CoverSearchResult> SearchCovers(string query, int maxResults, List<CoverSearchResult> existingCovers)
 	{
-		List<CoverSearchResult> results = new List<CoverSearchResult>();
-		HashSet<string> queuedCoverUrls = new HashSet<string>();
-
-		foreach (KuwoSongInfo song in SearchSongs(query, maxResults))
-		{
-			if (cancellationSource.IsCancellationRequested)
-			{
-				break;
-			}
-
-			CoverSearchResult cover = CreateCoverResult(song, null);
-			if (queuedCoverUrls.Contains(cover.CoverUrl) || existingCovers.Any(existingCover => existingCover.CoverUrl == cover.CoverUrl))
-			{
-				continue;
-			}
-
-			results.Add(cover);
-			queuedCoverUrls.Add(cover.CoverUrl);
-		}
-
-		return results;
+		return BuildDedupedCovers<KuwoSongInfo>(SearchSongs(query, maxResults), song => CreateCoverResult(song, null), existingCovers);
 	}
 
 	private TrackSearchResult CreateTrackResult(KuwoSongInfo song)

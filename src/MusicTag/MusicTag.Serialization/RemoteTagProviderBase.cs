@@ -1,12 +1,16 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using MusicTagWinApp.Adapter;
 using MusicTagWinApp.Instances;
+using MusicTagWinApp.Listeners;
 using MusicTagWinApp.Properties;
+using MusicTagWinApp.Roles;
 using MusicTagWinApp.Web;
 using MusicTagWinApp.Writers;
 using Newtonsoft.Json.Linq;
@@ -273,6 +277,112 @@ internal abstract class RemoteTagProviderBase : IDisposable
 			using FileStream fileStream = new FileStream(filePath, FileMode.Create);
 			return (downloader.DownloadToStream(url, fileStream, 30000, timeout), fileStream.Length);
 		};
+	}
+
+	// 候选装配共用骨架(原各 provider 内联的 拉取→去重→排序 循环上提;详见 docs/SIMPLIFICATION_PLAN.md B3-1)。
+	// 仅接收已拉取的歌曲序列 + 构造委托,内部从不发起网络。Tracks 无循环内取消检查(三源原本即无),
+	// Lyrics/Covers 在每次迭代开头做取消短路,与原各 provider 一致。
+	protected List<TrackSearchResult> BuildOrderedTracks<TSong>(IEnumerable<TSong> songs, Func<TSong, TrackSearchResult> buildTrack, int searchPass, int sourceOrder, List<TrackSearchResult> excludeA, List<TrackSearchResult> excludeB)
+	{
+		HashSet<string> knownTrackIds = new HashSet<string>();
+		foreach (TrackSearchResult track in excludeA)
+		{
+			if (track.SearchSource == GetSource())
+			{
+				knownTrackIds.Add(track.SourceTrackId);
+			}
+		}
+
+		foreach (TrackSearchResult track in excludeB)
+		{
+			if (track.SearchSource == GetSource())
+			{
+				knownTrackIds.Add(track.SourceTrackId);
+			}
+		}
+
+		List<TrackSearchResult> tracks = new List<TrackSearchResult>();
+		HashSet<string> seenTrackIds = new HashSet<string>();
+		foreach (TSong song in songs)
+		{
+			TrackSearchResult track = buildTrack(song);
+			if (!seenTrackIds.Contains(track.SourceTrackId) && !knownTrackIds.Contains(track.SourceTrackId))
+			{
+				seenTrackIds.Add(track.SourceTrackId);
+				tracks.Add(track);
+			}
+		}
+
+		int resultIndex = 0;
+		foreach (TrackSearchResult track in tracks)
+		{
+			track.ResultOrder = resultIndex++;
+			track.SearchPass = searchPass;
+			track.SourceOrder = sourceOrder;
+		}
+
+		return tracks;
+	}
+
+	protected List<LyricSearchResult> BuildOrderedLyrics<TSong>(IEnumerable<TSong> songs, Func<TSong, LyricSearchResult> loadLyric, int sourceOrder)
+	{
+		List<LyricSearchResult> lyrics = new List<LyricSearchResult>();
+		int resultIndex = 0;
+		foreach (TSong song in songs)
+		{
+			if (cancellationSource.IsCancellationRequested)
+			{
+				break;
+			}
+
+			LyricSearchResult lyric = loadLyric(song);
+			if (lyric != null)
+			{
+				lyric.ResultOrder = resultIndex++;
+				lyric.SourceOrder = sourceOrder;
+				lyrics.Add(lyric);
+			}
+		}
+
+		return lyrics;
+	}
+
+	protected List<CoverSearchResult> BuildDedupedCovers<TSong>(IEnumerable<TSong> songs, Func<TSong, CoverSearchResult> buildCover, List<CoverSearchResult> existingCovers)
+	{
+		List<CoverSearchResult> covers = new List<CoverSearchResult>();
+		HashSet<string> addedCoverUrls = new HashSet<string>();
+		foreach (TSong song in songs)
+		{
+			if (cancellationSource.IsCancellationRequested)
+			{
+				break;
+			}
+
+			CoverSearchResult cover = buildCover(song);
+			string coverUrl = cover.CoverUrl;
+			if (string.IsNullOrWhiteSpace(coverUrl) || addedCoverUrls.Contains(coverUrl))
+			{
+				continue;
+			}
+
+			bool isNewCover = true;
+			foreach (CoverSearchResult existingCover in existingCovers)
+			{
+				if (existingCover.CoverUrl == coverUrl)
+				{
+					isNewCover = false;
+					break;
+				}
+			}
+
+			if (isNewCover)
+			{
+				covers.Add(cover);
+				addedCoverUrls.Add(coverUrl);
+			}
+		}
+
+		return covers;
 	}
 
 	// 联网解析共用的 JToken 安全读取器(原各 provider 私有副本上提;详见 docs/SIMPLIFICATION_PLAN.md B3-2)。

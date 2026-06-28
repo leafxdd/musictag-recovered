@@ -152,156 +152,74 @@ internal class QqMusicTagProvider : RemoteTagProviderBase
 
 	public List<LyricSearchResult> SearchLyrics(string query, int maxResults, int sourceOrder)
 	{
-		List<LyricSearchResult> lyrics = new List<LyricSearchResult>();
-		int resultIndex = 0;
-		foreach (QqSongInfo songInfo in SearchSongs(query, maxResults))
-		{
-			if (cancellationSource.IsCancellationRequested)
-			{
-				break;
-			}
-
-			LyricSearchResult lyric = LoadLyrics(songInfo);
-			if (lyric != null)
-			{
-				lyric.ResultOrder = resultIndex++;
-				lyric.SourceOrder = sourceOrder;
-				lyrics.Add(lyric);
-			}
-		}
-
-		return lyrics;
+		return BuildOrderedLyrics<QqSongInfo>(SearchSongs(query, maxResults), LoadLyrics, sourceOrder);
 	}
 
 	public List<CoverSearchResult> SearchCovers(string query, int maxResults, List<CoverSearchResult> existingCovers)
 	{
-		List<CoverSearchResult> covers = new List<CoverSearchResult>();
-		HashSet<string> addedCoverUrls = new HashSet<string>();
-		foreach (QqSongInfo songInfo in SearchSongs(query, maxResults))
-		{
-			if (cancellationSource.IsCancellationRequested)
-			{
-				break;
-			}
+		return BuildDedupedCovers<QqSongInfo>(SearchSongs(query, maxResults), BuildCoverResult, existingCovers);
+	}
 
-			string coverUrl = string.Format(albumCoverUrlTemplate, songInfo.Album.Mid);
-			if (addedCoverUrls.Contains(coverUrl))
-			{
-				continue;
-			}
-
-			bool isNewCover = true;
-			foreach (CoverSearchResult existingCover in existingCovers)
-			{
-				if (existingCover.CoverUrl == coverUrl)
-				{
-					isNewCover = false;
-					break;
-				}
-			}
-
-			if (isNewCover)
-			{
-				CoverSearchResult cover = new CoverSearchResult();
-				cover.CoverUrl = coverUrl;
-				cover.SearchSource = GetSource();
-				cover.CoverDownloader = CreateCoverDownloader<QqMusicTagProvider>(coverUrl);
-				covers.Add(cover);
-				addedCoverUrls.Add(coverUrl);
-			}
-		}
-
-		return covers;
+	private CoverSearchResult BuildCoverResult(QqSongInfo songInfo)
+	{
+		string coverUrl = string.Format(albumCoverUrlTemplate, songInfo.Album.Mid);
+		CoverSearchResult cover = new CoverSearchResult();
+		cover.CoverUrl = coverUrl;
+		cover.SearchSource = GetSource();
+		cover.CoverDownloader = CreateCoverDownloader<QqMusicTagProvider>(coverUrl);
+		return cover;
 	}
 
 	public List<TrackSearchResult> SearchTracks(string query, int maxResults, int searchPass, int sourceOrder, List<TrackSearchResult> existingTracks, List<TrackSearchResult> previousResults)
 	{
-		List<TrackSearchResult> tracks = new List<TrackSearchResult>();
-		List<QqSongInfo> songs = SearchSongs(query, maxResults);
-		Dictionary<string, TrackSearchResult> tracksById = new Dictionary<string, TrackSearchResult>();
-		List<string> trackIdsInOrder = new List<string>();
-		HashSet<string> knownTrackIds = new HashSet<string>();
-		foreach (TrackSearchResult track in existingTracks)
+		return BuildOrderedTracks<QqSongInfo>(SearchSongs(query, maxResults), BuildTrackResult, searchPass, sourceOrder, existingTracks, previousResults);
+	}
+
+	private TrackSearchResult BuildTrackResult(QqSongInfo songInfo)
+	{
+		TrackSearchResult track = new TrackSearchResult();
+		track.SearchSource = GetSource();
+		track.SourceTrackId = songInfo.Id.ToString();
+		track.QqMusicMid = songInfo.Mid;
+		track.Title = songInfo.Title;
+		track.OriginalTitle = songInfo.Name;
+		track.Artist = songInfo.GetArtistNames();
+		track.Album = songInfo.Album.Name;
+		track.Genre = songInfo.GetGenreName();
+		track.Comment = songInfo.Subtitle;
+		if (!string.IsNullOrWhiteSpace(songInfo.ReleaseDate) && DateTime.TryParseExact(songInfo.ReleaseDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var releaseDate))
 		{
-			if (track.SearchSource == GetSource() && !knownTrackIds.Contains(track.SourceTrackId))
+			track.Year = releaseDate.ToString("yyyy", CultureInfo.InvariantCulture);
+		}
+
+		if (songInfo.TrackNumber.HasValue && songInfo.TrackNumber.Value > 0)
+		{
+			track.Track = songInfo.TrackNumber.Value;
+			track.TrackLabel = "Track " + songInfo.TrackNumber;
+			if (songInfo.DiscNumber.HasValue && songInfo.DiscNumber > 1)
 			{
-				knownTrackIds.Add(track.SourceTrackId);
+				track.Disc = songInfo.DiscNumber.Value;
+				track.TrackLabel = track.TrackLabel + " of " + songInfo.DiscNumber;
 			}
 		}
 
-		foreach (TrackSearchResult track in previousResults)
+		string coverUrl = string.Format(albumCoverUrlTemplate, songInfo.Album.Mid);
+		CoverSearchResult cover = new CoverSearchResult();
+		cover.CoverUrl = coverUrl;
+		cover.SearchSource = GetSource();
+		cover.CoverDownloader = CreateCoverDownloader<QqMusicTagProvider>(coverUrl);
+		track.Cover = cover;
+
+		LyricSearchResult lyric = new LyricSearchResult();
+		lyric.LyricUrl = string.Format(lyricUrlTemplate, songInfo.Mid, callbackName);
+		lyric.SearchSource = GetSource();
+		lyric.DeferredLyricLoader = cancellation =>
 		{
-			if (track.SearchSource == GetSource() && !knownTrackIds.Contains(track.SourceTrackId))
-			{
-				knownTrackIds.Add(track.SourceTrackId);
-			}
-		}
-
-		foreach (QqSongInfo songInfo in songs)
-		{
-			TrackSearchResult track = new TrackSearchResult();
-			track.SearchSource = GetSource();
-			track.SourceTrackId = songInfo.Id.ToString();
-			track.QqMusicMid = songInfo.Mid;
-			track.Title = songInfo.Title;
-			track.OriginalTitle = songInfo.Name;
-			track.Artist = songInfo.GetArtistNames();
-			track.Album = songInfo.Album.Name;
-			track.Genre = songInfo.GetGenreName();
-			track.Comment = songInfo.Subtitle;
-			if (!string.IsNullOrWhiteSpace(songInfo.ReleaseDate) && DateTime.TryParseExact(songInfo.ReleaseDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var releaseDate))
-			{
-				track.Year = releaseDate.ToString("yyyy", CultureInfo.InvariantCulture);
-			}
-
-			if (songInfo.TrackNumber.HasValue && songInfo.TrackNumber.Value > 0)
-			{
-				track.Track = songInfo.TrackNumber.Value;
-				track.TrackLabel = "Track " + songInfo.TrackNumber;
-				if (songInfo.DiscNumber.HasValue && songInfo.DiscNumber > 1)
-				{
-					track.Disc = songInfo.DiscNumber.Value;
-					track.TrackLabel = track.TrackLabel + " of " + songInfo.DiscNumber;
-				}
-			}
-
-			string coverUrl = string.Format(albumCoverUrlTemplate, songInfo.Album.Mid);
-			CoverSearchResult cover = new CoverSearchResult();
-			cover.CoverUrl = coverUrl;
-			cover.SearchSource = GetSource();
-			cover.CoverDownloader = CreateCoverDownloader<QqMusicTagProvider>(coverUrl);
-			track.Cover = cover;
-
-			LyricSearchResult lyric = new LyricSearchResult();
-			lyric.LyricUrl = string.Format(lyricUrlTemplate, songInfo.Mid, callbackName);
-			lyric.SearchSource = GetSource();
-			lyric.DeferredLyricLoader = cancellation =>
-			{
-				using QqMusicTagProvider qqProvider = new QqMusicTagProvider(cancellation);
-				return qqProvider.LoadLyrics(songInfo);
-			};
-			track.LyricResult = lyric;
-			if (!tracksById.ContainsKey(track.SourceTrackId) && !knownTrackIds.Contains(track.SourceTrackId))
-			{
-				trackIdsInOrder.Add(track.SourceTrackId);
-				tracksById.Add(track.SourceTrackId, track);
-			}
-		}
-
-		foreach (string trackId in trackIdsInOrder)
-		{
-			tracks.Add(tracksById[trackId]);
-		}
-
-		int resultIndex = 0;
-		foreach (TrackSearchResult track in tracks)
-		{
-			track.ResultOrder = resultIndex++;
-			track.SearchPass = searchPass;
-			track.SourceOrder = sourceOrder;
-		}
-
-		return tracks;
+			using QqMusicTagProvider qqProvider = new QqMusicTagProvider(cancellation);
+			return qqProvider.LoadLyrics(songInfo);
+		};
+		track.LyricResult = lyric;
+		return track;
 	}
 
 	private LyricSearchResult LoadLyrics(QqSongInfo songInfo)
