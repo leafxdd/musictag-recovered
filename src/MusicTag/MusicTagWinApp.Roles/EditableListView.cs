@@ -346,10 +346,7 @@ internal class EditableListView : HeaderAwareListView
 		{
 			if (e.Item is CoverImageListViewItem coverImageListViewItem && coverImageListViewItem.CoverImage != null)
 			{
-				Image coverImage = coverImageListViewItem.CoverImage;
-				int imageY = e.Bounds.Y + e.Bounds.Height / 2 - coverImage.Height / 2;
-				e.Graphics.DrawImage(coverImage, textX, imageY, coverImage.Width, coverImage.Height);
-				textX += coverImage.Width + 2;
+				textX = DrawableListViewSubItem.DrawCenteredImage(e.Graphics, coverImageListViewItem.CoverImage, e.Bounds, textX);
 			}
 		}
 		else if (e.SubItem is DrawableListViewSubItem drawableSubItem)

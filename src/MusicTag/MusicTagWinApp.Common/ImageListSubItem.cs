@@ -45,9 +45,7 @@ internal class ImageListSubItem : DrawableListViewSubItem
 
 		foreach (Image image in Images)
 		{
-			int y = item.Bounds.Y + item.Bounds.Height / 2 - image.Height / 2;
-			item.Graphics.DrawImage(image, x, y, image.Width, image.Height);
-			x += image.Width + 2;
+			x = DrawCenteredImage(item.Graphics, image, item.Bounds, x);
 		}
 		return x;
 	}

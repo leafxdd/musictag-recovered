@@ -40,9 +40,7 @@ internal class ImageSubItem : DrawableListViewSubItem
 	{
 		if (IconImage != null)
 		{
-			int y = item.Bounds.Y + item.Bounds.Height / 2 - IconImage.Height / 2;
-			item.Graphics.DrawImage(IconImage, x, y, IconImage.Width, IconImage.Height);
-			x += IconImage.Width + 2;
+			x = DrawCenteredImage(item.Graphics, IconImage, item.Bounds, x);
 		}
 		return x;
 	}
