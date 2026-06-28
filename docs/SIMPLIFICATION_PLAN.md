@@ -52,16 +52,16 @@
 
 ### Tier A — 安全速赢（低风险，建议先做）
 
-- [ ] **A1 死代码删除（纯减法）**
-  - [ ] 删 `src/MusicTag/MusicTag.States/LimitedConcurrencyTaskScheduler.cs`（123 行，全库无 `new`）—— **删文件后 build 即证明无引用**（真·编译器证明）
-  - [ ] 删 `src/MusicTag/MusicTag.Bridges/ImageComboBox.cs`（165 行）+ 同步删 `MusicTagWinApp.Roles/EditableListView.cs` 不可达消费分支（`typeof(ImageComboBox)` @354-365 及仅其调用的 `ApplySingleImageSelection`/`ApplyImageListSelection`）—— ⚠️（Codex 点 4）**非纯编译器证明**：删文件会令 `typeof(ImageComboBox)` 编译失败逼出该分支，但「删分支行为等价」依据是**可达性分析**（无静态 `new`、无子类、唯一 `EditorControl` 赋值点不可能是它），执行前核对无 designer/动态创建入口、执行后跑**完整 smoke**
-  - [ ] 删 `MusicTagWinApp.Properties/Resources.cs:164-170` 死访问器 `Enum_Kugou`/`Enum_Kuwo`/`Enum_Music163`/`Enum_Xiami`（含退役源 `Enum_Xiami` 残留；`.resx` 数据键不动，动态键 `GetString("Enum_"+name)` 不受影响）
+- [x] **A1 死代码删除（纯减法）** —— ✅ 完成 `ea1e618`
+  - [x] 删 `src/MusicTag/MusicTag.States/LimitedConcurrencyTaskScheduler.cs`（123 行，全库无 `new`）—— **删文件后 build 即证明无引用**（真·编译器证明）
+  - [x] 删 `src/MusicTag/MusicTag.Bridges/ImageComboBox.cs`（165 行）+ 同步删 `MusicTagWinApp.Roles/EditableListView.cs` 不可达消费分支（`typeof(ImageComboBox)` @354-365 及仅其调用的 `ApplySingleImageSelection`/`ApplyImageListSelection`）—— ⚠️（Codex 点 4）**非纯编译器证明**：删文件会令 `typeof(ImageComboBox)` 编译失败逼出该分支，但「删分支行为等价」依据是**可达性分析**（无静态 `new`、无子类、唯一 `EditorControl` 赋值点不可能是它），执行前核对无 designer/动态创建入口、执行后跑**完整 smoke**
+  - [x] 删 `MusicTagWinApp.Properties/Resources.cs:164-170` 死访问器 `Enum_Kugou`/`Enum_Kuwo`/`Enum_Music163`/`Enum_Xiami`（含退役源 `Enum_Xiami` 残留；`.resx` 数据键不动，动态键 `GetString("Enum_"+name)` 不受影响）
 
-- [ ] **A2 SQLite 数据层 in-file 去重**
-  - [ ] `GetLogSubdirectory(sub)` 收敛 7 个 `Get*LogDirectory`（`MusicTagWinApp.Instances/DatabaseMapper.cs:284-317`）
-  - [ ] `ExecuteNonQueryLogged(...)` 收敛 3 个 CRUD 包装（`MusicTagWinApp.Listeners/TagHistoryRepository.cs:336-373`）
-  - [ ] `ComputeMd5HashString(string)` 委托 byte[] 重载（`DatabaseMapper.cs:103-107`）
-  - [ ] 两处 catch 改调既有 `MarkTransactionFailed()`（`TagHistoryRepository.cs:247,261`）
+- [x] **A2 SQLite 数据层 in-file 去重** —— ✅ 完成 `de1af6b`
+  - [x] `GetLogSubdirectory(sub)` 收敛 7 个 `Get*LogDirectory`（`MusicTagWinApp.Instances/DatabaseMapper.cs:284-317`）
+  - [x] `ExecuteNonQueryLogged(...)` 收敛 3 个 CRUD 包装（`MusicTagWinApp.Listeners/TagHistoryRepository.cs:336-373`）
+  - [x] `ComputeMd5HashString(string)` 委托 byte[] 重载（`DatabaseMapper.cs:103-107`）
+  - [x] 两处 catch 改调既有 `MarkTransactionFailed()`（`TagHistoryRepository.cs:247,261`）
 
 - [ ] **A3 StateFieldInstance 纯 in-file 去重（无写 / 重命名副作用，仅 UI / 显示 / 错误路由）** —— `MusicTagWinApp.Instances/StateFieldInstance.cs`
   - [ ] 复用既有 `AddSelectedFilterValues`，删 2 个 filter-tally 闭包类 `FilterValueCollector`/`SelectedItemFilterValueCounter`（681-882，调用点 4682/4700-4711/5044-5049）
@@ -79,11 +79,11 @@
   - [ ] ⚠️ `BuildBatchResultMessage(...)` 收敛 5 处批结果消息装配（5986-6014 等，至 6243-6253，位于 save/rename/undo/clear runner）—— **用户可见文案，逐分支逐字节核对**；`StartClearTags` 变体可留 inline
   - 验证：确认文案 / 选中文件预览 / 只读文件处理 / 取消分支 / 进度弹窗 / 实际 save+rename 路径与每分支结果文案逐字节不变 + 手动验证说明
 
-- [ ] **A4 结果模型 / 相似度** —— `MusicTagWinApp.Roles/TrackSearchResult.cs`、`MusicTagWinApp.Adapter/LyricSearchResult.cs`
-  - [ ] ⭐ `ResolveNonInstrumentalTarget` + `PromoteWithInstrumentalFallback` 收敛 `PromoteBestMatch` 7 处 instrumental 解析三元式 + 5 处 self-fallback（`TrackSearchResult.cs:263-446`）—— **低风险 / 高价值，首推**
-  - [ ] `CompareScoresDescending(float[],float[])` 上提到 `MusicTagWinApp.Writers/TextSimilarityCalculator.cs`，`LyricSearchResult.CompareLyricResults` 复用（`LyricSearchResult.cs:169-193`）—— ⚠️（Codex 点 5）**只抽降序 score 内核，不合并整个 comparer**：两者 tie-break 不同（Track=`SourceOrder→SearchPass→ResultOrder` @666-676，Lyric=`SourceOrder→ResultOrder` @186-192，无 `SearchPass`），各自保留。补充约束：Track 的 artist-first 路径会**置换** score 顺序（`GetScoreIndex`），故该内核可被 Lyric 完整复用、Track 仅非 artist-first 分支复用
-  - [ ] ⚠️ `ReplaceFullWidthPunctuation(text)` 统一全角标点表，删 9 个单字符 Regex 静态字段（`TrackSearchResult.cs:42-58,523-563,568-576`；保留 `WhitespaceRegex`）
-  - [ ] ⚠️（效率）`PromoteBestMatch` 内 memoize `NormalizeForMatch`（`TrackSearchResult.cs:210-521`，方法内引用键缓存，无模型变更）
+- [x] **A4 结果模型 / 相似度** —— 仅执行 ⭐ Item 1；其余 3 项评估后**否决**（`MusicTagWinApp.Roles/TrackSearchResult.cs`）
+  - [x] ⭐ `ResolveNonInstrumentalCandidate` 收敛 `PromoteBestMatch` 7 处 instrumental 解析三元式（5 处自兜底 `?? 候选` + 2 处 `!= null` 守卫）—— **✅ 完成 `e7afa05`**（净 −14 行）。命名取 `ResolveNonInstrumentalCandidate`（返回可空三元结果，自兜底点内联 `?? 候选`）；**513 行有意不动**：判定原 `currentBest.Title` 却以当前 `results[0]` 为回溯种子（中途 `MoveTrackToFront` 已重排），判定实体≠回溯种子，不符助手契约
+  - [x] ❌ **否决** `CompareScoresDescending` 上提：两评分循环**语义不等价**——`CompareByScoreOrder` 用 `CompareDescending`（`r.CompareTo(l)`，对 NaN/−0.0 有序）、`CompareLyricResults` 用 `>`/`<`（NaN 视作相等）；tie-break 亦不同（Track 含 `SearchPass` + `GetScoreIndex` 置换，Lyric 无）。真正共享内核须重构 Track 置换路径，风险 > 去重收益（零 smoke 覆盖的双排序路径），等价仅靠"分数域非 NaN"论证而非构造
+  - [x] ❌ **否决** `ReplaceFullWidthPunctuation`：`NormalizeForMatch`（`.Replace` 单字符链）与 `NormalizeSimilarityTextCandidates`（`Regex` on `string[]`）是两套并行实现、跨上下文调用，Regex↔`.Replace` 等价性 + `string[]` 适配风险高收益低
+  - [x] ❌ **否决**（效率）memoize `NormalizeForMatch`：属**性能优化非可读性简化**，引入缓存状态，超出本轮"行为保留简化"范围
 
 - [ ] **A5 歌词处理** —— `MusicTag.Composer/LyricTextProcessor.cs`
   - [ ] `AbsorbTranslatedLines(translated)` 收敛 `MergeTranslatedLyric`/`AlignAndSplitTranslatedLyric` 两处译文吸收循环（449-469,504-523）
@@ -162,6 +162,9 @@
 
 - 2026-06-28 建文档，锁定本轮批次计划（整库 19 分区并行扫描综合：67 条发现 + 19 份结构笔记，已对抗性自检并剔除已完成 / 已推迟 / 禁区项）。**尚未开始执行**——用户选择先落盘计划、暂不改代码。
 - 2026-06-28 Codex 审阅 + Claude 复核：5 项事实声明逐一对源码核实**全部属实**（详见末尾「Claude 复核 Codex 审阅」）。据此修订计划：验证协议补 `codegraph sync` + 手动验证说明 + 提交卫生；A3 拆出写 / 重命名 UI 入口为 A3b；A1 改「非纯编译器证明」+ 可达性核对；A4 明确只抽 score 内核；B2 工厂移出基类至 `MusicTagWinApp.Web`；B3 加「不统一取消语义」约束。仍未改任何代码。
+- 2026-06-28 **A1 完成 `ea1e618`**：删 `LimitedConcurrencyTaskScheduler.cs`（123 行）+ `ImageComboBox.cs`（165 行）+ `EditableListView` 不可达 ImageComboBox 分支与 2 个仅其调用的 helper + 2 个 orphan using；删 `Resources.cs` 4 个死 `Enum_*` 访问器（`.resx` 键留）。Debug+Release 0 warn、smoke 通过；仅暂存 4 个代码文件。
+- 2026-06-28 **A2 完成 `de1af6b`**：`DatabaseMapper.GetLogSubdirectory` 收敛 7 个 `Get*LogDirectory`、`ComputeMd5HashString(string)` 委托 byte[] 重载；`TagHistoryRepository.ExecuteNonQueryLogged` 收敛 3 个 CRUD 包装、2 处 catch 改 `MarkTransactionFailed()`。仅暂存 2 个数据层文件。Debug+Release 0 warn、smoke 通过。
+- 2026-06-28 **A4 部分完成 `e7afa05`**：⭐ `ResolveNonInstrumentalCandidate` 收敛 `PromoteBestMatch` 7 处 instrumental 三元式（净 −14 行）；其余 3 子项（CompareScoresDescending / ReplaceFullWidthPunctuation / memoize）评估后**否决**（语义不等价 / 双实现风险 / 越界优化，详见 A4 批次）。Debug+Release 0 warn、smoke 通过；仅暂存 `TrackSearchResult.cs`。
 
 ---
 
