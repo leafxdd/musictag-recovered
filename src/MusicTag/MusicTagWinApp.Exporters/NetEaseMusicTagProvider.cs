@@ -92,7 +92,7 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase
 	// 网易云加密 POST 体:把 BuildEncryptedRequest 产出的 a/b 字段编码进 params/encSecKey 模板(原三处逐字节相同)。
 	private static string BuildEncryptedPostBody(JObject encryptedRequest)
 	{
-		return string.Format(encryptedPostDataFormat, DatabaseMapper.UrlEncodeUtf8(encryptedRequest["a"].ToString()), DatabaseMapper.UrlEncodeUtf8(encryptedRequest["b"].ToString()));
+		return string.Format(encryptedPostDataFormat, TextUtilities.UrlEncodeUtf8(encryptedRequest["a"].ToString()), TextUtilities.UrlEncodeUtf8(encryptedRequest["b"].ToString()));
 	}
 
 	// 歌曲查询 POST 公共骨架(SearchSongs / LoadSongDetails 同构,仅 endpoint / payload / 日志标签不同)。
@@ -123,7 +123,7 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase
 		{
 			try
 			{
-				return DatabaseMapper.UnixMillisecondsToDateTime(publishTimeValue).ToString("yyyy", CultureInfo.InvariantCulture);
+				return TextUtilities.UnixMillisecondsToDateTime(publishTimeValue).ToString("yyyy", CultureInfo.InvariantCulture);
 			}
 			catch (Exception)
 			{

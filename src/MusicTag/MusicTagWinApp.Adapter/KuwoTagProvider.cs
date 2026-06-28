@@ -205,7 +205,7 @@ internal class KuwoTagProvider : RemoteTagProviderBase
 			return new List<KuwoSongInfo>();
 		}
 
-		string responseBody = GetResponseString(string.Format(SearchUrlFormat, DatabaseMapper.UrlEncodeUtf8(query), maxResults));
+		string responseBody = GetResponseString(string.Format(SearchUrlFormat, TextUtilities.UrlEncodeUtf8(query), maxResults));
 		if (cancellationSource.IsCancellationRequested)
 		{
 			return new List<KuwoSongInfo>();
@@ -433,7 +433,7 @@ internal class KuwoTagProvider : RemoteTagProviderBase
 				for (int index = 0; index < normalizedLines.Count; index++)
 				{
 					(long TimestampMs, string PrimaryText, string AlternateText) line = normalizedLines[index];
-					if (line.AlternateText != null && DatabaseMapper.ContainsChinese(line.AlternateText) && !DatabaseMapper.ContainsChinese(line.PrimaryText))
+					if (line.AlternateText != null && TextUtilities.ContainsChinese(line.AlternateText) && !TextUtilities.ContainsChinese(line.PrimaryText))
 					{
 						normalizedLines[index] = (line.TimestampMs, line.AlternateText, line.PrimaryText);
 					}
@@ -466,7 +466,7 @@ internal class KuwoTagProvider : RemoteTagProviderBase
 					(long TimestampMs, string PrimaryText, string AlternateText) lastLine = normalizedLines[normalizedLines.Count - 1];
 					if (lastLine.AlternateText != null && thirdFromLast.AlternateText != null && secondFromLast.AlternateText == null)
 					{
-						if (DatabaseMapper.ContainsChinese(secondFromLast.PrimaryText) && DatabaseMapper.ContainsChinese(lastLine.PrimaryText) && !DatabaseMapper.ContainsChinese(lastLine.AlternateText))
+						if (TextUtilities.ContainsChinese(secondFromLast.PrimaryText) && TextUtilities.ContainsChinese(lastLine.PrimaryText) && !TextUtilities.ContainsChinese(lastLine.AlternateText))
 						{
 							lastLine = (lastLine.TimestampMs, lastLine.AlternateText, lastLine.PrimaryText);
 						}

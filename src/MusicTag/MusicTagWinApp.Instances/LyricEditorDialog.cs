@@ -114,7 +114,7 @@ internal class LyricEditorDialog : Form
 	{
 		if (!base.IsDisposed)
 		{
-			lyricTextBox.Text = DatabaseMapper.TrimNonEmptyLines(lyricText);
+			lyricTextBox.Text = TextUtilities.TrimNonEmptyLines(lyricText);
 		}
 	}
 

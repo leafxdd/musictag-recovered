@@ -256,7 +256,7 @@ internal class PictureFromTagsDialog : Form
 					continue;
 				}
 
-				string imageHash = DatabaseMapper.ComputeMd5HashString(picture.ImageBytes);
+				string imageHash = TextUtilities.ComputeMd5HashString(picture.ImageBytes);
 				candidates.Add((audioFilePath, image, imageHash, pictureIndex));
 				pictureIndex++;
 			}

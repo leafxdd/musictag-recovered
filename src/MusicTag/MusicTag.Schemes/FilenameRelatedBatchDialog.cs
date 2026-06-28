@@ -204,14 +204,14 @@ internal class FilenameRelatedBatchDialog : Form
 					{
 						configDescriptorState.LoadBasicTagFields();
 						configDescriptorState.Dispose();
-						string title = DatabaseMapper.CoalesceNonBlank(configDescriptorState.GetDisplayValue("title")).Trim();
-						string artist = DatabaseMapper.CoalesceNonBlank(configDescriptorState.GetDisplayValue("artist")).Trim();
-						string album = DatabaseMapper.CoalesceNonBlank(configDescriptorState.GetDisplayValue("album")).Trim();
-						string disc = DatabaseMapper.CoalesceNonBlank(configDescriptorState.GetDisplayValue("disc")).Trim();
+						string title = TextUtilities.CoalesceNonBlank(configDescriptorState.GetDisplayValue("title")).Trim();
+						string artist = TextUtilities.CoalesceNonBlank(configDescriptorState.GetDisplayValue("artist")).Trim();
+						string album = TextUtilities.CoalesceNonBlank(configDescriptorState.GetDisplayValue("album")).Trim();
+						string disc = TextUtilities.CoalesceNonBlank(configDescriptorState.GetDisplayValue("disc")).Trim();
 						string trackNumber = string.Format("{0:D2}", configDescriptorState["track"]);
-						string year = DatabaseMapper.CoalesceNonBlank(configDescriptorState.GetDisplayValue("year")).Trim();
-						string comment = DatabaseMapper.CoalesceNonBlank(configDescriptorState.GetDisplayValue("comment")).Trim();
-						string albumArtist = DatabaseMapper.CoalesceNonBlank(configDescriptorState.GetDisplayValue("albumartist")).Trim();
+						string year = TextUtilities.CoalesceNonBlank(configDescriptorState.GetDisplayValue("year")).Trim();
+						string comment = TextUtilities.CoalesceNonBlank(configDescriptorState.GetDisplayValue("comment")).Trim();
+						string albumArtist = TextUtilities.CoalesceNonBlank(configDescriptorState.GetDisplayValue("albumartist")).Trim();
 						bool isMissingRequiredTag = false;
 						if (Owner.selectedFilenamePattern.Contains("@1") && !title.Any())
 						{

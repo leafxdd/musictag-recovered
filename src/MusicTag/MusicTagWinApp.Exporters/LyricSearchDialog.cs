@@ -40,7 +40,7 @@ internal class LyricSearchDialog : Form
 		{
 			this.dialog = dialog;
 			selectedSource = dialog.selectedSource;
-			remainingResultLimit = DatabaseMapper.GetWebSearchResultLimit();
+			remainingResultLimit = TextUtilities.GetWebSearchResultLimit();
 		}
 
 		public void ResetSourceOrder()

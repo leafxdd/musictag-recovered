@@ -56,7 +56,7 @@ internal class CoverSearchDialog : Form
 			}
 
 			accumulatedCandidates = new List<CoverSearchResult>();
-			remainingTotal = DatabaseMapper.GetWebSearchResultLimit();
+			remainingTotal = TextUtilities.GetWebSearchResultLimit();
 			remainingBySource = new Dictionary<SourceItem, int>();
 
 			if (dialog.GetPreferredSource().HasValue)
@@ -242,7 +242,7 @@ internal class CoverSearchDialog : Form
 
 		public Image Load()
 		{
-			coverPath = candidate.LocalCoverPath ?? (DatabaseMapper.GetPictureCacheDirectory() + DatabaseMapper.ComputeMd5HashString(candidate.CoverUrl, "UTF-8").Replace("-", ""));
+			coverPath = candidate.LocalCoverPath ?? (DatabaseMapper.GetPictureCacheDirectory() + TextUtilities.ComputeMd5HashString(candidate.CoverUrl, "UTF-8").Replace("-", ""));
 			candidate.LocalCoverPath = coverPath;
 
 			if (!TryReserveCoverPath())

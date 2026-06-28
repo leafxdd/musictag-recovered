@@ -246,7 +246,7 @@ namespace MusicTagWinApp.Roles;
 			}
 			SortByArtistSimilarity(artistRankedCandidates);
 			string currentBestTitle = NormalizeForMatch(currentBest.Title);
-			string currentBestCompositeTitle = NormalizeForMatch(DatabaseMapper.CoalesceNonBlank(currentBest.OriginalTitle, currentBest.Title));
+			string currentBestCompositeTitle = NormalizeForMatch(TextUtilities.CoalesceNonBlank(currentBest.OriginalTitle, currentBest.Title));
 			string currentBestArtist = NormalizeForMatch(currentBest.Artist);
 			string currentBestAlbum = NormalizeForMatch(currentBest.Album);
 			foreach (TrackSearchResult artistRankedCandidate in artistRankedCandidates)
@@ -256,7 +256,7 @@ namespace MusicTagWinApp.Roles;
 					continue;
 				}
 				string artistRankedCandidateTitle = NormalizeForMatch(artistRankedCandidate.Title);
-				string artistRankedCandidateCompositeTitle = NormalizeForMatch(DatabaseMapper.CoalesceNonBlank(artistRankedCandidate.OriginalTitle, artistRankedCandidate.Title));
+				string artistRankedCandidateCompositeTitle = NormalizeForMatch(TextUtilities.CoalesceNonBlank(artistRankedCandidate.OriginalTitle, artistRankedCandidate.Title));
 				string artistRankedCandidateAlbum = NormalizeForMatch(artistRankedCandidate.Album);
 				if (ContainsEitherWay(artistRankedCandidateCompositeTitle, targetTitle) && artistRankedCandidateAlbum.Any() && targetAlbum.Any() && ContainsEitherWay(artistRankedCandidateAlbum, targetAlbum))
 				{
@@ -274,7 +274,7 @@ namespace MusicTagWinApp.Roles;
 						continue;
 					}
 					string titleCandidateTitle = NormalizeForMatch(titleCandidate.Title);
-					if (ContainsEitherWay(NormalizeForMatch(DatabaseMapper.CoalesceNonBlank(titleCandidate.OriginalTitle, titleCandidate.Title)), targetTitle))
+					if (ContainsEitherWay(NormalizeForMatch(TextUtilities.CoalesceNonBlank(titleCandidate.OriginalTitle, titleCandidate.Title)), targetTitle))
 					{
 						MoveTrackToFront(results, ResolveNonInstrumentalCandidate(results, titleCandidate, titleCandidateTitle, targetTitle) ?? titleCandidate);
 						promoted = true;
@@ -289,7 +289,7 @@ namespace MusicTagWinApp.Roles;
 					if (secondPassCandidate != currentBest && secondPassCandidate.SearchPass == AlbumArtistFallbackSearchPass)
 					{
 						string secondPassCandidateTitle = NormalizeForMatch(secondPassCandidate.Title);
-						string secondPassCandidateCompositeTitle = NormalizeForMatch(DatabaseMapper.CoalesceNonBlank(secondPassCandidate.OriginalTitle, secondPassCandidate.Title));
+						string secondPassCandidateCompositeTitle = NormalizeForMatch(TextUtilities.CoalesceNonBlank(secondPassCandidate.OriginalTitle, secondPassCandidate.Title));
 						string secondPassCandidateArtist = NormalizeForMatch(secondPassCandidate.Artist);
 						string secondPassCandidateAlbum = NormalizeForMatch(secondPassCandidate.Album);
 						if (secondPassCandidateAlbum.Any() && secondPassCandidateAlbum == targetAlbum && secondPassCandidateArtist == targetArtist && ContainsEitherWay(secondPassCandidateCompositeTitle, targetTitle) && !IsCandidateInstrumentalVariant(targetTitle, secondPassCandidateTitle))
@@ -308,7 +308,7 @@ namespace MusicTagWinApp.Roles;
 					if (albumArtistCandidate != currentBest && albumArtistCandidate.SearchPass < AlbumArtistFallbackSearchPass)
 					{
 						string albumArtistCandidateTitle = NormalizeForMatch(albumArtistCandidate.Title);
-						string albumArtistCandidateCompositeTitle = NormalizeForMatch(DatabaseMapper.CoalesceNonBlank(albumArtistCandidate.OriginalTitle, albumArtistCandidate.Title));
+						string albumArtistCandidateCompositeTitle = NormalizeForMatch(TextUtilities.CoalesceNonBlank(albumArtistCandidate.OriginalTitle, albumArtistCandidate.Title));
 						string albumArtistCandidateArtist = NormalizeForMatch(albumArtistCandidate.Artist);
 						string albumArtistCandidateAlbum = NormalizeForMatch(albumArtistCandidate.Album);
 						if (albumArtistCandidateAlbum.Any() && ContainsEitherWay(albumArtistCandidateAlbum, targetAlbum) && albumArtistCandidateArtist == targetArtist && ContainsEitherWay(albumArtistCandidateCompositeTitle, targetTitle) && !IsCandidateInstrumentalVariant(targetTitle, albumArtistCandidateTitle))
@@ -329,7 +329,7 @@ namespace MusicTagWinApp.Roles;
 						continue;
 					}
 					string artistAlbumCandidateTitle = NormalizeForMatch(artistAlbumCandidate.Title);
-					string artistAlbumCandidateCompositeTitle = NormalizeForMatch(DatabaseMapper.CoalesceNonBlank(artistAlbumCandidate.OriginalTitle, artistAlbumCandidate.Title));
+					string artistAlbumCandidateCompositeTitle = NormalizeForMatch(TextUtilities.CoalesceNonBlank(artistAlbumCandidate.OriginalTitle, artistAlbumCandidate.Title));
 					string artistAlbumCandidateAlbum = NormalizeForMatch(artistAlbumCandidate.Album);
 					if (artistAlbumCandidateAlbum.Any() && ContainsEitherWay(artistAlbumCandidateCompositeTitle, targetTitle) && ContainsEitherWay(artistAlbumCandidateAlbum, targetAlbum))
 					{
@@ -348,7 +348,7 @@ namespace MusicTagWinApp.Roles;
 						continue;
 					}
 					string primaryCandidateTitle = NormalizeForMatch(primaryCandidate.Title);
-					if (ContainsEitherWay(NormalizeForMatch(DatabaseMapper.CoalesceNonBlank(primaryCandidate.OriginalTitle, primaryCandidate.Title)), targetTitle))
+					if (ContainsEitherWay(NormalizeForMatch(TextUtilities.CoalesceNonBlank(primaryCandidate.OriginalTitle, primaryCandidate.Title)), targetTitle))
 					{
 						MoveTrackToFront(results, ResolveNonInstrumentalCandidate(results, primaryCandidate, primaryCandidateTitle, targetTitle) ?? primaryCandidate);
 						promoted = true;
@@ -374,7 +374,7 @@ namespace MusicTagWinApp.Roles;
 					if (albumMatchCandidate != currentBest)
 					{
 						string albumMatchCandidateTitle = NormalizeForMatch(albumMatchCandidate.Title);
-						string albumMatchCandidateCompositeTitle = NormalizeForMatch(DatabaseMapper.CoalesceNonBlank(albumMatchCandidate.OriginalTitle, albumMatchCandidate.Title));
+						string albumMatchCandidateCompositeTitle = NormalizeForMatch(TextUtilities.CoalesceNonBlank(albumMatchCandidate.OriginalTitle, albumMatchCandidate.Title));
 						string albumMatchCandidateArtist = NormalizeForMatch(albumMatchCandidate.Artist);
 						string albumMatchCandidateAlbum = NormalizeForMatch(albumMatchCandidate.Album);
 						bool albumCandidateMatchesTarget = ContainsEitherWay(albumMatchCandidateCompositeTitle, targetTitle) && albumMatchCandidateAlbum.Any() && targetAlbum.Any() && ContainsEitherWay(albumMatchCandidateAlbum, targetAlbum);
@@ -410,7 +410,7 @@ namespace MusicTagWinApp.Roles;
 							break;
 						}
 						string earlyPassCandidateTitle = NormalizeForMatch(earlyPassCandidate.Title);
-						string earlyPassCandidateCompositeTitle = NormalizeForMatch(DatabaseMapper.CoalesceNonBlank(earlyPassCandidate.OriginalTitle, earlyPassCandidate.Title));
+						string earlyPassCandidateCompositeTitle = NormalizeForMatch(TextUtilities.CoalesceNonBlank(earlyPassCandidate.OriginalTitle, earlyPassCandidate.Title));
 						string earlyPassCandidateArtist = NormalizeForMatch(earlyPassCandidate.Artist);
 						bool earlyPassTitleMatchesTarget = ContainsEitherWay(earlyPassCandidateCompositeTitle, targetTitle);
 						bool currentBestTitleMatchIsWeak = !ContainsEitherWay(currentBestCompositeTitle, targetTitle) && currentBest.TitleSimilarityScore < StrongSimilarityThreshold;
@@ -431,7 +431,7 @@ namespace MusicTagWinApp.Roles;
 		}
 		else if (targetArtist.Any() && currentBest.ArtistSimilarityScore >= StrongSimilarityThreshold)
 		{
-			string currentBestCompositeTitleForReplacementCheck = NormalizeForMatch(DatabaseMapper.CoalesceNonBlank(currentBest.OriginalTitle, currentBest.Title));
+			string currentBestCompositeTitleForReplacementCheck = NormalizeForMatch(TextUtilities.CoalesceNonBlank(currentBest.OriginalTitle, currentBest.Title));
 			string currentBestAlbumForReplacementCheck = NormalizeForMatch(currentBest.Album);
 			bool currentBestTitleMatchesReplacementTarget = ContainsEitherWay(currentBestCompositeTitleForReplacementCheck, targetTitle) || currentBest.TitleSimilarityScore >= StrongSimilarityThreshold;
 			bool currentBestNeedsAlbumReplacement = currentBestTitleMatchesReplacementTarget && targetAlbum.Any() && currentBestAlbumForReplacementCheck.Any() && !ContainsEitherWay(currentBestAlbumForReplacementCheck, targetAlbum) && currentBest.AlbumSimilarityScore < StrongSimilarityThreshold;
@@ -444,7 +444,7 @@ namespace MusicTagWinApp.Roles;
 						continue;
 					}
 					string albumReplacementCandidateTitle = NormalizeForMatch(albumReplacementCandidate.Title);
-					string albumReplacementCandidateCompositeTitle = NormalizeForMatch(DatabaseMapper.CoalesceNonBlank(albumReplacementCandidate.OriginalTitle, albumReplacementCandidate.Title));
+					string albumReplacementCandidateCompositeTitle = NormalizeForMatch(TextUtilities.CoalesceNonBlank(albumReplacementCandidate.OriginalTitle, albumReplacementCandidate.Title));
 					string albumReplacementCandidateArtist = NormalizeForMatch(albumReplacementCandidate.Artist);
 					string albumReplacementCandidateAlbum = NormalizeForMatch(albumReplacementCandidate.Album);
 					bool replacementTitleMatchesTarget = ContainsEitherWay(albumReplacementCandidateCompositeTitle, targetTitle) && (albumReplacementCandidate.TitleSimilarityScore >= StrongSimilarityThreshold || albumReplacementCandidateCompositeTitle.Contains(currentBestCompositeTitleForReplacementCheck));
@@ -461,7 +461,7 @@ namespace MusicTagWinApp.Roles;
 		}
 		else if (!targetArtist.Any())
 		{
-			string currentBestCompositeTitleWithoutArtist = NormalizeForMatch(DatabaseMapper.CoalesceNonBlank(currentBest.OriginalTitle, currentBest.Title));
+			string currentBestCompositeTitleWithoutArtist = NormalizeForMatch(TextUtilities.CoalesceNonBlank(currentBest.OriginalTitle, currentBest.Title));
 			if (currentBest.TitleSimilarityScore < LooseSimilarityThreshold && !ContainsEitherWay(currentBestCompositeTitleWithoutArtist, targetTitle))
 			{
 				foreach (TrackSearchResult titleOnlyCandidate in results)
@@ -471,7 +471,7 @@ namespace MusicTagWinApp.Roles;
 						continue;
 					}
 					bool titleOnlyCandidateIsFromEarlyTopResult = titleOnlyCandidate.ResultOrder == TopProviderResultOrder && titleOnlyCandidate.SearchPass < AlbumArtistFallbackSearchPass;
-					bool titleOnlyCandidateMatchesTarget = ContainsEitherWay(NormalizeForMatch(DatabaseMapper.CoalesceNonBlank(titleOnlyCandidate.OriginalTitle, titleOnlyCandidate.Title)), targetTitle);
+					bool titleOnlyCandidateMatchesTarget = ContainsEitherWay(NormalizeForMatch(TextUtilities.CoalesceNonBlank(titleOnlyCandidate.OriginalTitle, titleOnlyCandidate.Title)), targetTitle);
 					if (titleOnlyCandidateIsFromEarlyTopResult && titleOnlyCandidateMatchesTarget)
 					{
 						MoveTrackToFront(results, titleOnlyCandidate);
@@ -539,7 +539,7 @@ namespace MusicTagWinApp.Roles;
 
 	private static string NormalizeForMatch(string text)
 	{
-		text = DatabaseMapper.CoalesceNonBlank(text);
+		text = TextUtilities.CoalesceNonBlank(text);
 		text = text.Replace("（", "(");
 		text = text.Replace("）", ")");
 		text = text.Replace("！", "!");

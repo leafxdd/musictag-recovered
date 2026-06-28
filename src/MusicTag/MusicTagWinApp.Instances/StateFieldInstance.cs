@@ -4133,7 +4133,7 @@ internal class StateFieldInstance : Form
 
 	private static string FormatCountDurationSize(int count, long durationMs, long fileSizeBytes)
 	{
-		return $"{count} ({ConfigDescriptorState.FormatDurationHms(durationMs)} | {DatabaseMapper.FormatFileSize(fileSizeBytes)})";
+		return $"{count} ({ConfigDescriptorState.FormatDurationHms(durationMs)} | {TextUtilities.FormatFileSize(fileSizeBytes)})";
 	}
 
 	private void RefreshStatusLabelsFromCachedTotals()
@@ -4826,7 +4826,7 @@ internal class StateFieldInstance : Form
 				coverPictureBox.SizeMode = PictureBoxSizeMode.Zoom;
 				coverMimeTypeLabel.Text = selectedCover.MimeType;
 				coverDimensionsLabel.Text = image.Width + "x" + image.Height;
-				coverFileSizeLabel.Text = DatabaseMapper.FormatFileSize(selectedCover.ImageBytes.Length);
+				coverFileSizeLabel.Text = TextUtilities.FormatFileSize(selectedCover.ImageBytes.Length);
 				coverPictureTypeLabel.Text = selectedCover.PictureType;
 			}
 		}

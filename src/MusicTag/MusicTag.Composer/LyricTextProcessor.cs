@@ -378,7 +378,7 @@ namespace MusicTag.Composer;
 			lineBuilder.Append(line.OriginalText);
 			if (!string.IsNullOrWhiteSpace(line.TranslatedText))
 			{
-				string separator = DatabaseMapper.CoalesceNonBlank(Settings.Default.ConnectorsLyricAndTLyric, " ");
+				string separator = TextUtilities.CoalesceNonBlank(Settings.Default.ConnectorsLyricAndTLyric, " ");
 				if (OptionsDialog.BuiltInLyricTranslationSeparators.Contains(separator))
 				{
 					if (separator.Length > 0)

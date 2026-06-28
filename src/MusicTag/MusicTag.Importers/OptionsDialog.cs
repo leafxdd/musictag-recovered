@@ -491,7 +491,7 @@ internal class OptionsDialog : Form
 
 		lyricTranslationSeparatorComboBox.Items.Clear();
 		lyricTranslationSeparatorComboBox.Items.AddRange(BuiltInLyricTranslationSeparators);
-		lyricTranslationSeparatorComboBox.Text = DatabaseMapper.CoalesceNonBlank(Settings.Default.ConnectorsLyricAndTLyric, " ");
+		lyricTranslationSeparatorComboBox.Text = TextUtilities.CoalesceNonBlank(Settings.Default.ConnectorsLyricAndTLyric, " ");
 		reformatTimestampCheckBox.Checked = Settings.Default.LyricDownload_ReformatTimetag;
 		removeTimestampCheckBox.Checked = Settings.Default.LyricDownload_RemoveTimetag;
 		removeBlankLyricLinesCheckBox.Checked = Settings.Default.LyricDownload_DeleteLinesOfBlankText;

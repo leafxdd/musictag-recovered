@@ -1066,7 +1066,7 @@ internal class AutoMatchTagsDialog : Form
 			{
 				return metadataSearch.resultValues;
 			}
-			metadataSearch.remainingGlobalResults = DatabaseMapper.GetWebSearchResultLimit();
+			metadataSearch.remainingGlobalResults = TextUtilities.GetWebSearchResultLimit();
 			metadataSearch.remainingResultsBySource = new Dictionary<SearchSource, int>();
 			List<SourceItem> tagSources = TrackSearchResult.GetSortedTagSourceSettings();
 			metadataSearch.rankedTracks = new List<TrackSearchResult>();
@@ -1161,7 +1161,7 @@ internal class AutoMatchTagsDialog : Form
 						}
 					});
 				}
-				if (!GetCancellationSource().IsCancellationRequested && shouldSearchLyrics && !metadataSearch.resultValues.ContainsKey("lyric") && !TrackSearchResult.IsInstrumentalTitle(DatabaseMapper.CoalesceNonBlank(metadataSearch.searchContext.Title).ToLower()))
+				if (!GetCancellationSource().IsCancellationRequested && shouldSearchLyrics && !metadataSearch.resultValues.ContainsKey("lyric") && !TrackSearchResult.IsInstrumentalTitle(TextUtilities.CoalesceNonBlank(metadataSearch.searchContext.Title).ToLower()))
 				{
 					metadataSearch.resultValues.AddEntriesFrom(SearchFallbackLyrics(tagFile, 3));
 				}
@@ -1174,10 +1174,10 @@ internal class AutoMatchTagsDialog : Form
 			LyricSearchState lyricSearch = new LyricSearchState();
 			Dictionary<string, object> resultValues = new Dictionary<string, object>();
 			TrackSearchContext searchContext = new TrackSearchContext(tagFile);
-			if (searchContext.HasTitle() && (!GetOwnerDialog().skipInstrumentalLyrics || !TrackSearchResult.IsInstrumentalTitle(DatabaseMapper.CoalesceNonBlank(searchContext.Title).ToLower())))
+			if (searchContext.HasTitle() && (!GetOwnerDialog().skipInstrumentalLyrics || !TrackSearchResult.IsInstrumentalTitle(TextUtilities.CoalesceNonBlank(searchContext.Title).ToLower())))
 			{
 				List<LyricSearchResult> lyricResults = new List<LyricSearchResult>();
-				lyricSearch.remainingGlobalResults = DatabaseMapper.GetWebSearchResultLimit();
+				lyricSearch.remainingGlobalResults = TextUtilities.GetWebSearchResultLimit();
 				lyricSearch.remainingResultsBySourceItem = new Dictionary<SourceItem, int>();
 				List<SourceItem> lyricSources = LyricSearchResult.GetSortedLyricSourceSettings();
 				lyricSources.ForEach(lyricSearch.InitializeSourceLimit);

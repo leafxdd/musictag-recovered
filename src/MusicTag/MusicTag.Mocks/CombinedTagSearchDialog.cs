@@ -78,7 +78,7 @@ internal class CombinedTagSearchDialog : Form
 			CoverDownloadFile coverDownload = new CoverDownloadFile
 			{
 				LoadTask = this,
-				LocalCoverPath = Request.CoverResult.LocalCoverPath ?? DatabaseMapper.GetPictureCacheDirectory() + DatabaseMapper.ComputeMd5HashString(Request.CoverResult.CoverUrl, "UTF-8").Replace("-", ""),
+				LocalCoverPath = Request.CoverResult.LocalCoverPath ?? DatabaseMapper.GetPictureCacheDirectory() + TextUtilities.ComputeMd5HashString(Request.CoverResult.CoverUrl, "UTF-8").Replace("-", ""),
 				DownloadedBytes = 0L
 			};
 			Request.CoverResult.LocalCoverPath = coverDownload.LocalCoverPath;
@@ -220,7 +220,7 @@ internal class CombinedTagSearchDialog : Form
 				return true;
 			}
 			searchLimits.AccumulatedResults = new List<TrackSearchResult>();
-			searchLimits.RemainingGlobalResults = DatabaseMapper.GetWebSearchResultLimit();
+			searchLimits.RemainingGlobalResults = TextUtilities.GetWebSearchResultLimit();
 			searchLimits.RemainingResultsBySource = new Dictionary<SearchSource, int>();
 			searchLimits.CurrentBatch = null;
 			SearchSource? preferredSource = Owner.preferredSource;
@@ -973,7 +973,7 @@ internal class CombinedTagSearchDialog : Form
 		{
 			return;
 		}
-		string normalizedTitle = DatabaseMapper.CoalesceNonBlank(searchContext.Title).Trim();
+		string normalizedTitle = TextUtilities.CoalesceNonBlank(searchContext.Title).Trim();
 		if (searchContext.UsedFileNameForTitle && normalizedTitle.Contains(" - "))
 		{
 			List<TrackSearchResult> defaultRankedResults = new List<TrackSearchResult>(results);

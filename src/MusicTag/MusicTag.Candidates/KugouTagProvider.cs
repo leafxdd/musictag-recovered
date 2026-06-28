@@ -59,7 +59,7 @@ internal class KugouTagProvider : RemoteTagProviderBase
 		{
 			return new List<KugouSongInfo>();
 		}
-		string responseBody = GetResponseString(string.Format(songSearchUrlTemplate, DatabaseMapper.UrlEncodeUtf8(query), resultLimit));
+		string responseBody = GetResponseString(string.Format(songSearchUrlTemplate, TextUtilities.UrlEncodeUtf8(query), resultLimit));
 		if (cancellationSource.IsCancellationRequested)
 		{
 			return new List<KugouSongInfo>();
@@ -250,13 +250,13 @@ internal class KugouTagProvider : RemoteTagProviderBase
 	{
 		if (!string.IsNullOrWhiteSpace(artist) && !string.IsNullOrWhiteSpace(title))
 		{
-			return DatabaseMapper.UrlEncodeUtf8(title.Trim() + " - " + artist.Trim());
+			return TextUtilities.UrlEncodeUtf8(title.Trim() + " - " + artist.Trim());
 		}
 		if (string.IsNullOrWhiteSpace(title))
 		{
-			return DatabaseMapper.UrlEncodeUtf8((artist ?? "").Trim());
+			return TextUtilities.UrlEncodeUtf8((artist ?? "").Trim());
 		}
-		return DatabaseMapper.UrlEncodeUtf8((title ?? "").Trim());
+		return TextUtilities.UrlEncodeUtf8((title ?? "").Trim());
 	}
 
 	private string ParseTranslatedLyric(string content, LyricTextProcessor lyricMerger)

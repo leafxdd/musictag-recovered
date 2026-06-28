@@ -432,12 +432,12 @@ internal class QqMusicTagProvider : RemoteTagProviderBase
 		string translation = "";
 		if (!string.IsNullOrWhiteSpace(encodedLyric) && encodedLyric != EmptyLyricPlaceholderBase64)
 		{
-			lyric = DatabaseMapper.DecodeBase64String(encodedLyric, "UTF-8");
+			lyric = TextUtilities.DecodeBase64String(encodedLyric, "UTF-8");
 		}
 
 		if (!string.IsNullOrWhiteSpace(encodedTranslation))
 		{
-			translation = DatabaseMapper.DecodeBase64String(encodedTranslation, "UTF-8");
+			translation = TextUtilities.DecodeBase64String(encodedTranslation, "UTF-8");
 		}
 
 		return (lyric, translation);
