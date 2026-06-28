@@ -317,7 +317,7 @@ internal class StateFieldInstance : Form
 
 		public void ShowErrorMessage()
 		{
-			DatabaseMapper.ShowErrorMessage(ErrorMessage);
+			DialogService.ShowErrorMessage(ErrorMessage);
 		}
 	}
 
@@ -511,7 +511,7 @@ internal class StateFieldInstance : Form
 
 		public void ShowLoadErrors()
 		{
-			DatabaseMapper.ShowErrorMessage(LoadErrors.ToString());
+			DialogService.ShowErrorMessage(LoadErrors.ToString());
 		}
 	}
 
@@ -612,18 +612,18 @@ internal class StateFieldInstance : Form
 			{
 				if (previousMessage.Value.isErr)
 				{
-					DatabaseMapper.ShowErrorMessage(previousMessage?.msg);
+					DialogService.ShowErrorMessage(previousMessage?.msg);
 				}
 				else
 				{
-					DatabaseMapper.ShowInformationMessage(previousMessage?.msg);
+					DialogService.ShowInformationMessage(previousMessage?.msg);
 				}
 			}
 			if (!showLoadErrors || loadErrors.LineCount <= 0)
 			{
 				return;
 			}
-			DatabaseMapper.ShowErrorMessage(loadErrors.ToString());
+			DialogService.ShowErrorMessage(loadErrors.ToString());
 		}
 	}
 
@@ -631,7 +631,7 @@ internal class StateFieldInstance : Form
 	{
 		System.Exception displayException = UnwrapAsyncOperationException(exception);
 		LogService.WriteExceptionDetails(displayException, context);
-		DatabaseMapper.ShowErrorMessage(displayException.GetMessageChain());
+		DialogService.ShowErrorMessage(displayException.GetMessageChain());
 	}
 
 	private void ReportAsyncOperationErrorIfNotCancellation(System.Exception exception, CancellationTokenSource cancellationSource, string context)
@@ -2106,16 +2106,16 @@ internal class StateFieldInstance : Form
 			{
 				if (deletedCount > 0)
 				{
-					DatabaseMapper.ShowInformationMessage(Resources.Msg_DeleteFilesCompleted);
+					DialogService.ShowInformationMessage(Resources.Msg_DeleteFilesCompleted);
 				}
 				else
 				{
-					DatabaseMapper.ShowErrorMessage(errorLog.ToString());
+					DialogService.ShowErrorMessage(errorLog.ToString());
 				}
 			}
 			else
 			{
-				DatabaseMapper.ShowInformationMessage(string.Format(Resources.Msg_DeleteFilesCompleted + "\n" + Resources.Msg_OK_Fail_Count, deletedCount, failedCount, processedCount) + "\n" + errorLog.ToString());
+				DialogService.ShowInformationMessage(string.Format(Resources.Msg_DeleteFilesCompleted + "\n" + Resources.Msg_OK_Fail_Count, deletedCount, failedCount, processedCount) + "\n" + errorLog.ToString());
 			}
 
 			owner.removeItemsMenuItem.PerformClick();
@@ -2211,15 +2211,15 @@ internal class StateFieldInstance : Form
 		{
 			if (itemsToSave.Length > 1)
 			{
-				DatabaseMapper.ShowInformationMessage(string.Format(Resources.Msg_SaveLrcFilesComplete1, PathFileUtilities.GetLyricSaveDirectoryDisplayName()) + "\n" + string.Format(Resources.Msg_OK_Fail_Skip_Count, savedCount, failedCount, skippedCount, processedCount) + "\n" + errorLog.ToString());
+				DialogService.ShowInformationMessage(string.Format(Resources.Msg_SaveLrcFilesComplete1, PathFileUtilities.GetLyricSaveDirectoryDisplayName()) + "\n" + string.Format(Resources.Msg_OK_Fail_Skip_Count, savedCount, failedCount, skippedCount, processedCount) + "\n" + errorLog.ToString());
 				return;
 			}
 			if (savedCount <= 0)
 			{
-				DatabaseMapper.ShowErrorMessage(errorLog.ToString());
+				DialogService.ShowErrorMessage(errorLog.ToString());
 				return;
 			}
-			DatabaseMapper.ShowInformationMessage(string.Format(Resources.Msg_SaveLrcFilesComplete1, PathFileUtilities.GetLyricSaveDirectoryDisplayName()));
+			DialogService.ShowInformationMessage(string.Format(Resources.Msg_SaveLrcFilesComplete1, PathFileUtilities.GetLyricSaveDirectoryDisplayName()));
 		}
 	}
 
@@ -2334,16 +2334,16 @@ internal class StateFieldInstance : Form
 			{
 				if (extractedCount > 0)
 				{
-					DatabaseMapper.ShowInformationMessage(Resources.Msg_ExtractCoversComplete);
+					DialogService.ShowInformationMessage(Resources.Msg_ExtractCoversComplete);
 				}
 				else
 				{
-					DatabaseMapper.ShowErrorMessage(errorLog.ToString());
+					DialogService.ShowErrorMessage(errorLog.ToString());
 				}
 			}
 			else
 			{
-				DatabaseMapper.ShowInformationMessage(string.Format(Resources.Msg_ExtractCoversComplete + "\n" + Resources.Msg_OK_Fail_Skip_Count, extractedCount, failedCount, skippedCount, processedCount) + "\n" + errorLog.ToString());
+				DialogService.ShowInformationMessage(string.Format(Resources.Msg_ExtractCoversComplete + "\n" + Resources.Msg_OK_Fail_Skip_Count, extractedCount, failedCount, skippedCount, processedCount) + "\n" + errorLog.ToString());
 			}
 		}
 	}
@@ -2418,7 +2418,7 @@ internal class StateFieldInstance : Form
 			Settings.Default.FilterListViewKeyword = filterListViewKeyword;
 			Settings.Default.LastVersionCode = 17;
 			CustomColumnsDialog.SaveColumnHeaderSettings();
-			DatabaseMapper.TrySaveApplicationSettings();
+			DialogService.TrySaveApplicationSettings();
 			TagHistoryRepository.ClearUndoState();
 			TagHistoryRepository.CloseSharedConnection();
 		}
@@ -2483,12 +2483,12 @@ internal class StateFieldInstance : Form
 
 		internal void ShowFileNotFoundMessage()
 		{
-			DatabaseMapper.ShowErrorMessage((NewPath ?? RequestedFileName) + "\n" + Resources.Msg_FileNotFound);
+			DialogService.ShowErrorMessage((NewPath ?? RequestedFileName) + "\n" + Resources.Msg_FileNotFound);
 		}
 
 		internal void ShowRenameError()
 		{
-			DatabaseMapper.ShowErrorMessage((NewPath ?? RequestedFileName) + "\n" + RenameError.Message);
+			DialogService.ShowErrorMessage((NewPath ?? RequestedFileName) + "\n" + RenameError.Message);
 		}
 	}
 
@@ -3444,7 +3444,7 @@ internal class StateFieldInstance : Form
 		else
 		{
 			Settings.Default.Language = languageCode;
-			DatabaseMapper.TrySaveApplicationSettings();
+			DialogService.TrySaveApplicationSettings();
 		}
 		if (string.IsNullOrEmpty(languageCode))
 		{
@@ -3887,7 +3887,7 @@ internal class StateFieldInstance : Form
 		}
 		if (readOnlyFilePath != null)
 		{
-			return DatabaseMapper.ConfirmYesNoCancel(string.Format(Resources.Msg_WantAllowRemoveReadonlyAttribute, readOnlyFilePath)) switch
+			return DialogService.ConfirmYesNoCancel(string.Format(Resources.Msg_WantAllowRemoveReadonlyAttribute, readOnlyFilePath)) switch
 			{
 				DialogResult.No => false,
 				DialogResult.Yes => true,
@@ -5150,7 +5150,7 @@ internal class StateFieldInstance : Form
 
 	private void DeleteSelectedFiles_Click(object sender, EventArgs e)
 	{
-		if (!DatabaseMapper.ConfirmYesNo(string.Format(Resources.Msg_ConfirmRemoveFiles, SelectedFileCount) + "\n" + BuildSelectedFilePreview()))
+		if (!DialogService.ConfirmYesNo(string.Format(Resources.Msg_ConfirmRemoveFiles, SelectedFileCount) + "\n" + BuildSelectedFilePreview()))
 		{
 			return;
 		}
@@ -5380,7 +5380,7 @@ internal class StateFieldInstance : Form
 		}
 		catch (System.Exception ex)
 		{
-			DatabaseMapper.ShowErrorMessage($"{Resources.Msg_Readfilefail}, {Resources.Msg_ErrorMessage}: {ex.Message}");
+			DialogService.ShowErrorMessage($"{Resources.Msg_Readfilefail}, {Resources.Msg_ErrorMessage}: {ex.Message}");
 		}
 	}
 
@@ -5588,7 +5588,7 @@ internal class StateFieldInstance : Form
 		}
 		catch (System.Exception ex)
 		{
-			DatabaseMapper.ShowErrorMessage($"{Resources.Msg_ExtractCoverFail}, {Resources.Msg_ErrorMessage}: {ex.Message}");
+			DialogService.ShowErrorMessage($"{Resources.Msg_ExtractCoverFail}, {Resources.Msg_ErrorMessage}: {ex.Message}");
 		}
 	}
 
@@ -5682,7 +5682,7 @@ internal class StateFieldInstance : Form
 			columnHeader.DisplayIndex = columnDisplayOrder++;
 		}
 		CustomColumnsDialog.SaveColumnHeaderSettings();
-		DatabaseMapper.TrySaveApplicationSettings();
+		DialogService.TrySaveApplicationSettings();
 		fileListView.Refresh();
 	}
 
@@ -5769,7 +5769,7 @@ internal class StateFieldInstance : Form
 		{
 			return;
 		}
-		if (SelectedFileCount > 1 && !DatabaseMapper.ConfirmYesNo(string.Format(Resources.Msg_ConfirmSaveTags, SelectedFileCount) + "\n" + BuildSelectedFilePreview()))
+		if (SelectedFileCount > 1 && !DialogService.ConfirmYesNo(string.Format(Resources.Msg_ConfirmSaveTags, SelectedFileCount) + "\n" + BuildSelectedFilePreview()))
 		{
 			return;
 		}
@@ -5823,7 +5823,7 @@ internal class StateFieldInstance : Form
 		int undoTagsCount = TagHistoryRepository.UndoTagsCount();
 		if (undoTagsCount > 0)
 		{
-			if (DatabaseMapper.ConfirmYesNo(string.Format(Resources.Msg_ConfirmUndoTags, undoTagsCount) + "\n" + TagHistoryRepository.BuildUndoTagsPreview()))
+			if (DialogService.ConfirmYesNo(string.Format(Resources.Msg_ConfirmUndoTags, undoTagsCount) + "\n" + TagHistoryRepository.BuildUndoTagsPreview()))
 			{
 				ProgressDialog progressDialog = new ProgressDialog(taskbarProgress);
 				StartUndoSaveTags(progressDialog);
@@ -5835,7 +5835,7 @@ internal class StateFieldInstance : Form
 		int renameUndoOperationsCount = TagHistoryRepository.RenameUndoOperationsCount();
 		if (renameUndoOperationsCount > 0)
 		{
-			if (DatabaseMapper.ConfirmYesNo(string.Format(Resources.Msg_ConfirmUndoRename, renameUndoOperationsCount) + "\n" + TagHistoryRepository.BuildRenameUndoPreview()))
+			if (DialogService.ConfirmYesNo(string.Format(Resources.Msg_ConfirmUndoRename, renameUndoOperationsCount) + "\n" + TagHistoryRepository.BuildRenameUndoPreview()))
 			{
 				ProgressDialog progressDialog = new ProgressDialog(taskbarProgress);
 				StartUndoRename(progressDialog);
@@ -5875,7 +5875,7 @@ internal class StateFieldInstance : Form
 
 	private void ClearTags_Click(object sender, EventArgs e)
 	{
-		if (!DatabaseMapper.ConfirmYesNo(string.Format(Resources.Msg_ConfirmClearTags, SelectedFileCount) + "\n" + BuildSelectedFilePreview()))
+		if (!DialogService.ConfirmYesNo(string.Format(Resources.Msg_ConfirmClearTags, SelectedFileCount) + "\n" + BuildSelectedFilePreview()))
 		{
 			return;
 		}
@@ -6139,7 +6139,7 @@ internal class StateFieldInstance : Form
 	private void ConfirmAndSaveTagsWithOperation(string confirmLabelKey, Dictionary<string, object> comp)
 	{
 		int count = SelectedFileCount;
-		if (count != 0 && DatabaseMapper.ConfirmYesNo(string.Format(Resources.Msg_ConfirmSaveTags, count) + "(" + localizedResources.GetString(confirmLabelKey) + ")\n" + BuildSelectedFilePreview()))
+		if (count != 0 && DialogService.ConfirmYesNo(string.Format(Resources.Msg_ConfirmSaveTags, count) + "(" + localizedResources.GetString(confirmLabelKey) + ")\n" + BuildSelectedFilePreview()))
 		{
 			ProgressDialog progressDialog = new ProgressDialog(taskbarProgress);
 			SelectedListViewItemInfo[] selectedItems = CollectSelectedListViewItemInfos();
@@ -6344,7 +6344,7 @@ internal class StateFieldInstance : Form
 		{
 			if (selectedTagState == null || !selectedTagState.IsLoadedSuccessfully() || !File.Exists(selectedTagState.GetFilePath()) || string.IsNullOrWhiteSpace(lyricsComboBox.Text))
 			{
-				DatabaseMapper.ShowErrorMessage(Resources.Msg_LyricNotFound);
+				DialogService.ShowErrorMessage(Resources.Msg_LyricNotFound);
 				return;
 			}
 			try
@@ -6363,15 +6363,15 @@ internal class StateFieldInstance : Form
 					return;
 				}
 				File.WriteAllText(defaultLrcPath, lyricsComboBox.Text, Encoding.GetEncoding(Settings.Default.SaveLrcFileDefaultEncoding));
-				DatabaseMapper.ShowInformationMessage(string.Format(Resources.Msg_FilesSavedInSpecPath, defaultLrcPath));
+				DialogService.ShowInformationMessage(string.Format(Resources.Msg_FilesSavedInSpecPath, defaultLrcPath));
 			}
 			catch (System.Exception ex)
 			{
-				DatabaseMapper.ShowErrorMessage(ex.Message);
+				DialogService.ShowErrorMessage(ex.Message);
 			}
 			return;
 		}
-		if (SelectedFileCount > 1 && DatabaseMapper.ConfirmYesNo(string.Format(Resources.Msg_ConfirmSaveLrcFiles, SelectedFileCount) + "\n" + BuildSelectedFilePreview()))
+		if (SelectedFileCount > 1 && DialogService.ConfirmYesNo(string.Format(Resources.Msg_ConfirmSaveLrcFiles, SelectedFileCount) + "\n" + BuildSelectedFilePreview()))
 		{
 			SelectedListViewItemInfo[] selectedItems = CollectSelectedListViewItemInfos();
 			ProgressDialog progressDialog = new ProgressDialog(taskbarProgress);
@@ -6389,7 +6389,7 @@ internal class StateFieldInstance : Form
 				SaveCurrentCover(showSaveDialog: true);
 			}
 		}
-		else if (DatabaseMapper.ConfirmYesNo(string.Format(Resources.Msg_ConfirmExtractCovers, SelectedFileCount) + "\n" + BuildSelectedFilePreview()))
+		else if (DialogService.ConfirmYesNo(string.Format(Resources.Msg_ConfirmExtractCovers, SelectedFileCount) + "\n" + BuildSelectedFilePreview()))
 		{
 			SelectedListViewItemInfo[] selectedItems = CollectSelectedListViewItemInfos();
 			ProgressDialog progressDialog = new ProgressDialog(taskbarProgress);
@@ -6402,13 +6402,13 @@ internal class StateFieldInstance : Form
 	{
 		if (selectedTagState == null || !selectedTagState.IsLoadedSuccessfully())
 		{
-			DatabaseMapper.ShowErrorMessage(Resources.Msg_CoverNotFound);
+			DialogService.ShowErrorMessage(Resources.Msg_CoverNotFound);
 			return;
 		}
 		List<ConfigDescriptorState.PictureData> coverList = selectedTagState["allpicturedata"] as List<ConfigDescriptorState.PictureData>;
 		if (coverList == null || currentCoverIndex >= coverList.Count)
 		{
-			DatabaseMapper.ShowErrorMessage(Resources.Msg_CoverNotFound);
+			DialogService.ShowErrorMessage(Resources.Msg_CoverNotFound);
 			return;
 		}
 		try
@@ -6416,7 +6416,7 @@ internal class StateFieldInstance : Form
 			ConfigDescriptorState.PictureData selectedCover = coverList[currentCoverIndex];
 			if (selectedCover.MimeType == null || selectedCover.Width <= 0 || selectedCover.Height <= 0)
 			{
-				DatabaseMapper.ShowErrorMessage(Resources.Msg_CoverNotFound);
+				DialogService.ShowErrorMessage(Resources.Msg_CoverNotFound);
 				return;
 			}
 			string directoryName = Path.GetDirectoryName(selectedTagState.GetFilePath());
@@ -6425,7 +6425,7 @@ internal class StateFieldInstance : Form
 			if (!showSaveDialog && !File.Exists(defaultCoverPath))
 			{
 				File.WriteAllBytes(defaultCoverPath, selectedCover.ImageBytes);
-				DatabaseMapper.ShowInformationMessage(Resources.Msg_FilesSavedInLocalDir);
+				DialogService.ShowInformationMessage(Resources.Msg_FilesSavedInLocalDir);
 				return;
 			}
 
@@ -6443,7 +6443,7 @@ internal class StateFieldInstance : Form
 		}
 		catch (System.Exception ex)
 		{
-			DatabaseMapper.ShowErrorMessage($"{Resources.Msg_ExtractCoverFail}, {Resources.Msg_ErrorMessage}: {ex.Message}");
+			DialogService.ShowErrorMessage($"{Resources.Msg_ExtractCoverFail}, {Resources.Msg_ErrorMessage}: {ex.Message}");
 		}
 	}
 
@@ -6513,7 +6513,7 @@ internal class StateFieldInstance : Form
 	private void ConfirmAndConvertSelectedFilenames(string confirmLabelKey, bool isChsToCht)
 	{
 		int count = SelectedFileCount;
-		if (count != 0 && DatabaseMapper.ConfirmYesNo(string.Format(Resources.Msg_ConfirmRenameFiles, count) + "(" + localizedResources.GetString(confirmLabelKey) + ")\n" + BuildSelectedFilePreview()))
+		if (count != 0 && DialogService.ConfirmYesNo(string.Format(Resources.Msg_ConfirmRenameFiles, count) + "(" + localizedResources.GetString(confirmLabelKey) + ")\n" + BuildSelectedFilePreview()))
 		{
 			ProgressDialog progressDialog = new ProgressDialog(taskbarProgress);
 			(string Path, string NewPath, int ListViewIndex)[] itemInfos = CollectSelectedListViewItemInfos().Select(CreateRenameItemInfo).ToArray();
@@ -6569,7 +6569,7 @@ internal class StateFieldInstance : Form
 	private void SaveOverwriteCoverSetting_Click(object sender, EventArgs e)
 	{
 		Settings.Default.OverwritePictureboxPicture = overwriteCoverCheckBox.Checked;
-		DatabaseMapper.TrySaveApplicationSettings();
+		DialogService.TrySaveApplicationSettings();
 	}
 
 	protected override void OnLoad(EventArgs e)
@@ -6656,7 +6656,7 @@ internal class StateFieldInstance : Form
 		if (databaseErrorMessage != null)
 		{
 			skipSavingSettingsOnClose = true;
-			DatabaseMapper.ShowErrorMessage(string.Format(Resources.Msg_InitDatabaseFail, databaseErrorMessage));
+			DialogService.ShowErrorMessage(string.Format(Resources.Msg_InitDatabaseFail, databaseErrorMessage));
 			Close();
 			return;
 		}
@@ -6793,7 +6793,7 @@ internal class StateFieldInstance : Form
 	{
 		if (SelectedFileCount > 0)
 		{
-			DatabaseMapper.ShowInExplorer(SelectedFileRows.First().FilePath);
+			DialogService.ShowInExplorer(SelectedFileRows.First().FilePath);
 		}
 	}
 
@@ -8665,7 +8665,7 @@ internal class StateFieldInstance : Form
 		{
 			return true;
 		}
-		DatabaseMapper.ShowErrorMessage(message);
+		DialogService.ShowErrorMessage(message);
 		comboBox.Focus();
 		return false;
 	}

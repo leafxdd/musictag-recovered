@@ -1007,19 +1007,19 @@ internal class FilenameRelatedBatchDialog : Form
 		Control selectedPattern = patternOptionsPanel.Controls.Cast<Control>().FirstOrDefault(IsCheckedRadioButton);
 		if (selectedPattern == null)
 		{
-			DatabaseMapper.ShowErrorMessage(Resources.Msg_PleaseChoosePattern);
+			DialogService.ShowErrorMessage(Resources.Msg_PleaseChoosePattern);
 			return;
 		}
 		if (!operationModePanel.Controls.Cast<Control>().Any(IsCheckedRadioButton))
 		{
-			DatabaseMapper.ShowErrorMessage(Resources.Msg_PleaseChooseOperationMode);
+			DialogService.ShowErrorMessage(Resources.Msg_PleaseChooseOperationMode);
 			return;
 		}
 		if (customPatternRadioButton.Checked)
 		{
 			if (string.IsNullOrWhiteSpace(customPatternTextBox.Text))
 			{
-				DatabaseMapper.ShowErrorMessage(Resources.Msg_PleaseInputCustomPattern);
+				DialogService.ShowErrorMessage(Resources.Msg_PleaseInputCustomPattern);
 				return;
 			}
 			selectedFilenamePattern = customPatternTextBox.Text;
@@ -1043,7 +1043,7 @@ internal class FilenameRelatedBatchDialog : Form
 		Settings.Default.FilenameRelCondition = JsonConvert.SerializeObject(value);
 		Settings.Default.FilenameCustomPattern = customPatternTextBox.Text;
 		Settings.Default.FilenameRelSelectedTab = tabControl.SelectedTab.Name;
-		if (!DatabaseMapper.TrySaveApplicationSettings())
+		if (!DialogService.TrySaveApplicationSettings())
 		{
 			return;
 		}
@@ -1072,19 +1072,19 @@ internal class FilenameRelatedBatchDialog : Form
 			}
 			catch (ArgumentException ex)
 			{
-				DatabaseMapper.ShowErrorMessage(ex.Message);
+				DialogService.ShowErrorMessage(ex.Message);
 				return;
 			}
 			List<(int CaptureGroup, int SelectedIndex)> selectedCaptureGroups = captureGroupListView.Items.Cast<AssociatedValueListViewItem>().Select(CreateCaptureGroupSelection).Where(HasSelectedCaptureGroup)
 				.ToList();
 			if (!selectedCaptureGroups.Any())
 			{
-				DatabaseMapper.ShowErrorMessage(Resources.Msg_CapturegroupCannotBeEmpty);
+				DialogService.ShowErrorMessage(Resources.Msg_CapturegroupCannotBeEmpty);
 				return;
 			}
 			if (selectedCaptureGroups.GroupBy(group => group.SelectedIndex).Any(group => group.Count() > 1))
 			{
-				DatabaseMapper.ShowErrorMessage(Resources.Msg_CapturegroupCannotBeDuplicate);
+				DialogService.ShowErrorMessage(Resources.Msg_CapturegroupCannotBeDuplicate);
 				return;
 			}
 			filenameRegexPattern = regexPatternTextBox.Text;
@@ -1102,7 +1102,7 @@ internal class FilenameRelatedBatchDialog : Form
 			IsChangeTagsModeSelected = true;
 			Settings.Default.FilenameRelRegexCondition = JsonConvert.SerializeObject(regexCondition);
 			Settings.Default.FilenameRelSelectedTab = tabControl.SelectedTab.Name;
-			if (!DatabaseMapper.TrySaveApplicationSettings())
+			if (!DialogService.TrySaveApplicationSettings())
 			{
 				return;
 			}
@@ -1111,7 +1111,7 @@ internal class FilenameRelatedBatchDialog : Form
 		}
 		else
 		{
-			DatabaseMapper.ShowErrorMessage(Resources.Msg_PleaseInputRegularexpression);
+			DialogService.ShowErrorMessage(Resources.Msg_PleaseInputRegularexpression);
 		}
 	}
 
@@ -1137,7 +1137,7 @@ internal class FilenameRelatedBatchDialog : Form
 		pattern = Regex.Replace(pattern, "[\\s/\\\\]", " ");
 		if (string.IsNullOrWhiteSpace(pattern))
 		{
-			DatabaseMapper.ShowErrorMessage(Resources.Msg_PatternCannotBeEmpty);
+			DialogService.ShowErrorMessage(Resources.Msg_PatternCannotBeEmpty);
 			return false;
 		}
 		HashSet<string> parameters = new HashSet<string>();
@@ -1145,23 +1145,23 @@ internal class FilenameRelatedBatchDialog : Form
 		{
 			if (!parameters.Add(item.Value))
 			{
-				DatabaseMapper.ShowErrorMessage(Resources.Msg_ParamsInPatternCannotDuplicate);
+				DialogService.ShowErrorMessage(Resources.Msg_ParamsInPatternCannotDuplicate);
 				return false;
 			}
 		}
 		if (!parameters.Any())
 		{
-			DatabaseMapper.ShowErrorMessage(Resources.Msg_ParamsInPatternNotFound);
+			DialogService.ShowErrorMessage(Resources.Msg_ParamsInPatternNotFound);
 			return false;
 		}
 		if (!isChangeTagsMode && Regex.Match(pattern, "@0").Success)
 		{
-			DatabaseMapper.ShowErrorMessage(Resources.Msg_ParamsInPatternCannotUsePattern0);
+			DialogService.ShowErrorMessage(Resources.Msg_ParamsInPatternCannotUsePattern0);
 			return false;
 		}
 		if (pattern.StartsWith("@5@4"))
 		{
-			DatabaseMapper.ShowErrorMessage(Resources.Msg_ParamsInPatternCannotAdjacent);
+			DialogService.ShowErrorMessage(Resources.Msg_ParamsInPatternCannotAdjacent);
 			return false;
 		}
 		if (pattern.StartsWith("@4@5"))
@@ -1179,7 +1179,7 @@ internal class FilenameRelatedBatchDialog : Form
 		pattern = pattern.Replace("@4@5", "@4");
 		if (Regex.Match(pattern, "@[0-8]@[0-8]").Success)
 		{
-			DatabaseMapper.ShowErrorMessage(Resources.Msg_ParamsInPatternCannotAdjacent);
+			DialogService.ShowErrorMessage(Resources.Msg_ParamsInPatternCannotAdjacent);
 			return false;
 		}
 		return true;

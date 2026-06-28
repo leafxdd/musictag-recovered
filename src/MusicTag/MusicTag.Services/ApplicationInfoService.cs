@@ -18,22 +18,22 @@ internal static class ApplicationInfoService
 
 	private static void ShowAlreadyLatestVersionMessage()
 	{
-		DatabaseMapper.ShowInformationMessage(Resources.Msg_UsingLastestVersion);
+		DialogService.ShowInformationMessage(Resources.Msg_UsingLastestVersion);
 	}
 
 	private static void ShowVersionCheckFailedMessage()
 	{
-		DatabaseMapper.ShowErrorMessage(Resources.Msg_FailedToGetNewVersion);
+		DialogService.ShowErrorMessage(Resources.Msg_FailedToGetNewVersion);
 	}
 
 	private static void ShowUpdateCheckRequestFailedMessage(Exception exception)
 	{
-		DatabaseMapper.ShowErrorMessage(string.Format(Resources.Msg_CannotConnectToUpdateSite, UpdatePageUrl) + "(" + exception.GetMessageChain() + ")");
+		DialogService.ShowErrorMessage(string.Format(Resources.Msg_CannotConnectToUpdateSite, UpdatePageUrl) + "(" + exception.GetMessageChain() + ")");
 	}
 
 	private static void ShowNewVersionPrompt(string latestVersion)
 	{
-		switch (DatabaseMapper.ConfirmYesNoCancel(string.Format(Resources.Msg_FoundNewVersion, latestVersion, UpdatePageUrl)))
+		switch (DialogService.ConfirmYesNoCancel(string.Format(Resources.Msg_FoundNewVersion, latestVersion, UpdatePageUrl)))
 		{
 		case DialogResult.No:
 			Settings.Default.IgnoreCheckSpecAppVersion = latestVersion;

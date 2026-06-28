@@ -341,7 +341,7 @@ internal class LyricSearchDialog : Form
 		}
 		else
 		{
-			DatabaseMapper.ShowErrorMessage(Resources.Msg_PleaseSelectItem);
+			DialogService.ShowErrorMessage(Resources.Msg_PleaseSelectItem);
 		}
 	}
 

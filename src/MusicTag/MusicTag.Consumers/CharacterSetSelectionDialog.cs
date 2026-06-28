@@ -122,7 +122,7 @@ internal class CharacterSetSelectionDialog : Form
 
 	private void UpdateLayoutForSize()
 	{
-		DatabaseMapper.FillAndCenterButtons(encodingListView, mainPanel, buttonPanel);
+		DialogService.FillAndCenterButtons(encodingListView, mainPanel, buttonPanel);
 		encodingListView.Columns[1].Width = encodingListView.ClientSize.Width - encodingListView.Columns[0].Width;
 	}
 
@@ -135,7 +135,7 @@ internal class CharacterSetSelectionDialog : Form
 			return;
 		}
 
-		DatabaseMapper.ShowErrorMessage(Resources.Msg_PleaseSelectItem);
+		DialogService.ShowErrorMessage(Resources.Msg_PleaseSelectItem);
 	}
 
 	private void CancelButton_Click(object sender, EventArgs args)

@@ -85,7 +85,7 @@ internal class DirectoryManagerDialog : Form
 
 	private void LayoutControls()
 	{
-		DatabaseMapper.FillAndCenterButtons(directoryListView, mainPanel, buttonPanel);
+		DialogService.FillAndCenterButtons(directoryListView, mainPanel, buttonPanel);
 		directoryColumn.Width = directoryListView.ClientSize.Width;
 	}
 

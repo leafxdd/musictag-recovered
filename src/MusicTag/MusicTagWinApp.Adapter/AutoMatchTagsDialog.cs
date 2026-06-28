@@ -1743,7 +1743,7 @@ internal class AutoMatchTagsDialog : Form
 		}
 		if (!SelectedMatchConditions.Any())
 		{
-			DatabaseMapper.ShowErrorMessage(Resources.Msg_PleaseSelectAtLeastOneItem);
+			DialogService.ShowErrorMessage(Resources.Msg_PleaseSelectAtLeastOneItem);
 			return;
 		}
 		webSearchThreadCount = webSearchThreadCountTrackBar.Value;
@@ -1751,7 +1751,7 @@ internal class AutoMatchTagsDialog : Form
 		Settings.Default.AutoMatchTagsWebSearchThreadCount = webSearchThreadCountTrackBar.Value;
 		Settings.Default.DontDownloadLyricWithInstrumentInTitle = skipInstrumentalLyricsCheckBox.Checked;
 		Settings.Default.AutoMatchTagsCondition = JsonConvert.SerializeObject(SelectedMatchConditions);
-		if (!DatabaseMapper.TrySaveApplicationSettings())
+		if (!DialogService.TrySaveApplicationSettings())
 		{
 			return;
 		}

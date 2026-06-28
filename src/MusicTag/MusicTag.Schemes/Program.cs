@@ -152,7 +152,7 @@ internal static class Program
 		try
 		{
 			LogUnhandledException(exception, exceptionSource);
-			DatabaseMapper.ShowErrorMessage(Resources.Msg_ApplicationExceptionWillExit);
+			DialogService.ShowErrorMessage(Resources.Msg_ApplicationExceptionWillExit);
 		}
 		finally
 		{

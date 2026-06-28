@@ -289,7 +289,7 @@ internal class LyricEditorDialog : Form
 		}
 		catch (System.Exception ex)
 		{
-			DatabaseMapper.ShowErrorMessage(ex.Message);
+			DialogService.ShowErrorMessage(ex.Message);
 		}
 		finally
 		{
@@ -333,7 +333,7 @@ internal class LyricEditorDialog : Form
 		string adjustedLyric = LyricTextProcessor.ShiftLyricTimestamps(GetLyricText(), offsetDialog.OffsetMilliseconds);
 		if (adjustedLyric == null)
 		{
-			DatabaseMapper.ShowErrorMessage(Resources.Msg_AdjustTimetagFail);
+			DialogService.ShowErrorMessage(Resources.Msg_AdjustTimetagFail);
 			return;
 		}
 		SetLyricText(adjustedLyric);
@@ -355,7 +355,7 @@ internal class LyricEditorDialog : Form
 			if (!File.Exists(defaultSavePath))
 			{
 				File.WriteAllText(defaultSavePath, GetLyricText(), Encoding.GetEncoding(Settings.Default.SaveLrcFileDefaultEncoding));
-				DatabaseMapper.ShowInformationMessage(string.Format(Resources.Msg_FilesSavedInSpecPath, defaultSavePath));
+				DialogService.ShowInformationMessage(string.Format(Resources.Msg_FilesSavedInSpecPath, defaultSavePath));
 				return;
 			}
 
@@ -366,7 +366,7 @@ internal class LyricEditorDialog : Form
 		}
 		catch (System.Exception ex)
 		{
-			DatabaseMapper.ShowErrorMessage(ex.Message);
+			DialogService.ShowErrorMessage(ex.Message);
 		}
 	}
 
@@ -382,7 +382,7 @@ internal class LyricEditorDialog : Form
 		}
 		catch (System.Exception ex)
 		{
-			DatabaseMapper.ShowErrorMessage(ex.Message);
+			DialogService.ShowErrorMessage(ex.Message);
 		}
 	}
 

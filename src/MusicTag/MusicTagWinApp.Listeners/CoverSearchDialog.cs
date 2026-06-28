@@ -710,7 +710,7 @@ internal class CoverSearchDialog : Form
 	{
 		if (candidateListView.SelectedItems.Count <= 0)
 		{
-			DatabaseMapper.ShowErrorMessage(Resources.Msg_PleaseSelectItem);
+			DialogService.ShowErrorMessage(Resources.Msg_PleaseSelectItem);
 			return;
 		}
 

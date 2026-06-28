@@ -1081,7 +1081,7 @@ internal class CombinedTagSearchDialog : Form
 			Close();
 			return;
 		}
-		DatabaseMapper.ShowErrorMessage(Resources.Msg_PleaseSelectItem);
+		DialogService.ShowErrorMessage(Resources.Msg_PleaseSelectItem);
 	}
 
 	private void CancelButtonClick(object sender, EventArgs args)

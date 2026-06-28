@@ -107,7 +107,7 @@ internal class TagHistorySelectionDialog : Form
 	{
 		if (historyListView.SelectedItems.Count <= 0)
 		{
-			DatabaseMapper.ShowErrorMessage(Resources.Msg_PleaseSelectItem);
+			DialogService.ShowErrorMessage(Resources.Msg_PleaseSelectItem);
 			return;
 		}
 		int selectedHistoryIndex = historyListView.SelectedItems[0].Index;

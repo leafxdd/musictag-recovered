@@ -80,7 +80,7 @@ internal class CombinedTagOverwriteOptionsDialog : Form
 
 	private void LayoutControls()
 	{
-		DatabaseMapper.FillAndCenterButtons(optionListView, mainPanel, buttonPanel);
+		DialogService.FillAndCenterButtons(optionListView, mainPanel, buttonPanel);
 		optionListView.Columns[0].Width = optionListView.ClientSize.Width;
 	}
 

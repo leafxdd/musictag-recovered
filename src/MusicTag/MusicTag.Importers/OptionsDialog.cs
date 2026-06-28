@@ -436,7 +436,7 @@ internal class OptionsDialog : Form
 		optionsToolTip.SetToolTip(lyricTranslationSeparatorComboBox, dialogResources.GetString("cbConnectorsLyricAndTLyricTip"));
 		optionsToolTip.SetToolTip(browseLrcDirectoryButton, dialogResources.GetString("btnLrcSaveDirTip"));
 		optionsToolTip.SetToolTip(useLocalLrcDirectoryButton, dialogResources.GetString("btnLrcSaveLocalDirTip"));
-		DatabaseMapper.SetTextBoxCueBanner(lrcDirectoryTextBox, dialogResources.GetString("tbLrcSaveDirHint"));
+		DialogService.SetTextBoxCueBanner(lrcDirectoryTextBox, dialogResources.GetString("tbLrcSaveDirHint"));
 	}
 
 	private string GetDialogText(string resourceName, string fallbackText)
@@ -699,7 +699,7 @@ internal class OptionsDialog : Form
 		string[] restrictedExtensions = NormalizeRestrictedExtensions(restrictedExtensionsTextBox.Text);
 		if (!restrictedExtensions.Any())
 		{
-			DatabaseMapper.ShowErrorMessage(Resources.Msg_PleaseInputValidExt);
+			DialogService.ShowErrorMessage(Resources.Msg_PleaseInputValidExt);
 			optionsTreeView.SelectedNode = optionsTreeView.Nodes["Others"];
 			restrictedExtensionsTextBox.Focus();
 			return;
@@ -708,7 +708,7 @@ internal class OptionsDialog : Form
 		string unsupportedExtension = restrictedExtensions.FirstOrDefault(IsUnknownRestrictedExtension);
 		if (unsupportedExtension != null)
 		{
-			DatabaseMapper.ShowErrorMessage(string.Format(Resources.Msg_NoSupportExt, unsupportedExtension));
+			DialogService.ShowErrorMessage(string.Format(Resources.Msg_NoSupportExt, unsupportedExtension));
 			optionsTreeView.SelectedNode = optionsTreeView.Nodes["Others"];
 			restrictedExtensionsTextBox.Focus();
 			return;
@@ -776,7 +776,7 @@ internal class OptionsDialog : Form
 		Settings.Default.ConnectorsArtists = artistConnectorComboBox.Text;
 		Settings.Default.QQMusic_Cookie = qqCookieTextBox.Text.Trim();
 		Settings.Default.WebSearch_CustomUserAgent = customUserAgentTextBox.Text.Trim();
-		if (!DatabaseMapper.TrySaveApplicationSettings())
+		if (!DialogService.TrySaveApplicationSettings())
 		{
 			return;
 		}
@@ -957,15 +957,15 @@ internal class OptionsDialog : Form
 
 	private void ClearAllTagHistory(object sender, EventArgs e)
 	{
-		if (DatabaseMapper.ConfirmYesNo(Resources.Msg_ConfirmClearAllTagsHistory))
+		if (DialogService.ConfirmYesNo(Resources.Msg_ConfirmClearAllTagsHistory))
 		{
 			if (TagHistoryRepository.TryClearAllHistory(out string errorMessage) >= 0)
 			{
-				DatabaseMapper.ShowInformationMessage(Resources.Msg_ClearAllTagsHistoryComplete);
+				DialogService.ShowInformationMessage(Resources.Msg_ClearAllTagsHistoryComplete);
 			}
 			else
 			{
-				DatabaseMapper.ShowErrorMessage(Resources.Msg_ClearAllTagsHistoryFail + "\n" + errorMessage);
+				DialogService.ShowErrorMessage(Resources.Msg_ClearAllTagsHistoryFail + "\n" + errorMessage);
 			}
 		}
 	}

@@ -1,31 +1,16 @@
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Drawing;
-using System.Drawing.Drawing2D;
-using System.Drawing.Imaging;
 using System.IO;
-using System.Linq;
-using System.Resources;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Windows.Forms;
-using MusicTag.Readers;
-using MusicTag.Schemes;
-using MusicTag.Services;
 using MusicTagWinApp.Containers;
 using MusicTagWinApp.Properties;
 
 namespace MusicTagWinApp.Instances;
 
-internal static class DatabaseMapper
+// 消息框 / 确认对话框 / 资源管理器定位 / 设置保存等 UI 辅助。原 DatabaseMapper（误名神类）拆分而来,至此该类清空并删除（详见 docs/SIMPLIFICATION_PLAN.md Phase 2）。
+internal static class DialogService
 {
-	
-	
-	
-	
-
-	
 	public static void ShowInformationMessage(string message)
 	{
 			MessageBox.Show(message, Resources.Information, MessageBoxButtons.OK, MessageBoxIcon.Asterisk);
@@ -62,10 +47,6 @@ internal static class DatabaseMapper
 	{
 		return MessageBox.Show(message, Resources.Confirmation, MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
 	}
-
-	
-
-	
 
 	public static void ShowInExplorer(string path)
 	{
@@ -116,5 +97,4 @@ internal static class DatabaseMapper
 		int horizontalMargin = (mainPanel.Width - buttonPanel.Width) / 2;
 		buttonPanel.Margin = new Padding(horizontalMargin, buttonPanel.Margin.Top, horizontalMargin, buttonPanel.Margin.Bottom);
 	}
-
 }

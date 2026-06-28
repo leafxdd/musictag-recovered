@@ -142,7 +142,7 @@ internal sealed class TextBoxFindReplaceController
 			return;
 		}
 
-		DatabaseMapper.ShowInformationMessage(string.Format(Resources.Msg_CannotFindText, SearchText));
+		DialogService.ShowInformationMessage(string.Format(Resources.Msg_CannotFindText, SearchText));
 	}
 
 	private StringComparison GetStringComparison()
