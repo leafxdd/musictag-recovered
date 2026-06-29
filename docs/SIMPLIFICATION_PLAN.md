@@ -369,3 +369,39 @@
 - **Dispatch A defer**：`CombinedTagSearchDialog.SearchTracksFromSource`（per-source 多趟查询编排，含趟间取消/条件）风险显著高于 B–E 且联网路径无 smoke 覆盖，需粗粒度 `ICombinedTrackSearch` 逐字节搬入 per-source 实现，留作后续单独批准。收敛 B/C/D/E 已实现 5 个 dispatch 中的 4 个。
 - **不变量保持**：`SearchSource` 序数、`SourceItem` JSON 键、4 个 static dispatch 签名（含可选尾参默认值）→ `AutoMatchTagsDialog` 零改动；per-source 上限字节级复刻；StatusReporter 搜索前注入 / transportSink 搜索后 Invoke 的时序不变。
 - **验证**：每步 `Verify-Build.ps1 -RunSmokeTests`（Debug+Release 编译 + 22 characterization + 3 smoke）全绿。
+
+## 写标签/重命名 characterization 扩展（2026-06-30）
+
+承 B2 能力接口批次末尾「后续扩展：写标签/重命名路径 characterization」，按用户「先纯逻辑后音频」决策，为写标签（`ChangeTags`）/ 重命名（`RenameFiles`）/ `ConfigDescriptorState` 读写路径建 characterization 网，锁定现状为后续结构迁移的回归基线。测试总数 **22 → 103**（+81）。
+
+**铁律延续**：concrete 业务逻辑一字不动。可测性经两手段达成——**可见性放宽**（`private`→`internal`，纯可见性零逻辑）或**纯逻辑提取**（内联→`internal static`，逐字节搬移 + 调用点 retarget，build+smoke+diff 兜底）。每子批一 commit、各跑 `Verify-Build.ps1 -RunSmokeTests` 全绿。
+
+### 纯逻辑批（先做，无 fixture）
+
+| commit | 目标 | 手段 | 测试 |
+|---|---|---|---|
+| `d0a61ff` | `ConfigDescriptorState.ParseNumberAndCount` / `ToSingleValue` | 可见性放宽 | 13 |
+| `ec2ca03` | `FilenameRegexCaptureExtractor`（文件名正则捕获 + 括号保护段 masking） | 可见性放宽（`private sealed`→`internal sealed`） | 5 |
+| `7211d33a` | `RenderRenameFilename`（@1-8 模板渲染 + 非法字符清理） | 提取自 `RenameFiles` 内联 | 8 |
+| `fb8ad017` | `PendingTagUpdate`（数字门控 `SetNumberedTag` + disc/track 占位符 `SetFilenamePatternTag`） | 可见性放宽 | 13 |
+| `9045add9` | `BuildFilenameMatchRegex`（模板→匹配正则 + token 提取） | 提取自 `ChangeTags` 内联 | 6 |
+| `78be2666` | `SplitCombinedDiscTrackCapture`（disc/track 组合 token 数字前缀拆分） | 提取自 `ChangeTags` 内联（返回赋值序列隔离副作用） | 6 |
+| `13149346` | `GetDisplayValue`（显示格式化）+ `FormatDurationWithMilliseconds` / `FormatDurationHms` | 零放宽（全 public，空构造 + indexer 填 dict） | 16 |
+| `e641ae11` | `ValidateFilenamePatternCore`（模板输入校验） | 提取自 `ValidateFilenamePattern`（纯判定→enum，UI 层翻译消息） | 10 |
+
+### 音频 round-trip 批（后做，自包含 fixture）
+
+| commit | 目标 | fixture | 测试 |
+|---|---|---|---|
+| `09de9f22` | `LoadBasicTagFields`→改字段→`SaveTagFields`→重读 端到端 + **163-key COMM clear** | **程序化构造最小有效 MP3**（MPEG-1 Layer III 帧头 `0xFF FB 90 64` + 静音，4 帧 1668B；`TagLib.File.Create` 可识别，不依赖 gitignored 真实音频，CI 可复现） | 4 |
+
+- **fixture 自包含**：写标签 round-trip 需真实音频文件（`TagLib.File.Create` 默认 `ReadStyle.Average` 读音频属性），而 `docs/测试歌曲/` gitignored、CI 缺失。解法：测试代码程序化构造最小有效 MP3 字节（4 个相同 MPEG 帧头 + 静音填充），写临时文件，round-trip 后删。比 base64 嵌入更自解释。
+- **163-key COMM clear**：CLAUDE.md 标注的 native 行为修正（`SaveTagFields` 的 `RemoveFrames("COMM")` 使带非空 description 的网易云 163-key COMM 不随 comment 编辑存活）。测试用 TagLib 直接预置带 description 的 COMM，经 `ConfigDescriptorState` 改 comment 后验证其消失。为此 `MusicTag.Tests.csproj` 加 `TagLibSharp` dll 引用（与主项目同一 `musictag/TagLibSharp.dll`，非 NuGet）。
+
+### 锁定的 latent bug（IS not SHOULD）
+
+- `FilenameRegexCaptureExtractor` 的**括号保护段 masking 对捕获分组未生效**：构造函数用 `maskedVariants[i].Text` 匹配，而 `variant.Text` 始终是该轮 mask **前**的原文（最深 mask 版从未入列），故括号内分隔符仍被正则当分隔——`"A (b - c) - D"` 经 `^(.+?) - (.+)$` 被切成 `["A (b","c) - D"]`（本应 `["A (b - c)","D"]`）。按 characterization 原则锁定现状，留待 write/rename 结构批次单独决策是否修复。
+
+### 覆盖边界
+
+写标签/重命名的核心纯数据变换 + 端到端 round-trip 已覆盖。剩余未罩（刻意）：`RenameFiles` 的 destination 路径计算 / `(N)` 冲突 dedup（耦合 `File.Exists` I/O）、`ChangeTags` 的 regex 捕获模式 `case 1-8` dict 映射（低价值，已经 `PendingTagUpdate` 间接覆盖 `SetNumberedTag`）、各 UI 布局/事件。
