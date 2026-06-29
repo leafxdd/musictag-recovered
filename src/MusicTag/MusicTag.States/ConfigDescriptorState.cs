@@ -701,7 +701,7 @@ internal class ConfigDescriptorState : IDisposable
 	// so the on-disk frame structure matches the original (otherwise Xiph would get
 	// multiple ARTIST fields — confirmed divergent via native read-back). The read
 	// path still re-joins through JoinMulti, so the round-trip is unchanged.
-	private static string[] ToSingleValue(string value)
+	internal static string[] ToSingleValue(string value)
 	{
 		return string.IsNullOrEmpty(value) ? new string[0] : new string[1] { value };
 	}
@@ -1047,7 +1047,7 @@ internal class ConfigDescriptorState : IDisposable
 		tag.DiscCount = count;
 	}
 
-	private static void ParseNumberAndCount(string value, out uint number, out uint count)
+	internal static void ParseNumberAndCount(string value, out uint number, out uint count)
 	{
 		number = 0u;
 		count = 0u;

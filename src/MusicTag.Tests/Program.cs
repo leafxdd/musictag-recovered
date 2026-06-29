@@ -17,6 +17,7 @@ internal static class Program
 		tests.AddRange(QqProviderCharacterization.All());
 		tests.AddRange(KuwoProviderCharacterization.All());
 		tests.AddRange(KugouProviderCharacterization.All());
+		tests.AddRange(ConfigDescriptorStateCharacterization.All());
 		return TestRunner.RunAll(tests);
 	}
 }
