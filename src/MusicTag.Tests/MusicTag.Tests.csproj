@@ -11,6 +11,8 @@
          保持主项目零-NuGet 纯净度）。经 InternalsVisibleTo 访问主程序集 internal 类型。 -->
   </PropertyGroup>
   <ItemGroup>
+    <!-- HttpClient：override provider 的 protected virtual PostString 需匹配签名。net481 下 System.Net.Http 需显式引用。 -->
+    <Reference Include="System.Net.Http" />
     <ProjectReference Include="..\MusicTag\MusicTag.csproj" />
   </ItemGroup>
 </Project>

@@ -13,6 +13,7 @@ internal static class Program
 		Console.WriteLine();
 		List<(string, Action)> tests = new List<(string, Action)>();
 		tests.AddRange(TextUtilitiesTests.All());
+		tests.AddRange(NetEaseProviderCharacterization.All());
 		return TestRunner.RunAll(tests);
 	}
 }
