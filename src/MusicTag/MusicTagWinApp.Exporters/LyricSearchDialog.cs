@@ -464,31 +464,15 @@ internal class LyricSearchDialog : Form
 
 	public static LyricSearchResult DownloadLyricBySource(TrackSearchResult track, TrackSearchContext trackInfo, CancellationTokenSource cancellation)
 	{
-		switch (track.SearchSource)
+		// 按候选曲目自身的来源加载歌词;未知源(即原 switch 的 default)返回 null。trackInfo 形参在各源实现中
+		// 均未使用,保留以维持静态方法签名不变(AutoMatchTagsDialog 复用)。原 4 case 均不注入 StatusReporter,
+		// 故工厂此处不传 statusReporter。酷我经显式接口实现转发到单数名 LoadLyricForTrack。
+		using ITrackLyricLoader provider = SearchProviderFactory.CreateLyricLoader(track.SearchSource, cancellation);
+		if (provider == null)
 		{
-		case SearchSource.Music163:
-		{
-			using NetEaseMusicTagProvider netEaseProvider = new NetEaseMusicTagProvider(cancellation);
-			return netEaseProvider.LoadLyricsForTrack(track);
-		}
-		case SearchSource.QQ:
-		{
-			using QqMusicTagProvider qqProvider = new QqMusicTagProvider(cancellation);
-			return qqProvider.LoadLyricsForTrack(track);
-		}
-		case SearchSource.Kugou:
-		{
-			using KugouTagProvider kugouTagProvider = new KugouTagProvider(cancellation);
-			return kugouTagProvider.LoadLyricsForTrack(track);
-		}
-		default:
 			return null;
-		case SearchSource.Kuwo:
-		{
-			using KuwoTagProvider kuwoTagProvider = new KuwoTagProvider(cancellation);
-			return kuwoTagProvider.LoadLyricForTrack(track);
 		}
-		}
+		return provider.LoadLyricsForTrack(track);
 	}
 
 	private async void StartLyricSearch()
