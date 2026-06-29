@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Text;
 using MusicTag.Schemes;
@@ -101,6 +102,11 @@ internal static class LogService
 
 	static LogService()
 	{
-			startupLogFileName = Program.StartupTime().ToString("yyyy-MM-dd HH_mm_ss") + ".log";
+			// 显式行为修正（非纯行为保持）：原 DatabaseMapper 单 cctor 在首次任意成员访问时触发，
+		// 实践中早于 StateFieldInstance 的 culture 重置（ApplyLanguageResources），故 startupLogFileName
+		// 曾按启动时 OS 区域日历渲染。拆分后本字段改由 LogService cctor 初始化，首次 log 访问发生在
+		// culture 重置之后，使非公历默认日历区域（th-TH 泰历等）的日志文件名年份改变。此处固定用
+		// InvariantCulture（公历），令渲染与触发时机、与 UI 语言均无关——同时修掉这个潜伏的 i18n 缺陷。
+		startupLogFileName = Program.StartupTime().ToString("yyyy-MM-dd HH_mm_ss", CultureInfo.InvariantCulture) + ".log";
 	}
 }
