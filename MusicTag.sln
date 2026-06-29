@@ -4,6 +4,8 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MusicTag", "src\MusicTag\MusicTag.csproj", "{A74C2C6E-5C4E-49B9-9A15-E725E37C4CFB}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MusicTag.Tests", "src\MusicTag.Tests\MusicTag.Tests.csproj", "{C1A6CC0D-2AAA-445D-BAB0-2D6CB605A8BE}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -14,6 +16,10 @@ Global
 		{A74C2C6E-5C4E-49B9-9A15-E725E37C4CFB}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A74C2C6E-5C4E-49B9-9A15-E725E37C4CFB}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A74C2C6E-5C4E-49B9-9A15-E725E37C4CFB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C1A6CC0D-2AAA-445D-BAB0-2D6CB605A8BE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C1A6CC0D-2AAA-445D-BAB0-2D6CB605A8BE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C1A6CC0D-2AAA-445D-BAB0-2D6CB605A8BE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C1A6CC0D-2AAA-445D-BAB0-2D6CB605A8BE}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

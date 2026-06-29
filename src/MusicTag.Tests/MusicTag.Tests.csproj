@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net481</TargetFramework>
+    <UseWindowsForms>True</UseWindowsForms>
+    <Prefer32Bit>True</Prefer32Bit>
+    <AssemblyName>MusicTag.Tests</AssemblyName>
+    <RootNamespace>MusicTag.Tests</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <!-- characterization 测试宿主：独立 net481 x86 console exe，自写极简断言（零 NuGet，
+         保持主项目零-NuGet 纯净度）。经 InternalsVisibleTo 访问主程序集 internal 类型。 -->
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MusicTag\MusicTag.csproj" />
+  </ItemGroup>
+</Project>

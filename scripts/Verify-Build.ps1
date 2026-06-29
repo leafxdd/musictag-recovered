@@ -35,6 +35,14 @@ function Resolve-MSBuild {
     throw 'MSBuild not found. Install Visual Studio Build Tools with the MSBuild component or run from a Developer PowerShell.'
 }
 
+function Invoke-CharacterizationTests {
+    $exe = Resolve-Path -LiteralPath 'src\MusicTag.Tests\bin\Release\net481\MusicTag.Tests.exe'
+    & $exe.Path
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Characterization tests failed.'
+    }
+}
+
 function Invoke-FilenameRelatedBatchDialogSmokeTest {
     $command = @'
 $ErrorActionPreference = 'Stop'
@@ -97,6 +105,7 @@ foreach ($configuration in $Configurations) {
 }
 
 if ($RunSmokeTests) {
+    Invoke-CharacterizationTests
     Invoke-FilenameRelatedBatchDialogSmokeTest
     Invoke-OptionsDialogSmokeTest
     Invoke-ReleaseStartupSmokeTest

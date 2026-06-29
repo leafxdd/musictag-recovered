@@ -4,6 +4,9 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 
+// characterization 测试项目（src/MusicTag.Tests）经此访问本程序集的 internal 类型（provider / 工具类等）。
+// 纯可见性，零运行时行为影响。详见 docs/SIMPLIFICATION_PLAN.md Phase 2 characterization 基础设施。
+[assembly: InternalsVisibleTo("MusicTag.Tests")]
 [assembly: ComVisible(false)]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCopyright("Copyright ©  2019-2022")]
