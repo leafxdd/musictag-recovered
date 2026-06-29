@@ -369,43 +369,18 @@ internal class LyricSearchDialog : Form
 
 	public static List<LyricSearchResult> SearchLyricsBySource(SearchSource searchSource, bool useKnownMusicId, TrackSearchContext trackInfo, int maxResults, List<LyricSearchResult> existingLyrics, int sourceOrder, CancellationTokenSource cancellation, bool searchCandidateTracks, Action<SourceSearchStatus> statusReporter = null, Action<HttpResult> transportSink = null)
 	{
-		switch (searchSource)
+		// 经工厂按源构造歌词 provider(已注入 StatusReporter);未知源(原 switch 的 default)返回空列表。
+		// knownSongId / existingLyrics 仅网易云接收,QQ/酷狗/酷我经显式接口实现转发时丢弃(等价原 3 参 concrete);
+		// useKnownMusicId 仅在 LinkedMusicMetadata 已解引用(musicId>0L)的语境为 true,故三元对其余源短路取 0L、不触 NRE。
+		// searchCandidateTracks 形参在各源实现中均未使用,保留以维持静态签名(AutoMatchTagsDialog 复用)。
+		using ILyricSearchProvider provider = SearchProviderFactory.CreateLyricSearch(searchSource, cancellation, statusReporter);
+		if (provider == null)
 		{
-			case SearchSource.Music163:
-			{
-				using NetEaseMusicTagProvider netEaseProvider = new NetEaseMusicTagProvider(cancellation);
-				netEaseProvider.StatusReporter = statusReporter;
-				List<LyricSearchResult> lyrics = netEaseProvider.SearchLyrics((trackInfo.Title + " " + trackInfo.Artist).Trim(), Math.Min(15, maxResults), useKnownMusicId ? trackInfo.LinkedMusicMetadata.musicId : 0L, existingLyrics, sourceOrder);
-				transportSink?.Invoke(netEaseProvider.LastTransportResult);
-				return lyrics;
-			}
-			case SearchSource.QQ:
-			{
-				using QqMusicTagProvider qqProvider = new QqMusicTagProvider(cancellation);
-				qqProvider.StatusReporter = statusReporter;
-				List<LyricSearchResult> lyrics = qqProvider.SearchLyrics((trackInfo.Title + " " + trackInfo.Artist).Trim(), Math.Min(15, maxResults), sourceOrder);
-				transportSink?.Invoke(qqProvider.LastTransportResult);
-				return lyrics;
-			}
-			case SearchSource.Kugou:
-			{
-				using KugouTagProvider kugouTagProvider = new KugouTagProvider(cancellation);
-				kugouTagProvider.StatusReporter = statusReporter;
-				List<LyricSearchResult> lyrics = kugouTagProvider.SearchLyrics((trackInfo.Title + " " + trackInfo.Artist).Trim(), Math.Min(5, maxResults), sourceOrder);
-				transportSink?.Invoke(kugouTagProvider.LastTransportResult);
-				return lyrics;
-			}
-			case SearchSource.Kuwo:
-			{
-				using KuwoTagProvider kuwoTagProvider = new KuwoTagProvider(cancellation);
-				kuwoTagProvider.StatusReporter = statusReporter;
-				List<LyricSearchResult> lyrics = kuwoTagProvider.SearchLyrics((trackInfo.Title + " " + trackInfo.Artist).Trim(), Math.Min(5, maxResults), sourceOrder);
-				transportSink?.Invoke(kuwoTagProvider.LastTransportResult);
-				return lyrics;
-			}
-			default:
-				return new List<LyricSearchResult>();
+			return new List<LyricSearchResult>();
 		}
+		List<LyricSearchResult> lyrics = provider.SearchLyrics((trackInfo.Title + " " + trackInfo.Artist).Trim(), Math.Min(SearchProviderPolicy.ResultLimit(searchSource), maxResults), useKnownMusicId ? trackInfo.LinkedMusicMetadata.musicId : 0L, existingLyrics, sourceOrder);
+		transportSink?.Invoke(provider.LastTransportResult);
+		return lyrics;
 	}
 
 	private List<TrackSearchResult> SearchTrackCandidates(SearchSource searchSource, int sourceOrder, bool fromCandidateSearch)
