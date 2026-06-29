@@ -14,7 +14,6 @@ using MusicTag.Mocks;
 using MusicTag.Serialization;
 using MusicTag.Services;
 using MusicTag.States;
-using MusicTagWinApp.Adapter;
 using MusicTagWinApp.Containers;
 using MusicTagWinApp.Exporters;
 using MusicTagWinApp.Instances;
@@ -22,7 +21,6 @@ using MusicTagWinApp.Properties;
 using MusicTagWinApp.Stubs;
 using MusicTagWinApp.Web;
 using MusicTagWinApp.Win32.Taskbar;
-using MusicTagWinApp.Writers;
 
 namespace MusicTagWinApp.Listeners;
 

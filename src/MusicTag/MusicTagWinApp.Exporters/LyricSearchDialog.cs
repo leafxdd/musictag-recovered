@@ -7,7 +7,6 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using MusicTag.Candidates;
 using MusicTag.Consumers;
 using MusicTag.Serialization;
 using MusicTag.Services;
@@ -18,7 +17,6 @@ using MusicTagWinApp.Properties;
 using MusicTagWinApp.Roles;
 using MusicTagWinApp.Web;
 using MusicTagWinApp.Win32.Taskbar;
-using MusicTagWinApp.Writers;
 
 namespace MusicTagWinApp.Exporters;
 
