@@ -346,3 +346,26 @@
   - Kuwo：`TrackId` 去 `MUSIC_` 前缀、album-first / fallback 选取、Title&Artist 必须非空。
   - Kugou：**NO covers**（`track.Cover==null`）、`DurationMs` 秒 ×1000、按 `audio_id` 过滤。
 - **后续扩展**：写标签 / 重命名路径 characterization（需临时音频文件 fixture），作为 write/rename 结构批次的前置回归网。
+
+## Phase 2 首个结构重构：B2 provider 能力接口 + dispatch 收敛（2026-06-29）
+
+承 characterization 回归网，落实 B2 正解——**显式能力接口 + 按能力分派**（基类型工厂路线已否决：基类不声明搜索方法、返回值无法 uniform 调用）。4 联网 provider（NetEase/QQ/Kuwo/Kugou，命名空间分散、均继承 `RemoteTagProviderBase`）方法签名异构；3 搜索 dialog 散落 5 个 `switch(SearchSource)` dispatch，逐源 `new XxxProvider` 后调用。
+
+**铁律**：22 characterization 经子类 override `protected virtual PostString`/`GetResponseString` 驱动各 provider 的 public **concrete** 搜索方法。故 concrete 签名与方法体**一字不动**——签名调和全用「显式接口实现转发器」，不碰 concrete，回归网每步恒绿。
+
+| commit | 步骤 | 内容 | 风险 |
+|---|---|---|---|
+| `3081471` | Step 1 | 新建 4 能力接口 + `IRemoteSearchProvider` + `SearchProviderFactory` + `SearchProviderPolicy`（置 `MusicTagWinApp.Web`）；4 provider 加 `: 接口` 与显式转发器。纯加法、无调用方 → 零行为 | 极低 |
+| `28ac232` | Step 2 | 收敛 Dispatch E（`CoverSearchDialog.SearchCoversBySource`） | 低 |
+| `521fc9a` | Step 3 | 收敛 Dispatch D（`LyricSearchDialog.DownloadLyricBySource`） | 低 |
+| `e70fb7e` | Step 4 | 收敛 Dispatch C（`LyricSearchDialog.SearchLyricsBySource`） | 中 |
+| `4455648` | Step 5 | 收敛 Dispatch B（`LyricSearchDialog.SearchTracksBySource`） | 中 |
+| `1b1c831` | 收尾 | 移除两 dialog 因收敛而 unused 的 provider-namespace using（仅本批可追溯项；pre-existing 非 provider unused 留置） | 极低 |
+
+- **接口设计**：`IRemoteSearchProvider : IDisposable`（暴露 `LastTransportResult`，base 已 public 提供）；`ITrackSearchProvider`/`ILyricSearchProvider` 取 NetEase 超集签名（含 `knownSongId`）；`ICoverSearchProvider`（Kugou 不实现）；`ITrackLyricLoader`（`LoadLyricsForTrack`）。
+- **provider 实现**：NetEase 四接口全**隐式**（concrete 签名即超集，零新增成员）；QQ/Kugou 加 2 个 track/lyric 显式转发器（丢 `knownSongId`/`existingLyrics`）；Kuwo 再加 `LoadLyricsForTrack` 显式转发到单数名 concrete `LoadLyricForTrack`。
+- **工厂/策略**：`SearchProviderFactory` 每能力一 `Create*`，经典 `switch` 造实例、返回前注入 `StatusReporter`，未知源 / `CreateCoverSearch` 的 Kugou → `null`（镜像原 `default`，与「Kugou 不实现 ICoverSearchProvider」双重保证无封面）。`SearchProviderPolicy.ResultLimit`：网易云/QQ=15、酷狗/酷我=5（B/C/E 散落字面量的单一来源）。
+- **对抗性核对（i18n/NRE）**：收敛后 Dispatch C 对所有源求值 `useKnownMusicId ? trackInfo.LinkedMusicMetadata.musicId : 0L`（非 NetEase 经转发器丢弃）。核验所有 `useKnownMusicId=true` 调用点（dialog 内 gated `== Music163` 且已解引用 `LinkedMusicMetadata.musicId`；`AutoMatchTagsDialog:1186` gated `searchContext.LinkedMusicMetadata.musicId > 0L`）均保证 `LinkedMusicMetadata` 非 null → 三元对非 NetEase 短路取 `0L`、不触 NRE，严格等价。Dispatch B 各源硬编码 `knownSongId=0L`/`searchPass=0`/两个新建空列表，Kuwo 转发器把空列表映射到 concrete `previousResults`/`currentResults`（值同、无歧义）。
+- **Dispatch A defer**：`CombinedTagSearchDialog.SearchTracksFromSource`（per-source 多趟查询编排，含趟间取消/条件）风险显著高于 B–E 且联网路径无 smoke 覆盖，需粗粒度 `ICombinedTrackSearch` 逐字节搬入 per-source 实现，留作后续单独批准。收敛 B/C/D/E 已实现 5 个 dispatch 中的 4 个。
+- **不变量保持**：`SearchSource` 序数、`SourceItem` JSON 键、4 个 static dispatch 签名（含可选尾参默认值）→ `AutoMatchTagsDialog` 零改动；per-source 上限字节级复刻；StatusReporter 搜索前注入 / transportSink 搜索后 Invoke 的时序不变。
+- **验证**：每步 `Verify-Build.ps1 -RunSmokeTests`（Debug+Release 编译 + 22 characterization + 3 smoke）全绿。
