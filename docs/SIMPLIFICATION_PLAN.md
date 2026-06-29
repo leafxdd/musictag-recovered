@@ -347,6 +347,11 @@
   - Kugou：**NO covers**（`track.Cover==null`）、`DurationMs` 秒 ×1000、按 `audio_id` 过滤。
 - **后续扩展**：写标签 / 重命名路径 characterization（需临时音频文件 fixture），作为 write/rename 结构批次的前置回归网。
 
+**联网 cover/lyric characterization 扩展（2026-06-30）** —— 承 provider `SearchTracks` 覆盖，补齐前文「provider fixture 测试」建议里的 `SearchCovers`/`SearchLyrics`（共 +23，105→128）：
+- **封面（`993aa69f`，+10）**：NetEase/QQ/Kuwo 的 `SearchCovers`。锁定 CoverUrl 映射（NetEase=al.picUrl；QQ=`photo_new/...M000{album.mid}.jpg`；Kuwo=web_albumpic_short 拼 `500/` 高清直链，缺失则回退 `songinfoandlrc` 详情 URL）+ 基类 `BuildDedupedCovers` 去重三分支（空 CoverUrl / 重复 / existingCovers 已有）+ ParseFailed。封面下载是延迟闭包（`CoverDownloader`），不触发，无需 mock 图片字节；Kugou 无封面不列。
+- **歌词（`13029ef2` NetEase/QQ + `adbfbef2` Kugou/Kuwo，+13）**：四源 `SearchLyrics`。注入按 HTTP 调用分流——NetEase/QQ 搜索走 `PostString`、歌词走 `GetResponseString`（分别 override）；Kugou/Kuwo 搜索与歌词同走 `GetResponseString`，Stub 按 URL 关键字分流（`get_krc` / `songinfoandlrc`）。锁定 Lyric/TranslatedLyric/字段映射/ResultOrder/SourceOrder：NetEase 直取 lrc.lyric+tlyric.lyric；QQ base64-in-jsonp（fixture 用 `Convert.ToBase64String(UTF8)` 动态编码）；Kugou 直取 data.lrc；Kuwo 详情 lrclist 逐行 `FormatTimestamp` 厘秒 `[mm:ss.cc]` 拼装。均用单语规避 QQ `AlignAndSplitTranslatedLyric` / Kuwo 双语重排（留边界外）。空歌词→0、NetEase existing TrackId 去重、搜索 HTTP-200 不可解析→ParseFailed。
+- 全程注入点不发起网络、不触发下载/对齐——纯解析链 golden master。
+
 ## Phase 2 首个结构重构：B2 provider 能力接口 + dispatch 收敛（2026-06-29）
 
 承 characterization 回归网，落实 B2 正解——**显式能力接口 + 按能力分派**（基类型工厂路线已否决：基类不声明搜索方法、返回值无法 uniform 调用）。4 联网 provider（NetEase/QQ/Kuwo/Kugou，命名空间分散、均继承 `RemoteTagProviderBase`）方法签名异构；3 搜索 dialog 散落 5 个 `switch(SearchSource)` dispatch，逐源 `new XxxProvider` 后调用。
