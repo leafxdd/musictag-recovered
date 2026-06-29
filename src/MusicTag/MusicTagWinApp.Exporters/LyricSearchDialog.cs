@@ -393,43 +393,18 @@ internal class LyricSearchDialog : Form
 
 	public static List<TrackSearchResult> SearchTracksBySource(SearchSource searchSource, TrackSearchContext trackInfo, int sourceOrder, CancellationTokenSource cancellation, bool fromCandidateSearch, Action<SourceSearchStatus> statusReporter = null, Action<HttpResult> transportSink = null)
 	{
-		switch (searchSource)
+		// 经工厂按源构造曲目 provider(已注入 StatusReporter);未知源(原 switch 的 default)返回空列表。
+		// 原各 case 均以 knownSongId=0L、searchPass=0、两个新建空列表调用,此处逐一复刻;knownSongId 仅网易云接收,
+		// QQ/酷狗/酷我经显式接口实现转发时丢弃(酷我的两个空列表映射到 concrete previousResults/currentResults,值同)。
+		// fromCandidateSearch 形参在各源实现中均未使用,保留以维持静态签名(AutoMatchTagsDialog 复用)。
+		using ITrackSearchProvider provider = SearchProviderFactory.CreateTrackSearch(searchSource, cancellation, statusReporter);
+		if (provider == null)
 		{
-			case SearchSource.Music163:
-			{
-				using NetEaseMusicTagProvider netEaseProvider = new NetEaseMusicTagProvider(cancellation);
-				netEaseProvider.StatusReporter = statusReporter;
-				List<TrackSearchResult> tracks = netEaseProvider.SearchTracks((trackInfo.Title + " " + trackInfo.Artist).Trim(), 15, 0L, 0, sourceOrder, new List<TrackSearchResult>(), new List<TrackSearchResult>());
-				transportSink?.Invoke(netEaseProvider.LastTransportResult);
-				return tracks;
-			}
-			case SearchSource.QQ:
-			{
-				using QqMusicTagProvider qqProvider = new QqMusicTagProvider(cancellation);
-				qqProvider.StatusReporter = statusReporter;
-				List<TrackSearchResult> tracks = qqProvider.SearchTracks((trackInfo.Title + " " + trackInfo.Artist).Trim(), 15, 0, sourceOrder, new List<TrackSearchResult>(), new List<TrackSearchResult>());
-				transportSink?.Invoke(qqProvider.LastTransportResult);
-				return tracks;
-			}
-			case SearchSource.Kugou:
-			{
-				using KugouTagProvider kugouTagProvider = new KugouTagProvider(cancellation);
-				kugouTagProvider.StatusReporter = statusReporter;
-				List<TrackSearchResult> tracks = kugouTagProvider.SearchTracks((trackInfo.Title + " " + trackInfo.Artist).Trim(), 5, 0, sourceOrder, new List<TrackSearchResult>(), new List<TrackSearchResult>());
-				transportSink?.Invoke(kugouTagProvider.LastTransportResult);
-				return tracks;
-			}
-			case SearchSource.Kuwo:
-			{
-				using KuwoTagProvider kuwoTagProvider = new KuwoTagProvider(cancellation);
-				kuwoTagProvider.StatusReporter = statusReporter;
-				List<TrackSearchResult> tracks = kuwoTagProvider.SearchTracks((trackInfo.Title + " " + trackInfo.Artist).Trim(), 5, 0, sourceOrder, new List<TrackSearchResult>(), new List<TrackSearchResult>());
-				transportSink?.Invoke(kuwoTagProvider.LastTransportResult);
-				return tracks;
-			}
-			default:
-				return new List<TrackSearchResult>();
+			return new List<TrackSearchResult>();
 		}
+		List<TrackSearchResult> tracks = provider.SearchTracks((trackInfo.Title + " " + trackInfo.Artist).Trim(), SearchProviderPolicy.ResultLimit(searchSource), 0L, 0, sourceOrder, new List<TrackSearchResult>(), new List<TrackSearchResult>());
+		transportSink?.Invoke(provider.LastTransportResult);
+		return tracks;
 	}
 
 	private LyricSearchResult DownloadLyricForTrack(TrackSearchResult track)
