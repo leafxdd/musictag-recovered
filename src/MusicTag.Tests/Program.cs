@@ -22,6 +22,7 @@ internal static class Program
 		tests.AddRange(RenderRenameFilenameCharacterization.All());
 		tests.AddRange(PendingTagUpdateCharacterization.All());
 		tests.AddRange(BuildFilenameMatchRegexCharacterization.All());
+		tests.AddRange(SplitCombinedDiscTrackCaptureCharacterization.All());
 		return TestRunner.RunAll(tests);
 	}
 }

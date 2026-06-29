@@ -184,6 +184,35 @@ internal class FilenameRelatedBatchDialog : Form
 		return (filenamePatternRegex, patternTokens);
 	}
 
+	// 处理"disc/track 组合占位符紧跟另一占位符"的连写 token(如 @4@5@1):把捕获文本按数字前缀
+	// ^(\d*)(.*)$ 拆成(数字段 -> disc/track 组合占位符, 余下 -> 后一占位符),每段非空白才设置;
+	// 非此形态的 token 原样设置。提取自 ChangeTags 内联逻辑(行为逐字保持),返回 (占位符, 值) 赋值序列。
+	internal static List<(string parameter, string value)> SplitCombinedDiscTrackCapture(string patternToken, string capturedText)
+	{
+		List<(string parameter, string value)> assignments = new List<(string parameter, string value)>();
+		Match combinedDiscTrackMatch = Regex.Match(patternToken, "^(@4@5|@4|@5)(@[0-8])$");
+		Match numericPrefixMatch = Regex.Match(capturedText, "^(\\d*)(.*)$");
+		if (combinedDiscTrackMatch.Success)
+		{
+			if (numericPrefixMatch.Success)
+			{
+				if (!string.IsNullOrWhiteSpace(numericPrefixMatch.Groups[1].Value))
+				{
+					assignments.Add((combinedDiscTrackMatch.Groups[1].Value, numericPrefixMatch.Groups[1].Value));
+				}
+				if (!string.IsNullOrWhiteSpace(numericPrefixMatch.Groups[2].Value))
+				{
+					assignments.Add((combinedDiscTrackMatch.Groups[2].Value, numericPrefixMatch.Groups[2].Value));
+				}
+			}
+		}
+		else
+		{
+			assignments.Add((patternToken, capturedText));
+		}
+		return assignments;
+	}
+
 	private sealed class RenameFilesBatchWorker
 	{
 		public CancellationTokenSource CancellationTokenSource;
@@ -511,25 +540,9 @@ internal class FilenameRelatedBatchDialog : Form
 									{
 										continue;
 									}
-									Match combinedDiscTrackMatch = Regex.Match(patternToken, "^(@4@5|@4|@5)(@[0-8])$");
-									Match numericPrefixMatch = Regex.Match(capturedText, "^(\\d*)(.*)$");
-									if (combinedDiscTrackMatch.Success)
+									foreach (var (parameter, value) in SplitCombinedDiscTrackCapture(patternToken, capturedText))
 									{
-										if (numericPrefixMatch.Success)
-										{
-											if (!string.IsNullOrWhiteSpace(numericPrefixMatch.Groups[1].Value))
-											{
-												tagUpdate.SetFilenamePatternTag(combinedDiscTrackMatch.Groups[1].Value, numericPrefixMatch.Groups[1].Value);
-											}
-											if (!string.IsNullOrWhiteSpace(numericPrefixMatch.Groups[2].Value))
-											{
-												tagUpdate.SetFilenamePatternTag(combinedDiscTrackMatch.Groups[2].Value, numericPrefixMatch.Groups[2].Value);
-											}
-										}
-									}
-									else
-									{
-										tagUpdate.SetFilenamePatternTag(patternToken, capturedText);
+										tagUpdate.SetFilenamePatternTag(parameter, value);
 									}
 								}
 							}
