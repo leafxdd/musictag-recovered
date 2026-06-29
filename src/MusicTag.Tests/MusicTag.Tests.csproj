@@ -13,6 +13,10 @@
   <ItemGroup>
     <!-- HttpClient：override provider 的 protected virtual PostString 需匹配签名。net481 下 System.Net.Http 需显式引用。 -->
     <Reference Include="System.Net.Http" />
+    <!-- TagLibSharp：163-key COMM round-trip 测试需直接构造 ID3v2 CommentsFrame 预置 fixture(与 MusicTag.csproj 同一 dll)。 -->
+    <Reference Include="TagLibSharp">
+      <HintPath>..\MusicTag\musictag\TagLibSharp.dll</HintPath>
+    </Reference>
     <ProjectReference Include="..\MusicTag\MusicTag.csproj" />
   </ItemGroup>
 </Project>
