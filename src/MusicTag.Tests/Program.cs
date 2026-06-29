@@ -17,6 +17,7 @@ internal static class Program
 		tests.AddRange(QqProviderCharacterization.All());
 		tests.AddRange(KuwoProviderCharacterization.All());
 		tests.AddRange(KugouProviderCharacterization.All());
+		tests.AddRange(ProviderCoverCharacterization.All());
 		tests.AddRange(ConfigDescriptorStateCharacterization.All());
 		tests.AddRange(FilenameRegexCaptureExtractorCharacterization.All());
 		tests.AddRange(RenderRenameFilenameCharacterization.All());
