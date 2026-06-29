@@ -144,7 +144,7 @@
 ### Tier C — 结构 / altitude（高 churn / 高风险，**默认推迟，仅记录方向**）
 
 - [ ] **StateFieldInstance**（8868 行）：`BatchFileTaskContext` 基类（或 `BatchFileProcessor<TItem>` 驱动）统一 ~11 个批处理 context + 8 个 `Start*` runner 脚手架（Cancel/UpdateProgress/循环/取消检查/`TagHistoryRepository` try-finally）；7 个 failure-reporter 类 + `AppendFileError(page,name,msg)`；`PictureCompressionWorker` 的 14 个 `ResizeToNNNQualityMM` 改 `(resolution,quality)[]` 表；`CoverPreviewController`（~700 行，4815-5650）/ VirtualMode 选择模型（3711-3816）抽取；`InitializeComponent` 移入 `StateFieldInstance.Designer.cs` partial。
-- [ ] **DatabaseMapper**：误名神类（~50 静态方法，无一 DB 相关），拆 image/DPI、file-logging（7×Get*LogDirectory ↔ 7×Write*Log 对偶）、path/dir、message-box 四簇静态类。
+- [x] **DatabaseMapper**（实测 ~72 方法、零 DB 访问）：拆 image/DPI、file-logging、path/dir、message-box → 实为 **5 簇**（+ text/hash/encoding）。**2026-06-29 完成**，原文件删除，详见下方「Phase 2 首批完成」。
 - [ ] **TagHistoryRepository**：抽出静态 `UndoStore`（进程级内存撤销栈 + spill-to-disk，与实例和 SQLite 连接无关）。
 - [ ] **ConfigDescriptorState**：13 字段词汇表统一 4 个并行 switch（`ReadFieldText`/`Id3v2FrameId`/`XiphFieldId`/`ApeFieldId`）—— 有真实不对称（id3v2 略 comment/lyrics；read 派生 trackstr/discstr），中风险。
 - [ ] **CombinedTagSearchDialog**：封面缩略图子系统（`CoverDownloadRequestContext`+`CoverImageLoadTask`+`CoverDownloadFile` + `DownloadCoverAsync`，~250 行，63-195/717-812，疑与 CoverSearchDialog 封面下载重叠）、track-search 三元组（`TrackSearchCoordinator`/`TrackSearchLimitState`/`TrackResultLimitCollector`，197-412）抽取。
@@ -313,3 +313,18 @@
 - 🟢 保留 `BuildDedupedCovers` 空白过滤为联网手验关注点。
 
 **Phase 2 首批选定：`DatabaseMapper` 命名空间级拆分**（Tier C / DatabaseMapper，行 287）——blast-radius 最小（非写、非联网、纯工具方法），新类置同命名空间 `MusicTagWinApp.Instances` 使扩展方法（`GetMessageChain`/`GetStringRespectingUtf16Bom`）移动对调用点透明，非扩展方法调用点 `DatabaseMapper.X→NewClass.X` 由编译器强校验完整性（漏一处即 CS0117）。
+
+**Phase 2 首批完成：`DatabaseMapper` 命名空间级拆分（2026-06-29）** —— 误名神类（实测 ~72 方法、零 DB 访问）按职责拆为同命名空间 `MusicTagWinApp.Instances` 下 5 个内聚静态类，原 `DatabaseMapper.cs` 删除。**采用直接迁移**（用户授权大范围重构，故不留 Codex 建议的 facade 委托）：每簇逐方法体「字节级」搬移 + 调用点 retarget + build/smoke + 独立 byte-identity 核验（脚本从 `git show HEAD:DatabaseMapper.cs` 提取原方法体逐字节比对，EOL 归一）+ commit。
+
+| 簇 | commit | 内容 | 调用点 retarget |
+|---|---|---|---|
+| `TextUtilities` | `422a924` | 文本/哈希/编码/杂项（含 2 扩展方法 `GetMessageChain`/`GetStringRespectingUtf16Bom`） | 52 |
+| `PathFileUtilities` | `70c8824` | 路径/目录/文件 + 歌词存盘路径（17 法） | 45 |
+| `ImageUtilities` | `dd49a77` | 图像缩放/DPI/编解码/资源位图缓存（17 法 + 3 字段 + 半个 cctor） | 203 |
+| `LogService` | `e93df96` | 日志目录解析 + 操作/异常日志写入（19 法，含 7 个 expr-bodied + `startupLogFileName` + 半个 cctor） | 21 |
+| `DialogService` | `f7f3811` | 消息框/确认/资源管理器/设置保存（8 法）；`DatabaseMapper` 至此清空并删除 | 88 |
+
+- **扩展方法透明**：新类同命名空间，`ex.GetMessageChain()` 等实例式调用按命名空间解析，无需改调用点；非扩展方法由编译器强校验 retarget 完整性，最终全库 **0 残留 `DatabaseMapper` 代码引用**（仅各新类 header 注释保留 1 行历史出处）。
+- **静态构造函数拆分**：原单 cctor 初始化 `imageMimeMappings`/`startupLogFileName`/`resourceImageCache`；拆后 image 两字段入 `ImageUtilities` cctor、`startupLogFileName` 入 `LogService` cctor，`DatabaseMapper` cctor 随类删除。三初始化互相独立、保留显式 cctor 以保 `beforefieldinit` 语义。
+
+**对抗验证（5 lens perspective-diverse skeptics + 自核代码）发现 1 处真实 divergence + 显式修正 `da0a847`**：cctor 拆分使 `startupLogFileName` 的渲染时机从「culture 重置前（启动 OS 区域日历）」推迟到「重置后（应用语言）」——`ToString("yyyy-MM-dd HH_mm_ss")` 单参重载按 `CurrentCulture` 日历渲染年份；原单 cctor 由首次 image 访问（`GetDpiScale`，`StateFieldInstance.cs:3211`，在 culture 重置 `3481-3482` 之前）触发，拆后改由首次 log 访问（用户操作/异常，均在重置后）触发。非公历默认日历区域（th-TH 泰历、ar-SA 伊斯兰历、fa-IR）操作日志文件名年份因此改变（如 2569→2026）；公历区域（含开发/CI）不可见，故 build+smoke 未捕获。**用户裁定：改用 `CultureInfo.InvariantCulture`，作为「显式行为修正」记录（非纯行为保持）**——文件名年份恒公历、与时机/UI 语言均无关，既消除拆分 divergence 又修掉潜伏 i18n 缺陷（与 `NetEaseMusicTagProvider.cs:126`/`QqMusicTagProvider.cs:192` 既有 InvariantCulture 修复同源）。注：`LogService.cs:52` 逐行时间戳与 `StateFieldInstance.cs:4279` 文件时间显示同属 culture-sensitive，但拆分前后均在重置后渲染（pre-existing 行为），**未动**。
