@@ -23,6 +23,7 @@ internal static class Program
 		tests.AddRange(PendingTagUpdateCharacterization.All());
 		tests.AddRange(BuildFilenameMatchRegexCharacterization.All());
 		tests.AddRange(SplitCombinedDiscTrackCaptureCharacterization.All());
+		tests.AddRange(ConfigDescriptorStateDisplayCharacterization.All());
 		return TestRunner.RunAll(tests);
 	}
 }
