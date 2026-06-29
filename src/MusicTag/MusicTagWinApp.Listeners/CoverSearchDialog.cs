@@ -533,35 +533,16 @@ internal class CoverSearchDialog : Form
 	private List<CoverSearchResult> SearchCoversBySource(SearchSource source, string query, List<CoverSearchResult> existingCandidates)
 	{
 		lastSourceTransportResult = null;
-		switch (source)
+		// 经 SearchProviderFactory 按源构造封面 provider(已注入 StatusReporter);酷狗及未知源返回 null,
+		// 等价原 switch 的 default(返回空列表、lastSourceTransportResult 保持 null)。
+		using ICoverSearchProvider provider = SearchProviderFactory.CreateCoverSearch(source, GetSearchCancellation(), searchStatusReporter);
+		if (provider == null)
 		{
-		case SearchSource.Music163:
-		{
-			using NetEaseMusicTagProvider netEaseProvider = new NetEaseMusicTagProvider(GetSearchCancellation());
-			netEaseProvider.StatusReporter = searchStatusReporter;
-			List<CoverSearchResult> covers = netEaseProvider.SearchCovers(query, 15, existingCandidates);
-			lastSourceTransportResult = netEaseProvider.LastTransportResult;
-			return covers;
-		}
-		case SearchSource.QQ:
-		{
-			using QqMusicTagProvider qqProvider = new QqMusicTagProvider(GetSearchCancellation());
-			qqProvider.StatusReporter = searchStatusReporter;
-			List<CoverSearchResult> covers = qqProvider.SearchCovers(query, 15, existingCandidates);
-			lastSourceTransportResult = qqProvider.LastTransportResult;
-			return covers;
-		}
-		default:
 			return new List<CoverSearchResult>();
-		case SearchSource.Kuwo:
-		{
-			using KuwoTagProvider kuwoTagProvider = new KuwoTagProvider(GetSearchCancellation());
-			kuwoTagProvider.StatusReporter = searchStatusReporter;
-			List<CoverSearchResult> covers = kuwoTagProvider.SearchCovers(query, 5, existingCandidates);
-			lastSourceTransportResult = kuwoTagProvider.LastTransportResult;
-			return covers;
 		}
-		}
+		List<CoverSearchResult> covers = provider.SearchCovers(query, SearchProviderPolicy.ResultLimit(source), existingCandidates);
+		lastSourceTransportResult = provider.LastTransportResult;
+		return covers;
 	}
 
 	private async void StartCandidateSearch()
