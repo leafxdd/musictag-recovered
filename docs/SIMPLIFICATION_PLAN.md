@@ -398,9 +398,10 @@
 - **fixture 自包含**：写标签 round-trip 需真实音频文件（`TagLib.File.Create` 默认 `ReadStyle.Average` 读音频属性），而 `docs/测试歌曲/` gitignored、CI 缺失。解法：测试代码程序化构造最小有效 MP3 字节（4 个相同 MPEG 帧头 + 静音填充），写临时文件，round-trip 后删。比 base64 嵌入更自解释。
 - **163-key COMM clear**：CLAUDE.md 标注的 native 行为修正（`SaveTagFields` 的 `RemoveFrames("COMM")` 使带非空 description 的网易云 163-key COMM 不随 comment 编辑存活）。测试用 TagLib 直接预置带 description 的 COMM，经 `ConfigDescriptorState` 改 comment 后验证其消失。为此 `MusicTag.Tests.csproj` 加 `TagLibSharp` dll 引用（与主项目同一 `musictag/TagLibSharp.dll`，非 NuGet）。
 
-### 锁定的 latent bug（IS not SHOULD）
+### 已修复的 latent bug（曾锁定 IS，现修正为 SHOULD）
 
-- `FilenameRegexCaptureExtractor` 的**括号保护段 masking 对捕获分组未生效**：构造函数用 `maskedVariants[i].Text` 匹配，而 `variant.Text` 始终是该轮 mask **前**的原文（最深 mask 版从未入列），故括号内分隔符仍被正则当分隔——`"A (b - c) - D"` 经 `^(.+?) - (.+)$` 被切成 `["A (b","c) - D"]`（本应 `["A (b - c)","D"]`）。按 characterization 原则锁定现状，留待 write/rename 结构批次单独决策是否修复。
+- `FilenameRegexCaptureExtractor` 的**括号保护段 masking 对捕获分组未生效**（曾按 characterization 原则锁定现状）。根因三处交织：`variant.Text` 误存该轮 mask **前**的原文（最深 masked 版从未入列）→ 构造函数 `regex.Match(maskedVariants[i].Text)` 实际跑在未屏蔽的原文上；还原循环又从 `matchedVariantIndex+1` 起跳过匹配变体自身。故括号内分隔符仍被当分隔——`"A (b - c) - D"` 经 `^(.+?) - (.+)$` 切成 `["A (b","c) - D"]`。
+- **已作为显式行为修正修复**（非逐字节等价；CLAUDE.md 铁律的合法例外——latent bug 经 characterization 锁定后单独决策修复）：`variant.Text` 改存 mask **后**文本 + 还原循环起点含匹配变体本身（production +7/−2 行）。修复后：`"A (b - c) - D"`→`["A (b - c)","D"]`、嵌套 `"((a - b))"`→`["((a - b))"]`、同层两段 `"(a - b) - (c - d)"`→`["(a - b)","(c - d)"]`。characterization 由「锁定现状」翻转为「断言修复后正确行为」并补嵌套/同层多段 2 用例（该类 5→7），全绿（总数 103→105）。
 
 ### 覆盖边界
 

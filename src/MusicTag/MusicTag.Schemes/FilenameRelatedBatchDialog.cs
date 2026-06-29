@@ -80,7 +80,7 @@ internal class FilenameRelatedBatchDialog : Form
 			for (int groupIndex = 1; groupIndex < match.Groups.Count; groupIndex++)
 			{
 				string capture = match.Groups[groupIndex].Value;
-				for (int variantIndex = matchedVariantIndex + 1; variantIndex < maskedVariants.Count; variantIndex++)
+				for (int variantIndex = matchedVariantIndex; variantIndex < maskedVariants.Count; variantIndex++)
 				{
 					capture = RestoreProtectedSegments(capture, maskedVariants[variantIndex]);
 				}
@@ -96,7 +96,6 @@ internal class FilenameRelatedBatchDialog : Form
 			}
 			MaskedFilenameVariant variant = new MaskedFilenameVariant
 			{
-				Text = filename,
 				MaskDepth = maskDepth
 			};
 			int segmentIndex = 0;
@@ -105,6 +104,10 @@ internal class FilenameRelatedBatchDialog : Form
 				variant.ProtectedSegments.Add(match.Value);
 				return $"\t{maskDepth:D5}{segmentIndex++}";
 			});
+			// 行为修正(非逐字节等价):原 variant.Text 误存 mask 前原文,最深 masked 版本从未进入
+			// maskedVariants、匹配退化到未屏蔽原文 -> 括号内分隔符未被保护。改存 mask 后文本(占位符
+			// 版)使括号保护段对捕获分组真正生效;还原循环自最深变体起逐层把占位符恢复为原段。
+			variant.Text = maskedFilename;
 			maskedVariants.Add(variant);
 			return maskedFilename;
 		}
