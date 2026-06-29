@@ -1163,37 +1163,46 @@ internal class FilenameRelatedBatchDialog : Form
 		unusedPatternDefinitionLabel.Enabled = true;
 	}
 
-	private bool ValidateFilenamePattern(string pattern, bool isChangeTagsMode)
+	// pattern 校验的纯判定结果(无 UI),供 ValidateFilenamePattern 翻译为错误消息 + characterization 锁定。
+	internal enum FilenamePatternValidation
+	{
+		Valid,
+		Empty,
+		DuplicateParam,
+		NoParam,
+		Pattern0NotAllowed,
+		AdjacentParams
+	}
+
+	// 文件名模板校验核心(纯逻辑,无 UI):规整空白/路径分隔为空格后,要求 @1-8 不重复、至少一个参数、
+	// 非改标签模式禁用 @0、且 disc/track 占位符不相邻(@5@4 直接拒;否则剥去首段 @4@5/@4/@5 并把
+	// @4@5 视作 @4 后,任意 @x@y 相邻即拒)。提取自 ValidateFilenamePattern 的判定逻辑(行为逐字保持)。
+	internal static FilenamePatternValidation ValidateFilenamePatternCore(string pattern, bool isChangeTagsMode)
 	{
 		pattern = Regex.Replace(pattern, "[\\s/\\\\]", " ");
 		if (string.IsNullOrWhiteSpace(pattern))
 		{
-			DialogService.ShowErrorMessage(Resources.Msg_PatternCannotBeEmpty);
-			return false;
+			return FilenamePatternValidation.Empty;
 		}
 		HashSet<string> parameters = new HashSet<string>();
 		foreach (Match item in Regex.Matches(pattern, "@[1-8]"))
 		{
 			if (!parameters.Add(item.Value))
 			{
-				DialogService.ShowErrorMessage(Resources.Msg_ParamsInPatternCannotDuplicate);
-				return false;
+				return FilenamePatternValidation.DuplicateParam;
 			}
 		}
 		if (!parameters.Any())
 		{
-			DialogService.ShowErrorMessage(Resources.Msg_ParamsInPatternNotFound);
-			return false;
+			return FilenamePatternValidation.NoParam;
 		}
 		if (!isChangeTagsMode && Regex.Match(pattern, "@0").Success)
 		{
-			DialogService.ShowErrorMessage(Resources.Msg_ParamsInPatternCannotUsePattern0);
-			return false;
+			return FilenamePatternValidation.Pattern0NotAllowed;
 		}
 		if (pattern.StartsWith("@5@4"))
 		{
-			DialogService.ShowErrorMessage(Resources.Msg_ParamsInPatternCannotAdjacent);
-			return false;
+			return FilenamePatternValidation.AdjacentParams;
 		}
 		if (pattern.StartsWith("@4@5"))
 		{
@@ -1210,10 +1219,33 @@ internal class FilenameRelatedBatchDialog : Form
 		pattern = pattern.Replace("@4@5", "@4");
 		if (Regex.Match(pattern, "@[0-8]@[0-8]").Success)
 		{
-			DialogService.ShowErrorMessage(Resources.Msg_ParamsInPatternCannotAdjacent);
-			return false;
+			return FilenamePatternValidation.AdjacentParams;
 		}
-		return true;
+		return FilenamePatternValidation.Valid;
+	}
+
+	private bool ValidateFilenamePattern(string pattern, bool isChangeTagsMode)
+	{
+		switch (ValidateFilenamePatternCore(pattern, isChangeTagsMode))
+		{
+			case FilenamePatternValidation.Empty:
+				DialogService.ShowErrorMessage(Resources.Msg_PatternCannotBeEmpty);
+				return false;
+			case FilenamePatternValidation.DuplicateParam:
+				DialogService.ShowErrorMessage(Resources.Msg_ParamsInPatternCannotDuplicate);
+				return false;
+			case FilenamePatternValidation.NoParam:
+				DialogService.ShowErrorMessage(Resources.Msg_ParamsInPatternNotFound);
+				return false;
+			case FilenamePatternValidation.Pattern0NotAllowed:
+				DialogService.ShowErrorMessage(Resources.Msg_ParamsInPatternCannotUsePattern0);
+				return false;
+			case FilenamePatternValidation.AdjacentParams:
+				DialogService.ShowErrorMessage(Resources.Msg_ParamsInPatternCannotAdjacent);
+				return false;
+			default:
+				return true;
+		}
 	}
 
 	internal async void StartRenameFiles((string path, string _, int lvIndex)[] paths, ProgressDialog progressDialog, ListViewFileSetting listViewFileSetting, Action<(string msg, bool isErr)> finallyCallback)

@@ -25,6 +25,7 @@ internal static class Program
 		tests.AddRange(SplitCombinedDiscTrackCaptureCharacterization.All());
 		tests.AddRange(ConfigDescriptorStateDisplayCharacterization.All());
 		tests.AddRange(ConfigDescriptorStateRoundTripCharacterization.All());
+		tests.AddRange(ValidateFilenamePatternCoreCharacterization.All());
 		return TestRunner.RunAll(tests);
 	}
 }
