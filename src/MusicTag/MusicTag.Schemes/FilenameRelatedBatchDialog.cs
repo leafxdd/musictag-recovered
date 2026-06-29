@@ -592,7 +592,7 @@ internal class FilenameRelatedBatchDialog : Form
 		}
 	}
 
-	private sealed class PendingTagUpdate
+	internal sealed class PendingTagUpdate
 	{
 		public PendingTagUpdate(ConfigDescriptorState tagState)
 		{
