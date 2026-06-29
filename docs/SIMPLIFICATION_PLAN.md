@@ -341,4 +341,8 @@
 | `cd443c0` | NetEase 解析 golden master（注入点验证） | 典型 2 结果（Id/Title/Artist/Album/Year/Comment/ResultOrder/SearchSource）/ 空结果→0 / 同 id 去重→1 / HTTP-200 不可解析→`ParseFailed` |
 
 - **副产实证**：`Settings.Default` 在 console 测试宿主按 `musictag/MusicTag.config` 默认值工作（`ConnectorsArtists`=`/` / `CommentTagWrite163Key`=False / `TrackSearchResult` static cctor 读 `CombTagsInfo_SourceItemList` 均正常）；`Newtonsoft.Json`/`System.Data.SQLite`/`MusicTag.db` 等依赖经 ProjectReference 自动传递到测试 bin。
-- **后续扩展**：复用注入点把 characterization 铺到 QQ（`MusicTagWinApp.Writers`）/ Kuwo（`MusicTagWinApp.Adapter`）/ Kugou（`MusicTag.Candidates`，无 `SearchCovers`）provider，及写标签 / 重命名路径，作为各高风险结构批次的前置回归网。
+- **provider 覆盖完成（2026-06-29）**：4 provider 解析全部 characterize（22 测试：4 自检 + NetEase 4 + QQ 5 + Kuwo 5 + Kugou 4），各一个 commit（`9f2f0a4` QQ、`6af2ce7` Kuwo、`770a27e` Kugou）。注入点二分：NetEase/QQ 走 `PostString`（POST），Kuwo/Kugou 走 `GetResponseString`（GET）；均从 public `SearchTracks` 端到端驱动真实解析链，锁定字段映射 / 过滤 / 去重 / 排序 / `ParseFailed` 回填 + 各源特有行为：
+  - QQ：空 album guard（`Album.Id>0 && Mid 非空 && Name 非空`）、限流 2001 → `Retrying` 上报（测试用 StatusReporter 回调首次上报即 cancel，避开真实指数退避）、`title`/`name` 双字段。
+  - Kuwo：`TrackId` 去 `MUSIC_` 前缀、album-first / fallback 选取、Title&Artist 必须非空。
+  - Kugou：**NO covers**（`track.Cover==null`）、`DurationMs` 秒 ×1000、按 `audio_id` 过滤。
+- **后续扩展**：写标签 / 重命名路径 characterization（需临时音频文件 fixture），作为 write/rename 结构批次的前置回归网。
