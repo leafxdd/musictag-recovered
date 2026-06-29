@@ -149,6 +149,20 @@ internal class FilenameRelatedBatchDialog : Form
 		return char.IsDigit(character);
 	}
 
+	// 由文件名模板(@1..@8 占位符)与各 tag 字段渲染目标文件名,并清理为合法文件名:
+	// 路径分隔符 \ / -> ;,其余文件名非法字符(空白及 " : * ? < > |)-> 空格。
+	// 提取自 RenameFilesBatchWorker.RenameFiles 的内联逻辑(行为逐字保持),供 characterization 锁定。
+	internal static string RenderRenameFilename(string filenamePattern, string title, string artist, string album, string disc, string trackNumber, string year, string comment, string albumArtist)
+	{
+		string newFilename = filenamePattern.Replace("@1", title).Replace("@2", artist).Replace("@3", album).Replace("@4", disc).Replace("@5", trackNumber)
+			.Replace("@6", year)
+			.Replace("@7", comment)
+			.Replace("@8", albumArtist);
+		newFilename = Regex.Replace(newFilename, "[\\\\/]", ";");
+		newFilename = Regex.Replace(newFilename, "[\\s\":*?<>|]", " ");
+		return newFilename;
+	}
+
 	private sealed class RenameFilesBatchWorker
 	{
 		public CancellationTokenSource CancellationTokenSource;
@@ -225,12 +239,7 @@ internal class FilenameRelatedBatchDialog : Form
 						{
 							try
 							{
-								string newFilename = Owner.selectedFilenamePattern.Replace("@1", title).Replace("@2", artist).Replace("@3", album).Replace("@4", disc).Replace("@5", trackNumber)
-									.Replace("@6", year)
-									.Replace("@7", comment)
-									.Replace("@8", albumArtist);
-								newFilename = Regex.Replace(newFilename, "[\\\\/]", ";");
-								newFilename = Regex.Replace(newFilename, "[\\s\":*?<>|]", " ");
+								string newFilename = RenderRenameFilename(Owner.selectedFilenamePattern, title, artist, album, disc, trackNumber, year, comment, albumArtist);
 								if (!string.IsNullOrWhiteSpace(newFilename))
 								{
 									string sourceLrcPath = null;
