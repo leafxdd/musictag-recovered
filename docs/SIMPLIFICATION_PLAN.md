@@ -328,3 +328,17 @@
 - **静态构造函数拆分**：原单 cctor 初始化 `imageMimeMappings`/`startupLogFileName`/`resourceImageCache`；拆后 image 两字段入 `ImageUtilities` cctor、`startupLogFileName` 入 `LogService` cctor，`DatabaseMapper` cctor 随类删除。三初始化互相独立、保留显式 cctor 以保 `beforefieldinit` 语义。
 
 **对抗验证（5 lens perspective-diverse skeptics + 自核代码）发现 1 处真实 divergence + 显式修正 `da0a847`**：cctor 拆分使 `startupLogFileName` 的渲染时机从「culture 重置前（启动 OS 区域日历）」推迟到「重置后（应用语言）」——`ToString("yyyy-MM-dd HH_mm_ss")` 单参重载按 `CurrentCulture` 日历渲染年份；原单 cctor 由首次 image 访问（`GetDpiScale`，`StateFieldInstance.cs:3211`，在 culture 重置 `3481-3482` 之前）触发，拆后改由首次 log 访问（用户操作/异常，均在重置后）触发。非公历默认日历区域（th-TH 泰历、ar-SA 伊斯兰历、fa-IR）操作日志文件名年份因此改变（如 2569→2026）；公历区域（含开发/CI）不可见，故 build+smoke 未捕获。**用户裁定：改用 `CultureInfo.InvariantCulture`，作为「显式行为修正」记录（非纯行为保持）**——文件名年份恒公历、与时机/UI 语言均无关，既消除拆分 divergence 又修掉潜伏 i18n 缺陷（与 `NetEaseMusicTagProvider.cs:126`/`QqMusicTagProvider.cs:192` 既有 InvariantCulture 修复同源）。注：`LogService.cs:52` 逐行时间戳与 `StateFieldInstance.cs:4279` 文件时间显示同属 culture-sensitive，但拆分前后均在重置后渲染（pre-existing 行为），**未动**。
+
+**Phase 2 characterization 基础设施落成（2026-06-29）** —— 进入剩余高风险批次（provider 解析 / 写标签 / 重命名 / god-form / ConfigDescriptorState）前，按 Codex「先 characterization 再结构迁移」路线，在此前无测试套件的项目里立起回归网，锁定「当前实际行为」golden master，使后续大范围重构可对比验证行为未变。
+
+- **宿主形态（用户拍板）**：独立 `src/MusicTag.Tests`（`Microsoft.NET.Sdk.WindowsDesktop`，net481，x86，`OutputType=Exe` console）+ 自写极简断言（`TestRunner.cs`：`Check.Equal/True/Null/NotNull` + 收集→逐个跑→打印 PASS/FAIL→退出码 0/1），**零第三方框架**，保持主项目零-NuGet 纯净度。已注册进 `MusicTag.sln`；`scripts/Verify-Build.ps1` 加 `Invoke-CharacterizationTests`（跑 Release 测试 exe，退出码非 0 即 throw），挂 `-RunSmokeTests` 下、3 smoke 之前。
+- **可见性**：`src/MusicTag/Properties/AssemblyInfo.cs` 加 `[InternalsVisibleTo("MusicTag.Tests")]`（纯可见性、零运行时行为），使测试程序集可达 internal provider / 工具类。
+- **provider 注入点**：测试子类继承 internal provider、override `protected virtual PostString`/`GetResponseString` 喂录制 JSON fixture，从 public `SearchTracks`/`SearchLyrics`/`SearchCovers` 端到端驱动**真实解析链**（含 `NetEaseCrypto` 加密、去重、排序、`ParseFailed` 回填）。无 mock HttpClient、无反射、不联网（`CreateHttpClient`/`GetHttpClient` 永不触发）。4 provider 同构（均继承 `RemoteTagProviderBase`、共享 protected virtual HTTP 注入点），此模式可直接复用。
+
+| commit | 内容 | 测试 |
+|---|---|---|
+| `b2f9a11` | harness 骨架 + IVT + Verify-Build 集成 + 零依赖自检 | 4 自检（`TextUtilities` 纯确定性、locale 无关不变式：UnixEpoch→1970 UTC / UrlEncode 空格→%20 / CoalesceNonBlank / MD5("") 公认常量） |
+| `cd443c0` | NetEase 解析 golden master（注入点验证） | 典型 2 结果（Id/Title/Artist/Album/Year/Comment/ResultOrder/SearchSource）/ 空结果→0 / 同 id 去重→1 / HTTP-200 不可解析→`ParseFailed` |
+
+- **副产实证**：`Settings.Default` 在 console 测试宿主按 `musictag/MusicTag.config` 默认值工作（`ConnectorsArtists`=`/` / `CommentTagWrite163Key`=False / `TrackSearchResult` static cctor 读 `CombTagsInfo_SourceItemList` 均正常）；`Newtonsoft.Json`/`System.Data.SQLite`/`MusicTag.db` 等依赖经 ProjectReference 自动传递到测试 bin。
+- **后续扩展**：复用注入点把 characterization 铺到 QQ（`MusicTagWinApp.Writers`）/ Kuwo（`MusicTagWinApp.Adapter`）/ Kugou（`MusicTag.Candidates`，无 `SearchCovers`）provider，及写标签 / 重命名路径，作为各高风险结构批次的前置回归网。
