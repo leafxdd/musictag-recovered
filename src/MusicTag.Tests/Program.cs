@@ -14,6 +14,7 @@ internal static class Program
 		List<(string, Action)> tests = new List<(string, Action)>();
 		tests.AddRange(TextUtilitiesTests.All());
 		tests.AddRange(NetEaseProviderCharacterization.All());
+		tests.AddRange(QqProviderCharacterization.All());
 		return TestRunner.RunAll(tests);
 	}
 }
