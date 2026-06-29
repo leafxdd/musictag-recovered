@@ -18,8 +18,10 @@ using Newtonsoft.Json.Linq;
 
 namespace MusicTagWinApp.Exporters;
 
-internal class NetEaseMusicTagProvider : RemoteTagProviderBase
+internal class NetEaseMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider, ILyricSearchProvider, ICoverSearchProvider, ITrackLyricLoader
 {
+	// 网易云 concrete 的 SearchTracks / SearchLyrics / SearchCovers / LoadLyricsForTrack 签名即各能力接口的超集,
+	// 故四个接口全部隐式实现,无需转发器。LastTransportResult / IDisposable 由 RemoteTagProviderBase 提供。
 	private const string songSearchEndpoint = "http://music.163.com/weapi/cloudsearch/pc";
 
 	private const string encryptedPostDataFormat = "params={0}&encSecKey={1}";

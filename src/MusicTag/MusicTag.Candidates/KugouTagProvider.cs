@@ -16,8 +16,20 @@ using Newtonsoft.Json.Linq;
 
 namespace MusicTag.Candidates;
 
-internal class KugouTagProvider : RemoteTagProviderBase
+internal class KugouTagProvider : RemoteTagProviderBase, ITrackSearchProvider, ILyricSearchProvider, ITrackLyricLoader
 {
+	// 显式接口实现:把能力接口的统一签名(网易云超集)转发到本类既有 concrete,丢弃酷狗不接收的 knownSongId / existingLyrics。
+	// concrete 方法体与签名一字未动;LoadLyricsForTrack 因签名匹配而隐式实现。酷狗无封面,故不实现 ICoverSearchProvider。
+	List<TrackSearchResult> ITrackSearchProvider.SearchTracks(string query, int resultLimit, long knownSongId, int searchPass, int sourceOrder, List<TrackSearchResult> existingTracks, List<TrackSearchResult> previousResults)
+	{
+		return SearchTracks(query, resultLimit, searchPass, sourceOrder, existingTracks, previousResults);
+	}
+
+	List<LyricSearchResult> ILyricSearchProvider.SearchLyrics(string query, int resultLimit, long knownSongId, List<LyricSearchResult> existingLyrics, int sourceOrder)
+	{
+		return SearchLyrics(query, resultLimit, sourceOrder);
+	}
+
 	private const string songSearchUrlTemplate = "http://mobilecdn.kugou.com/api/v3/search/song?format=json&keyword={0}&page=1&pagesize={1}&showtype=1";
 
 	private const string lyricUrlTemplate = "https://m3ws.kugou.com/api/v1/krc/get_krc?keyword={0}&hash={1}&timelength={2}";

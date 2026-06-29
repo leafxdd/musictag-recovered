@@ -19,8 +19,25 @@ using Newtonsoft.Json.Linq;
 
 namespace MusicTagWinApp.Adapter;
 
-internal class KuwoTagProvider : RemoteTagProviderBase
+internal class KuwoTagProvider : RemoteTagProviderBase, ITrackSearchProvider, ILyricSearchProvider, ICoverSearchProvider, ITrackLyricLoader
 {
+	// 显式接口实现:把能力接口的统一签名(网易云超集)转发到本类既有 concrete,丢弃酷我不接收的 knownSongId / existingLyrics;
+	// LoadLyricsForTrack 转发到酷我单数名 concrete LoadLyricForTrack。concrete 方法体与签名一字未动;SearchCovers 隐式实现。
+	List<TrackSearchResult> ITrackSearchProvider.SearchTracks(string query, int resultLimit, long knownSongId, int searchPass, int sourceOrder, List<TrackSearchResult> existingTracks, List<TrackSearchResult> previousResults)
+	{
+		return SearchTracks(query, resultLimit, searchPass, sourceOrder, existingTracks, previousResults);
+	}
+
+	List<LyricSearchResult> ILyricSearchProvider.SearchLyrics(string query, int resultLimit, long knownSongId, List<LyricSearchResult> existingLyrics, int sourceOrder)
+	{
+		return SearchLyrics(query, resultLimit, sourceOrder);
+	}
+
+	LyricSearchResult ITrackLyricLoader.LoadLyricsForTrack(TrackSearchResult track)
+	{
+		return LoadLyricForTrack(track);
+	}
+
 	private const int DetailApiRetryIntervalMs = 300000;
 
 	private const string SearchUrlFormat = "https://search.kuwo.cn/r.s?all={0}&client=kt&pn=0&rn={1}&ver=kwplayer_ar_9.2.3.2&vipver=1&show_copyright_off=1&newver=1&correct=1&ft=music&cluster=0&strategy=2012&encoding=utf8&rformat=json&vermerge=1&mobi=1&issubtitle=1";

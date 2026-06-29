@@ -20,8 +20,20 @@ using Newtonsoft.Json.Linq;
 
 namespace MusicTagWinApp.Writers;
 
-internal class QqMusicTagProvider : RemoteTagProviderBase
+internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider, ILyricSearchProvider, ICoverSearchProvider, ITrackLyricLoader
 {
+	// 显式接口实现:把能力接口的统一签名(网易云超集)转发到本类既有 concrete,丢弃 QQ 不接收的 knownSongId / existingLyrics。
+	// concrete 方法体与签名一字未动;SearchCovers / LoadLyricsForTrack 因签名匹配而隐式实现。
+	List<TrackSearchResult> ITrackSearchProvider.SearchTracks(string query, int resultLimit, long knownSongId, int searchPass, int sourceOrder, List<TrackSearchResult> existingTracks, List<TrackSearchResult> previousResults)
+	{
+		return SearchTracks(query, resultLimit, searchPass, sourceOrder, existingTracks, previousResults);
+	}
+
+	List<LyricSearchResult> ILyricSearchProvider.SearchLyrics(string query, int resultLimit, long knownSongId, List<LyricSearchResult> existingLyrics, int sourceOrder)
+	{
+		return SearchLyrics(query, resultLimit, sourceOrder);
+	}
+
 	private const string EmptyLyricPlaceholderBase64 = "WzAwOjAwOjAwXeatpOatjOabsuS4uuayoeacieWhq+ivjeeahOe6r+mfs+S5kO+8jOivt+aCqOaso+i1jw==";
 
 	private const string callbackName = "MusicJsonCallback34475857153687595";
