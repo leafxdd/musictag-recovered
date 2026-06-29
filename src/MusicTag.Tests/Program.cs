@@ -15,6 +15,7 @@ internal static class Program
 		tests.AddRange(TextUtilitiesTests.All());
 		tests.AddRange(NetEaseProviderCharacterization.All());
 		tests.AddRange(QqProviderCharacterization.All());
+		tests.AddRange(KuwoProviderCharacterization.All());
 		return TestRunner.RunAll(tests);
 	}
 }
