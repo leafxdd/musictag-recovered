@@ -18,6 +18,7 @@ internal static class Program
 		tests.AddRange(KuwoProviderCharacterization.All());
 		tests.AddRange(KugouProviderCharacterization.All());
 		tests.AddRange(ConfigDescriptorStateCharacterization.All());
+		tests.AddRange(FilenameRegexCaptureExtractorCharacterization.All());
 		return TestRunner.RunAll(tests);
 	}
 }

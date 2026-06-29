@@ -26,7 +26,7 @@ namespace MusicTag.Schemes;
 
 internal class FilenameRelatedBatchDialog : Form
 {
-		private sealed class FilenameRegexCaptureExtractor
+		internal sealed class FilenameRegexCaptureExtractor
 		{
 		private sealed class MaskedFilenameVariant
 		{
