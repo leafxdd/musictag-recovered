@@ -163,6 +163,27 @@ internal class FilenameRelatedBatchDialog : Form
 		return newFilename;
 	}
 
+	// 把文件名模板(@1..@8 占位符 + 字面量)编译为匹配用正则:先把字面量里的正则元字符逐一转义,
+	// 再把每段连续占位符 (@[0-8])+ 记为一个 token 并整体替换为捕获组 (.*)。返回 (正则, token 列表)。
+	// 提取自 ChangeTags 的内联逻辑(行为逐字保持),供 characterization 锁定。
+	internal static (string regex, List<string> tokens) BuildFilenameMatchRegex(string filenamePattern)
+	{
+		string filenamePatternRegex = Regex.Replace(filenamePattern, "\\s", " ");
+		filenamePatternRegex = filenamePatternRegex.Replace("\\", "\\\\").Replace("(", "\\(").Replace(")", "\\)").Replace("[", "\\[").Replace("]", "\\]").Replace("{", "\\{").Replace("}", "\\}").Replace("^", "\\^").Replace("$", "\\$")
+			.Replace("?", "\\?")
+			.Replace("*", "\\*")
+			.Replace("+", "\\+")
+			.Replace(".", "\\.")
+			.Replace("|", "\\|");
+		List<string> patternTokens = new List<string>();
+		foreach (Match tokenMatch in Regex.Matches(filenamePatternRegex, "(@[0-8])+"))
+		{
+			patternTokens.Add(tokenMatch.Value);
+		}
+		filenamePatternRegex = Regex.Replace(filenamePatternRegex, "(@[0-8])+", "(.*)");
+		return (filenamePatternRegex, patternTokens);
+	}
+
 	private sealed class RenameFilesBatchWorker
 	{
 		public CancellationTokenSource CancellationTokenSource;
@@ -480,19 +501,7 @@ internal class FilenameRelatedBatchDialog : Form
 							}
 							else
 							{
-								string filenamePatternRegex = Regex.Replace(Owner.selectedFilenamePattern, "\\s", " ");
-								filenamePatternRegex = filenamePatternRegex.Replace("\\", "\\\\").Replace("(", "\\(").Replace(")", "\\)").Replace("[", "\\[").Replace("]", "\\]").Replace("{", "\\{").Replace("}", "\\}").Replace("^", "\\^").Replace("$", "\\$")
-									.Replace("?", "\\?")
-									.Replace("*", "\\*")
-									.Replace("+", "\\+")
-									.Replace(".", "\\.")
-									.Replace("|", "\\|");
-								List<string> patternTokens = new List<string>();
-								foreach (Match tokenMatch in Regex.Matches(filenamePatternRegex, "(@[0-8])+"))
-								{
-									patternTokens.Add(tokenMatch.Value);
-								}
-								filenamePatternRegex = Regex.Replace(filenamePatternRegex, "(@[0-8])+", "(.*)");
+								var (filenamePatternRegex, patternTokens) = BuildFilenameMatchRegex(Owner.selectedFilenamePattern);
 								FilenameRegexCaptureExtractor captureExtractor = new FilenameRegexCaptureExtractor(fileNameWithoutExtension, filenamePatternRegex);
 								for (int captureIndex = 0; captureIndex < captureExtractor.Captures.Count; captureIndex++)
 								{
