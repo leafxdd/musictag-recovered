@@ -80,6 +80,8 @@ internal class FilenameRelatedBatchDialog : Form
 			for (int groupIndex = 1; groupIndex < match.Groups.Count; groupIndex++)
 			{
 				string capture = match.Groups[groupIndex].Value;
+				// 与上面 variant.Text 修正耦合:Text 改存 mask 后串后,命中(最深)变体自身引入的占位符也须
+				// 还原,故起点含 matchedVariantIndex 本身(原 +1 只适配旧的 mask-前-Text 语义)。
 				for (int variantIndex = matchedVariantIndex; variantIndex < maskedVariants.Count; variantIndex++)
 				{
 					capture = RestoreProtectedSegments(capture, maskedVariants[variantIndex]);
@@ -102,7 +104,9 @@ internal class FilenameRelatedBatchDialog : Form
 			string maskedFilename = ProtectedSegmentRegex.Replace(filename, match =>
 			{
 				variant.ProtectedSegments.Add(match.Value);
-				return $"\t{maskDepth:D5}{segmentIndex++}";
+				// segmentIndex 同 maskDepth 定宽 D5:令占位符等长,杜绝 seg1 占位符成为 seg10 的前缀而被
+				// String.Replace 串扰(同层 >=11 段;masking 生效后此还原路径才首次真正运行)。
+				return $"\t{maskDepth:D5}{segmentIndex++:D5}";
 			});
 			// 行为修正(非逐字节等价):原 variant.Text 误存 mask 前原文,最深 masked 版本从未进入
 			// maskedVariants、匹配退化到未屏蔽原文 -> 括号内分隔符未被保护。改存 mask 后文本(占位符
@@ -116,7 +120,7 @@ internal class FilenameRelatedBatchDialog : Form
 		{
 			for (int segmentIndex = 0; segmentIndex < variant.ProtectedSegments.Count; segmentIndex++)
 			{
-				capture = capture.Replace($"\t{variant.MaskDepth:D5}{segmentIndex}", variant.ProtectedSegments[segmentIndex]);
+				capture = capture.Replace($"\t{variant.MaskDepth:D5}{segmentIndex:D5}", variant.ProtectedSegments[segmentIndex]);
 			}
 			return capture;
 		}

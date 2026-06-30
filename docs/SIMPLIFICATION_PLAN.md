@@ -405,8 +405,11 @@
 
 ### 已修复的 latent bug（曾锁定 IS，现修正为 SHOULD）
 
-- `FilenameRegexCaptureExtractor` 的**括号保护段 masking 对捕获分组未生效**（曾按 characterization 原则锁定现状）。根因三处交织：`variant.Text` 误存该轮 mask **前**的原文（最深 masked 版从未入列）→ 构造函数 `regex.Match(maskedVariants[i].Text)` 实际跑在未屏蔽的原文上；还原循环又从 `matchedVariantIndex+1` 起跳过匹配变体自身。故括号内分隔符仍被当分隔——`"A (b - c) - D"` 经 `^(.+?) - (.+)$` 切成 `["A (b","c) - D"]`。
-- **已作为显式行为修正修复**（非逐字节等价；CLAUDE.md 铁律的合法例外——latent bug 经 characterization 锁定后单独决策修复）：`variant.Text` 改存 mask **后**文本 + 还原循环起点含匹配变体本身（production +7/−2 行）。修复后：`"A (b - c) - D"`→`["A (b - c)","D"]`、嵌套 `"((a - b))"`→`["((a - b))"]`、同层两段 `"(a - b) - (c - d)"`→`["(a - b)","(c - d)"]`。characterization 由「锁定现状」翻转为「断言修复后正确行为」并补嵌套/同层多段 2 用例（该类 5→7），全绿（总数 103→105）。
+- `FilenameRegexCaptureExtractor` 的**括号/书名号保护段 masking 对捕获分组未生效**（曾按 characterization 原则锁定现状）。根因**单一**：`variant.Text` 误存该轮 mask **前**的原文 → 最深 masked 版本从未进入 `maskedVariants`、构造函数 `regex.Match` 退化到跑在未屏蔽的原文上（还原循环从 `matchedVariantIndex+1` 起跳过命中变体，只是旧 Text 语义下的自洽配套，**非独立缺陷**）。故 `"A (b - c) - D"` 经 `^(.+?) - (.+)$` 切成 `["A (b","c) - D"]`。
+- **已作为显式行为修正修复**（非逐字节等价；CLAUDE.md 铁律的合法例外——latent bug 经 characterization 锁定后单独决策修复），三处耦合：① `variant.Text` 改存 mask **后**文本；② 还原循环起点含命中变体自身（①② 合起来使 masking 生效）；③ 占位符 `segmentIndex` 由无填充改 `:D5` 定宽。修复后：`"A (b - c) - D"`→`["A (b - c)","D"]`、嵌套 `"((a - b))"`→`["((a - b))"]`、同层两段 `"(a - b) - (c - d)"`→`["(a - b)","(c - d)"]`、书名号 `"《b - c》 - D"`→`["《b - c》","D"]`。
+- **③ 的由来（3-lens 对抗验证 Workflow 发现的回归）**：①② 让"masking 生效后的还原路径"首次真正运行，暴露既有占位符格式 `\t{depth:D5}{seg}` 中 `seg` 无填充的潜伏缺陷——同层 **≥11 段**时 seg1 占位符 `\t…001` 是 seg10 `\t…0010` 的前缀，`String.Replace` 按序还原会**静默损坏第 11 段**（reachable：同人/V 家文件名可叠 11+ 个括号组，错写标签且无报错）。`seg` 同样 `:D5` 定宽后占位符等长、互不为前缀，回归消除（实践上限 10^5 段，与既有 `depth:D5` 对称、改动最小）。占位符为构造函数内临时生成/消费、不落 JSON/resx/DllImport，改格式不触犯持久化名称稳定约束。
+- characterization 由「锁定现状」翻转为「断言修复后正确行为」，并补嵌套、同层多段、**≥11 段回归守卫**、书名号 4 个用例（该类 5→9），全绿。
+- **正交、未修的预先存在缺陷（记录待决，本批不扩大范围）**：`ProtectedSegmentRegex` 的引号 4 分支 `“[^“”]”`/`‘[^‘’]’`/`『[^『』]』`/`「[^「」]」` **缺 `*` 量词**（前 7 分支均有），只能匹配**单字符**引号段，`「a - b」` 这类多字符段不被保护 → 会错切。与本次 masking 修复正交，留作后续单独决策（修法：4 分支各补 `*`）。
 
 ### 覆盖边界
 

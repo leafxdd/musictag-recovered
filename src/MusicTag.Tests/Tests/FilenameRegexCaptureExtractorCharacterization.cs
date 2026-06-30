@@ -8,11 +8,15 @@ namespace MusicTag.Tests;
 // 锁定"从文件名按正则提取捕获组 + 括号/书名号保护段 masking"的行为。可见性由 private sealed 放宽
 // 为 internal sealed（仅可见性、零逻辑改动）。
 //
-// 历史:此处原先 probe 出一处 latent bug——保护段 masking 对捕获分组并未生效(variant.Text 误存
-// mask **前**原文、最深 masked 版本从未进入列表、还原循环又从 matchedVariantIndex+1 起跳过匹配
-// 变体自身),致括号内的分隔符仍被正则当作分隔。该 bug 已作为**显式行为修正**修复(两处:variant.Text
-// 改存 mask **后**文本 + 还原循环起点含匹配变体本身),本测试断言**修复后的正确行为**:括号/嵌套/
-// 同层多段保护内部的分隔符被屏蔽,整体落入同一捕获组,再逐层还原为原文。
+// 历史:此处原先 probe 出一处 latent bug——保护段 masking 对捕获分组并未生效。根因(经对抗验证收敛)
+// 只有一个:variant.Text 误存 mask **前**原文,致最深 masked 版本从未进入 maskedVariants、匹配退化到
+// 未屏蔽原文(还原循环从 matchedVariantIndex+1 起跳过命中变体,只是旧 Text 语义下的自洽配套)。
+// 已作为**显式行为修正**修复,两处耦合 + 一处硬化:
+//   (1) variant.Text 改存 mask **后**文本;(2) 还原循环起点含匹配变体自身——(1)(2) 合起来使 masking
+//       对捕获分组真正生效;
+//   (3) 占位符 segmentIndex 定宽 D5——消除「masking 生效后还原路径首次真正运行」暴露的【同层 ≥11 段】
+//       前缀串扰(seg1 占位符曾是 seg10 的前缀,String.Replace 会损坏第 11 段)。
+// 本测试断言修复后的正确行为:括号/嵌套/同层多段/书名号保护段内部的分隔符被屏蔽,整体落入同一捕获组。
 internal static class FilenameRegexCaptureExtractorCharacterization
 {
 	private static List<string> Extract(string filename, string pattern)
@@ -81,6 +85,26 @@ internal static class FilenameRegexCaptureExtractorCharacterization
 			Check.Equal(2, captures.Count, "count");
 			Check.Equal("(a - b)", captures[0], "[0]");
 			Check.Equal("(c - d)", captures[1], "[1]");
+		});
+
+		// ≥11 同层保护段(回归守卫):占位符 segmentIndex 定宽 D5 后,seg1 不再是 seg10 的前缀,
+		// String.Replace 还原不串扰,全部 11 段完整复原。masking 生效令此还原路径首次真正运行;
+		// 若 segmentIndex 不定宽,第 11 段会被静默损坏——此用例锁定该回归已修复。
+		yield return ("Extractor: 11 same-level segments restore without placeholder-prefix collision (fixed)", delegate
+		{
+			List<string> captures = Extract("(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)(k)", "^(.+)$");
+			Check.Equal(1, captures.Count, "count");
+			Check.Equal("(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)(k)", captures[0], "[0]");
+		});
+
+		// 非圆括号保护段(书名号):masking 对 ProtectedSegmentRegex 的带 * 量词分支同样生效,
+		// 《》内的 " - " 被屏蔽,整体落入 group1。(CLAUDE.md 明确把书名号/括号列为保护用例。)
+		yield return ("Extractor: CJK book-title marks shield inner separator (fixed)", delegate
+		{
+			List<string> captures = Extract("《b - c》 - D", "^(.+?) - (.+)$");
+			Check.Equal(2, captures.Count, "count");
+			Check.Equal("《b - c》", captures[0], "[0]");
+			Check.Equal("D", captures[1], "[1]");
 		});
 	}
 }
