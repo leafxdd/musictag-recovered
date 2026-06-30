@@ -824,7 +824,7 @@ internal class CombinedTagSearchDialog : Form
 
 	// 依据本源结果数量与最近一次传输结果,判定本源是"完成"还是"出错"并上报。
 	// 有结果即视为完成(即便末次子请求出错);仅当 0 结果且末次传输为错误时标记出错。
-	private static void ReportSourceOutcome(Action<SourceSearchStatus> statusReporter, SearchSource source, List<TrackSearchResult> results, HttpResult lastTransportResult)
+	internal static void ReportSourceOutcome(Action<SourceSearchStatus> statusReporter, SearchSource source, List<TrackSearchResult> results, HttpResult lastTransportResult)
 	{
 		if (results.Count == 0 && lastTransportResult != null && !lastTransportResult.IsSuccess)
 		{
@@ -895,6 +895,15 @@ internal class CombinedTagSearchDialog : Form
 		RankSearchResults(results, currentSearchContext);
 	}
 
+	// 文件名 "艺术家 - 标题" 拆分后的回退排序结果是否足够可信而采用(否则改用默认排序结果)。
+	// 两条接受通道,任一满足即采用:
+	//   通道一(宽松双确认):标题与艺术家均(大小写不敏感)互含 target,且各自相似度均 >= 0.5;
+	//   通道二(强分数):标题与艺术家相似度各 >= 0.8(无需互含)。
+	internal static bool ShouldAcceptFilenameFallbackMatch(string filenameTitle, string filenameArtist, TrackSearchResult bestFilenameFallbackResult)
+	{
+		return (TrackSearchResult.ContainsEitherWay(filenameTitle.ToLower(), bestFilenameFallbackResult.Title.ToLower()) && (double)bestFilenameFallbackResult.TitleSimilarityScore >= 0.5 && TrackSearchResult.ContainsEitherWay(filenameArtist.ToLower(), bestFilenameFallbackResult.Artist.ToLower()) && (double)bestFilenameFallbackResult.ArtistSimilarityScore >= 0.5) || ((double)bestFilenameFallbackResult.TitleSimilarityScore >= 0.8 && (double)bestFilenameFallbackResult.ArtistSimilarityScore >= 0.8);
+	}
+
 	public static void RankSearchResults(List<TrackSearchResult> results, TrackSearchContext searchContext)
 	{
 		if (!results.Any())
@@ -923,7 +932,7 @@ internal class CombinedTagSearchDialog : Form
 					TrackSearchResult.PromoteBestMatch(filenameTitle, filenameArtist, "", filenameFallbackResults);
 					TrackSearchResult bestFilenameFallbackResult = filenameFallbackResults[0];
 					results.Clear();
-					if ((TrackSearchResult.ContainsEitherWay(filenameTitle.ToLower(), bestFilenameFallbackResult.Title.ToLower()) && (double)bestFilenameFallbackResult.TitleSimilarityScore >= 0.5 && TrackSearchResult.ContainsEitherWay(filenameArtist.ToLower(), bestFilenameFallbackResult.Artist.ToLower()) && (double)bestFilenameFallbackResult.ArtistSimilarityScore >= 0.5) || ((double)bestFilenameFallbackResult.TitleSimilarityScore >= 0.8 && (double)bestFilenameFallbackResult.ArtistSimilarityScore >= 0.8))
+					if (ShouldAcceptFilenameFallbackMatch(filenameTitle, filenameArtist, bestFilenameFallbackResult))
 					{
 						results.AddRange(filenameFallbackResults);
 					}

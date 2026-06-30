@@ -555,3 +555,37 @@ characterization;经 4-agent Workflow 行为等价对抗验证全部判 PRESERVE
 补 7 例完备性 gap(count>0 最小正边界 off-by-one、clamp 轴独立性 cross-wiring、unchecked 溢出+clamp、
 numeric-string vs int 严格、lazy pull-count 锁定惰性语义、null 元素合并)。测试 389→421(+32),编译干净 +
 3 smoke 全绿。可提取纯逻辑趋于收敛;余下多为 UI/IO/事件耦合或敏感区(i18n/cctor/window-clamp),留待专门批次。
+
+## CombinedTagSearchDialog 纯逻辑提取 + characterize(2026-07-01)
+
+`CombinedTagSearchDialog`(`MusicTag.Mocks`,1300 行,code-health 最差 1.0/10、churn 99.4th 的联网搜索
+编排 god-form)。Dispatch A 已于上轮 B2 收官收敛至 `SearchProviderFactory.CreateCombinedTrackSearch`;
+`RankSearchResults`/`SortBySearchContextSimilarity`/`PromoteBestSearchMatch`/`ReportSourceOutcome` 等已
+static 化但 **codegraph 标注全部无测试覆盖**(untested hotspot = health 低分根因)。本批聚焦提取剩余可
+提取纯逻辑 + 补回归网,**不碰** Dispatch A 多趟编排(高风险,需单独批准)。
+
+提取(behavior-preserving):
+- **`ShouldAcceptFilenameFallbackMatch`**(internal static):从 `RankSearchResults` 60 行方法里提取
+  filename-fallback 接受谓词——文件名 "艺术家 - 标题" 拆分后的回退排序结果是否足够可信而采用。双阈值
+  (通道一=标题∧艺术家均互含且各相似度 >=0.5;通道二=两分数各 >=0.8),直接决定用户可见候选排序(敏感)。
+  整个布尔表达式逐字节搬入方法体 `return` + 调用替换,短路/求值时机/浮点 cast 全保留(非求值结构改变)。
+- **`ReportSourceOutcome`** private static → internal static(可见性提升,零体改)。
+
+characterization(31 例,probe-first 全程零 FAIL):
+- ① `ShouldAcceptFilenameFallbackMatch`(12 例):双通道、四阈值边界(0.5/0.49、0.8/0.79)、ToLower
+  大小写不敏感、ContainsEitherWay 空串陷阱、Completed Source 透传。浮点 `(double)(float)0.8 >= 0.8`
+  边界经数值核对(0.8f→0.800000011920929 真 >= 字面量 0.8)。
+- ② `ReportSourceOutcome`(5 例):单次(per 源 per 趟)完成/出错判定(有结果即完成、仅 0 结果+末次传输
+  错误才 Error、业务码透传)。
+- ③ `SourceOutcomeTracker`(`MusicTagWinApp.Web`,封面/歌词弹窗共用的跨趟聚合核心,此前无测试)(14 例):
+  Record/BuildFinalStatus/ReportFinal/Clear——曾有结果即终态 Completed(跨趟记忆)、顺序无关、源隔离、
+  Clear 同时清成功记忆与错误、同源多趟错误 last-wins 不抛(锁定**韧性不变量**:单源多失败不 abort)。
+
+②(单次无状态)与③(聚合记忆"曾有结果")刻意语义不同:Tag 弹窗各源【并行单趟】、封面/歌词各源【串行
+多趟】,二者各自正确,characterization 显式锁定该差异(非矛盾)。
+
+经 3-lens Workflow 对抗验证:equivalence(逐字节 diff old-vs-new 表达式 485 字符 IDENTICAL + 短路/
+eager-eval 陷阱排查 + 浮点 cast)、assertions(28 例独立重算 expected 全匹配 + 浮点边界数值核对)均判
+EQUIVALENT_AND_COMPLETE;completeness 补 3 例完备性 gap(Clear 清成功记忆、同源重复错误 last-wins/不抛、
+Completed Source 透传——前二关联韧性不变量与 reused-instance 回归)。测试 420→451(+31),Debug+Release
+编译干净 + 3 smoke 全绿。

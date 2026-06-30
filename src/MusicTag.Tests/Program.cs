@@ -42,6 +42,7 @@ internal static class Program
 		tests.AddRange(PromoteBestMatchCharacterization.All());
 		tests.AddRange(OptionsDialogCharacterization.All());
 		tests.AddRange(StateFieldInstancePureLogicCharacterization.All());
+		tests.AddRange(CombinedTagSearchDialogCharacterization.All());
 		return TestRunner.RunAll(tests);
 	}
 }
