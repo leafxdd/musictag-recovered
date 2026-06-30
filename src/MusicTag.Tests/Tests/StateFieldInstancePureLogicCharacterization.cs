@@ -548,5 +548,271 @@ internal static class StateFieldInstancePureLogicCharacterization
 			Check.Equal("", StateFieldInstance.NormalizeDroppedFilePath(""), "empty -> empty");
 			Check.Equal("", StateFieldInstance.NormalizeDroppedFilePath("   "), "pure whitespace -> empty after Trim");
 		});
+
+		// ===== 第二轮:纯核提取(从混杂实例方法分离的 behavior-preserving 纯核,probe-first + 对抗验证)=====
+
+		// UpdateSelectedFilterValue:AddSelectedFilterValue 的 decrement 对称体,4+ 分支(增/减/归零移除/缺席)。
+		yield return ("UpdateSelectedFilterValue: select absent -> add count=1 + changed(value,false)", delegate
+		{
+			Dictionary<string, int> counts = new Dictionary<string, int>();
+			List<(string, bool)> changed = new List<(string, bool)>();
+			StateFieldInstance.UpdateSelectedFilterValue(counts, changed, "x", isSelected: true);
+			Check.Equal(1, counts["x"], "added count 1");
+			Check.Equal(1, changed.Count, "one changed");
+			Check.Equal("x", changed[0].Item1, "changed value x");
+			Check.True(!changed[0].Item2, "changed flag false (add)");
+		});
+
+		yield return ("UpdateSelectedFilterValue: select present(count=2) -> count=3, no new changed", delegate
+		{
+			Dictionary<string, int> counts = new Dictionary<string, int> { { "x", 2 } };
+			List<(string, bool)> changed = new List<(string, bool)>();
+			StateFieldInstance.UpdateSelectedFilterValue(counts, changed, "x", isSelected: true);
+			Check.Equal(3, counts["x"], "count incremented to 3");
+			Check.Equal(0, changed.Count, "no new changed on existing increment");
+		});
+
+		yield return ("UpdateSelectedFilterValue: deselect present(count=3) -> count=2, kept, no changed", delegate
+		{
+			Dictionary<string, int> counts = new Dictionary<string, int> { { "x", 3 } };
+			List<(string, bool)> changed = new List<(string, bool)>();
+			StateFieldInstance.UpdateSelectedFilterValue(counts, changed, "x", isSelected: false);
+			Check.Equal(2, counts["x"], "count decremented to 2 (still > 0)");
+			Check.Equal(0, changed.Count, "no changed while count stays positive");
+		});
+
+		yield return ("UpdateSelectedFilterValue: deselect present(count=1) -> remove + changed(value,true)", delegate
+		{
+			Dictionary<string, int> counts = new Dictionary<string, int> { { "x", 1 } };
+			List<(string, bool)> changed = new List<(string, bool)>();
+			StateFieldInstance.UpdateSelectedFilterValue(counts, changed, "x", isSelected: false);
+			Check.True(!counts.ContainsKey("x"), "count hit zero -> key removed");
+			Check.Equal(1, changed.Count, "one changed on removal");
+			Check.Equal("x", changed[0].Item1, "changed value x");
+			Check.True(changed[0].Item2, "changed flag TRUE (removal, unlike add)");
+		});
+
+		// 缺席 + 取消选中:既不进 TryGetValue 分支,也不满足 else-if(isSelected) -> 完全 no-op。
+		yield return ("UpdateSelectedFilterValue: deselect absent -> no-op", delegate
+		{
+			Dictionary<string, int> counts = new Dictionary<string, int>();
+			List<(string, bool)> changed = new List<(string, bool)>();
+			StateFieldInstance.UpdateSelectedFilterValue(counts, changed, "x", isSelected: false);
+			Check.Equal(0, counts.Count, "no key added on deselect-absent");
+			Check.Equal(0, changed.Count, "no changed on deselect-absent");
+		});
+
+		yield return ("UpdateSelectedFilterValue: whitespace value select -> normalized to \"\" key", delegate
+		{
+			Dictionary<string, int> counts = new Dictionary<string, int>();
+			List<(string, bool)> changed = new List<(string, bool)>();
+			StateFieldInstance.UpdateSelectedFilterValue(counts, changed, "  ", isSelected: true);
+			Check.Equal(1, counts[""], "whitespace -> empty-string key");
+			Check.Equal("", changed[0].Item1, "changed records empty string");
+		});
+
+		// AccumulateClampedTotals:选中累加 / 取消选中扣减,两者各 clamp 到 >=0。
+		yield return ("AccumulateClampedTotals: select -> add both", delegate
+		{
+			(long, long) r = StateFieldInstance.AccumulateClampedTotals(100L, 200L, 10L, 20L, isSelected: true);
+			Check.Equal(110L, r.Item1, "duration added");
+			Check.Equal(220L, r.Item2, "size added");
+		});
+
+		yield return ("AccumulateClampedTotals: deselect -> subtract both (positive)", delegate
+		{
+			(long, long) r = StateFieldInstance.AccumulateClampedTotals(100L, 200L, 10L, 20L, isSelected: false);
+			Check.Equal(90L, r.Item1, "duration subtracted");
+			Check.Equal(180L, r.Item2, "size subtracted");
+		});
+
+		// 取消选中导致负值 -> 双 clamp 到 0(防负漂移,load-bearing)。
+		yield return ("AccumulateClampedTotals: deselect underflow -> both clamped to 0", delegate
+		{
+			(long, long) r = StateFieldInstance.AccumulateClampedTotals(5L, 5L, 10L, 20L, isSelected: false);
+			Check.Equal(0L, r.Item1, "duration clamped to 0");
+			Check.Equal(0L, r.Item2, "size clamped to 0");
+		});
+
+		// 独立 clamp:时长下溢归 0、字节数仍为正(各自判定)。
+		yield return ("AccumulateClampedTotals: deselect partial underflow -> only negative axis clamped", delegate
+		{
+			(long, long) r = StateFieldInstance.AccumulateClampedTotals(5L, 100L, 10L, 20L, isSelected: false);
+			Check.Equal(0L, r.Item1, "duration underflow -> 0");
+			Check.Equal(80L, r.Item2, "size stays positive (80)");
+		});
+
+		yield return ("AccumulateClampedTotals: select from zero -> item totals", delegate
+		{
+			(long, long) r = StateFieldInstance.AccumulateClampedTotals(0L, 0L, 10L, 20L, isSelected: true);
+			Check.Equal(10L, r.Item1, "duration from 0");
+			Check.Equal(20L, r.Item2, "size from 0");
+		});
+
+		// ResolveSearchValue:非空白 string 原样 / int>0 -> ToString / 其余 -> null(不写)。
+		yield return ("ResolveSearchValue: non-blank string -> itself", delegate
+		{
+			Check.Equal("abc", StateFieldInstance.ResolveSearchValue("abc"), "non-blank string");
+		});
+
+		yield return ("ResolveSearchValue: whitespace string -> null (not written)", delegate
+		{
+			Check.Null(StateFieldInstance.ResolveSearchValue("  "), "whitespace -> null");
+		});
+
+		yield return ("ResolveSearchValue: empty string -> null", delegate
+		{
+			Check.Null(StateFieldInstance.ResolveSearchValue(""), "empty -> null");
+		});
+
+		// 非空白但含首尾空格的串原样返回(不 Trim)。
+		yield return ("ResolveSearchValue: surrounded-by-space string -> verbatim (no trim)", delegate
+		{
+			Check.Equal("  x  ", StateFieldInstance.ResolveSearchValue("  x  "), "non-blank verbatim");
+		});
+
+		yield return ("ResolveSearchValue: int > 0 -> ToString", delegate
+		{
+			Check.Equal("5", StateFieldInstance.ResolveSearchValue(5), "positive int");
+		});
+
+		yield return ("ResolveSearchValue: int 0 -> null (not > 0)", delegate
+		{
+			Check.Null(StateFieldInstance.ResolveSearchValue(0), "zero int -> null");
+		});
+
+		yield return ("ResolveSearchValue: negative int -> null", delegate
+		{
+			Check.Null(StateFieldInstance.ResolveSearchValue(-3), "negative int -> null");
+		});
+
+		yield return ("ResolveSearchValue: null -> null", delegate
+		{
+			Check.Null(StateFieldInstance.ResolveSearchValue(null), "null -> null");
+		});
+
+		// 其他类型(double 等,非 string 非 int)-> null。
+		yield return ("ResolveSearchValue: other type (double) -> null", delegate
+		{
+			Check.Null(StateFieldInstance.ResolveSearchValue(3.14), "double -> null");
+		});
+
+		// BuildSelectedFilePreview:前 10 行各 "<text>\n";第 11 行起 "..." 并停止;空集 -> ""。
+		yield return ("BuildSelectedFilePreview: empty -> \"\"", delegate
+		{
+			Check.Equal("", StateFieldInstance.BuildSelectedFilePreview(new List<string>()), "empty -> empty");
+		});
+
+		yield return ("BuildSelectedFilePreview: single row -> \"row\\n\"", delegate
+		{
+			Check.Equal("a\n", StateFieldInstance.BuildSelectedFilePreview(new List<string> { "a" }), "one row");
+		});
+
+		yield return ("BuildSelectedFilePreview: three rows -> joined with trailing newlines", delegate
+		{
+			Check.Equal("a\nb\nc\n", StateFieldInstance.BuildSelectedFilePreview(new List<string> { "a", "b", "c" }), "three rows");
+		});
+
+		// 恰 10 行:全部进入 <10 分支,无 "..."。
+		yield return ("BuildSelectedFilePreview: exactly 10 rows -> 10 lines, NO ellipsis", delegate
+		{
+			List<string> rows = new List<string>();
+			string expected = "";
+			for (int i = 0; i < 10; i++)
+			{
+				rows.Add("x");
+				expected += "x\n";
+			}
+			Check.Equal(expected, StateFieldInstance.BuildSelectedFilePreview(rows), "10 rows no ellipsis");
+		});
+
+		// 11 行:前 10 行 + 第 11 行触发 "..." 并 break(故仅 10 个 "x\n" + "...",其后元素不再处理)。
+		yield return ("BuildSelectedFilePreview: 11 rows -> 10 lines + ellipsis (break on 11th)", delegate
+		{
+			List<string> rows = new List<string>();
+			for (int i = 0; i < 11; i++)
+			{
+				rows.Add("x");
+			}
+			string expected = "";
+			for (int i = 0; i < 10; i++)
+			{
+				expected += "x\n";
+			}
+			expected += "...";
+			Check.Equal(expected, StateFieldInstance.BuildSelectedFilePreview(rows), "11 rows -> 10 + ellipsis");
+		});
+
+		// ===== 第二轮对抗验证补充(4 纯核行为等价 PRESERVED,以下为完备性 gap 补强,逐条 trace 复核)=====
+
+		// count>0 阈值最小正边界(count=2 deselect ->1 保留):抓 count>0 误变 count>1 的 off-by-one 突变。
+		yield return ("UpdateSelectedFilterValue: deselect present(count=2) -> count=1 (minimal positive kept, >0 boundary)", delegate
+		{
+			Dictionary<string, int> counts = new Dictionary<string, int> { { "x", 2 } };
+			List<(string, bool)> changed = new List<(string, bool)>();
+			StateFieldInstance.UpdateSelectedFilterValue(counts, changed, "x", isSelected: false);
+			Check.True(counts.ContainsKey("x"), "key retained when decrement lands on exactly 1");
+			Check.Equal(1, counts["x"], "count decremented to minimal-positive 1 and kept (catches count>1 mutant)");
+			Check.Equal(0, changed.Count, "no changed entry recorded when result is 1 (not removed)");
+		});
+
+		// clamp 独立性反向(size 轴下溢、duration 不下溢):抓 size clamp 误置 duration=0 的 cross-wiring 突变。
+		yield return ("AccumulateClampedTotals: deselect partial underflow (size axis) -> only size clamped, duration kept", delegate
+		{
+			(long, long) r = StateFieldInstance.AccumulateClampedTotals(100L, 5L, 10L, 20L, isSelected: false);
+			Check.Equal(90L, r.Item1, "duration stays positive (90), NOT zeroed by size clamp (axis independence)");
+			Check.Equal(0L, r.Item2, "size underflow (5-20=-15) -> clamped to 0");
+		});
+
+		// unchecked 溢出 + clamp 耦合的 latent 行为:MaxValue+1 wrap 为负 -> clamp 0(非朴素预期的大正数)。
+		yield return ("AccumulateClampedTotals: select overflow (MaxValue + positive) wraps negative -> clamped to 0", delegate
+		{
+			(long, long) r = StateFieldInstance.AccumulateClampedTotals(long.MaxValue, 0L, 1L, 0L, isSelected: true);
+			Check.Equal(0L, r.Item1, "MaxValue+1 wraps to MinValue (<0, unchecked) then clamps to 0");
+			Check.Equal(0L, r.Item2, "size unchanged (0+0=0)");
+		});
+
+		// 数字样 string("0"/"-3")原样返回:string 路径无 >0 过滤(对照 int 0/-3 -> null)。
+		yield return ("ResolveSearchValue: numeric-looking string -> verbatim (string path has NO >0 filter)", delegate
+		{
+			Check.Equal("0", StateFieldInstance.ResolveSearchValue("0"), "string \"0\" verbatim, not null (contrast int 0 -> null)");
+			Check.Equal("-3", StateFieldInstance.ResolveSearchValue("-3"), "string \"-3\" verbatim, not null (contrast int -3 -> null)");
+		});
+
+		// is int 类型严格:正 long(非 int)落入 null(无数字 widening)。
+		yield return ("ResolveSearchValue: positive long (not int) -> null (is-int type-strict)", delegate
+		{
+			Check.Null(StateFieldInstance.ResolveSearchValue(5L), "positive long is not a boxed int -> null");
+		});
+
+		// 锁定提取的 load-bearing 惰性语义:15 元素源仅 pull 11(10 append + 第 11 projected-then-discarded),非 eager 全求值。
+		yield return ("BuildSelectedFilePreview: lazy projection pulls exactly 11 of 15 (no eager full eval) + 11th discarded", delegate
+		{
+			int pulls = 0;
+			IEnumerable<string> CountingSource()
+			{
+				for (int i = 0; i < 15; i++)
+				{
+					pulls++;
+					yield return "r" + i;
+				}
+			}
+			string result = StateFieldInstance.BuildSelectedFilePreview(CountingSource());
+			string expected = "";
+			for (int i = 0; i < 10; i++)
+			{
+				expected += "r" + i + "\n";
+			}
+			expected += "...";
+			Check.Equal(expected, result, "15-source -> r0..r9 lines + ellipsis (r10..r14 absent)");
+			Check.Equal(11, pulls, "lazy early-stop: pulled exactly 11 (10 appended + 1 boundary projected-then-discarded), not all 15");
+		});
+
+		// null 元素经 string 连接合并为空段(firstColumnText + "\n" -> "\n"),与原 CellTexts[0]==null 路径一致、不抛、不渲染 "null"。
+		yield return ("BuildSelectedFilePreview: null element -> \"\\n\" (concat coalesces null)", delegate
+		{
+			Check.Equal("\n", StateFieldInstance.BuildSelectedFilePreview(new List<string> { null }), "single null -> newline only");
+			Check.Equal("a\n\nb\n", StateFieldInstance.BuildSelectedFilePreview(new List<string> { "a", null, "b" }), "null in middle -> empty segment, order kept");
+		});
 	}
 }

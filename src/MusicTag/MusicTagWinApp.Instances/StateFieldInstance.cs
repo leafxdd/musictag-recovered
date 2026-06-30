@@ -4417,31 +4417,37 @@ internal class StateFieldInstance : Form
 	{
 		foreach (var selectedFilter in selectedFilterValueStates)
 		{
-			Dictionary<string, int> valueCounts = selectedFilter.Value.Item1;
-			List<(string, bool)> changedValues = selectedFilter.Value.Item2;
-			string value = GetSelectedFilterValue(fileRow, selectedFilter.Key);
-			if (string.IsNullOrWhiteSpace(value))
+			UpdateSelectedFilterValue(selectedFilter.Value.Item1, selectedFilter.Value.Item2, GetSelectedFilterValue(fileRow, selectedFilter.Key), isSelected);
+		}
+	}
+
+	// 纯核(从 UpdateSelectedFilterValues 循环体逐字节分离,behavior-preserving):选中/取消选中时维护筛选值计数。
+	// AddSelectedFilterValue 的 decrement 对称体——isSelected=false 计数--、归零则移除并记 (value,true);
+	// isSelected=true 同 AddSelectedFilterValue(计数++、首现 add 并记 (value,false));absent+deselect 为 no-op。
+	// 空白 value 统一归一为 ""。
+	internal static void UpdateSelectedFilterValue(Dictionary<string, int> valueCounts, List<(string, bool)> changedValues, string value, bool isSelected)
+	{
+		if (string.IsNullOrWhiteSpace(value))
+		{
+			value = "";
+		}
+		if (valueCounts.TryGetValue(value, out int count))
+		{
+			count = isSelected ? count + 1 : count - 1;
+			if (count > 0)
 			{
-				value = "";
+				valueCounts[value] = count;
 			}
-			if (valueCounts.TryGetValue(value, out int count))
+			else
 			{
-				count = isSelected ? count + 1 : count - 1;
-				if (count > 0)
-				{
-					valueCounts[value] = count;
-				}
-				else
-				{
-					valueCounts.Remove(value);
-					changedValues.Add((value, true));
-				}
+				valueCounts.Remove(value);
+				changedValues.Add((value, true));
 			}
-			else if (isSelected)
-			{
-				valueCounts.Add(value, 1);
-				changedValues.Add((value, false));
-			}
+		}
+		else if (isSelected)
+		{
+			valueCounts.Add(value, 1);
+			changedValues.Add((value, false));
 		}
 	}
 
@@ -4466,25 +4472,24 @@ internal class StateFieldInstance : Form
 	{
 		(long selectedDurationMs, long selectedFileSizeBytes) = selectedFilesStatusLabel.Tag is ValueTuple<long, long> cachedTotals ? cachedTotals : (0L, 0L);
 		GetListViewItemDurationAndFileSize(fileRow, out var itemDurationMs, out var itemFileSizeBytes);
-		if (isSelected)
+		selectedFilesStatusLabel.Tag = AccumulateClampedTotals(selectedDurationMs, selectedFileSizeBytes, itemDurationMs, itemFileSizeBytes, isSelected);
+	}
+
+	// 纯核(从 UpdateSelectedDurationAndSize 分离控件 Tag 读写 + FileInfo IO,behavior-preserving):选中累加 /
+	// 取消选中扣减时长与字节数,两者各 clamp 到 >=0(防取消选中造成负漂移)。
+	internal static (long DurationMs, long FileSizeBytes) AccumulateClampedTotals(long currentDurationMs, long currentFileSizeBytes, long itemDurationMs, long itemFileSizeBytes, bool isSelected)
+	{
+		long durationMs = isSelected ? currentDurationMs + itemDurationMs : currentDurationMs - itemDurationMs;
+		long fileSizeBytes = isSelected ? currentFileSizeBytes + itemFileSizeBytes : currentFileSizeBytes - itemFileSizeBytes;
+		if (durationMs < 0L)
 		{
-			selectedDurationMs += itemDurationMs;
-			selectedFileSizeBytes += itemFileSizeBytes;
+			durationMs = 0L;
 		}
-		else
+		if (fileSizeBytes < 0L)
 		{
-			selectedDurationMs -= itemDurationMs;
-			selectedFileSizeBytes -= itemFileSizeBytes;
+			fileSizeBytes = 0L;
 		}
-		if (selectedDurationMs < 0L)
-		{
-			selectedDurationMs = 0L;
-		}
-		if (selectedFileSizeBytes < 0L)
-		{
-			selectedFileSizeBytes = 0L;
-		}
-		selectedFilesStatusLabel.Tag = (selectedDurationMs, selectedFileSizeBytes);
+		return (durationMs, fileSizeBytes);
 	}
 
 	private void UpdateSelectionCommandState()
@@ -5463,14 +5468,26 @@ internal class StateFieldInstance : Form
 
 	private static void SetComboBoxSearchValue(ComboBox comboBox, object value)
 	{
+		string resolvedText = ResolveSearchValue(value);
+		if (resolvedText != null)
+		{
+			comboBox.Text = resolvedText;
+		}
+	}
+
+	// 纯核(从 SetComboBoxSearchValue 分离控件副作用,behavior-preserving):解析搜索框应显示的文本——
+	// 非空白 string 原样返回;int>0 返回其 ToString();其余(空白串 / int<=0 / 其他类型 / null)返回 null 表示不写。
+	internal static string ResolveSearchValue(object value)
+	{
 		if (value is string text && !string.IsNullOrWhiteSpace(text))
 		{
-			comboBox.Text = text;
+			return text;
 		}
-		else if (value is int number && number > 0)
+		if (value is int number && number > 0)
 		{
-			comboBox.Text = number.ToString();
+			return number.ToString();
 		}
+		return null;
 	}
 
 	private async void StartSearchYearLookup(TrackSearchResult searchResult, SimpleProgressDialog progressDialog)
@@ -5845,13 +5862,20 @@ internal class StateFieldInstance : Form
 
 	private string BuildSelectedFilePreview()
 	{
+		return BuildSelectedFilePreview(SelectedFileRows.Select(fileRow => fileRow.CellTexts[0]));
+	}
+
+	// 纯核(从 BuildSelectedFilePreview 分离实例 SelectedFileRows 依赖,behavior-preserving):取每行首列文本,
+	// 前 10 行各追加 "<text>\n";第 11 行起追加 "..." 并停止(故 >10 才出现 "...",且 "..." 前无换行)。空集 -> ""。
+	internal static string BuildSelectedFilePreview(IEnumerable<string> firstColumnTexts)
+	{
 		StringBuilder stringBuilder = new StringBuilder();
 		int lineCount = 0;
-		foreach (FileRow fileRow in SelectedFileRows)
+		foreach (string firstColumnText in firstColumnTexts)
 		{
 			if (lineCount < 10)
 			{
-				stringBuilder.Append(fileRow.CellTexts[0] + "\n");
+				stringBuilder.Append(firstColumnText + "\n");
 				lineCount++;
 				continue;
 			}

@@ -543,3 +543,15 @@ characterization 分两轮（probe-first,全程零 FAIL）:先 48 例覆盖主�
 " x " 不 Trim 语义、未定义枚举 default、size>=1000 KB 分支、null→NRE/ArgumentNullException 边界、
 completedMessage 进 format 模板的 latent 插值。3 agent 均确认行为保持 PRESERVED（其一以 `git diff HEAD`
 佐证字节级一致）。测试 317→389（+72）,Debug+Release 编译干净 + 3 smoke 全绿。
+
+**第二轮(2026-07-01)**:经 6 段 Workflow 系统深扫嵌套类/多行签名/可 static 化实例方法(第一轮单行 grep
+盲区),纯逻辑密度低(god-form 主体是 UI/IO/事件处理器),甄别后提取 4 个 behavior-preserving 纯核(从混杂
+实例方法分离纯计算 + 原方法委托,签名不变、零调用点改动):`UpdateSelectedFilterValue`(AddSelectedFilterValue
+的 decrement 对称体,4 分支:选中++/取消--、归零移除)、`AccumulateClampedTotals`(选中累加/取消扣减 + 双
+clamp>=0 防负漂移)、`ResolveSearchValue`(搜索值三态:非空白 string / int>0 / 否则 null 不写)、
+`BuildSelectedFilePreview`(前 10 行 + "..." 截断,取 IEnumerable<string> 绕开 private FileRow)。32 例
+characterization;经 4-agent Workflow 行为等价对抗验证全部判 PRESERVED(逐分支 + 求值语义,含
+`BuildSelectedFilePreview` 的 lazy-Select 求值次数微差经 uniform-array-length 不变量论证为 unobservable),
+补 7 例完备性 gap(count>0 最小正边界 off-by-one、clamp 轴独立性 cross-wiring、unchecked 溢出+clamp、
+numeric-string vs int 严格、lazy pull-count 锁定惰性语义、null 元素合并)。测试 389→421(+32),编译干净 +
+3 smoke 全绿。可提取纯逻辑趋于收敛;余下多为 UI/IO/事件耦合或敏感区(i18n/cctor/window-clamp),留待专门批次。
