@@ -165,7 +165,7 @@ internal class AutoMatchTagsDialog : Form
 	// 文本标签写入门控:从 AutoMatchWorker 的三个嵌套上下文(LoadedTagContext/TextTagUpdateFilter/TagSaveContext)
 	// 提取的纯判定逻辑,提到 AutoMatchTagsDialog 顶层(internal)以便 characterization 测试可见(嵌套类仍可调用外层 static)。
 	// 同一字段经三阶段流水线:探测(IsExistingTextTagUpdatable)→ 过滤(ShouldDiscardTextTagCandidate)→ 写入(ShouldWriteTextTagUpdate)。
-	// 行为与提取前逐字节一致;锁定见 AutoMatchTextTagGatingCharacterization。
+	// 三 gate 对"现值算不算空"已统一为 IsNullOrWhiteSpace;锁定见 AutoMatchTextTagGatingCharacterization。
 
 	// 探测:现有文本标签是否"需要被更新"(值是字符串且为空白,或允许覆盖)。命中则发起联网搜索。
 	internal static bool IsExistingTextTagUpdatable(object existingValue, bool overwrite)
@@ -192,9 +192,11 @@ internal class AutoMatchTagsDialog : Form
 	}
 
 	// 写入:最终是否把候选新值写入标签。true=写入。
+	// 现值空判定用 IsNullOrWhiteSpace,与探测/过滤两阶段一致(此处历史上误用 IsNullOrEmpty,使纯空白现值被当
+	// "非空且禁覆盖"而静默拒写 = 更新丢失;行为修正,见 AutoMatchTextTagGatingCharacterization)。
 	internal static bool ShouldWriteTextTagUpdate(object newValue, object currentValue, bool overwrite)
 	{
-		return newValue is string text && currentValue is string value && !string.IsNullOrEmpty(text) && (string.IsNullOrEmpty(value) || overwrite);
+		return newValue is string text && currentValue is string value && !string.IsNullOrEmpty(text) && (string.IsNullOrWhiteSpace(value) || overwrite);
 	}
 
 	private class AutoMatchWorker
@@ -444,7 +446,10 @@ internal class AutoMatchTagsDialog : Form
 			{
 				bool overwrite = worker.MatchConditionSettings[fieldName].overwrite;
 				object newValue = worker.textTagUpdates[fieldName];
-				if (ShouldWriteTextTagUpdate(newValue, tagFile[fieldName], overwrite))
+				// newValue is string 守卫保持原内联条件的短路:仅当候选是字符串才读 tagFile[fieldName]
+				// (原 `textTagUpdates[..] is string text && tagFile[..] is string value && ..` —— 非字符串候选时不读 tagFile,
+				// 避免把短路操作数变成无条件实参而 eager 索引,杜绝潜在 KeyNotFoundException)。
+				if (newValue is string && ShouldWriteTextTagUpdate(newValue, tagFile[fieldName], overwrite))
 				{
 					tagFile[fieldName] = (string)newValue;
 				}

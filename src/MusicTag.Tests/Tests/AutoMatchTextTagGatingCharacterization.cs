@@ -11,12 +11,12 @@ namespace MusicTag.Tests;
 //     -> 过滤 ShouldDiscardTextTagCandidate(搜到候选后剔除不该写的字段)
 //       -> 写入 ShouldWriteTextTagUpdate(最终是否落盘)。
 //
-// 【本文件锁定的是当前实际行为,其中包含一个已确认可达的 latent bug】:
-//   三个 gate 对"现有值算不算空"判定不一致 —— 探测与过滤用 string.IsNullOrWhiteSpace、写入用 string.IsNullOrEmpty。
-//   后果:现有标签为【纯空白】(如 " ")+ overwrite=false + 搜到合法新值时,探测判定需更新、过滤判定保留候选
-//   (空白被当空)、textTagUpdates 拿到新值,但写入阶段把空白当"非空且禁覆盖" -> 静默不写 = 更新丢失。
-//   见下方 "*** LATENT BUG ***" case 与跨阶段矛盾对照。该 bug 将在后续 commit 显式修正(写入 gate 改用
-//   IsNullOrWhiteSpace),届时对应断言从"锁定 bug"翻转为"锁定修正后行为"。
+// 【本文件锁定三个 gate 的当前行为。其中曾有一处已确认可达的 latent bug,现已修正】:
+//   三个 gate 对"现有值算不算空"判定曾不一致 —— 探测/过滤用 string.IsNullOrWhiteSpace、写入【曾】用
+//   string.IsNullOrEmpty。后果:现有标签为【纯空白】(如 " ")+ overwrite=false + 搜到合法新值时,探测判定
+//   需更新、过滤判定保留候选(空白被当空)、textTagUpdates 拿到新值,但写入阶段把空白当"非空且禁覆盖"
+//   -> 静默不写 = 更新丢失。修正:写入 gate 改用 IsNullOrWhiteSpace,三阶段对空判定统一(行为修正,非逐字节
+//   等价 —— commit 87ff27a5 先锁定 bug、本 commit 翻转对应断言为修正后行为)。见下方标 "fixed" 的 case。
 // 全部为 internal static 纯函数(参数 object/string + bool),无任何状态依赖。
 internal static class AutoMatchTextTagGatingCharacterization
 {
@@ -111,13 +111,14 @@ internal static class AutoMatchTextTagGatingCharacterization
 		});
 
 		// *** 关键:现值纯空白 + 有合法新值 + overwrite=false -> 保留(false)。空白现值被当"空",候选通过过滤。
-		// 这是探测/过滤阶段对空白的处理(IsNullOrWhiteSpace),与写入阶段(下方 BUG case)矛盾的【上半场】。
+		// 探测/过滤阶段对空白用 IsNullOrWhiteSpace;修正后写入阶段(下方)亦如此 -> 全流水线一致(此前写入误用
+		// IsNullOrEmpty 与此处矛盾,即已修正的 latent bug 的【上半场】)。
 		yield return ("ShouldDiscardTextTagCandidate: whitespace current + valid new + overwrite=false -> keep (false)", delegate
 		{
 			Check.True(!AutoMatchTagsDialog.ShouldDiscardTextTagCandidate("   ", "RealTitle", false), "blank current treated as empty -> candidate kept");
 		});
 
-		// ===== 阶段 3:ShouldWriteTextTagUpdate(newValue, currentValue, overwrite) —— 是否写入(true=写)【当前含 bug】 =====
+		// ===== 阶段 3:ShouldWriteTextTagUpdate(newValue, currentValue, overwrite) —— 是否写入(true=写)【含已修正的 bug 翻转】 =====
 
 		// 新值非 string -> false
 		yield return ("ShouldWriteTextTagUpdate: newValue null -> false", delegate
@@ -155,13 +156,12 @@ internal static class AutoMatchTextTagGatingCharacterization
 			Check.True(AutoMatchTagsDialog.ShouldWriteTextTagUpdate("new", "old", true), "overwrite allows write");
 		});
 
-		// *** LATENT BUG ***:新值合法 + 现值【纯空白】+ overwrite=false -> 当前返回 false(不写)。
-		// 写入用 IsNullOrEmpty(" ")=false -> 把空白当"非空且禁覆盖"而拒写,但过滤阶段(上方)已把同一空白现值当空、
-		// 保留了候选。两阶段矛盾 -> 用户的空白标签未被搜到的真实值替换,且无任何提示 = 静默更新丢失。
-		// 锁定当前 bug 行为;后续 commit 把写入 gate 改为 IsNullOrWhiteSpace 后,此断言翻转为期望 true。
-		yield return ("ShouldWriteTextTagUpdate: valid new + WHITESPACE current + overwrite=false -> false (*** LATENT BUG: silent update loss ***)", delegate
+		// 修正后(曾是 *** LATENT BUG ***):新值合法 + 现值【纯空白】+ overwrite=false -> 写入(true)。
+		// 写入 gate 改用 IsNullOrWhiteSpace 后,纯空白现值与探测/过滤一致地被当空 -> 接受搜到的真实值。
+		// 此前误用 IsNullOrEmpty(" ")=false 把空白当"非空且禁覆盖"而静默拒写(过滤已保留候选,写入却丢弃)= 更新丢失。
+		yield return ("ShouldWriteTextTagUpdate: valid new + WHITESPACE current + overwrite=false -> true (fixed: was silent update loss)", delegate
 		{
-			Check.True(!AutoMatchTagsDialog.ShouldWriteTextTagUpdate("RealTitle", "   ", false), "BUG: whitespace current wrongly blocks write");
+			Check.True(AutoMatchTagsDialog.ShouldWriteTextTagUpdate("RealTitle", "   ", false), "fixed: whitespace current now allows write (blank treated as empty)");
 		});
 
 		// 对照:同样纯空白现值,overwrite=true 时绕过空判定 -> 写入(证明 bug 仅在 overwrite=false 下显形)
@@ -170,13 +170,13 @@ internal static class AutoMatchTextTagGatingCharacterization
 			Check.True(AutoMatchTagsDialog.ShouldWriteTextTagUpdate("RealTitle", "   ", true), "overwrite bypasses the blank-vs-empty mismatch");
 		});
 
-		// ===== 跨阶段矛盾对照:同一输入(current=" ", new="RealTitle", overwrite=false)过滤保留却写入拒绝 =====
-		yield return ("Pipeline contradiction: blank current kept by filter but rejected by write (*** LATENT BUG ***)", delegate
+		// ===== 跨阶段一致(修正后):同一输入(current=" ", new="RealTitle", overwrite=false)过滤保留且写入接受 =====
+		yield return ("Pipeline consistency (fixed): blank current kept by filter AND written", delegate
 		{
 			// 过滤:保留(false=不丢弃)-> 候选进入 textTagUpdates,字段保留在 MatchConditionSettings
 			Check.True(!AutoMatchTagsDialog.ShouldDiscardTextTagCandidate("   ", "RealTitle", false), "filter keeps candidate");
-			// 写入:false=不写 -> 更新被静默丢弃。两者矛盾即 bug。
-			Check.True(!AutoMatchTagsDialog.ShouldWriteTextTagUpdate("RealTitle", "   ", false), "write silently rejects the kept candidate");
+			// 写入:true=写入 -> 候选落盘,与过滤决定一致(此前两者矛盾导致静默更新丢失)。
+			Check.True(AutoMatchTagsDialog.ShouldWriteTextTagUpdate("RealTitle", "   ", false), "write now accepts the kept candidate");
 		});
 	}
 }

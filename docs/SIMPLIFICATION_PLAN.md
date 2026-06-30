@@ -432,3 +432,31 @@
 - **集成缺口（对抗验证 major finding，待 route A）**：`RenameFiles` 的【关联文件 move-gating `if (sourceXxx != null && destinationXxx != null) Move`】+【per-related-file `try/catch` 的「歌词/封面移动失败只告警、不回退已成功的音频改名」韧性不变式】无任何测试覆盖（codegraph 确认 `RenameFiles` 无覆盖测试）。`ResolveRelatedFileTarget` / `ResolveDestinationAudioPath` 本身已 characterize，但未来重构可保持它们 byte-identical 却仍回归 move-gating（如 dest==null 仍移动、调换 lrc/image 参数、移除 `try/catch` 致单个关联文件失败中止整批），两测试 suite 仍全过。需真实文件系统 fixture 的集成测试（route A 范畴）才罩得住。
 - **route A 起步（本批，集成测试层）**：`PathFileUtilities.MoveFileAllowingCaseOnlyRename`（`RenameFiles` 改名/移动的【实际核心原语】）已补真实文件系统集成测试（5 case：普通改名内容保留 / case-only rename 经同目录 temp 两步中转使磁盘 casing 真变更 + 无 temp 残留 / case-only 相对路径→`ArgumentException` / 源缺失→抛 / 目标已存在非 case-only→抛 + 源保留）。自建临时目录 + `try/finally` 删除，CI 可复现、零额外依赖。**仍未覆盖**上一条的 worker 级 move-gating 编排 + per-file `try/catch` 韧性 + history/undo 回写 —— 那需 worker 端到端 fixture（route A form 2，仍待决策）。
 - **route A form 3 完成（本批，提取 + 单元测试层）**：把 `RenameFiles` 的【两段对称关联文件(lrc/封面)尽力而为移动】合并提取为 `FilenameRelatedBatchDialog.MoveRelatedFileBestEffort`（`internal static`，注入 `moveFile`=`MoveFileAllowingCaseOnlyRename` 方法组 + `reportFailure`=`ReportFailure` 委托字段，byte-identical），5 个单元测试（注入 `Recorder` fake，不碰真实 FS）锁定韧性不变式核心：移动失败 → 异常被方法内 `catch` 吞掉、**不传播** → 到不了外层 `catch` → `successCount` 不回退、`failureCount` 不触发（= **不回退已成功的音频改名**）+ `reportFailure(sourcePath, ex.Message)`；gate 4 种 null 组合 no-op。3-lens 对抗验证（等价/回归/完备）**全 pass**。这填补了上方 major-finding 的【移除 `try/catch` 致单个关联文件失败中止整批】回归场景。**仍未覆盖**：音频 move 本体 + `successCount++` 计数时机 + 4 项 history/undo 回写的 worker 级端到端 —— 那耦合 static SQLite/Form/计数，注入会引入计数时机的可观测变化风险，属 form 2 端到端 fixture（仍待决策）。
+
+## AutoMatchTagsDialog 文本标签写入门控：gate 提取 + latent bug 修复（2026-06-30）
+
+承「写标签/重命名 characterization 扩展」路线，落地盘点清单的 AutoMatchTagsDialog gating 项（value 7/risk 5，含 latent bug 候选）。`AutoMatchTagsDialog`（`MusicTagWinApp.Adapter`，未测热点）的【文本标签自动匹配写入流水线】分三阶段，散落在 `AutoMatchWorker` 的三个 private 孙级嵌套上下文：
+- 探测 `LoadedTagContext.MarkTextTagNeededIfMissing`（决定是否发起联网搜索）
+- 过滤 `TextTagUpdateFilter.RemoveUnchangedOrBlockedField`（搜到候选后剔除不该写的字段，`MatchConditionSettings.Remove`）
+- 写入 `TagSaveContext.ApplyTextTagUpdate`（`SaveTagsToFile` 内经 `GetTextTagMatchKeys().ForEachItem` 落盘）
+
+### Phase 1：gate 提取 + characterize 当前行为（`87ff27a5`，零行为变更）
+
+三个嵌套上下文 private、对测试程序集不可见。把各 gate 的判定逻辑提取为 `AutoMatchTagsDialog` 顶层 3 个 `internal static` 纯函数（嵌套类仍可调外层 static）：`IsExistingTextTagUpdatable` / `ShouldDiscardTextTagCandidate`（true=丢弃）/ `ShouldWriteTextTagUpdate`（true=写）。三个实例方法改为调对应 static。24 个 characterization 锁定当前实际行为（golden master），其中明确标注一处 latent bug。
+
+### latent bug：纯空白现值的静默更新丢失
+
+三阶段对「现有值算不算空」判定不一致：探测/过滤用 `IsNullOrWhiteSpace`、写入用 `IsNullOrEmpty`。当现有标签为【纯空白】（`" "`）+ overwrite=false + 搜到合法新值时：探测判定需更新、过滤把空白当空保留候选、`textTagUpdates` 拿到新值，但写入把空白当「非空且禁覆盖」而静默拒写 = 用户的空白标签未被搜到的真实值替换且无提示 = 静默更新丢失。可达性逐阶段核对（`GetTextTagMatchKeys()` 的 `.ToList()` 快照使过滤阶段 `Remove` 的键不被写入阶段遍历，同一字段顺序贯通无 `KeyNotFoundException`）。
+
+### Phase 2：行为修正 + eager-eval 订正 + 3-lens 对抗验证（本 commit）
+
+两类改动：
+1. **行为修正**（非逐字节等价；CLAUDE.md 铁律的合法例外——latent bug 经 characterization 锁定后单独决策修复）：`ShouldWriteTextTagUpdate` 的 `IsNullOrEmpty(value)` → `IsNullOrWhiteSpace(value)`（仅 current-value 半边；new-value 半边不变——纯空白新值在过滤阶段已被 `IsNullOrWhiteSpace(newValue)` 丢弃、不可达写入）。三阶段对「现值」空判定统一。2 个 characterization 断言由「锁定 bug」翻转为「锁定修正后行为」（false→true）。
+2. **eager-eval 订正**（行为保持；对抗验证发现 Phase 1 提取的瑕疵）：Phase 1 把 `ApplyTextTagUpdate` 原内联条件里的 `tagFile[fieldName]` 从【短路操作数】误提为 `ShouldWriteTextTagUpdate` 的【无条件实参】——非字符串候选（过滤阶段故意保留 `as string` 为 null 的键）时由读 0 次变读 1 次。当前 benign（save 前 `CaptureLyricFileNameParts→LoadBasicTagFields` 必加载全部 8 个可达 match 字段、索引必命中），但属 latent `KeyNotFoundException` fragility。订正：外层加 `newValue is string &&` 守卫恢复短路。
+
+3-lens 对抗验证（提取等价 / 修正回归 / 数据流完备）：
+- **提取等价**：(a) 探测、(b) 过滤 gate 逐字节等价确认；(c) 写入 gate 暴露上述 eager-eval 瑕疵 → 本 commit 订正恢复短路。
+- **修正回归**：50-cell 穷举（real .NET string 语义），恰好预测类内 2 cell 变 false→true，唯一可达者 = 预期修复；其余 48 cell 字节相同；零意外回归。
+- **数据流完备**：调用图闭合（`ShouldWriteTextTagUpdate` ← 唯一 `ApplyTextTagUpdate` ← 唯一 `SaveTagsToFile`）；per-worker 隔离零跨文件污染；新写值经 `AddHistoryAndUndoRecord` 可撤销；**额外发现下游修复**——buggy 版纯空白 title 会令 `BuildLyricFileName` 返回 null → `File.WriteAllText(null)` 抛异常被吞为 `Msg_WriteLrcFileFail`，修正后真实 title 使 lrc 正确保存（repair 非 regression）。
+
+测试 219→243（+24），Debug+Release 编译干净 + 3 smoke 全绿。
