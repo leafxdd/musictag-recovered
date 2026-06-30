@@ -34,6 +34,7 @@ internal static class Program
 		tests.AddRange(IsRequiredTagMissingCharacterization.All());
 		tests.AddRange(ResolveRelatedFileTargetCharacterization.All());
 		tests.AddRange(GetSiblingPathWithExtensionCharacterization.All());
+		tests.AddRange(MoveFileAllowingCaseOnlyRenameCharacterization.All());
 		return TestRunner.RunAll(tests);
 	}
 }
