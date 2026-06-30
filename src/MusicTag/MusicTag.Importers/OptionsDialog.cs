@@ -801,7 +801,7 @@ internal class OptionsDialog : Form
 		entry.Key.SearchResultLimit = entry.Value;
 	}
 
-	private static SourceItem FindSourceItemByName(List<SourceItem> sourceItems, string sourceName)
+	internal static SourceItem FindSourceItemByName(List<SourceItem> sourceItems, string sourceName)
 	{
 		foreach (SourceItem sourceItem in sourceItems)
 		{
@@ -2075,7 +2075,14 @@ internal class OptionsDialog : Form
 
 	private int ClampSearchResultLimit(int limit)
 	{
-		return Math.Max(coverSourceLimitTrackBar.Minimum, Math.Min(coverSourceLimitTrackBar.Maximum, limit));
+		return ClampToRange(limit, coverSourceLimitTrackBar.Minimum, coverSourceLimitTrackBar.Maximum);
+	}
+
+	// 纯 clamp 核(从 ClampSearchResultLimit 分离 TrackBar UI 依赖,behavior-preserving):
+	// value 夹到 [min,max];Math.Max(min, Math.Min(max, value)) 故 min>max 反常时 min 胜出。
+	internal static int ClampToRange(int value, int min, int max)
+	{
+		return Math.Max(min, Math.Min(max, value));
 	}
 
 }

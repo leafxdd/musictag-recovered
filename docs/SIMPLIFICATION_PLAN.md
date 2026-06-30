@@ -508,3 +508,10 @@ probe-first build 锁定真实 `results[0]`。8 例首次全绿。覆盖:通道�
 
 测试 291→306（+15）,Debug+Release 编译干净 + 3 smoke 全绿（OptionsDialog 反射构造 smoke 不受可见性
 提升影响）。后续可继续把更多纯逻辑 helper 外提至工具类、逐步缩小 god class。
+
+**第二步（2026-06-30）**:再分离两处纯逻辑 + characterize——`FindSourceItemByName`（遍历
+`List<SourceItem>` 按 `SearchSource.ToString()` 大小写敏感查找,返回首个或 null）`private static` →
+`internal static`（仅可见性,behavior-preserving）+ 4 例;`ClampSearchResultLimit` 提取纯 clamp 核
+`ClampToRange(value,min,max)=Math.Max(min,Math.Min(max,value))`（从 `coverSourceLimitTrackBar.Minimum/Maximum`
+的 TrackBar UI 依赖分离,逻辑逐字等价、behavior-preserving;`min>max` 反常时 min 胜出）+ 7 例。
+测试 306→317（+11）,编译干净 + 3 smoke 绿。

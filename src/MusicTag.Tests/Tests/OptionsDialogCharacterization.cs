@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using MusicTag.Importers;
+using MusicTagWinApp.Web;
 
 namespace MusicTag.Tests;
 
@@ -104,6 +105,71 @@ internal static class OptionsDialogCharacterization
 		yield return ("NormalizeRestrictedExtensions: whitespace-only \"  \" -> []", delegate
 		{
 			CheckArray("", OptionsDialog.NormalizeRestrictedExtensions("  "), "whitespace-only");
+		});
+
+		// ===== FindSourceItemByName:遍历 List<SourceItem> 找 SearchSource.ToString()==name(大小写敏感) =====
+
+		yield return ("FindSourceItemByName: found by enum name -> that item", delegate
+		{
+			SourceItem qq = new SourceItem(SearchSource.QQ, 1);
+			List<SourceItem> list = new List<SourceItem> { new SourceItem(SearchSource.Music163, 0), qq };
+			Check.True(OptionsDialog.FindSourceItemByName(list, "QQ") == qq, "found QQ ref");
+		});
+
+		yield return ("FindSourceItemByName: name not in list -> null", delegate
+		{
+			List<SourceItem> list = new List<SourceItem> { new SourceItem(SearchSource.Music163, 0), new SourceItem(SearchSource.QQ, 1) };
+			Check.Null(OptionsDialog.FindSourceItemByName(list, "Kugou"), "Kugou absent");
+		});
+
+		yield return ("FindSourceItemByName: empty list -> null", delegate
+		{
+			Check.Null(OptionsDialog.FindSourceItemByName(new List<SourceItem>(), "QQ"), "empty list");
+		});
+
+		// SearchSource.ToString() 区分大小写,小写 name 不匹配
+		yield return ("FindSourceItemByName: case-sensitive (\"qq\" != \"QQ\") -> null", delegate
+		{
+			List<SourceItem> list = new List<SourceItem> { new SourceItem(SearchSource.QQ, 1) };
+			Check.Null(OptionsDialog.FindSourceItemByName(list, "qq"), "case-sensitive");
+		});
+
+		// ===== ClampToRange:Math.Max(min, Math.Min(max, value)) — 夹到 [min,max](从 ClampSearchResultLimit 分离的纯核) =====
+
+		yield return ("ClampToRange: within range -> value", delegate
+		{
+			Check.Equal(5, OptionsDialog.ClampToRange(5, 0, 10), "within");
+		});
+
+		yield return ("ClampToRange: below min -> min", delegate
+		{
+			Check.Equal(0, OptionsDialog.ClampToRange(-3, 0, 10), "below");
+		});
+
+		yield return ("ClampToRange: above max -> max", delegate
+		{
+			Check.Equal(10, OptionsDialog.ClampToRange(15, 0, 10), "above");
+		});
+
+		yield return ("ClampToRange: at min -> min", delegate
+		{
+			Check.Equal(0, OptionsDialog.ClampToRange(0, 0, 10), "at min");
+		});
+
+		yield return ("ClampToRange: at max -> max", delegate
+		{
+			Check.Equal(10, OptionsDialog.ClampToRange(10, 0, 10), "at max");
+		});
+
+		// min>max 反常:Math.Min(max,value) 先压到 <=max,Math.Max(min,..) 再抬到 min -> min 胜出
+		yield return ("ClampToRange: inverted min>max -> min wins", delegate
+		{
+			Check.Equal(10, OptionsDialog.ClampToRange(5, 10, 0), "inverted");
+		});
+
+		yield return ("ClampToRange: min==max -> that value", delegate
+		{
+			Check.Equal(3, OptionsDialog.ClampToRange(5, 3, 3), "min==max");
 		});
 	}
 }
