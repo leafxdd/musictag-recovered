@@ -30,6 +30,7 @@ internal static class Program
 		tests.AddRange(ValidateFilenamePatternCoreCharacterization.All());
 		tests.AddRange(PendingTagUpdateTextTagCharacterization.All());
 		tests.AddRange(SetRegexCaptureTagCharacterization.All());
+		tests.AddRange(ResolveDestinationAudioPathCharacterization.All());
 		return TestRunner.RunAll(tests);
 	}
 }

@@ -170,6 +170,29 @@ internal class FilenameRelatedBatchDialog : Form
 		return newFilename;
 	}
 
+	// 由渲染后的目标文件名构造最终音频目标路径,并处理同名冲突:目标已存在【且】新文件名与原文件名
+	// (不含扩展名,大小写不敏感)不同时,追加 " (N)"(N 从 1 递增)直到空位;若新旧同名(仅大小写/无变化)
+	// 则原样返回不去重(避免把原地改名误判为冲突)。fileExists 注入存在性判定(生产端传 File.Exists,逐字节等价)。
+	// 提取自 RenameFilesBatchWorker.RenameFiles 的内联逻辑(行为逐字保持),供 characterization 锁定。
+	internal static string ResolveDestinationAudioPath(string originalPath, string newFilename, Func<string, bool> fileExists)
+	{
+		string destinationAudioPath = Path.GetDirectoryName(originalPath) + "\\" + newFilename + Path.GetExtension(originalPath);
+		if (fileExists(destinationAudioPath) && !string.Equals(newFilename, Path.GetFileNameWithoutExtension(originalPath), StringComparison.OrdinalIgnoreCase))
+		{
+			int duplicateIndex = 1;
+			while (true)
+			{
+				destinationAudioPath = Path.GetDirectoryName(originalPath) + "\\" + newFilename + " (" + duplicateIndex + ")" + Path.GetExtension(originalPath);
+				if (!fileExists(destinationAudioPath))
+				{
+					break;
+				}
+				duplicateIndex++;
+			}
+		}
+		return destinationAudioPath;
+	}
+
 	// 把文件名模板(@1..@8 占位符 + 字面量)编译为匹配用正则:先把字面量里的正则元字符逐一转义,
 	// 再把每段连续占位符 (@[0-8])+ 记为一个 token 并整体替换为捕获组 (.*)。返回 (正则, token 列表)。
 	// 提取自 ChangeTags 的内联逻辑(行为逐字保持),供 characterization 锁定。
@@ -310,20 +333,7 @@ internal class FilenameRelatedBatchDialog : Form
 										}
 										sourceImagePath = ImageUtilities.FindExistingSiblingImageFile(originalPath);
 									}
-									string destinationAudioPath = Path.GetDirectoryName(originalPath) + "\\" + newFilename + Path.GetExtension(originalPath);
-									if (File.Exists(destinationAudioPath) && !string.Equals(newFilename, Path.GetFileNameWithoutExtension(originalPath), StringComparison.OrdinalIgnoreCase))
-									{
-										int duplicateIndex = 1;
-										while (true)
-										{
-											destinationAudioPath = Path.GetDirectoryName(originalPath) + "\\" + newFilename + " (" + duplicateIndex + ")" + Path.GetExtension(originalPath);
-											if (!File.Exists(destinationAudioPath))
-											{
-												break;
-											}
-											duplicateIndex++;
-										}
-									}
+									string destinationAudioPath = ResolveDestinationAudioPath(originalPath, newFilename, File.Exists);
 									string destinationLrcPath = null;
 									if (sourceLrcPath != null)
 									{
