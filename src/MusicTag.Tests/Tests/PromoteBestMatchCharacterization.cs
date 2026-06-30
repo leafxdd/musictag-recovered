@@ -251,5 +251,119 @@ internal static class PromoteBestMatchCharacterization
 			TrackSearchResult.PromoteBestMatch("song instrumental", "a", "b", results);
 			CheckFront("T0", results, "instrumental target no fallback");
 		});
+
+		// ===== 分支1/2 深层 fallback 通道(Workflow 8-agent 逐 pass 设计触发 fixture + 独立追踪复核 + probe-first build 锁定)=====
+		// 每例精确触发一个更深的 fallback 通道:构造使前序通道全部不命中(promoted 保持 false)、
+		// 仅目标通道的 MoveTrackToFront 执行。候选用 SearchPass/ResultOrder/分数/严格相等-vs-互含 等杠杆
+		// 把控制流逐级推进。预期 front 全为 T1(从 currentBest=T0 提升,可观察变化锁定该通道)。
+
+		// 通道三(285-303):SearchPass==2 候选,album/artist 与 target【严格相等】+ 标题互含。
+		// T1.SearchPass=2 使其被排除出 artistRanked(236 要求 SearchPass<2),故通道一/二跳过它,由本通道捕获。
+		yield return ("PromoteBestMatch: pass3 second-pass(SearchPass==2) album+artist exact match", delegate
+		{
+			List<TrackSearchResult> results = new List<TrackSearchResult>
+			{
+				Track("T0", "hello", "wrong", "19", titleScore: 0.3, artistScore: 0.3, albumScore: 0.3),
+				Track("T1", "hello", "adele", "25", titleScore: 1.0, artistScore: 1.0, albumScore: 1.0, searchPass: 2)
+			};
+			TrackSearchResult.PromoteBestMatch("hello", "adele", "25", results);
+			CheckFront("T1", results, "pass3 second-pass-album-fallback");
+		});
+
+		// 通道四(304-322):遍历全部 results 找 SearchPass<2 候选,album 互含 + artist【严格相等】+ 标题互含。
+		// T1.ResultOrder=1 使其被排除出 artistRanked(230 跳过非 top 候选),故通道一/二/五(均遍历 artistRanked)
+		// 不命中;通道三要 SearchPass==2 而 T1 是 1;本通道遍历 results 捕获 T1。
+		yield return ("PromoteBestMatch: pass4 album-artist(SearchPass<2 scan all) exact-artist match", delegate
+		{
+			List<TrackSearchResult> results = new List<TrackSearchResult>
+			{
+				Track("T0", "love story", "karaoke version", "karaoke hits", titleScore: 0.9, artistScore: 0.2, albumScore: 0.1),
+				Track("T1", "love story", "taylor swift", "fearless", titleScore: 0.95, artistScore: 1.0, albumScore: 0.95, resultOrder: 1, searchPass: 1, sourceOrder: 1)
+			};
+			TrackSearchResult.PromoteBestMatch("love story", "taylor swift", "fearless", results);
+			CheckFront("T1", results, "pass4 album-artist-fallback");
+		});
+
+		// 通道五(323-341):遍历 artistRanked 找 artist【互含】(非严格)+ album 非空互含 + 标题互含。
+		// T1.artist "alpha beta" 互含 target "alpha" 但不严格相等,故落出通道四(严格)、被本通道(互含)捕获。
+		// (resultOrder=0 使 T1 进 artistRanked——这是 Workflow 设计中 fixture/trace 的不一致点,以 trace 为准修正。)
+		yield return ("PromoteBestMatch: pass5 artist-album(loose-artist Contains) match", delegate
+		{
+			List<TrackSearchResult> results = new List<TrackSearchResult>
+			{
+				Track("T0", "wrong", "zzz", "other", artistScore: 0.3),
+				Track("T1", "song", "alpha beta", "greatest hits", artistScore: 0.3, sourceOrder: 1)
+			};
+			TrackSearchResult.PromoteBestMatch("song", "alpha", "greatest", results);
+			CheckFront("T1", results, "pass5 artist-album-fallback");
+		});
+
+		// 通道六(342-358):遍历 primaryCandidates 找 artist 互含 + 标题互含。
+		// currentBest.Album="" 使通道三/四/五(均 gated by currentBestAlbum.Any())整块跳过,直达本通道。
+		// currentBest.Artist="eason"(非空)避开 ContainsEitherWay 空串陷阱(否则 T0 自命中成 no-op)。
+		yield return ("PromoteBestMatch: pass6 primary(blank currentBest album bypasses 3/4/5) artist+title", delegate
+		{
+			List<TrackSearchResult> results = new List<TrackSearchResult>
+			{
+				Track("T0", "alpha", "eason", ""),
+				Track("T1", "beta", "jay", "", artistScore: 0.5, sourceOrder: 1)
+			};
+			TrackSearchResult.PromoteBestMatch("beta", "jay", "", results);
+			CheckFront("T1", results, "pass6 primary-fallback");
+		});
+
+		// 通道七(359-365):artistRanked 排序后首位(artist 分最高)!=currentBest 且 artist 分>=0.8、
+		// 而 currentBest 标题既不互含 target 又 titleScore<0.8 -> 提升 artistRanked[0]。
+		yield return ("PromoteBestMatch: pass7 artist-ranked-best (top artist-score promoted)", delegate
+		{
+			List<TrackSearchResult> results = new List<TrackSearchResult>
+			{
+				Track("T0", "mmm", "ccc", "", titleScore: 0.1, artistScore: 0.3),
+				Track("T1", "zzz", "bbb", "", artistScore: 0.9)
+			};
+			TrackSearchResult.PromoteBestMatch("ttt", "aaa", "", results);
+			CheckFront("T1", results, "pass7 artist-ranked-best");
+		});
+
+		// 通道八(366-402):earlyPass 候选 标题+专辑双匹配 target 且不该保留 currentBest -> 提升。
+		// currentBest 标题不匹配(currentBestAlreadyMatches=false)使 T0(earlyPass 首位、==currentBest)
+		// 不触发 398 提前 break,T1 得以被处理。
+		yield return ("PromoteBestMatch: pass8 early-pass album+title match", delegate
+		{
+			List<TrackSearchResult> results = new List<TrackSearchResult>
+			{
+				Track("T0", "diff", "zoe", ""),
+				Track("T1", "song", "bob", "album", titleScore: 1.0, albumScore: 1.0)
+			};
+			TrackSearchResult.PromoteBestMatch("song", "alice", "album", results);
+			CheckFront("T1", results, "pass8 early-pass-album-match");
+		});
+
+		// 通道九(404-429):earlyPass 候选 标题匹配 + artist 可接受 -> 提升。
+		// T0.SearchPass=1 使 currentBest 不入 earlyPass(成员要 SearchPass<1),故 408 的 ==currentBest break
+		// 永不触发、T1 可被处理(这是本通道唯一的可达构造——currentBest 必为 results[0])。
+		yield return ("PromoteBestMatch: pass9 early-pass title match (currentBest excluded from earlyPass)", delegate
+		{
+			List<TrackSearchResult> results = new List<TrackSearchResult>
+			{
+				Track("T0", "omega", "zzz", "", searchPass: 1),
+				Track("T1", "alpha", "bbb", "ealb", titleScore: 1.0, artistScore: 0.3)
+			};
+			TrackSearchResult.PromoteBestMatch("alpha", "aaa", "", results);
+			CheckFront("T1", results, "pass9 early-pass-title-match");
+		});
+
+		// 分支2(438-459):currentBest artist 强匹配(>=0.8)但 album 错(albumScore<0.8 且不互含 target),
+		// 另一候选同 title+artist 但 album 正确且 albumScore 更高 -> 替换提升。
+		yield return ("PromoteBestMatch: branch2 album replacement (right album, higher score)", delegate
+		{
+			List<TrackSearchResult> results = new List<TrackSearchResult>
+			{
+				Track("T0", "song", "artist", "wrongalbum", titleScore: 0.9, artistScore: 0.9, albumScore: 0.3),
+				Track("T1", "song", "artist", "rightalbum", titleScore: 0.9, artistScore: 0.9, albumScore: 0.9)
+			};
+			TrackSearchResult.PromoteBestMatch("song", "artist", "rightalbum", results);
+			CheckFront("T1", results, "branch2-album-replacement");
+		});
 	}
 }

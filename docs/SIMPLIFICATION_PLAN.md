@@ -468,3 +468,29 @@
 新增 16 characterization（`NaturalSortCharacterization`）锁定自然排序语义：数值序（`"2" < "10"` 非字典序）、前导零数值相等 fallback `string.Compare`（`"01" < "1"`）、数字段超 `Int64` 时 `long.TryParse` 双失败 fallback `string.Compare`、文本段不同比 `text+number` 拼接串、段数差、分段正则交替「非数字段 + 数字段」+ 空匹配过滤。
 
 测试 243→259（+16），Debug+Release 编译干净 + 3 smoke 全绿。
+
+## PromoteBestMatch 自动匹配大脑 characterization（2026-06-30）
+
+`TrackSearchResult.PromoteBestMatch`（`MusicTagWinApp.Roles`，~290 行 9-pass fallback）是自动匹配
+「大脑」：就地把最契合 target（title/artist/album）的候选 `MoveTrackToFront` 到 `results[0]`。
+untested hotspot（2 callers in `CombinedTagSearchDialog`，零覆盖）。纯逻辑——只读 `SimilarityScores[]`、
+不算分，故 fixture 直接写 `track.SimilarityScores[0..2]` 绕过 `TextSimilarityCalculator`；候选靠
+`SourceTrackId` 标识、断言 `results[0]`。零生产改动。
+
+**第一批（24 例，`07df31b3`）**：`ContainsEitherWay`（空串陷阱 `("","abc")->true`）+ `IsInstrumentalTitle`
+（大小写敏感）两个 public static building block 各 7 例；PromoteBestMatch 10 例覆盖边界（空/单元素）、
+三大分支入口、分支1 通道一/二、伴奏回退母版 + target 伴奏不回退。
+
+**第二批（8 例，本 commit）— Workflow 完备性扩展**：分支1 的 6 个深层 fallback 通道（通道三~九）+
+分支2 album 替换此前未覆盖，触发条件层层依赖前序通道全不命中，fixture 需精巧的
+SearchPass/ResultOrder/分数/严格相等-vs-互含 杠杆。用 8-agent Workflow（每 agent 逐 pass 设计触发
+fixture + 完整追踪可达性，effort=high），3 个 agent 自行 build-verified。**对抗验证三重把关**:
+agent 设计 → 我独立逐 pass 追踪复核（抓出通道五 fixture JSON `resultOrder=1` 与其 trace 推理 `=0`
+的不一致——`=1` 会被 230 行「非 top 候选跳过」排除出 artistRanked、通道五不触发，以 trace 为准修正）→
+probe-first build 锁定真实 `results[0]`。8 例首次全绿。覆盖:通道三（SearchPass==2 严格 album+artist）、
+通道四（SearchPass<2 扫全表严格 artist）、通道五（artist 互含非严格）、通道六（currentBest album 空
+绕过 3/4/5）、通道七（artist-ranked 排序首位）、通道八（earlyPass album+title）、通道九（currentBest
+须排除出 earlyPass 方可达）、分支2（album 替换）。
+
+至此 PromoteBestMatch 全部 9 个 fallback 通道 + 3 分支 + 边界 + 伴奏均有 golden master。
+测试 259→291（+32），Debug+Release 编译干净 + 3 smoke 全绿。
