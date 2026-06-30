@@ -494,3 +494,17 @@ probe-first build 锁定真实 `results[0]`。8 例首次全绿。覆盖:通道�
 
 至此 PromoteBestMatch 全部 9 个 fallback 通道 + 3 分支 + 边界 + 伴奏均有 golden master。
 测试 259→291（+32），Debug+Release 编译干净 + 3 smoke 全绿。
+
+## OptionsDialog god class 拆分起步:纯逻辑可见性提升 + characterize（2026-06-30）
+
+`OptionsDialog`（`MusicTag.Importers`）是 code-health biomarker 最重的 god class（impact -2.3）。
+渐进拆分第一步（最低风险):把两个无状态 static helper 由 `private` 提升为 `internal`（仅可见性关键字、
+逻辑零改动 = behavior-preserving;两者只在 OptionsDialog 内部调用,提升不影响现有 caller）+ characterize
+锁定 golden master:
+- `GetResourceText`（`IsNullOrEmpty(resourceText) ? fallback : resourceText`,注意是 IsNullOrEmpty 而非
+  IsNullOrWhiteSpace——纯空白 `" "` 原样返回、不取 fallback）5 例。
+- `NormalizeRestrictedExtensions`（`Split(';',RemoveEmpty) → Trim().ToLowerInvariant() → 过滤空 →
+  Distinct(OrdinalIgnoreCase)`)10 例:大小写归一、去重、空白段/空段过滤、纯空白→`[]`。
+
+测试 291→306（+15）,Debug+Release 编译干净 + 3 smoke 全绿（OptionsDialog 反射构造 smoke 不受可见性
+提升影响）。后续可继续把更多纯逻辑 helper 外提至工具类、逐步缩小 god class。

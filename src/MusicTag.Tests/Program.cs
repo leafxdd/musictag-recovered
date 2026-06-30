@@ -40,6 +40,7 @@ internal static class Program
 		tests.AddRange(AutoMatchTextTagGatingCharacterization.All());
 		tests.AddRange(NaturalSortCharacterization.All());
 		tests.AddRange(PromoteBestMatchCharacterization.All());
+		tests.AddRange(OptionsDialogCharacterization.All());
 		return TestRunner.RunAll(tests);
 	}
 }

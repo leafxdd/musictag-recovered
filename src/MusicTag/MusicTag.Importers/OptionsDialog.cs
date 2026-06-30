@@ -445,7 +445,7 @@ internal class OptionsDialog : Form
 		return string.IsNullOrEmpty(resourceText) ? fallbackText : resourceText;
 	}
 
-	private static string GetResourceText(string resourceText, string fallbackText)
+	internal static string GetResourceText(string resourceText, string fallbackText)
 	{
 		return string.IsNullOrEmpty(resourceText) ? fallbackText : resourceText;
 	}
@@ -818,7 +818,7 @@ internal class OptionsDialog : Form
 		return !StateFieldInstance.KnownTagTypesByExtension.ContainsKey(extension);
 	}
 
-	private static string[] NormalizeRestrictedExtensions(string restrictedExtensionsText)
+	internal static string[] NormalizeRestrictedExtensions(string restrictedExtensionsText)
 	{
 		return restrictedExtensionsText
 			.Split(new char[1] { ';' }, StringSplitOptions.RemoveEmptyEntries)
