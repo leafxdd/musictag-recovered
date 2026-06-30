@@ -228,6 +228,26 @@ internal class FilenameRelatedBatchDialog : Form
 		return destinationPath;
 	}
 
+	// 关联文件(歌词/封面)的尽力而为移动:仅当 source 与 destination 均非 null 时移动;移动失败【只告警
+	// (reportFailure),不向上抛出】——RenameFiles 的韧性不变式:歌词/封面移动失败不回退已成功的音频改名
+	// (异常被本方法吞掉,到不了外层 catch,故 successCount 不回退、failureCount 不触发)。
+	// 由 RenameFilesBatchWorker.RenameFiles 的两段对称 lrc/封面移动内联块合并提取(行为逐字保持:
+	// MoveFileAllowingCaseOnlyRename -> 注入 moveFile,ReportFailure -> 注入 reportFailure)。
+	internal static void MoveRelatedFileBestEffort(string sourcePath, string destinationPath, Action<string, string> moveFile, Action<string, string> reportFailure)
+	{
+		if (sourcePath != null && destinationPath != null)
+		{
+			try
+			{
+				moveFile(sourcePath, destinationPath);
+			}
+			catch (Exception relatedFileException)
+			{
+				reportFailure(sourcePath, relatedFileException.Message);
+			}
+		}
+	}
+
 	// 把文件名模板(@1..@8 占位符 + 字面量)编译为匹配用正则:先把字面量里的正则元字符逐一转义,
 	// 再把每段连续占位符 (@[0-8])+ 记为一个 token 并整体替换为捕获组 (.*)。返回 (正则, token 列表)。
 	// 提取自 ChangeTags 的内联逻辑(行为逐字保持),供 characterization 锁定。
@@ -377,28 +397,8 @@ internal class FilenameRelatedBatchDialog : Form
 											TagHistoryRepository.AddRenameUndoRecord(originalPath, destinationAudioPath);
 											Owner.successCount++;
 											// 关联文件(歌词/封面)为尽力而为:移动失败只记录告警,不回退已成功的音频改名。
-											if (sourceLrcPath != null && destinationLrcPath != null)
-											{
-												try
-												{
-													PathFileUtilities.MoveFileAllowingCaseOnlyRename(sourceLrcPath, destinationLrcPath);
-												}
-												catch (Exception lrcEx)
-												{
-													ReportFailure(sourceLrcPath, lrcEx.Message);
-												}
-											}
-											if (sourceImagePath != null && destinationImagePath != null)
-											{
-												try
-												{
-													PathFileUtilities.MoveFileAllowingCaseOnlyRename(sourceImagePath, destinationImagePath);
-												}
-												catch (Exception imageEx)
-												{
-													ReportFailure(sourceImagePath, imageEx.Message);
-												}
-											}
+											MoveRelatedFileBestEffort(sourceLrcPath, destinationLrcPath, PathFileUtilities.MoveFileAllowingCaseOnlyRename, ReportFailure);
+											MoveRelatedFileBestEffort(sourceImagePath, destinationImagePath, PathFileUtilities.MoveFileAllowingCaseOnlyRename, ReportFailure);
 										}
 										catch (Exception ex)
 										{
