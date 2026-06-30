@@ -28,6 +28,7 @@ internal static class Program
 		tests.AddRange(ConfigDescriptorStateDisplayCharacterization.All());
 		tests.AddRange(ConfigDescriptorStateRoundTripCharacterization.All());
 		tests.AddRange(ValidateFilenamePatternCoreCharacterization.All());
+		tests.AddRange(PendingTagUpdateTextTagCharacterization.All());
 		return TestRunner.RunAll(tests);
 	}
 }

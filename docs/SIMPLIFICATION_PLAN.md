@@ -393,6 +393,7 @@
 | `78be2666` | `SplitCombinedDiscTrackCapture`（disc/track 组合 token 数字前缀拆分） | 提取自 `ChangeTags` 内联（返回赋值序列隔离副作用） | 6 |
 | `13149346` | `GetDisplayValue`（显示格式化）+ `FormatDurationWithMilliseconds` / `FormatDurationHms` | 零放宽（全 public，空构造 + indexer 填 dict） | 16 |
 | `e641ae11` | `ValidateFilenamePatternCore`（模板输入校验） | 提取自 `ValidateFilenamePattern`（纯判定→enum，UI 层翻译消息） | 10 |
+| 本批 | `PendingTagUpdate` 文本 case（@1/@2/@3/@6/@7/@8 经 `SetTextTagIfChanged` 变更门控 + tagName 映射）+ `ApplyChanges` 写回 TagState | 零放宽（全 public） | 11 |
 
 ### 音频 round-trip 批（后做，自包含 fixture）
 
