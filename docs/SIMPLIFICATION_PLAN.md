@@ -515,3 +515,12 @@ probe-first build 锁定真实 `results[0]`。8 例首次全绿。覆盖:通道�
 `ClampToRange(value,min,max)=Math.Max(min,Math.Min(max,value))`（从 `coverSourceLimitTrackBar.Minimum/Maximum`
 的 TrackBar UI 依赖分离,逻辑逐字等价、behavior-preserving;`min>max` 反常时 min 胜出）+ 7 例。
 测试 306→317（+11）,编译干净 + 3 smoke 绿。
+
+## dead code 清理:ImageSubItem + ImageListSubItem（2026-06-30）
+
+删除两个零引用类 `ImageSubItem`（`MusicTag.Services`）+ `ImageListSubItem`（`MusicTagWinApp.Common`）——
+均继承 `DrawableListViewSubItem` 但全仓【零实例化】(codegraph + Grep 全仓确认:无 `new`、无字符串/反射/
+resx/designer 引用;唯一外部引用在 `.claude/worktrees` 另一分支副本,不影响 master)。删除前确认基类
+不连带 dead:`DrawableListViewSubItem` 另有两个活子类 `CheckBoxSubItem` + `EmbeddedControlSubItem`
+(被 `EditableListView` 多态 `DoDraw` + 静态 `DrawCenteredImage` 使用),保留。
+Debug+Release 编译干净（无引用断裂）+ 317 characterization + 3 smoke 全绿。
