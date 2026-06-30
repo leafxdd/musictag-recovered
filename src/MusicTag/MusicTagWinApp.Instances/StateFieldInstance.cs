@@ -595,7 +595,7 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	private static (string, bool) BuildBatchResultMessage(int totalCount, string completedMessage, int primaryCount, int failedCount, int skippedCount, int processedCount, string logText, bool includeSkippedBranch)
+	internal static (string, bool) BuildBatchResultMessage(int totalCount, string completedMessage, int primaryCount, int failedCount, int skippedCount, int processedCount, string logText, bool includeSkippedBranch)
 	{
 		(string, bool) value = default((string, bool));
 		if (totalCount > 1)
@@ -618,7 +618,7 @@ internal class StateFieldInstance : Form
 		return value;
 	}
 
-	private static bool IsCancellationException(System.Exception exception, CancellationTokenSource cancellationSource)
+	internal static bool IsCancellationException(System.Exception exception, CancellationTokenSource cancellationSource)
 	{
 		if (cancellationSource == null || !cancellationSource.IsCancellationRequested)
 		{
@@ -635,7 +635,7 @@ internal class StateFieldInstance : Form
 		return false;
 	}
 
-	private static System.Exception UnwrapAsyncOperationException(System.Exception exception)
+	internal static System.Exception UnwrapAsyncOperationException(System.Exception exception)
 	{
 		if (exception is AggregateException aggregateException && aggregateException.InnerExceptions.Count == 1)
 		{
@@ -3601,7 +3601,7 @@ internal class StateFieldInstance : Form
 		fileListView.RowTemplate.Height = Math.Max(ImageUtilities.ScaleByDpi(22f), fileTypeImageList.ImageSize.Height + fileListIconPadding);
 	}
 
-	private static DataGridViewContentAlignment MapColumnAlignment(HorizontalAlignment textAlign)
+	internal static DataGridViewContentAlignment MapColumnAlignment(HorizontalAlignment textAlign)
 	{
 		switch (textAlign)
 		{
@@ -4084,7 +4084,7 @@ internal class StateFieldInstance : Form
 
 	private IEnumerable<FileRow> SelectedFileRows => visibleRows.Where(r => selectedVisibleRows.Contains(r));
 
-	private static string FormatCountDurationSize(int count, long durationMs, long fileSizeBytes)
+	internal static string FormatCountDurationSize(int count, long durationMs, long fileSizeBytes)
 	{
 		return $"{count} ({ConfigDescriptorState.FormatDurationHms(durationMs)} | {TextUtilities.FormatFileSize(fileSizeBytes)})";
 	}
@@ -4097,7 +4097,7 @@ internal class StateFieldInstance : Form
 		totalFilesStatusLabel.Text = FormatCountDurationSize(visibleRows.Count, allDurationMs, allFileSizeBytes);
 	}
 
-	private static (long DurationMs, long FileSizeBytes) GetCachedDurationAndFileSize(object cachedValue)
+	internal static (long DurationMs, long FileSizeBytes) GetCachedDurationAndFileSize(object cachedValue)
 	{
 		return cachedValue is ValueTuple<long, long> totals ? totals : (0L, 0L);
 	}
@@ -4445,7 +4445,7 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	private static void AddSelectedFilterValue(Dictionary<string, int> valueCounts, List<(string, bool)> changedValues, string value)
+	internal static void AddSelectedFilterValue(Dictionary<string, int> valueCounts, List<(string, bool)> changedValues, string value)
 	{
 		if (string.IsNullOrWhiteSpace(value))
 		{
@@ -5701,7 +5701,7 @@ internal class StateFieldInstance : Form
 		return pictureInfo.ProcessingFailed;
 	}
 
-	private int ParseLeadingNumber(string value)
+	internal static int ParseLeadingNumber(string value)
 	{
 		Match match = Regex.Match(value, "^\\d+");
 		if (match.Success)
@@ -6719,7 +6719,7 @@ internal class StateFieldInstance : Form
 		Text = title;
 	}
 
-	private static bool IsEnabledConfiguredDirectory(ListViewFileSettingFileInfo directoryInfo)
+	internal static bool IsEnabledConfiguredDirectory(ListViewFileSettingFileInfo directoryInfo)
 	{
 		return !directoryInfo.Disabled && !directoryInfo.IsAnyFile();
 	}
@@ -6986,7 +6986,7 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	private static string NormalizeDroppedFilePath(string path)
+	internal static string NormalizeDroppedFilePath(string path)
 	{
 		return path.Replace("\"", "").Trim();
 	}

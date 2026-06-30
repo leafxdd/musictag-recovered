@@ -524,3 +524,22 @@ resx/designer 引用;唯一外部引用在 `.claude/worktrees` 另一分支副�
 不连带 dead:`DrawableListViewSubItem` 另有两个活子类 `CheckBoxSubItem` + `EmbeddedControlSubItem`
 (被 `EditableListView` 多态 `DoDraw` + 静态 `DrawCenteredImage` 使用),保留。
 Debug+Release 编译干净（无引用断裂）+ 317 characterization + 3 smoke 全绿。
+
+## StateFieldInstance 纯逻辑提取:10 helper 可见性提升 + characterize + 对抗审计（2026-07-01）
+
+`StateFieldInstance`（`MusicTagWinApp.Instances`,~8654 行主 god-form、churn 最高 42 commits）渐进拆分,
+延续自然排序提取路径,把 10 个 UI 无关纯逻辑 helper 提升可见性以便 characterization 锁定 golden master——
+9 个 `private static`→`internal static`（仅可见性关键字、body 零改动）+ `ParseLeadingNumber` 由 `private`
+（实例）→`internal static`（body 不碰任何实例字段、唯一调用点 line 8617 是类内无限定符调用,static 化后
+解析不变 = 零调用点改动）。均无控件/实例状态/IO 依赖。涉及:`BuildBatchResultMessage`（4 分支批处理结果
+消息构造）、`IsCancellationException`（取消异常递归判定）、`UnwrapAsyncOperationException`（单层
+AggregateException 解包）、`MapColumnAlignment`（对齐枚举映射）、`FormatCountDurationSize`、
+`GetCachedDurationAndFileSize`（ValueTuple 类型守卫）、`AddSelectedFilterValue`（筛选值计数、空白归一）、
+`IsEnabledConfiguredDirectory`、`NormalizeDroppedFilePath`、`ParseLeadingNumber`。
+
+characterization 分两轮（probe-first,全程零 FAIL）:先 48 例覆盖主路径+关键分支;再经 3-lens Workflow
+完备性对抗审计（找未覆盖分支/边界/语义/行为保持风险,逐条 trace 独立复核）补 24 例——嵌套 AggregateException
+递归（depth-2 正/负）、多 inner All、TaskCanceledException 派生、int.MaxValue 溢出边界、3-arity 类型守卫、
+" x " 不 Trim 语义、未定义枚举 default、size>=1000 KB 分支、null→NRE/ArgumentNullException 边界、
+completedMessage 进 format 模板的 latent 插值。3 agent 均确认行为保持 PRESERVED（其一以 `git diff HEAD`
+佐证字节级一致）。测试 317→389（+72）,Debug+Release 编译干净 + 3 smoke 全绿。
