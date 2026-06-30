@@ -589,3 +589,20 @@ eager-eval 陷阱排查 + 浮点 cast)、assertions(28 例独立重算 expected 
 EQUIVALENT_AND_COMPLETE;completeness 补 3 例完备性 gap(Clear 清成功记忆、同源重复错误 last-wins/不抛、
 Completed Source 透传——前二关联韧性不变量与 reused-instance 回归)。测试 420→451(+31),Debug+Release
 编译干净 + 3 smoke 全绿。
+
+## OptionsDialog 第三步:图片选项序列 iterator 提取(2026-07-01)
+
+`OptionsDialog`(`MusicTag.Importers`,2093 行,code-health 最重 god class biomarker)。前 2 步
+(69dad1dd + cc9a32aa)已提取 4 个纯 helper(GetResourceText/NormalizeRestrictedExtensions/
+FindSourceItemByName/ClampToRange,26 例 characterize)。本步从 `LoadSavedOptions` 124 行 settings↔控件
+编排里分离出仅有的两段非平凡纯逻辑——图片大小/分辨率选项序列生成(条件步进):
+- **`EnumeratePictureSizeOptions`**(internal static iterator):20 起,<100 步进 20、>=100 步进 100,
+  至 10000(104 档)。
+- **`EnumeratePictureResolutionOptions`**:0 起,首步 +100 到 100、之后步进 10,至 4000(392 档)。
+
+提取取 yield iterator:仅把序列【生成规则】分离为可测 iterator,选中索引(`selectedIndex = 字段.Count`)
+与控件填充逻辑原样留在 LoadSavedOptions(for→foreach,body 零改)——绝对 behavior-preserving,不依赖字段
+初始状态假设。git diff 逐字节确认 iterator 内 for 表达式 == 原内联 for(提取 trivial + characterization
+精确锁定序列,属 already-verified,未跑完整 Workflow)。5 例 characterization 锁定序列首末项/总档数/步进
+切换点/跳过值。测试 451→456(+5),Debug+Release 编译干净 + 3 smoke 全绿。OptionsDialog 可提取纯逻辑
+(非 UI/Settings/designer 耦合)至此基本收敛。

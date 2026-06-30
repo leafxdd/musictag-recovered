@@ -501,7 +501,7 @@ internal class OptionsDialog : Form
 		albumSearchConditionCheckBox.Checked = Settings.Default.SearchCondition_UseAlbum;
 
 		int selectedPictureSizeIndex = 0;
-		for (int sizeLimit = 20; sizeLimit <= 10000; sizeLimit = (sizeLimit >= 100) ? (sizeLimit + 100) : (sizeLimit + 20))
+		foreach (int sizeLimit in EnumeratePictureSizeOptions())
 		{
 			if (sizeLimit == Settings.Default.PictureSizeLimitsKB)
 			{
@@ -515,7 +515,7 @@ internal class OptionsDialog : Form
 		UpdatePictureSizeLimitLabel(null, null);
 
 		int selectedResolutionIndex = 0;
-		for (int resolutionLimit = 0; resolutionLimit <= 4000; resolutionLimit = (resolutionLimit != 0) ? (resolutionLimit + 10) : (resolutionLimit + 100))
+		foreach (int resolutionLimit in EnumeratePictureResolutionOptions())
 		{
 			if (resolutionLimit == Settings.Default.PictureResolutionLimits)
 			{
@@ -826,6 +826,25 @@ internal class OptionsDialog : Form
 			.Where(extension => !string.IsNullOrEmpty(extension))
 			.Distinct(StringComparer.OrdinalIgnoreCase)
 			.ToArray();
+	}
+
+	// 图片大小限制选项序列(KB):20 起,<100 段步进 20、>=100 段步进 100,至 10000(共 104 档)。
+	// 纯序列规则(从 LoadSavedOptions 内联 for 提取为可测 iterator);选中索引与控件填充仍在调用点按原逻辑处理。
+	internal static IEnumerable<int> EnumeratePictureSizeOptions()
+	{
+		for (int sizeLimit = 20; sizeLimit <= 10000; sizeLimit = (sizeLimit >= 100) ? (sizeLimit + 100) : (sizeLimit + 20))
+		{
+			yield return sizeLimit;
+		}
+	}
+
+	// 图片分辨率限制选项序列(px):0 起,首步 +100 到 100,之后步进 10,至 4000(共 392 档)。
+	internal static IEnumerable<int> EnumeratePictureResolutionOptions()
+	{
+		for (int resolutionLimit = 0; resolutionLimit <= 4000; resolutionLimit = (resolutionLimit != 0) ? (resolutionLimit + 10) : (resolutionLimit + 100))
+		{
+			yield return resolutionLimit;
+		}
 	}
 
 	private static void SetTrackBarValue(TrackBar trackBar, int value)

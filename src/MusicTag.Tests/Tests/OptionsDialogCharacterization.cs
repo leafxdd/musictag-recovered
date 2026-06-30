@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using MusicTag.Importers;
 using MusicTagWinApp.Web;
 
@@ -170,6 +171,54 @@ internal static class OptionsDialogCharacterization
 		yield return ("ClampToRange: min==max -> that value", delegate
 		{
 			Check.Equal(3, OptionsDialog.ClampToRange(5, 3, 3), "min==max");
+		});
+
+		// ===== EnumeratePictureSizeOptions:20 起,<100 段步进 20、>=100 段步进 100,至 10000(从 LoadSavedOptions 内联 for 提取的纯序列 iterator) =====
+
+		yield return ("EnumeratePictureSizeOptions: first=20, last=10000, count=104", delegate
+		{
+			List<int> options = OptionsDialog.EnumeratePictureSizeOptions().ToList();
+			Check.Equal(20, options[0], "first 20");
+			Check.Equal(10000, options[options.Count - 1], "last 10000");
+			Check.Equal(104, options.Count, "104 entries");
+		});
+
+		// 步进切换点:索引4=100(20/40/60/80/100 步进20段末),索引5=200(步进100段始)
+		yield return ("EnumeratePictureSizeOptions: step switches 20->100 at value 100", delegate
+		{
+			List<int> options = OptionsDialog.EnumeratePictureSizeOptions().ToList();
+			Check.Equal(100, options[4], "index4=100");
+			Check.Equal(200, options[5], "index5=200 (step jumps to 100)");
+		});
+
+		// 步进跳过的值不在序列(150 被 100->200 跨过;50 被 40->60 跨过)
+		yield return ("EnumeratePictureSizeOptions: skipped values absent", delegate
+		{
+			List<int> options = OptionsDialog.EnumeratePictureSizeOptions().ToList();
+			Check.True(options.Contains(100), "has 100");
+			Check.True(!options.Contains(150), "no 150 (step-100 skips)");
+			Check.True(!options.Contains(50), "no 50 (step-20 skips)");
+		});
+
+		// ===== EnumeratePictureResolutionOptions:0 起,首步 +100 到 100,之后步进 10,至 4000 =====
+
+		yield return ("EnumeratePictureResolutionOptions: first=0, second=100, last=4000, count=392", delegate
+		{
+			List<int> options = OptionsDialog.EnumeratePictureResolutionOptions().ToList();
+			Check.Equal(0, options[0], "first 0");
+			Check.Equal(100, options[1], "second 100 (first step +100)");
+			Check.Equal(4000, options[options.Count - 1], "last 4000");
+			Check.Equal(392, options.Count, "392 entries");
+		});
+
+		// 0 之后步进 10:索引2=110;非网格值(>100 的非 10 倍数)不在序列
+		yield return ("EnumeratePictureResolutionOptions: step-10 after 100, off-grid absent", delegate
+		{
+			List<int> options = OptionsDialog.EnumeratePictureResolutionOptions().ToList();
+			Check.Equal(110, options[2], "index2=110");
+			Check.True(options.Contains(0) && options.Contains(100) && options.Contains(4000), "has 0/100/4000");
+			Check.True(!options.Contains(50), "no 50 (0 jumps straight to 100)");
+			Check.True(!options.Contains(105), "no 105 (step-10 off-grid)");
 		});
 	}
 }
