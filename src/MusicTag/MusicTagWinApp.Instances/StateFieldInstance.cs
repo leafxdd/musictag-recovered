@@ -101,8 +101,6 @@ internal class StateFieldInstance : Form
 
 		private readonly ListViewSortSetting sortSetting;
 
-		private static readonly Regex naturalSortSegmentRegex = new Regex("(\\D*)(\\d*)");
-
 		public ListViewItemNaturalComparer(ListViewSortSetting sortSetting)
 		{
 			this.sortSetting = sortSetting;
@@ -119,55 +117,10 @@ internal class StateFieldInstance : Form
 			bool useNaturalSort = columnName == "trackstr" || columnName == "discstr";
 			return sortSetting.SortOrder switch
 			{
-				SortOrder.Descending => useNaturalSort ? CompareNaturalText(rightText, leftText) : string.Compare(rightText, leftText),
-				SortOrder.Ascending => useNaturalSort ? CompareNaturalText(leftText, rightText) : string.Compare(leftText, rightText),
+				SortOrder.Descending => useNaturalSort ? TextUtilities.CompareNaturalText(rightText, leftText) : string.Compare(rightText, leftText),
+				SortOrder.Ascending => useNaturalSort ? TextUtilities.CompareNaturalText(leftText, rightText) : string.Compare(leftText, rightText),
 				_ => 0,
 			};
-		}
-
-		private int CompareNaturalText(string left, string right)
-		{
-			List<(string Text, string Number)> leftSegments = SplitNaturalSortSegments(left);
-			List<(string Text, string Number)> rightSegments = SplitNaturalSortSegments(right);
-			int segmentIndex = 0;
-			for (; segmentIndex < leftSegments.Count && segmentIndex < rightSegments.Count; segmentIndex++)
-			{
-				(string leftText, string leftNumberText) = leftSegments[segmentIndex];
-				(string rightText, string rightNumberText) = rightSegments[segmentIndex];
-				if (leftText == rightText)
-				{
-					if (leftNumberText == rightNumberText)
-					{
-						continue;
-					}
-					if (long.TryParse(leftNumberText, out long leftNumber) && long.TryParse(rightNumberText, out long rightNumber))
-					{
-						int numericCompare = leftNumber.CompareTo(rightNumber);
-						if (numericCompare != 0)
-						{
-							return numericCompare;
-						}
-					}
-					return string.Compare(leftNumberText, rightNumberText);
-				}
-				return string.Compare(leftText + leftNumberText, rightText + rightNumberText);
-			}
-			return leftSegments.Count - rightSegments.Count;
-		}
-
-		private List<(string Text, string Number)> SplitNaturalSortSegments(string value)
-		{
-			List<(string Text, string Number)> segments = new List<(string, string)>();
-			foreach (Match match in naturalSortSegmentRegex.Matches(value))
-			{
-				string text = match.Groups[1].Value;
-				string number = match.Groups[2].Value;
-				if (!string.IsNullOrEmpty(text) || !string.IsNullOrEmpty(number))
-				{
-					segments.Add((text ?? "", number ?? ""));
-				}
-			}
-			return segments;
 		}
 	}
 

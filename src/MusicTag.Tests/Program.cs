@@ -38,6 +38,7 @@ internal static class Program
 		tests.AddRange(MoveRelatedFileBestEffortCharacterization.All());
 		tests.AddRange(TextSimilarityCalculatorCharacterization.All());
 		tests.AddRange(AutoMatchTextTagGatingCharacterization.All());
+		tests.AddRange(NaturalSortCharacterization.All());
 		return TestRunner.RunAll(tests);
 	}
 }

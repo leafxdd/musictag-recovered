@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
@@ -144,5 +145,55 @@ internal static class TextUtilities
 	public static bool ContainsChinese(string text)
 	{
 		return Regex.Match(text, "[\\u4e00-\\u9fa5]").Success;
+	}
+
+	// 自然排序:把字符串切成「非数字段 + 数字段」序列后逐段比较,数字段按数值大小(而非字典序)排,使 "2" < "10"。
+	// 提取自 StateFieldInstance.ListViewItemNaturalComparer(trackstr/discstr 列排序),byte-identical;
+	// characterization 见 NaturalSortCharacterization。
+	private static readonly Regex naturalSortSegmentRegex = new Regex("(\\D*)(\\d*)");
+
+	public static int CompareNaturalText(string left, string right)
+	{
+		List<(string Text, string Number)> leftSegments = SplitNaturalSortSegments(left);
+		List<(string Text, string Number)> rightSegments = SplitNaturalSortSegments(right);
+		int segmentIndex = 0;
+		for (; segmentIndex < leftSegments.Count && segmentIndex < rightSegments.Count; segmentIndex++)
+		{
+			(string leftText, string leftNumberText) = leftSegments[segmentIndex];
+			(string rightText, string rightNumberText) = rightSegments[segmentIndex];
+			if (leftText == rightText)
+			{
+				if (leftNumberText == rightNumberText)
+				{
+					continue;
+				}
+				if (long.TryParse(leftNumberText, out long leftNumber) && long.TryParse(rightNumberText, out long rightNumber))
+				{
+					int numericCompare = leftNumber.CompareTo(rightNumber);
+					if (numericCompare != 0)
+					{
+						return numericCompare;
+					}
+				}
+				return string.Compare(leftNumberText, rightNumberText);
+			}
+			return string.Compare(leftText + leftNumberText, rightText + rightNumberText);
+		}
+		return leftSegments.Count - rightSegments.Count;
+	}
+
+	public static List<(string Text, string Number)> SplitNaturalSortSegments(string value)
+	{
+		List<(string Text, string Number)> segments = new List<(string, string)>();
+		foreach (Match match in naturalSortSegmentRegex.Matches(value))
+		{
+			string text = match.Groups[1].Value;
+			string number = match.Groups[2].Value;
+			if (!string.IsNullOrEmpty(text) || !string.IsNullOrEmpty(number))
+			{
+				segments.Add((text ?? "", number ?? ""));
+			}
+		}
+		return segments;
 	}
 }

@@ -460,3 +460,11 @@
 - **数据流完备**：调用图闭合（`ShouldWriteTextTagUpdate` ← 唯一 `ApplyTextTagUpdate` ← 唯一 `SaveTagsToFile`）；per-worker 隔离零跨文件污染；新写值经 `AddHistoryAndUndoRecord` 可撤销；**额外发现下游修复**——buggy 版纯空白 title 会令 `BuildLyricFileName` 返回 null → `File.WriteAllText(null)` 抛异常被吞为 `Msg_WriteLrcFileFail`，修正后真实 title 使 lrc 正确保存（repair 非 regression）。
 
 测试 219→243（+24），Debug+Release 编译干净 + 3 smoke 全绿。
+
+## StateFieldInstance 自然排序提取（2026-06-30）
+
+把 `StateFieldInstance.ListViewItemNaturalComparer`（8654 行主神类窗体的嵌套排序比较器，`trackstr`/`discstr` 列用）的自然排序纯逻辑【逐字节】搬到 `TextUtilities`（`MusicTagWinApp.Instances`，同命名空间）：`naturalSortSegmentRegex`（`(\D*)(\d*)`）+ `CompareNaturalText` + `SplitNaturalSortSegments`。方法体一字未改（仅可见性 `private` 实例 → `public static`，regex 仍 `private static readonly`）；比较器 `Compare` 的两个自然排序分支（升/降序）加 `TextUtilities.` 前缀。`string.Compare` 仍 CurrentCulture（同进程同 culture）。byte-identical move、零行为变更——无 latent bug、无需对抗验证。
+
+新增 16 characterization（`NaturalSortCharacterization`）锁定自然排序语义：数值序（`"2" < "10"` 非字典序）、前导零数值相等 fallback `string.Compare`（`"01" < "1"`）、数字段超 `Int64` 时 `long.TryParse` 双失败 fallback `string.Compare`、文本段不同比 `text+number` 拼接串、段数差、分段正则交替「非数字段 + 数字段」+ 空匹配过滤。
+
+测试 243→259（+16），Debug+Release 编译干净 + 3 smoke 全绿。
