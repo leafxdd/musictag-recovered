@@ -210,6 +210,24 @@ internal class FilenameRelatedBatchDialog : Form
 		return isMissingRequiredTag;
 	}
 
+	// 关联文件(歌词/封面)目标路径 + 防覆盖:source 为 null 直接返回 null(无该关联文件);否则目标 = 目标音频
+	// 的同名兄弟文件(给定扩展名),但若该目标已存在【且】不是 source 本身(OrdinalIgnoreCase)则返回 null
+	// (不覆盖一个不同的已存在文件;目标==source 即原地/仅大小写,允许)。fileExists 注入(生产传 File.Exists,逐字节等价)。
+	// 提取自 RenameFilesBatchWorker.RenameFiles 的内联逻辑(行为逐字保持),供 characterization 锁定。
+	internal static string ResolveRelatedFileTarget(string destinationAudioPath, string sourcePath, string extension, Func<string, bool> fileExists)
+	{
+		if (sourcePath == null)
+		{
+			return null;
+		}
+		string destinationPath = PathFileUtilities.GetSiblingPathWithExtension(destinationAudioPath, extension);
+		if (fileExists(destinationPath) && !string.Equals(destinationPath, sourcePath, StringComparison.OrdinalIgnoreCase))
+		{
+			return null;
+		}
+		return destinationPath;
+	}
+
 	// 把文件名模板(@1..@8 占位符 + 字面量)编译为匹配用正则:先把字面量里的正则元字符逐一转义,
 	// 再把每段连续占位符 (@[0-8])+ 记为一个 token 并整体替换为捕获组 (.*)。返回 (正则, token 列表)。
 	// 提取自 ChangeTags 的内联逻辑(行为逐字保持),供 characterization 锁定。
@@ -343,24 +361,8 @@ internal class FilenameRelatedBatchDialog : Form
 										sourceImagePath = ImageUtilities.FindExistingSiblingImageFile(originalPath);
 									}
 									string destinationAudioPath = ResolveDestinationAudioPath(originalPath, newFilename, File.Exists);
-									string destinationLrcPath = null;
-									if (sourceLrcPath != null)
-									{
-										destinationLrcPath = PathFileUtilities.GetSiblingPathWithExtension(destinationAudioPath, ".lrc");
-										if (File.Exists(destinationLrcPath) && !string.Equals(destinationLrcPath, sourceLrcPath, StringComparison.OrdinalIgnoreCase))
-										{
-											destinationLrcPath = null;
-										}
-									}
-									string destinationImagePath = null;
-									if (sourceImagePath != null)
-									{
-										destinationImagePath = PathFileUtilities.GetSiblingPathWithExtension(destinationAudioPath, Path.GetExtension(sourceImagePath));
-										if (File.Exists(destinationImagePath) && !string.Equals(destinationImagePath, sourceImagePath, StringComparison.OrdinalIgnoreCase))
-										{
-											destinationImagePath = null;
-										}
-									}
+									string destinationLrcPath = ResolveRelatedFileTarget(destinationAudioPath, sourceLrcPath, ".lrc", File.Exists);
+									string destinationImagePath = ResolveRelatedFileTarget(destinationAudioPath, sourceImagePath, sourceImagePath != null ? Path.GetExtension(sourceImagePath) : null, File.Exists);
 									newFilename = Path.GetFileName(destinationAudioPath);
 									if (newFilename != Path.GetFileName(originalPath))
 									{

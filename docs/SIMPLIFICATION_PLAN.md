@@ -395,7 +395,10 @@
 | `e641ae11` | `ValidateFilenamePatternCore`（模板输入校验） | 提取自 `ValidateFilenamePattern`（纯判定→enum，UI 层翻译消息） | 10 |
 | `b8c9ba88` | `PendingTagUpdate` 文本 case（@1/@2/@3/@6/@7/@8 经 `SetTextTagIfChanged` 变更门控 + tagName 映射）+ `ApplyChanges` 写回 TagState | 零放宽（全 public） | 11 |
 | `9ea53a36` | `PendingTagUpdate.SetRegexCaptureTag`（regex 捕获组序号 1-8→标签键；文本盲写 vs disc/track `SetNumberedTag` 门控，与 @N 路径语义分叉）| 提取自 `ChangeTags` 内联 switch（byte-identical） | 12 |
-| 本批 | `ResolveDestinationAudioPath`（`RenameFiles` 的 `(N)` 冲突 dedup：base 路径构造 + 同名/纯大小写改名豁免 `OrdinalIgnoreCase` + ` (N)` 从 1 递增首个空位）| 提取自 `RenameFiles` 内联 + 注入 `Func<string,bool>` 存在谓词（生产传 `File.Exists`，byte-identical） | 12 |
+| `4a6a89ea` | `ResolveDestinationAudioPath`（`RenameFiles` 的 `(N)` 冲突 dedup：base 路径构造 + 同名/纯大小写改名豁免 `OrdinalIgnoreCase` + ` (N)` 从 1 递增首个空位）| 提取自 `RenameFiles` 内联 + 注入 `Func<string,bool>` 存在谓词（生产传 `File.Exists`，byte-identical） | 12 |
+| `bdd45fc0` | `IsRequiredTagMissing`（@1/@2 必填校验：模板含 @1/@2 占位符却 title/artist 空 → 跳过计失败；`else if` 短路 + `!value.Any()` 空判据）| 提取自 `RenameFiles` 内联（byte-identical，保 `else if` + 局部变量）| 7 |
+| 本批 | `ResolveRelatedFileTarget`（关联文件 lrc/封面目标 + 防覆盖：source `null`→`null`、目标存在且≠source→`null`、==source 精确/大小写→目标；lrc/image 两段合并）| 提取自 `RenameFiles` 内联 + 注入 `Func<string,bool>`（image extension 三元保求值时机）| 7 |
+| 本批 | `PathFileUtilities.GetSiblingPathWithExtension`（目录 + 无扩展名文件名 + extension 纯拼接，不智能加点）| 零放宽（已 `public`，纯函数加测试）| 6 |
 
 ### 音频 round-trip 批（后做，自包含 fixture）
 
@@ -417,11 +420,13 @@
 
 ### 覆盖边界
 
-写标签/重命名的核心纯数据变换 + 端到端 round-trip 已覆盖；`ChangeTags` 的 regex 捕获 `case 1-8` 映射已提取为 `SetRegexCaptureTag`、`RenameFiles` 的 `(N)` 冲突 dedup 已提取为 `ResolveDestinationAudioPath`，均已覆盖。
+写标签/重命名的核心纯数据变换 + 端到端 round-trip 已覆盖；`ChangeTags` 的 regex 捕获 `case 1-8` 映射已提取为 `SetRegexCaptureTag`、`RenameFiles` 的 `(N)` 冲突 dedup → `ResolveDestinationAudioPath`、@1/@2 必填校验 → `IsRequiredTagMissing`、关联文件 lrc/封面 dedup → `ResolveRelatedFileTarget`、`GetSiblingPathWithExtension` 路径拼接，均已覆盖（RenameFiles 的纯逻辑分支已清完）。
 
 **盘点（2026-06-30，3-reader Workflow）确认的候选**（按价值）：
 - [x] ~~**HIGH** `RenameFiles` 的 `(N)` 冲突 dedup（原 `FilenameRelatedBatchDialog.cs:313-326`）~~ —— ✅ 完成（本批）：提取 `ResolveDestinationAudioPath`（internal static + 注入 `Func<string,bool>` 存在谓词替代 `File.Exists`，生产传方法组、byte-identical），12 个 characterization 锁定 base 构造 / 同名 + 纯大小写改名豁免（`OrdinalIgnoreCase`）/ ` (N)` 从 1 递增首个空位 / 两位数无零填充 / 括号后缀朴素拼接 / 空目录前导反斜杠 / 扩展名大小写保留。3-lens 对抗验证 = 等价 pass + 回归 pass + 完备 concern（concern 仅指我据此补的 3 个 golden-master 边界，非回归）。
-- **MEDIUM** 关联文件 lrc/封面目标 + 防覆盖不同文件（`RenameFiles` 内 `destinationLrcPath`/`destinationImagePath` 段，`null`=跳过语义）；@1/@2 必填 tag 校验（`RenameFiles` 内 `isMissingRequiredTag` 段，决定成败计数）。
-- **零成本** `PathFileUtilities.GetSiblingPathWithExtension`（已 `internal static`，纯路径拼接，无测试）。
+- [x] ~~**MEDIUM** 关联文件 lrc/封面目标 + 防覆盖；@1/@2 必填 tag 校验~~ —— ✅ 完成：@1/@2 校验提取 `IsRequiredTagMissing`（`bdd45fc0`，7 case，byte-identical 保 `else if` + 局部变量）；关联文件 lrc/image 两段合并提取 `ResolveRelatedFileTarget`（本批，注入存在谓词，7 case；3-lens 对抗验证 等价/回归 pass、完备 concern）。
+- [x] ~~**零成本** `PathFileUtilities.GetSiblingPathWithExtension`~~ —— ✅ 完成（本批，6 case 锁定纯拼接 + anti-`Path.Combine`/anti-`ChangeExtension` quirks）。
 
 其余刻意未罩：`RenameFiles` 外层编排 / `Cancel` / `UpdateProgress` / `SaveTagFields` 的 TagLib 写（耦合文件系统 + SQLite + UI，属集成测试范畴）、各 UI 布局/事件。
+
+- **集成缺口（对抗验证 major finding，待 route A）**：`RenameFiles` 的【关联文件 move-gating `if (sourceXxx != null && destinationXxx != null) Move`】+【per-related-file `try/catch` 的「歌词/封面移动失败只告警、不回退已成功的音频改名」韧性不变式】无任何测试覆盖（codegraph 确认 `RenameFiles` 无覆盖测试）。`ResolveRelatedFileTarget` / `ResolveDestinationAudioPath` 本身已 characterize，但未来重构可保持它们 byte-identical 却仍回归 move-gating（如 dest==null 仍移动、调换 lrc/image 参数、移除 `try/catch` 致单个关联文件失败中止整批），两测试 suite 仍全过。需真实文件系统 fixture 的集成测试（route A 范畴）才罩得住。
