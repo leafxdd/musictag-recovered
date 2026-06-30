@@ -809,87 +809,15 @@ internal class CombinedTagSearchDialog : Form
 
 	public static List<TrackSearchResult> SearchTracksFromSource(SearchSource source, bool useLinkedNetEaseId, List<TrackSearchResult> existingResults, int searchPass, TrackSearchContext searchContext, CancellationTokenSource cancellationSource, Action<SourceSearchStatus> statusReporter = null)
 	{
-		List<TrackSearchResult> results = new List<TrackSearchResult>();
-		RemoteTagProviderBase searchProvider = null;
-		switch (source)
+		using ICombinedTrackSearch combinedTrackSearch = SearchProviderFactory.CreateCombinedTrackSearch(source, cancellationSource, statusReporter);
+		if (combinedTrackSearch == null)
 		{
-			case SearchSource.Music163:
-				{
-					using NetEaseMusicTagProvider netEaseProvider = new NetEaseMusicTagProvider(cancellationSource);
-					netEaseProvider.StatusReporter = statusReporter;
-					searchProvider = netEaseProvider;
-					if (useLinkedNetEaseId)
-					{
-						results.AddRange(netEaseProvider.SearchTracks("", 0, searchContext.LinkedMusicMetadata.musicId, 0, searchPass, existingResults, results));
-						break;
-					}
-					results.AddRange(netEaseProvider.SearchTracks((searchContext.Title + " " + searchContext.Artist).Trim(), 15, 0L, 0, searchPass, existingResults, results));
-					if (cancellationSource.IsCancellationRequested)
-					{
-						break;
-					}
-					if (!string.IsNullOrWhiteSpace(searchContext.Artist))
-					{
-						results.AddRange(netEaseProvider.SearchTracks(searchContext.Title.Trim(), 10, 0L, 1, searchPass, existingResults, results));
-					}
-					if (cancellationSource.IsCancellationRequested)
-					{
-						break;
-					}
-					if (!string.IsNullOrWhiteSpace(searchContext.Album) && searchContext.Album != searchContext.Title)
-					{
-						results.AddRange(netEaseProvider.SearchTracks((searchContext.Album + " " + searchContext.Artist).Trim(), 8, 0L, 2, searchPass, existingResults, results));
-					}
-					break;
-				}
-			case SearchSource.QQ:
-				{
-					using QqMusicTagProvider qqProvider = new QqMusicTagProvider(cancellationSource);
-					qqProvider.StatusReporter = statusReporter;
-					searchProvider = qqProvider;
-					results.AddRange(qqProvider.SearchTracks((searchContext.Title + " " + searchContext.Artist).Trim(), 15, 0, searchPass, existingResults, results));
-					if (cancellationSource.IsCancellationRequested)
-					{
-						break;
-					}
-					if (!string.IsNullOrWhiteSpace(searchContext.Artist))
-					{
-						results.AddRange(qqProvider.SearchTracks(searchContext.Title.Trim(), 10, 1, searchPass, existingResults, results));
-					}
-					if (cancellationSource.IsCancellationRequested)
-					{
-						break;
-					}
-					if (!string.IsNullOrWhiteSpace(searchContext.Album) && searchContext.Album != searchContext.Title)
-					{
-						results.AddRange(qqProvider.SearchTracks((searchContext.Album + " " + searchContext.Artist).Trim(), 8, 2, searchPass, existingResults, results));
-					}
-					break;
-				}
-			default:
-				return results;
-			case SearchSource.Kuwo:
-				{
-					using KuwoTagProvider kuwoTagProvider = new KuwoTagProvider(cancellationSource);
-					kuwoTagProvider.StatusReporter = statusReporter;
-					searchProvider = kuwoTagProvider;
-					results.AddRange(kuwoTagProvider.SearchTracks((searchContext.Title + " " + searchContext.Artist).Trim(), 8, 0, searchPass, existingResults, results));
-					if (cancellationSource.IsCancellationRequested)
-					{
-						break;
-					}
-					if (!results.Any() && !string.IsNullOrWhiteSpace(searchContext.Album) && searchContext.Album != searchContext.Title)
-					{
-						results.AddRange(kuwoTagProvider.SearchTracks((searchContext.Album + " " + searchContext.Artist).Trim(), 8, 1, searchPass, existingResults, results));
-					}
-					break;
-				}
+			return new List<TrackSearchResult>();
 		}
-		// 仅在非"网易 linkedId 中间子搜索"时上报本源最终结果:linkedId 是 pass A 的中间步骤,
-		// 同源的常规搜索(pass B / 首选源非 linked)随后会给出真正的完成/出错状态,避免误报"已完成"。
+		List<TrackSearchResult> results = combinedTrackSearch.SearchTracks(useLinkedNetEaseId, existingResults, searchPass, searchContext);
 		if (statusReporter != null && !useLinkedNetEaseId && !cancellationSource.IsCancellationRequested)
 		{
-			ReportSourceOutcome(statusReporter, source, results, searchProvider?.LastTransportResult);
+			ReportSourceOutcome(statusReporter, source, results, combinedTrackSearch.LastTransportResult);
 		}
 		return results;
 	}
