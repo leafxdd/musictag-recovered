@@ -504,33 +504,7 @@ internal class FilenameRelatedBatchDialog : Form
 										if (Owner.regexCaptureGroupMap.TryGetValue(groupIndex, out var selectedTagIndex))
 										{
 											string capturedValue = match.Groups[groupIndex].Value.Trim();
-											switch (selectedTagIndex)
-											{
-												case 1:
-													tagUpdate.Changes["title"] = capturedValue;
-													break;
-												case 2:
-													tagUpdate.Changes["artist"] = capturedValue;
-													break;
-												case 3:
-													tagUpdate.Changes["album"] = capturedValue;
-													break;
-												case 4:
-													tagUpdate.SetNumberedTag("discstr", capturedValue);
-													break;
-												case 5:
-													tagUpdate.SetNumberedTag("trackstr", capturedValue);
-													break;
-												case 6:
-													tagUpdate.Changes["year"] = capturedValue;
-													break;
-												case 7:
-													tagUpdate.Changes["comment"] = capturedValue;
-													break;
-												case 8:
-													tagUpdate.Changes["albumartist"] = capturedValue;
-													break;
-											}
+											tagUpdate.SetRegexCaptureTag(selectedTagIndex, capturedValue);
 										}
 									}
 								}
@@ -684,6 +658,37 @@ internal class FilenameRelatedBatchDialog : Form
 						Changes["discstr"] = (discAndTrack / 100).ToString();
 						Changes["trackstr"] = (discAndTrack % 100).ToString();
 					}
+					break;
+			}
+		}
+
+		public void SetRegexCaptureTag(int selectedTagIndex, string capturedValue)
+		{
+			switch (selectedTagIndex)
+			{
+				case 1:
+					Changes["title"] = capturedValue;
+					break;
+				case 2:
+					Changes["artist"] = capturedValue;
+					break;
+				case 3:
+					Changes["album"] = capturedValue;
+					break;
+				case 4:
+					SetNumberedTag("discstr", capturedValue);
+					break;
+				case 5:
+					SetNumberedTag("trackstr", capturedValue);
+					break;
+				case 6:
+					Changes["year"] = capturedValue;
+					break;
+				case 7:
+					Changes["comment"] = capturedValue;
+					break;
+				case 8:
+					Changes["albumartist"] = capturedValue;
 					break;
 			}
 		}

@@ -394,6 +394,7 @@
 | `13149346` | `GetDisplayValue`（显示格式化）+ `FormatDurationWithMilliseconds` / `FormatDurationHms` | 零放宽（全 public，空构造 + indexer 填 dict） | 16 |
 | `e641ae11` | `ValidateFilenamePatternCore`（模板输入校验） | 提取自 `ValidateFilenamePattern`（纯判定→enum，UI 层翻译消息） | 10 |
 | 本批 | `PendingTagUpdate` 文本 case（@1/@2/@3/@6/@7/@8 经 `SetTextTagIfChanged` 变更门控 + tagName 映射）+ `ApplyChanges` 写回 TagState | 零放宽（全 public） | 11 |
+| 本批 | `PendingTagUpdate.SetRegexCaptureTag`（regex 捕获组序号 1-8→标签键；文本盲写 vs disc/track `SetNumberedTag` 门控，与 @N 路径语义分叉）| 提取自 `ChangeTags` 内联 switch（byte-identical） | 12 |
 
 ### 音频 round-trip 批（后做，自包含 fixture）
 
@@ -415,4 +416,11 @@
 
 ### 覆盖边界
 
-写标签/重命名的核心纯数据变换 + 端到端 round-trip 已覆盖。剩余未罩（刻意）：`RenameFiles` 的 destination 路径计算 / `(N)` 冲突 dedup（耦合 `File.Exists` I/O）、`ChangeTags` 的 regex 捕获模式 `case 1-8` dict 映射（低价值，已经 `PendingTagUpdate` 间接覆盖 `SetNumberedTag`）、各 UI 布局/事件。
+写标签/重命名的核心纯数据变换 + 端到端 round-trip 已覆盖；`ChangeTags` 的 regex 捕获 `case 1-8` 映射已提取为 `SetRegexCaptureTag` 并覆盖。
+
+**盘点（2026-06-30，3-reader Workflow）确认的剩余候选**（按价值，留待后续批次）：
+- **HIGH** `RenameFiles` 的 `(N)` 冲突 dedup（`FilenameRelatedBatchDialog.cs:313-326`）——后缀 ` (n)` 格式 / index 从 1 起 / 纯大小写改名豁免（`OrdinalIgnoreCase`），直接决定用户可见文件名与历史/undo。测法：提取 internal static + 注入 `Func<string,bool>` 存在谓词替代 `File.Exists`。
+- **MEDIUM** 关联文件 lrc/封面目标 + 防覆盖不同文件（327-344，`null`=跳过语义）；@1/@2 必填 tag 校验（286-294，决定成败计数）。
+- **零成本** `PathFileUtilities.GetSiblingPathWithExtension`（已 `internal static`，纯路径拼接，无测试）。
+
+其余刻意未罩：`RenameFiles` 外层编排 / `Cancel` / `UpdateProgress` / `SaveTagFields` 的 TagLib 写（耦合文件系统 + SQLite + UI，属集成测试范畴）、各 UI 布局/事件。
