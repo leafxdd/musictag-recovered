@@ -37,6 +37,7 @@ internal static class Program
 		tests.AddRange(MoveFileAllowingCaseOnlyRenameCharacterization.All());
 		tests.AddRange(MoveRelatedFileBestEffortCharacterization.All());
 		tests.AddRange(TextSimilarityCalculatorCharacterization.All());
+		tests.AddRange(AutoMatchTextTagGatingCharacterization.All());
 		return TestRunner.RunAll(tests);
 	}
 }

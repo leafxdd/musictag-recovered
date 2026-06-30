@@ -162,6 +162,41 @@ internal class AutoMatchTagsDialog : Form
 		}
 	}
 
+	// 文本标签写入门控:从 AutoMatchWorker 的三个嵌套上下文(LoadedTagContext/TextTagUpdateFilter/TagSaveContext)
+	// 提取的纯判定逻辑,提到 AutoMatchTagsDialog 顶层(internal)以便 characterization 测试可见(嵌套类仍可调用外层 static)。
+	// 同一字段经三阶段流水线:探测(IsExistingTextTagUpdatable)→ 过滤(ShouldDiscardTextTagCandidate)→ 写入(ShouldWriteTextTagUpdate)。
+	// 行为与提取前逐字节一致;锁定见 AutoMatchTextTagGatingCharacterization。
+
+	// 探测:现有文本标签是否"需要被更新"(值是字符串且为空白,或允许覆盖)。命中则发起联网搜索。
+	internal static bool IsExistingTextTagUpdatable(object existingValue, bool overwrite)
+	{
+		return existingValue is string text && (string.IsNullOrWhiteSpace(text) || overwrite);
+	}
+
+	// 过滤:搜到候选后,是否应丢弃此字段的候选(不更新)。true=丢弃。
+	internal static bool ShouldDiscardTextTagCandidate(string currentValue, string newValue, bool overwrite)
+	{
+		if (newValue == null || currentValue == null)
+		{
+			return false;
+		}
+		if (string.IsNullOrWhiteSpace(newValue))
+		{
+			return true;
+		}
+		if (!string.IsNullOrWhiteSpace(currentValue) && !overwrite)
+		{
+			return true;
+		}
+		return string.Equals(currentValue, newValue);
+	}
+
+	// 写入:最终是否把候选新值写入标签。true=写入。
+	internal static bool ShouldWriteTextTagUpdate(object newValue, object currentValue, bool overwrite)
+	{
+		return newValue is string text && currentValue is string value && !string.IsNullOrEmpty(text) && (string.IsNullOrEmpty(value) || overwrite);
+	}
+
 	private class AutoMatchWorker
 	{
 		private sealed class AutoMatchFileSearchTask
@@ -357,7 +392,7 @@ internal class AutoMatchTagsDialog : Form
 			internal bool MarkTextTagNeededIfMissing(string fieldName)
 			{
 				bool overwrite = searchTask.worker.MatchConditionSettings[fieldName].overwrite;
-				if (tagFile[fieldName] is string text && (string.IsNullOrWhiteSpace(text) || overwrite))
+				if (IsExistingTextTagUpdatable(tagFile[fieldName], overwrite))
 				{
 					searchTask.worker.shouldUpdateTextTags = true;
 					return false;
@@ -377,21 +412,7 @@ internal class AutoMatchTagsDialog : Form
 				bool overwrite = loadedTag.searchTask.worker.MatchConditionSettings[fieldName].overwrite;
 				string newValue = candidateTextTags[fieldName] as string;
 				string currentValue = loadedTag.tagFile[fieldName] as string;
-				if (newValue == null || currentValue == null)
-				{
-					return;
-				}
-				if (string.IsNullOrWhiteSpace(newValue))
-				{
-					loadedTag.searchTask.worker.MatchConditionSettings.Remove(fieldName);
-					return;
-				}
-				if (!string.IsNullOrWhiteSpace(currentValue) && !overwrite)
-				{
-					loadedTag.searchTask.worker.MatchConditionSettings.Remove(fieldName);
-					return;
-				}
-				if (string.Equals(currentValue, newValue))
+				if (ShouldDiscardTextTagCandidate(currentValue, newValue, overwrite))
 				{
 					loadedTag.searchTask.worker.MatchConditionSettings.Remove(fieldName);
 				}
@@ -422,9 +443,10 @@ internal class AutoMatchTagsDialog : Form
 			internal void ApplyTextTagUpdate(string fieldName)
 			{
 				bool overwrite = worker.MatchConditionSettings[fieldName].overwrite;
-				if (worker.textTagUpdates[fieldName] is string text && tagFile[fieldName] is string value && !string.IsNullOrEmpty(text) && (string.IsNullOrEmpty(value) || overwrite))
+				object newValue = worker.textTagUpdates[fieldName];
+				if (ShouldWriteTextTagUpdate(newValue, tagFile[fieldName], overwrite))
 				{
-					tagFile[fieldName] = text;
+					tagFile[fieldName] = (string)newValue;
 				}
 			}
 		}
