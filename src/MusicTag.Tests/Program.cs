@@ -31,6 +31,7 @@ internal static class Program
 		tests.AddRange(PendingTagUpdateTextTagCharacterization.All());
 		tests.AddRange(SetRegexCaptureTagCharacterization.All());
 		tests.AddRange(ResolveDestinationAudioPathCharacterization.All());
+		tests.AddRange(IsRequiredTagMissingCharacterization.All());
 		return TestRunner.RunAll(tests);
 	}
 }

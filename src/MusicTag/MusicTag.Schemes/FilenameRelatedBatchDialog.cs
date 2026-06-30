@@ -193,6 +193,23 @@ internal class FilenameRelatedBatchDialog : Form
 		return destinationAudioPath;
 	}
 
+	// @1/@2 必填校验:重命名模板含 @1(标题)/@2(艺术家)占位符却对应 tag 为空时,该文件跳过(计为失败,
+	// 报 "Title or artist tags are empty")。else if 短路:@1 缺失即判定,不再查 @2。
+	// 提取自 RenameFilesBatchWorker.RenameFiles 的内联逻辑(行为逐字保持),供 characterization 锁定。
+	internal static bool IsRequiredTagMissing(string filenamePattern, string title, string artist)
+	{
+		bool isMissingRequiredTag = false;
+		if (filenamePattern.Contains("@1") && !title.Any())
+		{
+			isMissingRequiredTag = true;
+		}
+		else if (filenamePattern.Contains("@2") && !artist.Any())
+		{
+			isMissingRequiredTag = true;
+		}
+		return isMissingRequiredTag;
+	}
+
 	// 把文件名模板(@1..@8 占位符 + 字面量)编译为匹配用正则:先把字面量里的正则元字符逐一转义,
 	// 再把每段连续占位符 (@[0-8])+ 记为一个 token 并整体替换为捕获组 (.*)。返回 (正则, token 列表)。
 	// 提取自 ChangeTags 的内联逻辑(行为逐字保持),供 characterization 锁定。
@@ -306,15 +323,7 @@ internal class FilenameRelatedBatchDialog : Form
 						string year = TextUtilities.CoalesceNonBlank(configDescriptorState.GetDisplayValue("year")).Trim();
 						string comment = TextUtilities.CoalesceNonBlank(configDescriptorState.GetDisplayValue("comment")).Trim();
 						string albumArtist = TextUtilities.CoalesceNonBlank(configDescriptorState.GetDisplayValue("albumartist")).Trim();
-						bool isMissingRequiredTag = false;
-						if (Owner.selectedFilenamePattern.Contains("@1") && !title.Any())
-						{
-							isMissingRequiredTag = true;
-						}
-						else if (Owner.selectedFilenamePattern.Contains("@2") && !artist.Any())
-						{
-							isMissingRequiredTag = true;
-						}
+						bool isMissingRequiredTag = IsRequiredTagMissing(Owner.selectedFilenamePattern, title, artist);
 						if (!isMissingRequiredTag)
 						{
 							try
