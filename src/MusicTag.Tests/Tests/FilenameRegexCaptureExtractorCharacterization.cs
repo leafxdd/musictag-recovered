@@ -5,8 +5,8 @@ using MusicTag.Schemes;
 namespace MusicTag.Tests;
 
 // FilenameRelatedBatchDialog.FilenameRegexCaptureExtractor 的 characterization（纯逻辑、无 fixture）。
-// 锁定"从文件名按正则提取捕获组 + 括号/书名号保护段 masking"的行为。可见性由 private sealed 放宽
-// 为 internal sealed（仅可见性、零逻辑改动）。
+// 锁定"从文件名按正则提取捕获组 + 括号/书名号/引号保护段 masking"的行为。可见性由 private sealed
+// 放宽为 internal sealed（仅可见性、零逻辑改动）。
 //
 // 历史:此处原先 probe 出一处 latent bug——保护段 masking 对捕获分组并未生效。根因(经对抗验证收敛)
 // 只有一个:variant.Text 误存 mask **前**原文,致最深 masked 版本从未进入 maskedVariants、匹配退化到
@@ -16,7 +16,12 @@ namespace MusicTag.Tests;
 //       对捕获分组真正生效;
 //   (3) 占位符 segmentIndex 定宽 D5——消除「masking 生效后还原路径首次真正运行」暴露的【同层 ≥11 段】
 //       前缀串扰(seg1 占位符曾是 seg10 的前缀,String.Replace 会损坏第 11 段)。
-// 本测试断言修复后的正确行为:括号/嵌套/同层多段/书名号保护段内部的分隔符被屏蔽,整体落入同一捕获组。
+//
+// 另:同源的引号保护缺陷亦已作为行为修正修复——ProtectedSegmentRegex 的 4 个引号分支(“”/‘’/『』/「」)
+// 原缺 * 量词(写作 “[^“”]”),只能匹配【单字符】引号段,多字符段(如「a - b」)不被保护而错切;各补 *
+// 量词后多字符引号段与括号/书名号一致地被屏蔽(* 是修复前 exactly-1 的严格超集,单字符/空段仍被保护)。
+//
+// 本测试断言修复后的正确行为:括号/嵌套/同层多段/书名号/引号保护段内部的分隔符被屏蔽,整体落入同一捕获组。
 internal static class FilenameRegexCaptureExtractorCharacterization
 {
 	private static List<string> Extract(string filename, string pattern)
@@ -104,6 +109,63 @@ internal static class FilenameRegexCaptureExtractorCharacterization
 			List<string> captures = Extract("《b - c》 - D", "^(.+?) - (.+)$");
 			Check.Equal(2, captures.Count, "count");
 			Check.Equal("《b - c》", captures[0], "[0]");
+			Check.Equal("D", captures[1], "[1]");
+		});
+
+		// 引号保护(双引号多字符,branch 8,修复的引号缺 * bug):4 个引号分支补 * 量词后,“a - b” 整体被屏蔽。
+		// 修复前 “[^“”]” 只匹配单字符引号段,“a - b” 不被保护 -> 错切成 "“a" / "b” - D"。
+		yield return ("Extractor: multi-char double-quote segment shields inner separator (fixed)", delegate
+		{
+			List<string> captures = Extract("“a - b” - D", "^(.+?) - (.+)$");
+			Check.Equal(2, captures.Count, "count");
+			Check.Equal("“a - b”", captures[0], "[0]");
+			Check.Equal("D", captures[1], "[1]");
+		});
+
+		// 引号保护(单引号多字符,branch 9):锁定第 2 个引号分支补 * 生效。
+		yield return ("Extractor: multi-char single-quote segment shields inner separator (fixed)", delegate
+		{
+			List<string> captures = Extract("‘a - b’ - D", "^(.+?) - (.+)$");
+			Check.Equal(2, captures.Count, "count");
+			Check.Equal("‘a - b’", captures[0], "[0]");
+			Check.Equal("D", captures[1], "[1]");
+		});
+
+		// 引号保护(日文白角括号多字符,branch 10):锁定第 3 个引号分支补 * 生效。
+		yield return ("Extractor: multi-char white-corner-bracket segment shields inner separator (fixed)", delegate
+		{
+			List<string> captures = Extract("『a - b』 - D", "^(.+?) - (.+)$");
+			Check.Equal(2, captures.Count, "count");
+			Check.Equal("『a - b』", captures[0], "[0]");
+			Check.Equal("D", captures[1], "[1]");
+		});
+
+		// 引号保护(日文角括号多字符,branch 11):同理「a - b」整体屏蔽,验证补 * 对全部 4 个引号分支生效。
+		yield return ("Extractor: multi-char CJK corner-bracket segment shields inner separator (fixed)", delegate
+		{
+			List<string> captures = Extract("「a - b」 - D", "^(.+?) - (.+)$");
+			Check.Equal(2, captures.Count, "count");
+			Check.Equal("「a - b」", captures[0], "[0]");
+			Check.Equal("D", captures[1], "[1]");
+		});
+
+		// 单字符引号段(回归守卫):补 * (0+) 是修复前 exactly-1 的严格超集,单字符段仍被保护,
+		// 结果与修复前一致——证明补 * 未破坏单字符路径。
+		yield return ("Extractor: single-char quote segment still protected after adding * (regression guard)", delegate
+		{
+			List<string> captures = Extract("“X” - D", "^(.+?) - (.+)$");
+			Check.Equal(2, captures.Count, "count");
+			Check.Equal("“X”", captures[0], "[0]");
+			Check.Equal("D", captures[1], "[1]");
+		});
+
+		// 空引号段:补 * 后 “” 也匹配(0 字符),被屏蔽为占位符再原样还原 -> 对普通捕获完全透明
+		// (空段内无分隔符,还原回 “”)。锁定该副作用无害。
+		yield return ("Extractor: empty quote segment masks transparently (fixed)", delegate
+		{
+			List<string> captures = Extract("“” - D", "^(.+?) - (.+)$");
+			Check.Equal(2, captures.Count, "count");
+			Check.Equal("“”", captures[0], "[0]");
 			Check.Equal("D", captures[1], "[1]");
 		});
 	}

@@ -37,7 +37,7 @@ internal class FilenameRelatedBatchDialog : Form
 			public List<string> ProtectedSegments = new List<string>();
 		}
 
-			private static readonly Regex ProtectedSegmentRegex = new Regex("\\([^()]*\\)|\\[[^\\[\\]]*\\]|\\{[^{}]*\\}|<[^<>]*>|（[^（）]*）|【[^【】]*】|《[^《》]*》|“[^“”]”|‘[^‘’]’|『[^『』]』|「[^「」]」");
+			private static readonly Regex ProtectedSegmentRegex = new Regex("\\([^()]*\\)|\\[[^\\[\\]]*\\]|\\{[^{}]*\\}|<[^<>]*>|（[^（）]*）|【[^【】]*】|《[^《》]*》|“[^“”]*”|‘[^‘’]*’|『[^『』]*』|「[^「」]*」");
 
 			private static readonly ConcurrentDictionary<string, Regex> RegexCache = new ConcurrentDictionary<string, Regex>(StringComparer.Ordinal);
 
