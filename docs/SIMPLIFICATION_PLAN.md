@@ -606,3 +606,14 @@ FindSourceItemByName/ClampToRange,26 例 characterize)。本步从 `LoadSavedOpt
 精确锁定序列,属 already-verified,未跑完整 Workflow)。5 例 characterization 锁定序列首末项/总档数/步进
 切换点/跳过值。测试 451→456(+5),Debug+Release 编译干净 + 3 smoke 全绿。OptionsDialog 可提取纯逻辑
 (非 UI/Settings/designer 耦合)至此基本收敛。
+
+## untested hotspot 补测:ApplicationInfoService 版本比较(2026-07-01)
+
+`ApplicationInfoService`(`MusicTag.Services`,code-health untested hotspot −2.0,此前零测试)。非 god-class
+拆分,而是为 biomarker 点名的无测试 hotspot 补 characterization:更新检查的版本解析/比较纯逻辑(用户可见
+"发现新版本"提示的判定核心)由 private 提升 internal,锁定 golden master:
+- **`ParseVersionParts`**:恰 4 段 `int.Parse`,非 4 段 → null,非数字/空段 → FormatException。
+- **`CompareVersionParts`**:逐段比较,首个不等段定胜负(高位优先),全等 → 0。
+
+14 例 characterization(probe-first 零 FAIL):段数边界 3/4/5/空、前导零、非数字与尾空段抛异常、逐段
+比较高位优先/中间段决定/相等。测试 456→470(+14),编译干净 + 3 smoke 全绿。

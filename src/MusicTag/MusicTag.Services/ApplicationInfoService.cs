@@ -45,7 +45,7 @@ internal static class ApplicationInfoService
 		}
 	}
 
-	private static int[] ParseVersionParts(string version)
+	internal static int[] ParseVersionParts(string version)
 	{
 		string[] parts = version.Split('.');
 		if (parts.Length != 4)
@@ -60,7 +60,7 @@ internal static class ApplicationInfoService
 		return versionParts;
 	}
 
-	private static int CompareVersionParts(int[] currentVersionParts, int[] latestVersionParts)
+	internal static int CompareVersionParts(int[] currentVersionParts, int[] latestVersionParts)
 	{
 		for (int index = 0; index < currentVersionParts.Length; index++)
 		{
