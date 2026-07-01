@@ -114,13 +114,7 @@ internal partial class StateFieldInstance : Form
 			string leftText = leftItem.CellTexts[columnIndex];
 			string rightText = rightItem.CellTexts[columnIndex];
 			string columnName = configuredColumnHeaders[columnIndex].Name;
-			bool useNaturalSort = columnName == "trackstr" || columnName == "discstr";
-			return sortSetting.SortOrder switch
-			{
-				SortOrder.Descending => useNaturalSort ? TextUtilities.CompareNaturalText(rightText, leftText) : string.Compare(rightText, leftText),
-				SortOrder.Ascending => useNaturalSort ? TextUtilities.CompareNaturalText(leftText, rightText) : string.Compare(leftText, rightText),
-				_ => 0,
-			};
+			return CompareColumnText(leftText, rightText, columnName, sortSetting.SortOrder);
 		}
 	}
 
@@ -5870,6 +5864,20 @@ internal partial class StateFieldInstance : Form
 			return value.Substring(0, 20).Trim();
 		}
 		return value;
+	}
+
+	// 从 ListViewItemNaturalComparer.Compare 提取:列排序比较纯核。按列名判定自然序(trackstr/discstr)抑或
+	// 字典序,再按 SortOrder 方向分派(降序交换左右实参、升序原序、None/其它 -> 0)。Compare 保留 FileRow /
+	// 列索引 / configuredColumnHeaders 解引用后调此(纯核仅依赖入参 + TextUtilities.CompareNaturalText / string.Compare)。
+	internal static int CompareColumnText(string leftText, string rightText, string columnName, SortOrder sortOrder)
+	{
+		bool useNaturalSort = columnName == "trackstr" || columnName == "discstr";
+		return sortOrder switch
+		{
+			SortOrder.Descending => useNaturalSort ? TextUtilities.CompareNaturalText(rightText, leftText) : string.Compare(rightText, leftText),
+			SortOrder.Ascending => useNaturalSort ? TextUtilities.CompareNaturalText(leftText, rightText) : string.Compare(leftText, rightText),
+			_ => 0,
+		};
 	}
 
 	// 从 DeleteFilesTaskContext.ShowCompletionResult 提取:三路(单项成功/单项全败/多项)构造 (消息, 是否错误);

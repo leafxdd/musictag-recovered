@@ -981,5 +981,52 @@ internal static class StateFieldInstancePureLogicCharacterization
 			(string, bool) r2 = StateFieldInstance.BuildExtractCoversResultMessage(0, 0, 0, 0, 0, new Page());
 			Check.True(r2.Item2, "itemCount 0 -> else -> Item2 true");
 		});
+
+		// ===== CompareColumnText:ListViewItemNaturalComparer.Compare 排序比较纯核(自然序列名判定 + 方向分派)=====
+		// 用 TextUtilities.CompareNaturalText / string.Compare 自身作 golden(测试与被测同 CurrentCulture 恒等)-> 完全
+		// culture-safe;golden 值均非零(有区分力),锁定:路径选择(trackstr/discstr->natural,余->string.Compare)、
+		// 方向(降序交换左右实参、None->0)、参数转发顺序。
+		yield return ("CompareColumnText: natural-sort column (trackstr/discstr) Ascending -> CompareNaturalText(left,right)", delegate
+		{
+			Check.Equal(TextUtilities.CompareNaturalText("2", "10"), StateFieldInstance.CompareColumnText("2", "10", "trackstr", SortOrder.Ascending), "trackstr asc -> CompareNaturalText(l,r)");
+			Check.Equal(TextUtilities.CompareNaturalText("2", "10"), StateFieldInstance.CompareColumnText("2", "10", "discstr", SortOrder.Ascending), "discstr asc -> CompareNaturalText(l,r)");
+		});
+
+		yield return ("CompareColumnText: natural-sort column Descending swaps args -> CompareNaturalText(right,left)", delegate
+		{
+			Check.Equal(TextUtilities.CompareNaturalText("10", "2"), StateFieldInstance.CompareColumnText("2", "10", "trackstr", SortOrder.Descending), "trackstr desc -> CompareNaturalText(r,l) swapped");
+			Check.Equal(TextUtilities.CompareNaturalText("10", "2"), StateFieldInstance.CompareColumnText("2", "10", "discstr", SortOrder.Descending), "discstr desc -> CompareNaturalText(r,l)");
+		});
+
+		yield return ("CompareColumnText: non-natural column Ascending -> string.Compare(left,right)", delegate
+		{
+			Check.Equal(string.Compare("abc", "abd"), StateFieldInstance.CompareColumnText("abc", "abd", "title", SortOrder.Ascending), "title asc -> string.Compare(l,r)");
+			Check.Equal(string.Compare("2", "10"), StateFieldInstance.CompareColumnText("2", "10", "album", SortOrder.Ascending), "non-natural asc uses string.Compare (differs from natural sign)");
+		});
+
+		yield return ("CompareColumnText: non-natural column Descending swaps args -> string.Compare(right,left)", delegate
+		{
+			Check.Equal(string.Compare("abd", "abc"), StateFieldInstance.CompareColumnText("abc", "abd", "title", SortOrder.Descending), "title desc -> string.Compare(r,l) swapped");
+		});
+
+		yield return ("CompareColumnText: SortOrder.None -> 0 regardless of column/values", delegate
+		{
+			Check.Equal(0, StateFieldInstance.CompareColumnText("2", "10", "trackstr", SortOrder.None), "natural col + None -> 0");
+			Check.Equal(0, StateFieldInstance.CompareColumnText("abc", "abd", "title", SortOrder.None), "non-natural col + None -> 0");
+			Check.Equal(0, StateFieldInstance.CompareColumnText("x", "y", "discstr", SortOrder.None), "None short-circuits before any comparison");
+		});
+
+		yield return ("CompareColumnText: column-name is case-sensitive/exact ('Trackstr'/'' != magic) -> string.Compare path", delegate
+		{
+			Check.Equal(string.Compare("2", "10"), StateFieldInstance.CompareColumnText("2", "10", "Trackstr", SortOrder.Ascending), "case-mismatch column -> string.Compare not natural");
+			Check.Equal(string.Compare("2", "10"), StateFieldInstance.CompareColumnText("2", "10", "", SortOrder.Ascending), "empty column -> string.Compare");
+		});
+
+		yield return ("CompareColumnText: equal text -> 0 in both natural and string.Compare paths", delegate
+		{
+			Check.Equal(0, StateFieldInstance.CompareColumnText("5", "5", "trackstr", SortOrder.Ascending), "natural equal -> 0");
+			Check.Equal(0, StateFieldInstance.CompareColumnText("5", "5", "trackstr", SortOrder.Descending), "natural equal desc -> 0");
+			Check.Equal(0, StateFieldInstance.CompareColumnText("abc", "abc", "title", SortOrder.Ascending), "string.Compare equal -> 0");
+		});
 	}
 }
