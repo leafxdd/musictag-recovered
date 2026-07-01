@@ -927,80 +927,18 @@ internal class StateFieldInstance : Form
 			return false;
 		}
 
-		internal bool ResizeTo1200Quality75()
+		// 压缩重试梯度表(替代原 15 个 ResizeToNNNQualityMM / ResizeToConfiguredLimitQualityMM 纯转发方法)。
+		// CompressPictures 按 maxResolution 场景选表,Array.ConvertAll 成 Func<bool>[](每个 lambda 调用时
+		// 执行 resizeWorkingImageAndEncode(分辨率, 质量),等价于原对应方法)。
+		// 固定分辨率梯度(maxResolution==0):从高到低逐级压。
+		internal static readonly (int Resolution, long Quality)[] fixedResolutionRetrySteps =
 		{
-			return resizeWorkingImageAndEncode(1200, 75L);
-		}
+			(1200, 75L), (1200, 55L), (800, 75L), (800, 55L), (500, 75L), (500, 55L),
+			(500, 30L), (300, 50L), (300, 30L), (100, 30L), (50, 10L),
+		};
 
-		internal bool ResizeTo1200Quality55()
-		{
-			return resizeWorkingImageAndEncode(1200, 55L);
-		}
-
-		internal bool ResizeTo800Quality75()
-		{
-			return resizeWorkingImageAndEncode(800, 75L);
-		}
-
-		internal bool ResizeTo800Quality55()
-		{
-			return resizeWorkingImageAndEncode(800, 55L);
-		}
-
-		internal bool ResizeTo500Quality75()
-		{
-			return resizeWorkingImageAndEncode(500, 75L);
-		}
-
-		internal bool ResizeTo500Quality55()
-		{
-			return resizeWorkingImageAndEncode(500, 55L);
-		}
-
-		internal bool ResizeTo500Quality30()
-		{
-			return resizeWorkingImageAndEncode(500, 30L);
-		}
-
-		internal bool ResizeTo300Quality50()
-		{
-			return resizeWorkingImageAndEncode(300, 50L);
-		}
-
-		internal bool ResizeTo300Quality30()
-		{
-			return resizeWorkingImageAndEncode(300, 30L);
-		}
-
-		internal bool ResizeTo100Quality30()
-		{
-			return resizeWorkingImageAndEncode(100, 30L);
-		}
-
-		internal bool ResizeTo50Quality10()
-		{
-			return resizeWorkingImageAndEncode(50, 10L);
-		}
-
-		internal bool ResizeToConfiguredLimitQuality75()
-		{
-			return resizeWorkingImageAndEncode(compressionItem.options.maxResolution, 75L);
-		}
-
-		internal bool ResizeToConfiguredLimitQuality50()
-		{
-			return resizeWorkingImageAndEncode(compressionItem.options.maxResolution, 50L);
-		}
-
-		internal bool ResizeToConfiguredLimitQuality30()
-		{
-			return resizeWorkingImageAndEncode(compressionItem.options.maxResolution, 30L);
-		}
-
-		internal bool ResizeToConfiguredLimitQuality10()
-		{
-			return resizeWorkingImageAndEncode(compressionItem.options.maxResolution, 10L);
-		}
+		// 配置上限场景(maxResolution!=0):分辨率固定为 options.maxResolution(lambda 调用时读),仅质量递降。
+		internal static readonly long[] configuredLimitRetryQualities = { 75L, 50L, 30L, 10L };
 
 		internal bool CompressPicture()
 		{
@@ -5686,15 +5624,13 @@ internal class StateFieldInstance : Form
 			pictureCompressionWorker.resizeWorkingImageAndEncode = pictureCompressionWorker.ResizeCurrentImageAndEncode;
 			if (pictureCompressionWorker.compressionItem.options.maxResolution == 0)
 			{
-				pictureCompressionWorker.compressionRetrySteps = new Func<bool>[11]
-				{
-					pictureCompressionWorker.ResizeTo1200Quality75, pictureCompressionWorker.ResizeTo1200Quality55, pictureCompressionWorker.ResizeTo800Quality75, pictureCompressionWorker.ResizeTo800Quality55, pictureCompressionWorker.ResizeTo500Quality75, pictureCompressionWorker.ResizeTo500Quality55, pictureCompressionWorker.ResizeTo500Quality30, pictureCompressionWorker.ResizeTo300Quality50, pictureCompressionWorker.ResizeTo300Quality30, pictureCompressionWorker.ResizeTo100Quality30,
-					pictureCompressionWorker.ResizeTo50Quality10
-				};
+				pictureCompressionWorker.compressionRetrySteps = Array.ConvertAll(PictureCompressionWorker.fixedResolutionRetrySteps,
+					step => (Func<bool>)(() => pictureCompressionWorker.resizeWorkingImageAndEncode(step.Resolution, step.Quality)));
 			}
 			else
 			{
-				pictureCompressionWorker.compressionRetrySteps = new Func<bool>[4] { pictureCompressionWorker.ResizeToConfiguredLimitQuality75, pictureCompressionWorker.ResizeToConfiguredLimitQuality50, pictureCompressionWorker.ResizeToConfiguredLimitQuality30, pictureCompressionWorker.ResizeToConfiguredLimitQuality10 };
+				pictureCompressionWorker.compressionRetrySteps = Array.ConvertAll(PictureCompressionWorker.configuredLimitRetryQualities,
+					quality => (Func<bool>)(() => pictureCompressionWorker.resizeWorkingImageAndEncode(pictureCompressionWorker.compressionItem.options.maxResolution, quality)));
 			}
 			try
 			{
