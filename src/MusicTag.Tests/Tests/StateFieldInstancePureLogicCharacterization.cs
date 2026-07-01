@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Threading;
 using System.Windows.Forms;
 using MusicTagWinApp;
@@ -1104,6 +1105,19 @@ internal static class StateFieldInstancePureLogicCharacterization
 
 			var overflow = StateFieldInstance.ResolvePictureCompressionLimits(false, 2097152, 0, "A");
 			Check.Equal(long.MaxValue, overflow.MaxByteLength, "2097152 * 1024 int-overflows to negative -> <=0 -> long.MaxValue (int multiply preserved, NOT long)");
+		});
+
+		// ===== ClampWindowToWorkingArea:窗口位置 clamp 纯几何(workingArea 传参);顺序依赖 X->Y->出界归零 =====
+		yield return ("StateFieldInstance.ClampWindowToWorkingArea: X/Y clamp + off-screen origin reset (sequential)", delegate
+		{
+			Rectangle wa = new Rectangle(0, 0, 1920, 1040);   // -> maxVisible = (1900, 1040)
+			Check.Equal(new Point(100, 100), StateFieldInstance.ClampWindowToWorkingArea(new Point(100, 100), new Size(800, 600), wa), "in-bounds -> unchanged");
+			Check.Equal(new Point(1900, 100), StateFieldInstance.ClampWindowToWorkingArea(new Point(2000, 100), new Size(800, 600), wa), "X > 1900 -> clamp X, keep Y");
+			Check.Equal(new Point(100, 1040), StateFieldInstance.ClampWindowToWorkingArea(new Point(100, 1100), new Size(800, 600), wa), "Y > 1040 -> clamp Y, keep X");
+			Check.Equal(new Point(1900, 1040), StateFieldInstance.ClampWindowToWorkingArea(new Point(2000, 1100), new Size(800, 600), wa), "both over -> clamp X then Y (sequential)");
+			Check.Equal(new Point(0, 0), StateFieldInstance.ClampWindowToWorkingArea(new Point(-900, 100), new Size(800, 600), wa), "off-screen left (X+W < 20) -> origin reset");
+			Check.Equal(new Point(0, 0), StateFieldInstance.ClampWindowToWorkingArea(new Point(100, -700), new Size(800, 600), wa), "off-screen top (Y+H < 20) -> origin reset");
+			Check.Equal(new Point(1900, 1040), StateFieldInstance.ClampWindowToWorkingArea(new Point(2000, 1100), new Size(10, 10), wa), "both over + small size -> clamped, not reset (order matters)");
 		});
 	}
 }

@@ -6436,6 +6436,28 @@ internal partial class StateFieldInstance : Form
 		DialogService.TrySaveApplicationSettings();
 	}
 
+	// 从 OnLoad 提取:窗口位置 clamp 到工作区纯几何(顺序依赖——先右/下越界回拉,再整体出界归零)。
+	// 无 LocationChanged/Move handler 订阅或 override(已核实),故 BEFORE 的 0~3 次中间 base.Location 写与 AFTER
+	// 单次写(局部 Point 模拟顺序读写)用户态等价:WinForms Control.Location setter 对相同值 no-op(SetBounds 内部
+	// 值比较,无观察者观测中间态)。maximumVisibleLocation:宽留 20px 余量(至少 20)、高取满工作区。
+	internal static Point ClampWindowToWorkingArea(Point location, Size size, Rectangle workingArea)
+	{
+		Size maximumVisibleLocation = new Size(Math.Min(Math.Max(workingArea.Width - 20, 20), workingArea.Width), workingArea.Height);
+		if (location.X > maximumVisibleLocation.Width)
+		{
+			location = new Point(maximumVisibleLocation.Width, location.Y);
+		}
+		if (location.Y > maximumVisibleLocation.Height)
+		{
+			location = new Point(location.X, maximumVisibleLocation.Height);
+		}
+		if (location.X + size.Width < 20 || location.Y + size.Height < 20)
+		{
+			location = new Point(0, 0);
+		}
+		return location;
+	}
+
 	protected override void OnLoad(EventArgs e)
 	{
 		base.OnLoad(e);
@@ -6458,20 +6480,8 @@ internal partial class StateFieldInstance : Form
 				}
 
 				Rectangle workingArea = SystemInformation.WorkingArea;
-				Size maximumVisibleLocation = new Size(Math.Min(Math.Max(workingArea.Width - 20, 20), workingArea.Width), workingArea.Height);
 				base.Size = new Size(Math.Min(base.Size.Width, workingArea.Width), Math.Min(base.Size.Height, workingArea.Height));
-				if (base.Location.X > maximumVisibleLocation.Width)
-				{
-					base.Location = new Point(maximumVisibleLocation.Width, base.Location.Y);
-				}
-				if (base.Location.Y > maximumVisibleLocation.Height)
-				{
-					base.Location = new Point(base.Location.X, maximumVisibleLocation.Height);
-				}
-				if (base.Location.X + base.Size.Width < 20 || base.Location.Y + base.Size.Height < 20)
-				{
-					base.Location = new Point(0, 0);
-				}
+				base.Location = ClampWindowToWorkingArea(base.Location, base.Size, workingArea);
 			}
 		}
 		catch (System.Exception ex)
