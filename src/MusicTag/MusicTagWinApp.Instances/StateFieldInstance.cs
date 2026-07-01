@@ -468,7 +468,12 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	private sealed class RefreshItemsTaskContext
+	// 收敛 9 个批文件处理 TaskContext 的公共脚手架:取消令牌 / 进度对话框 / 当前文件 / 已处理计数 + 幂等 Cancel()。
+	// 这 4 字段与 guarded Cancel()(9 个逐字节相同)在 RefreshItems/ConvertFilenameChinese/SaveTags/UndoSaveTags/
+	// UndoRename/ClearTags/DeleteFiles/SaveLrcFiles/ExtractCovers 全部出现;各 context 特有字段(items 数组 / 各类
+	// 计数 / log / owner 等)保留派生类。LyricDownload/ReleaseYearSearch 的 Cancel() 语义不同(无 guard + 关闭对话框),
+	// 不属此基类。
+	private class BatchFileTaskContext
 	{
 		public CancellationTokenSource cancellationSource;
 
@@ -478,6 +483,17 @@ internal class StateFieldInstance : Form
 
 		public int processedCount;
 
+		internal void Cancel()
+		{
+			if (!cancellationSource.IsCancellationRequested)
+			{
+				cancellationSource.Cancel();
+			}
+		}
+	}
+
+	private sealed class RefreshItemsTaskContext : BatchFileTaskContext
+	{
 		public SelectedListViewItemInfo[] itemInfos;
 
 		public StateFieldInstance owner;
@@ -491,14 +507,6 @@ internal class StateFieldInstance : Form
 		public bool showLoadErrors;
 
 		public Action<(SelectedListViewItemInfo ItemInfo, ConfigDescriptorState TagState, Dictionary<string, string> DisplayValues)> updateListViewItemAction;
-
-		internal void Cancel()
-		{
-			if (!cancellationSource.IsCancellationRequested)
-			{
-				cancellationSource.Cancel();
-			}
-		}
 
 		internal void UpdateProgress()
 		{
@@ -1013,16 +1021,8 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	private sealed class ConvertFilenameChineseBatchContext
+	private sealed class ConvertFilenameChineseBatchContext : BatchFileTaskContext
 	{
-		public CancellationTokenSource cancellationSource;
-
-		public ProgressDialog progressDialog;
-
-		public FileInfo currentFile;
-
-		public int processedCount;
-
 		public (string Path, string NewPath, int ListViewIndex)[] renameItems;
 
 		public int renamedCount;
@@ -1034,14 +1034,6 @@ internal class StateFieldInstance : Form
 		public Page messageLog;
 
 		public bool convertSimplifiedToTraditional;
-
-		internal void Cancel()
-		{
-			if (!cancellationSource.IsCancellationRequested)
-			{
-				cancellationSource.Cancel();
-			}
-		}
 
 		internal void UpdateProgress()
 		{
@@ -1115,16 +1107,8 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	private sealed class SaveTagsTaskContext
+	private sealed class SaveTagsTaskContext : BatchFileTaskContext
 	{
-		public CancellationTokenSource cancellationSource;
-
-		public ProgressDialog progressDialog;
-
-		public FileInfo currentFile;
-
-		public int processedCount;
-
 		public SelectedListViewItemInfo[] itemsToSave;
 
 		public int savedCount;
@@ -1146,14 +1130,6 @@ internal class StateFieldInstance : Form
 		public Func<ConfigDescriptorState, string, bool> applyLyricsAction;
 
 		public Func<ConfigDescriptorState, bool, bool> convertChineseTextAction;
-
-		internal void Cancel()
-		{
-			if (!cancellationSource.IsCancellationRequested)
-			{
-				cancellationSource.Cancel();
-			}
-		}
 
 		internal void UpdateProgress()
 		{
@@ -1455,17 +1431,9 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	private sealed class UndoSaveTagsTaskContext
+	private sealed class UndoSaveTagsTaskContext : BatchFileTaskContext
 	{
-		public CancellationTokenSource cancellationSource;
-
-		public int processedCount;
-
 		public List<ConfigDescriptorState> undoTagSnapshots;
-
-		public ProgressDialog progressDialog;
-
-		public FileInfo currentFile;
 
 		public int restoredCount;
 
@@ -1474,14 +1442,6 @@ internal class StateFieldInstance : Form
 		public int skippedCount;
 
 		public Page messageLog;
-
-		internal void Cancel()
-		{
-			if (!cancellationSource.IsCancellationRequested)
-			{
-				cancellationSource.Cancel();
-			}
-		}
 
 		internal void UpdateProgress()
 		{
@@ -1640,17 +1600,9 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	private sealed class UndoRenameTaskContext
+	private sealed class UndoRenameTaskContext : BatchFileTaskContext
 	{
-		public CancellationTokenSource cancellationSource;
-
-		public int processedCount;
-
 		public List<(string oldPath, string newPath, bool failed)> renameUndoOperations;
-
-		public ProgressDialog progressDialog;
-
-		public FileInfo currentFile;
 
 		public int successCount;
 
@@ -1661,14 +1613,6 @@ internal class StateFieldInstance : Form
 		public Page errorLog;
 
 		public StateFieldInstance owner;
-
-		internal void Cancel()
-		{
-			if (!cancellationSource.IsCancellationRequested)
-			{
-				cancellationSource.Cancel();
-			}
-		}
 
 		internal void UpdateProgress()
 		{
@@ -1754,16 +1698,8 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	private sealed class ClearTagsTaskContext
+	private sealed class ClearTagsTaskContext : BatchFileTaskContext
 	{
-		public CancellationTokenSource cancellationSource;
-
-		public ProgressDialog progressDialog;
-
-		public FileInfo currentFile;
-
-		public int processedCount;
-
 		public SelectedListViewItemInfo[] itemsToClear;
 
 		public int successCount;
@@ -1773,14 +1709,6 @@ internal class StateFieldInstance : Form
 		public bool canCancelFileReadonly;
 
 		public Page errorLog;
-
-		internal void Cancel()
-		{
-			if (!cancellationSource.IsCancellationRequested)
-			{
-				cancellationSource.Cancel();
-			}
-		}
 
 		internal void UpdateProgress()
 		{
@@ -1911,16 +1839,8 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	private sealed class DeleteFilesTaskContext
+	private sealed class DeleteFilesTaskContext : BatchFileTaskContext
 	{
-		public CancellationTokenSource cancellationSource;
-
-		public ProgressDialog progressDialog;
-
-		public FileInfo currentFile;
-
-		public int processedCount;
-
 		public SelectedListViewItemInfo[] itemsToDelete;
 
 		public int deletedCount;
@@ -1930,14 +1850,6 @@ internal class StateFieldInstance : Form
 		public int failedCount;
 
 		public StateFieldInstance owner;
-
-		internal void Cancel()
-		{
-			if (!cancellationSource.IsCancellationRequested)
-			{
-				cancellationSource.Cancel();
-			}
-		}
 
 		internal void UpdateProgress()
 		{
@@ -2008,16 +1920,8 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	private sealed class SaveLrcFilesTaskContext
+	private sealed class SaveLrcFilesTaskContext : BatchFileTaskContext
 	{
-		public CancellationTokenSource cancellationSource;
-
-		public ProgressDialog progressDialog;
-
-		public FileInfo currentFile;
-
-		public int processedCount;
-
 		public SelectedListViewItemInfo[] itemsToSave;
 
 		public Page errorLog;
@@ -2027,14 +1931,6 @@ internal class StateFieldInstance : Form
 		public int failedCount;
 
 		public int skippedCount;
-
-		internal void Cancel()
-		{
-			if (!cancellationSource.IsCancellationRequested)
-			{
-				cancellationSource.Cancel();
-			}
-		}
 
 		internal void UpdateProgress()
 		{
@@ -2124,16 +2020,8 @@ internal class StateFieldInstance : Form
 		}
 	}
 
-	private sealed class ExtractCoversTaskContext
+	private sealed class ExtractCoversTaskContext : BatchFileTaskContext
 	{
-		public CancellationTokenSource cancellationSource;
-
-		public ProgressDialog progressDialog;
-
-		public FileInfo currentFile;
-
-		public int processedCount;
-
 		public SelectedListViewItemInfo[] itemsToExtract;
 
 		public Page errorLog;
@@ -2143,14 +2031,6 @@ internal class StateFieldInstance : Form
 		public int skippedCount;
 
 		public int failedCount;
-
-		internal void Cancel()
-		{
-			if (!cancellationSource.IsCancellationRequested)
-			{
-				cancellationSource.Cancel();
-			}
-		}
 
 		internal void UpdateProgress()
 		{
