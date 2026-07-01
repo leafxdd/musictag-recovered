@@ -57,6 +57,7 @@ internal static class Program
 		tests.AddRange(UtilityMappingCharacterization.All());
 		tests.AddRange(LyricFileNameCharacterization.All());
 		tests.AddRange(ExceptionDetailsFormatCharacterization.All());
+		tests.AddRange(BatchCompletionResultCharacterization.All());
 		return TestRunner.RunAll(tests);
 	}
 }

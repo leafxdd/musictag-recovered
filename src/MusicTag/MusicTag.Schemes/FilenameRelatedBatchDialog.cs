@@ -1347,19 +1347,29 @@ internal class FilenameRelatedBatchDialog : Form
 
 	private (string msg, bool isErr) BuildBatchCompletionResult(int totalCount)
 	{
+		return BuildBatchCompletionResult(totalCount, successCount, failureCount, skippedCount, processedCount, batchMessages.ToString());
+	}
+
+	// 批处理完成消息的纯构建核(无 UI):提取自 BuildBatchCompletionResult 实例方法,原方法转发各计数字段 +
+	// batchMessages.ToString()。逐字保持:原方法所有路径均恰好求值一次 batchMessages.ToString(),故提取为
+	// 无条件实参不改变求值次数。totalCount<=1 时按 success>0 / skipped>0 / else 三分支(末分支 isErr=true);
+	// totalCount>1 用 Msg_OK_Fail_Skip_Count 模板(参数序 success,failure,skipped,processed)。
+	// characterization 见 BatchCompletionResultCharacterization。
+	internal static (string msg, bool isErr) BuildBatchCompletionResult(int totalCount, int successCount, int failureCount, int skippedCount, int processedCount, string batchMessagesText)
+	{
 		if (totalCount <= 1)
 		{
 			if (successCount > 0)
 			{
-				return (Resources.Msg_SaveCompleted + "\n" + batchMessages.ToString(), false);
+				return (Resources.Msg_SaveCompleted + "\n" + batchMessagesText, false);
 			}
 			if (skippedCount > 0)
 			{
-				return (Resources.Msg_Skipped + "\n" + batchMessages.ToString(), false);
+				return (Resources.Msg_Skipped + "\n" + batchMessagesText, false);
 			}
-			return (batchMessages.ToString(), true);
+			return (batchMessagesText, true);
 		}
-		return (string.Format(Resources.Msg_SaveCompleted + "\n" + Resources.Msg_OK_Fail_Skip_Count, successCount, failureCount, skippedCount, processedCount) + "\n" + batchMessages.ToString(), false);
+		return (string.Format(Resources.Msg_SaveCompleted + "\n" + Resources.Msg_OK_Fail_Skip_Count, successCount, failureCount, skippedCount, processedCount) + "\n" + batchMessagesText, false);
 	}
 
 	protected override void Dispose(bool disposing)
