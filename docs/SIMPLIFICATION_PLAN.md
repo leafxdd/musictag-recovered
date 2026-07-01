@@ -617,3 +617,41 @@ FindSourceItemByName/ClampToRange,26 例 characterize)。本步从 `LoadSavedOpt
 
 14 例 characterization(probe-first 零 FAIL):段数边界 3/4/5/空、前导零、非数字与尾空段抛异常、逐段
 比较高位优先/中间段决定/相等。测试 456→470(+14),编译干净 + 3 smoke 全绿。
+
+## Phase 2 characterization 深度扩展:scout 驱动补盲 + 纯核提取(2026-06-30 ~ 2026-07-01)
+
+承 untested-hotspot 补测路线,以整库 scout workflow 系统盘点「零覆盖但可测」的纯逻辑 / 子系统边界,
+逐批 characterize 锁定 golden master;个别混杂纯计算的方法用 behavior-preserving 纯核提取(原方法转发,
+签名不变、零调用点改动),敏感提取经 Workflow 多 lens 对抗验证。测试 **470→641(+171)**,全程 probe-first
+**零 FAIL**,每批一 commit、各跑 `Verify-Build.ps1 -RunSmokeTests` 全绿。
+
+| commit | 目标 | 类型 |
+|---|---|---|
+| `391d8bad` | `SourceItem` + `SearchProviderPolicy` 源配置纯逻辑(scout 批1) | 纯测试 |
+| `65ea1345` | `SearchStatusIndicator` 状态栏文案渲染提取 internal static + 18 例(scout 批2) | 提取 |
+| `98623814` | `NetEaseCrypto` 163-key AES 编解码(scout 批3,补加密层零覆盖) | 纯测试 |
+| `947c7f01` | `RemoteTagProviderBase` 传输错误 taxonomy 提取 + 14 例(scout 批4) | 提取 |
+| `91e1560d` | `TrackSearchResult` 相似度编排 / 多键排序 + `NormalizeForMatch` 提升(scout 批5) | 混合 |
+| `2f35ec2f` | 4 provider 边角解码器簇 + 可见性提升(scout 批6,补搜索子系统边界分支零覆盖) | 混合 |
+| `615fd0d1` | 歌词处理三簇(`FormatTimestamp` / 双语对齐拆分 / QQ 歌词解码) | 纯测试 |
+| `56dbf9a2` | 酷我详情歌词构建(`PopulateSongDetails` 主干 + 封面 700 改写) | 纯测试 |
+| `35adf13e` | 图片类型名 ↔ APIC code 映射(`ConfigDescriptorState` picture-type mapper) | 纯测试 |
+| `e9665d33` | services/utilities MIME 映射 + HTML 实体解码(`DecodeBasicHtmlEntities` / `GetImage*ForMimeType`) | 纯测试 |
+| `75828189` | 歌词文件名规则(`PathFileUtilities.BuildLyricFileName`) | 纯测试 |
+| `53c923ce` | `LogService.FormatExceptionDetails` 提取纯格式化核 + 6 例(对抗验证等价) | 提取+对抗 |
+| `6dc0f44c` | `FilenameRelatedBatchDialog.BuildBatchCompletionResult` 提取纯核 + 6 例(对抗验证等价) | 提取+对抗 |
+
+- **两个纯核提取经 3-lens Workflow 对抗验证**:`FormatExceptionDetails`(whole-body verbatim 抽取,terminal
+  `return sb.ToString()`;`wulw5y8a3` 3-lens 全 EQUIVALENT)、`BuildBatchCompletionResult`(计数字段 +
+  `batchMessages.ToString()` 参数化;`wgq3dv05o` 3-lens 全 EQUIVALENT、0 反例)。后者特别核验
+  **eager-eval 陷阱**:原方法 4 条 return 路径均恰求值一次 `batchMessages.ToString()`,故提为无条件实参
+  不改求值次数;失败 / 跳过分支原不读 `failureCount`/`processedCount`,转发无条件读传参但 int 读无副作用、
+  static core 仍只在多文件分支用之 → eval-order / branch-isErr / callsite-argmap 三 lens 全等价,与独立
+  追踪 + 6 characterization 断言三方交叉一致。
+- **i18n 安全**:Resources 依赖的期望值引用 `Resources.Msg_*` 同源(锁分支 / 拼接结构 / isErr 三态 /
+  format 参数序,非硬编码语言文本)。
+- **覆盖增量**:加密层(NetEaseCrypto AES)、传输错误分类(RemoteErrorKind taxonomy)、状态栏渲染、
+  provider 解码边角、歌词时间戳 / 双语 / 解码、图片类型 / MIME 映射、异常 / 批完成消息格式化 —— 均为此前
+  characterization 网的盲区,现全部 golden master 锁定。至此可安全 characterize 的纯逻辑 / 子系统边界
+  **趋于收敛**,余下多为 UI / IO / 事件耦合或敏感区(i18n / cctor / 音频 round-trip 已覆盖核心),
+  留待专门批次或按需扩展。
