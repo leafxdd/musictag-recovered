@@ -199,6 +199,22 @@ internal class AutoMatchTagsDialog : Form
 		return newValue is string text && currentValue is string value && !string.IsNullOrEmpty(text) && (string.IsNullOrWhiteSpace(value) || overwrite);
 	}
 
+	// 从 AutoMatchWorker 上提(仅 private->internal + 移到外层类),供 characterization 测试可见;嵌套调用点按简单名/方法组仍解析到外层 static。
+	internal static bool IsSameTrackMetadata(TrackSearchResult first, TrackSearchResult second)
+	{
+		return first.Title == second.Title && first.Artist == second.Artist && first.Album == second.Album;
+	}
+
+	internal static bool IsTextTagMatchKey(string fieldName)
+	{
+		return fieldName != "cover" && fieldName != "lyrics";
+	}
+
+	internal static bool IsYearFieldName(string fieldName)
+	{
+		return fieldName == "year";
+	}
+
 	private class AutoMatchWorker
 	{
 		private sealed class AutoMatchFileSearchTask
@@ -421,19 +437,9 @@ internal class AutoMatchTagsDialog : Form
 			}
 		}
 
-		private static bool IsTextTagMatchKey(string fieldName)
-		{
-			return fieldName != "cover" && fieldName != "lyrics";
-		}
-
 		private static bool HasProcessingFailed(ConfigDescriptorState.PictureData coverData)
 		{
 			return coverData.ProcessingFailed;
-		}
-
-		private static bool IsYearFieldName(string fieldName)
-		{
-			return fieldName == "year";
 		}
 
 		private sealed class TagSaveContext
@@ -773,11 +779,6 @@ internal class AutoMatchTagsDialog : Form
 			searchThread.Priority = GetOwnerDialog().hasStartedParallelWorker ? ThreadPriority.BelowNormal : ThreadPriority.Normal;
 			searchThread.Start();
 			GetOwnerDialog().hasStartedParallelWorker = true;
-		}
-
-		private static bool IsSameTrackMetadata(TrackSearchResult first, TrackSearchResult second)
-		{
-			return first.Title == second.Title && first.Artist == second.Artist && first.Album == second.Album;
 		}
 
 		private bool SaveSidecarFiles(ConfigDescriptorState.PictureData downloadedCoverPicture)
