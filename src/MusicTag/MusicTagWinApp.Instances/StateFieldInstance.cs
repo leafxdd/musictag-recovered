@@ -5879,6 +5879,27 @@ internal class StateFieldInstance : Form
 		}
 	}
 
+	// 从 StartClearTags 完成段提取:按待处理条目数 / 成功数分三路构造 (消息, 是否错误) 二元组。
+	// 纯逻辑(仅字段读 + string.Format + Page.ToString);errorLog 传 Page 以保 ToString 调用位置/次数逐字节不变。
+	internal static (string, bool) BuildClearTagsResultMessage(int itemCount, int successCount, int failedCount, int processedCount, Page errorLog)
+	{
+		(string, bool) value = default((string, bool));
+		if (itemCount > 1)
+		{
+			value.Item1 = string.Format(Resources.Msg_CleartagsCompleted + "\n" + Resources.Msg_OK_Fail_Count, successCount, failedCount, processedCount) + "\n" + errorLog.ToString();
+		}
+		else if (successCount > 0)
+		{
+			value.Item1 = Resources.Msg_CleartagsCompleted;
+		}
+		else
+		{
+			value.Item1 = errorLog.ToString();
+			value.Item2 = true;
+		}
+		return value;
+	}
+
 	private async void StartClearTags(SelectedListViewItemInfo[] itemInfos, ProgressDialog progressDialog, bool canCancelFileReadonly)
 	{
 		ClearTagsTaskContext clearTagsContext = new ClearTagsTaskContext();
@@ -5896,20 +5917,7 @@ internal class StateFieldInstance : Form
 		try
 		{
 			await Task.Run((Action)clearTagsContext.ClearTags, clearTagsContext.cancellationSource.Token);
-			(string, bool) value = default((string, bool));
-			if (clearTagsContext.itemsToClear.Length > 1)
-			{
-				value.Item1 = string.Format(Resources.Msg_CleartagsCompleted + "\n" + Resources.Msg_OK_Fail_Count, clearTagsContext.successCount, clearTagsContext.failedCount, clearTagsContext.processedCount) + "\n" + clearTagsContext.errorLog.ToString();
-			}
-			else if (clearTagsContext.successCount > 0)
-			{
-				value.Item1 = Resources.Msg_CleartagsCompleted;
-			}
-			else
-			{
-				value.Item1 = clearTagsContext.errorLog.ToString();
-				value.Item2 = true;
-			}
+			(string, bool) value = BuildClearTagsResultMessage(clearTagsContext.itemsToClear.Length, clearTagsContext.successCount, clearTagsContext.failedCount, clearTagsContext.processedCount, clearTagsContext.errorLog);
 			clearTagsContext.progressDialog.CloseAfterCompletion();
 			GC.Collect();
 			RefreshSelectedItems(showErrorMessageBox: false, showProgressDialog: true, refreshStatusAllInfo: true, previousMessage: value);

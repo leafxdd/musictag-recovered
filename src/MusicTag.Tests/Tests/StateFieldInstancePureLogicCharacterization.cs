@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Windows.Forms;
 using MusicTagWinApp;
+using MusicTagWinApp.Common;
 using MusicTagWinApp.Instances;
 using MusicTagWinApp.Properties;
 
@@ -845,6 +846,47 @@ internal static class StateFieldInstancePureLogicCharacterization
 		yield return ("ResolveFailureMessage: loadError with real chars kept verbatim (no trim)", delegate
 		{
 			Check.Equal(" x ", StateFieldInstance.ResolveFailureMessage(" x ", "FB"), "padded real content is non-empty, returned verbatim");
+		});
+
+		// ===== BuildClearTagsResultMessage:收敛 StartClearTags 完成段三路(itemCount>1 / success>0 / else)=====
+		// 传 Page(非预 ToString 的 string)以保 errorLog.ToString 调用位置/次数逐字节不变。返回 (消息 Item1, 是否错误 Item2)。
+		// 分支1 含本地化 Resources -> 结构断言(EndsWith/Length,避 culture 脆性);分支2/3/边界 -> 精确断言。
+		yield return ("BuildClearTagsResultMessage: itemCount>1 -> header + trailing errorLog, not error", delegate
+		{
+			Page log = new Page();
+			log.AddLine("E1");
+			log.AddLine("E2");
+			(string, bool) r = StateFieldInstance.BuildClearTagsResultMessage(3, 2, 1, 3, log);
+			Check.True(!r.Item2, "multi-file -> Item2 false (not error)");
+			Check.True(r.Item1.EndsWith("\n" + log.ToString()), "multi-file appends newline+errorLog at tail");
+			Check.True(r.Item1.Length > log.ToString().Length + 1, "multi-file has header before errorLog (distinguishes else branch)");
+		});
+
+		yield return ("BuildClearTagsResultMessage: single-file success -> bare completed message", delegate
+		{
+			Page log = new Page();
+			log.AddLine("ignored");
+			(string, bool) r = StateFieldInstance.BuildClearTagsResultMessage(1, 1, 0, 1, log);
+			Check.Equal(Resources.Msg_CleartagsCompleted, r.Item1, "success branch -> bare Msg_CleartagsCompleted (no count, no errorLog)");
+			Check.True(!r.Item2, "success branch -> Item2 false");
+		});
+
+		yield return ("BuildClearTagsResultMessage: single-file all-fail -> bare errorLog + error flag", delegate
+		{
+			Page log = new Page();
+			log.AddLine("boom");
+			(string, bool) r = StateFieldInstance.BuildClearTagsResultMessage(1, 0, 1, 1, log);
+			Check.Equal(log.ToString(), r.Item1, "else branch -> bare errorLog (no header)");
+			Check.True(r.Item2, "else branch -> Item2 true (error)");
+		});
+
+		yield return ("BuildClearTagsResultMessage: itemCount<=1 boundary -> else branch (empty log / zero count)", delegate
+		{
+			(string, bool) r1 = StateFieldInstance.BuildClearTagsResultMessage(1, 0, 0, 1, new Page());
+			Check.Equal("", r1.Item1, "single empty-log all-fail -> empty message");
+			Check.True(r1.Item2, "single empty-log all-fail -> Item2 true");
+			(string, bool) r2 = StateFieldInstance.BuildClearTagsResultMessage(0, 0, 0, 0, new Page());
+			Check.True(r2.Item2, "itemCount 0 -> else (0>1 false, 0>0 false) -> Item2 true");
 		});
 	}
 }
