@@ -863,7 +863,7 @@ internal class ConfigDescriptorState : IDisposable
 		return (field != null && rawFieldVocabulary.TryGetValue(field, out (string Id3v2, string Xiph, string Ape) ids)) ? ids.Ape : null;
 	}
 
-	private static string StringTypeName(TagLib.StringType stringType)
+	internal static string StringTypeName(TagLib.StringType stringType)
 	{
 		switch (stringType)
 		{
@@ -880,7 +880,7 @@ internal class ConfigDescriptorState : IDisposable
 		}
 	}
 
-	private static byte[] EncodeByStringType(string value, TagLib.StringType stringType)
+	internal static byte[] EncodeByStringType(string value, TagLib.StringType stringType)
 	{
 		if (value == null)
 		{

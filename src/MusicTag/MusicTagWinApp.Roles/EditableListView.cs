@@ -48,7 +48,7 @@ internal class EditableListView : HeaderAwareListView
 		}
 	}
 
-	private static int CompareSortableText(string left, string right)
+	internal static int CompareSortableText(string left, string right)
 	{
 		if (decimal.TryParse(left, out var leftNumber) && decimal.TryParse(right, out var rightNumber))
 		{

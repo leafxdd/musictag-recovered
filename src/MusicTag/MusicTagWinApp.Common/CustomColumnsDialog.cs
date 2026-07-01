@@ -119,7 +119,7 @@ internal class CustomColumnsDialog : Form
 		return string.IsNullOrEmpty(resourceText) ? fallbackText : resourceText;
 	}
 
-	private static int CompareColumnDisplayOrder(ColumnHeaderInfo left, ColumnHeaderInfo right)
+	internal static int CompareColumnDisplayOrder(ColumnHeaderInfo left, ColumnHeaderInfo right)
 	{
 		int leftDisplayOrder = left.isShow ? left.displayIndex : left.beforeHideDisplayIndex;
 		int rightDisplayOrder = right.isShow ? right.displayIndex : right.beforeHideDisplayIndex;

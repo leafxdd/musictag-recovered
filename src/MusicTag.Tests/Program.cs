@@ -61,6 +61,7 @@ internal static class Program
 		tests.AddRange(ConfigDescriptorFrameIdCharacterization.All());
 			tests.AddRange(SerializationEncodingCharacterization.All());
 			tests.AddRange(AutoMatchFieldClassificationCharacterization.All());
+			tests.AddRange(PureHelperTailCharacterization.All());
 		return TestRunner.RunAll(tests);
 	}
 }
