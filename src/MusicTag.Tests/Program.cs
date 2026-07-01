@@ -54,6 +54,7 @@ internal static class Program
 		tests.AddRange(LyricProcessingCharacterization.All());
 		tests.AddRange(KuwoLyricBuildCharacterization.All());
 		tests.AddRange(PictureTypeMapperCharacterization.All());
+		tests.AddRange(UtilityMappingCharacterization.All());
 		return TestRunner.RunAll(tests);
 	}
 }
