@@ -51,6 +51,7 @@ internal static class Program
 		tests.AddRange(RemoteTagProviderBaseCharacterization.All());
 		tests.AddRange(TrackSearchResultCharacterization.All());
 		tests.AddRange(ProviderDecodersCharacterization.All());
+		tests.AddRange(LyricProcessingCharacterization.All());
 		return TestRunner.RunAll(tests);
 	}
 }

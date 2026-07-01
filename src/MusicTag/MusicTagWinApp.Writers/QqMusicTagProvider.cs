@@ -419,7 +419,7 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 		return lyric;
 	}
 
-	private static (string Lyric, string Translation) DecodeLyricPayload(string responseBody)
+	internal static (string Lyric, string Translation) DecodeLyricPayload(string responseBody)
 	{
 		string callbackJson = ExtractCallbackJson(responseBody);
 		if (string.IsNullOrWhiteSpace(callbackJson))
