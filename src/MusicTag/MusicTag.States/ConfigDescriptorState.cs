@@ -826,87 +826,41 @@ internal class ConfigDescriptorState : IDisposable
 		AppendUtf8Blocks(values, blocks, "APE", ref tagType, ref stringType);
 	}
 
+	// field -> (Id3v2 frame, Xiph field, APE item) 标识符词汇表。合并原三个并行 switch
+	// (Id3v2FrameId/XiphFieldId/ApeFieldId),逐字节等价。不对称:comment/lyrics 的 Id3v2 列为 null
+	// ——二者在 Id3v2 走 CommentsFrame/UnsynchronisedLyricsFrame 特殊 frame、由 FillRawFromId3v2 直接
+	// 处理、不经此表(等价于原 Id3v2FrameId 对二者落 default 返 null);track/disc/trackstr/discstr 纯读
+	// 派生、不做 raw 提取,故不在表中(TryGetValue 落空 -> null,同原 switch default)。
+	private static readonly Dictionary<string, (string Id3v2, string Xiph, string Ape)> rawFieldVocabulary =
+		new Dictionary<string, (string Id3v2, string Xiph, string Ape)>
+		{
+			{ "title",       ("TIT2", "TITLE",       "Title") },
+			{ "artist",      ("TPE1", "ARTIST",      "Artist") },
+			{ "album",       ("TALB", "ALBUM",       "Album") },
+			{ "year",        ("TDRC", "DATE",        "Year") },
+			{ "genre",       ("TCON", "GENRE",       "Genre") },
+			{ "albumartist", ("TPE2", "ALBUMARTIST", "Album Artist") },
+			{ "composer",    ("TCOM", "COMPOSER",    "Composer") },
+			{ "lyricist",    ("TEXT", "LYRICIST",    "Lyricist") },
+			{ "comment",     (null,   "COMMENT",     "Comment") },
+			{ "lyrics",      (null,   "LYRICS",      "Lyrics") },
+		};
+
+	// field==null 时短路返回 null(不查字典),严格保持原 switch(null)->default->null 语义:
+	// Dictionary.TryGetValue(null) 会抛 ArgumentNullException,守卫不可省。
 	internal static string Id3v2FrameId(string field)
 	{
-		switch (field)
-		{
-			case "title":
-				return "TIT2";
-			case "artist":
-				return "TPE1";
-			case "album":
-				return "TALB";
-			case "year":
-				return "TDRC";
-			case "genre":
-				return "TCON";
-			case "albumartist":
-				return "TPE2";
-			case "composer":
-				return "TCOM";
-			case "lyricist":
-				return "TEXT";
-			default:
-				return null;
-		}
+		return (field != null && rawFieldVocabulary.TryGetValue(field, out (string Id3v2, string Xiph, string Ape) ids)) ? ids.Id3v2 : null;
 	}
 
 	internal static string XiphFieldId(string field)
 	{
-		switch (field)
-		{
-			case "title":
-				return "TITLE";
-			case "artist":
-				return "ARTIST";
-			case "album":
-				return "ALBUM";
-			case "year":
-				return "DATE";
-			case "genre":
-				return "GENRE";
-			case "albumartist":
-				return "ALBUMARTIST";
-			case "composer":
-				return "COMPOSER";
-			case "lyricist":
-				return "LYRICIST";
-			case "comment":
-				return "COMMENT";
-			case "lyrics":
-				return "LYRICS";
-			default:
-				return null;
-		}
+		return (field != null && rawFieldVocabulary.TryGetValue(field, out (string Id3v2, string Xiph, string Ape) ids)) ? ids.Xiph : null;
 	}
 
 	internal static string ApeFieldId(string field)
 	{
-		switch (field)
-		{
-			case "title":
-				return "Title";
-			case "artist":
-				return "Artist";
-			case "album":
-				return "Album";
-			case "year":
-				return "Year";
-			case "genre":
-				return "Genre";
-			case "albumartist":
-				return "Album Artist";
-			case "composer":
-				return "Composer";
-			case "lyricist":
-				return "Lyricist";
-			case "comment":
-				return "Comment";
-			case "lyrics":
-				return "Lyrics";
-			default:
-				return null;
-		}
+		return (field != null && rawFieldVocabulary.TryGetValue(field, out (string Id3v2, string Xiph, string Ape) ids)) ? ids.Ape : null;
 	}
 
 	private static string StringTypeName(TagLib.StringType stringType)
