@@ -826,7 +826,7 @@ internal class ConfigDescriptorState : IDisposable
 		AppendUtf8Blocks(values, blocks, "APE", ref tagType, ref stringType);
 	}
 
-	private static string Id3v2FrameId(string field)
+	internal static string Id3v2FrameId(string field)
 	{
 		switch (field)
 		{
@@ -851,7 +851,7 @@ internal class ConfigDescriptorState : IDisposable
 		}
 	}
 
-	private static string XiphFieldId(string field)
+	internal static string XiphFieldId(string field)
 	{
 		switch (field)
 		{
@@ -880,7 +880,7 @@ internal class ConfigDescriptorState : IDisposable
 		}
 	}
 
-	private static string ApeFieldId(string field)
+	internal static string ApeFieldId(string field)
 	{
 		switch (field)
 		{
