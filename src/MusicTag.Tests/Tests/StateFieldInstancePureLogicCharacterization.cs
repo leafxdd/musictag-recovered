@@ -888,5 +888,16 @@ internal static class StateFieldInstancePureLogicCharacterization
 			(string, bool) r2 = StateFieldInstance.BuildClearTagsResultMessage(0, 0, 0, 0, new Page());
 			Check.True(r2.Item2, "itemCount 0 -> else (0>1 false, 0>0 false) -> Item2 true");
 		});
+
+		// ===== TruncateLyricsOrCommentDisplayValue:lyrics/comment 列值 >20 字符截断前 20 + Trim,余列原样 =====
+		yield return ("TruncateLyricsOrCommentDisplayValue: lyrics/comment >20 truncate, else verbatim", delegate
+		{
+			Check.Equal(new string('a', 20), StateFieldInstance.TruncateLyricsOrCommentDisplayValue("lyrics", new string('a', 26)), "lyrics 26 -> first 20");
+			Check.Equal(new string('b', 20), StateFieldInstance.TruncateLyricsOrCommentDisplayValue("comment", new string('b', 21)), "comment 21 -> first 20");
+			Check.Equal("short", StateFieldInstance.TruncateLyricsOrCommentDisplayValue("comment", "short"), "len<=20 verbatim");
+			Check.Equal(new string('a', 30), StateFieldInstance.TruncateLyricsOrCommentDisplayValue("title", new string('a', 30)), "non-lyrics/comment column verbatim even if >20");
+			Check.Equal(new string('a', 20), StateFieldInstance.TruncateLyricsOrCommentDisplayValue("lyrics", new string('a', 20)), "exactly 20 (not >20) -> verbatim");
+			Check.Equal("abcdefghijklmnopqr", StateFieldInstance.TruncateLyricsOrCommentDisplayValue("lyrics", "abcdefghijklmnopqr  Z"), "cut@20 (18 letters + 2 spaces) then Trim trailing spaces");
+		});
 	}
 }

@@ -333,10 +333,7 @@ internal partial class StateFieldInstance : Form
 						value = "";
 					}
 					int fullValueLength = value.Length;
-					if ((column.Name == "lyrics" || column.Name == "comment") && value.Length > 20)
-					{
-						value = value.Substring(0, 20).Trim();
-					}
+					value = TruncateLyricsOrCommentDisplayValue(column.Name, value);
 					cellTexts[columnIndex] = value;
 					if (column.Name == "durationinms" && value != "" && tagFile[column.Name] is int duration)
 					{
@@ -4009,10 +4006,7 @@ internal partial class StateFieldInstance : Form
 				value = "";
 			}
 			int length = value.Length;
-			if ((column.Name == "lyrics" || column.Name == "comment") && value.Length > 20)
-			{
-				value = value.Substring(0, 20).Trim();
-			}
+			value = TruncateLyricsOrCommentDisplayValue(column.Name, value);
 			if (fileRow.CellTexts[columnIndex] != value)
 			{
 				fileRow.CellTexts[columnIndex] = value;
@@ -5877,6 +5871,17 @@ internal partial class StateFieldInstance : Form
 		{
 			undoRenameContext.progressDialog.CloseAfterCompletion();
 		}
+	}
+
+	// 从 AddLoadedFilesToListView / UpdateListViewItemValues 提取:lyrics/comment 列值超 20 字符时截断前 20 + Trim,
+	// 其余列原样返回。columnName 为 ColumnHeaderInfo.Name(get-only auto-property,纯);value 调用点已 null 归一。
+	internal static string TruncateLyricsOrCommentDisplayValue(string columnName, string value)
+	{
+		if ((columnName == "lyrics" || columnName == "comment") && value.Length > 20)
+		{
+			return value.Substring(0, 20).Trim();
+		}
+		return value;
 	}
 
 	// 从 StartClearTags 完成段提取:按待处理条目数 / 成功数分三路构造 (消息, 是否错误) 二元组。
