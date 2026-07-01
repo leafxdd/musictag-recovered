@@ -118,7 +118,7 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase, ITrackSearchProv
 	}
 
 	// 发行年份格式化(GetAlbumReleaseYear / SearchTracks 同构):有效 publishTime → "yyyy",无效或异常 → null。
-	private static string FormatPublishYear(long? publishTime)
+	internal static string FormatPublishYear(long? publishTime)
 	{
 		long publishTimeValue = publishTime.GetValueOrDefault();
 		if (publishTime.HasValue && publishTimeValue > 0L)
@@ -565,7 +565,7 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase, ITrackSearchProv
 			?? GetNullableLongField(GetFirstField(songJson, "l"), "br");
 	}
 
-	private static long ParseCoverDocId(string coverUrl)
+	internal static long ParseCoverDocId(string coverUrl)
 	{
 		Match coverDocIdMatch = Regex.Match(coverUrl, "/(\\d+)\\.\\w+$");
 		string coverDocIdText;
@@ -633,7 +633,7 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase, ITrackSearchProv
 		return lyric;
 	}
 
-	private (string lyricText, string translatedLyricText) ExtractLyricTexts(string responseBody)
+	internal static (string lyricText, string translatedLyricText) ExtractLyricTexts(string responseBody)
 	{
 		JObject responseJson = JObject.Parse(responseBody);
 		string lyricText = responseJson["lrc"]?["lyric"]?.ToString() ?? "";

@@ -258,7 +258,7 @@ internal class KugouTagProvider : RemoteTagProviderBase, ITrackSearchProvider, I
 		return lyric;
 	}
 
-	private string BuildEncodedLyricKeyword(string artist, string title)
+	internal static string BuildEncodedLyricKeyword(string artist, string title)
 	{
 		if (!string.IsNullOrWhiteSpace(artist) && !string.IsNullOrWhiteSpace(title))
 		{

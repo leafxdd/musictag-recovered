@@ -156,7 +156,7 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 		}
 	}
 
-	private static bool IsRateLimited(JObject parsedResponse)
+	internal static bool IsRateLimited(JObject parsedResponse)
 	{
 		JToken codeToken = parsedResponse?["req_0"]?["code"];
 		return codeToken != null && codeToken.Type == JTokenType.Integer && (int)codeToken == 2001;
