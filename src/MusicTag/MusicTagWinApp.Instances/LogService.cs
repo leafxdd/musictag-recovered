@@ -90,6 +90,14 @@ internal static class LogService
 
 	public static void WriteExceptionDetails(Exception exception, string context = null)
 	{
+		WriteExceptionLog(FormatExceptionDetails(exception, context));
+	}
+
+	// 提取自 WriteExceptionDetails 的纯格式化核(字符串拼接,无 I/O);写日志留在 WriteExceptionDetails。
+	// InnerException 优先取其 Type.Name / StackTrace;Message 走 GetMessageChain。逻辑逐字节保持。
+	// characterization 见 ExceptionDetailsFormatCharacterization。
+	internal static string FormatExceptionDetails(Exception exception, string context = null)
+	{
 		StringBuilder stringBuilder = new StringBuilder("\r\n");
 		string contextText = context != null ? context + ", " : "";
 		string exceptionType = exception?.InnerException?.GetType().Name ?? exception?.GetType().Name;
@@ -97,7 +105,7 @@ internal static class LogService
 		stringBuilder.Append("Type: " + contextText + exceptionType + "\r\n");
 		stringBuilder.Append("Message: " + exception?.GetMessageChain() + "\r\n");
 		stringBuilder.Append("StackTrace: " + stackTrace + "\r\n");
-		WriteExceptionLog(stringBuilder.ToString());
+		return stringBuilder.ToString();
 	}
 
 	static LogService()

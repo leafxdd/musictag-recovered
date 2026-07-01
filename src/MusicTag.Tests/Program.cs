@@ -56,6 +56,7 @@ internal static class Program
 		tests.AddRange(PictureTypeMapperCharacterization.All());
 		tests.AddRange(UtilityMappingCharacterization.All());
 		tests.AddRange(LyricFileNameCharacterization.All());
+		tests.AddRange(ExceptionDetailsFormatCharacterization.All());
 		return TestRunner.RunAll(tests);
 	}
 }
