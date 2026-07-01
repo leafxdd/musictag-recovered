@@ -65,6 +65,7 @@ internal static class Program
 			tests.AddRange(AutoMatchDialogCharacterization.All());
 			tests.AddRange(PureCoreExtractionTailCharacterization.All());
 			tests.AddRange(TrieMatcherCharacterization.All());
+			tests.AddRange(LyricTextProcessorCharacterization.All());
 		return TestRunner.RunAll(tests);
 	}
 }
