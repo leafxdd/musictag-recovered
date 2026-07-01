@@ -1822,22 +1822,7 @@ internal class AutoMatchTagsDialog : Form
 		try
 		{
 			await Task.Run((Action)worker.Run, worker.CancellationToken);
-			if (paths.Length > 1)
-			{
-				result = CreateBatchAutoMatchResult();
-			}
-			else if (successCount > 0)
-			{
-				result = (Resources.Msg_SaveCompleted + "\n" + autoMatchLog.ToString(), false);
-			}
-			else if (skippedCount > 0)
-			{
-				result = (Resources.Msg_Skipped + "\n" + autoMatchLog.ToString(), false);
-			}
-			else
-			{
-				result = (autoMatchLog.ToString(), true);
-			}
+			result = BuildAutoMatchCompletionResult(paths.Length, successCount, failedCount, skippedCount, processedCount, autoMatchLog.ToString());
 		}
 		catch (OperationCanceledException) when (worker.CancellationToken.IsCancellationRequested)
 		{
@@ -1857,17 +1842,41 @@ internal class AutoMatchTagsDialog : Form
 		}
 	}
 
-	private (string msg, bool isErr) CreateBatchAutoMatchResult()
+	// 从 StartAutoMatchTags 提取:批量/单文件自动匹配的完成文案纯核(4 路径,与
+	// FilenameRelatedBatchDialog.BuildBatchCompletionResult 同构)。totalCount>1 -> 批量 OK/失败/跳过统计;
+	// 否则 success>0 -> 已保存;skipped>0 -> 已跳过;else -> 纯日志+错误标志。logText 由调用点预求值
+	// (autoMatchLog.ToString() 纯,且 4 路径 BEFORE 均用到 log,故无条件预求值等价);successCount 等为
+	// volatile int,worker 已 join(await Task.Run 完成)后值已定,eager 读全 4 字段无副作用不可观测。
+	internal static (string msg, bool isErr) BuildAutoMatchCompletionResult(int totalCount, int successCount, int failedCount, int skippedCount, int processedCount, string logText)
 	{
-		string message = string.Format(Resources.Msg_SaveCompleted + "\n" + Resources.Msg_OK_Fail_Skip_Count, successCount, failedCount, skippedCount, processedCount) + "\n" + autoMatchLog.ToString();
-		return (message, false);
+		if (totalCount > 1)
+		{
+			return (string.Format(Resources.Msg_SaveCompleted + "\n" + Resources.Msg_OK_Fail_Skip_Count, successCount, failedCount, skippedCount, processedCount) + "\n" + logText, false);
+		}
+		if (successCount > 0)
+		{
+			return (Resources.Msg_SaveCompleted + "\n" + logText, false);
+		}
+		if (skippedCount > 0)
+		{
+			return (Resources.Msg_Skipped + "\n" + logText, false);
+		}
+		return (logText, true);
 	}
 
+	// 从实例谓词提取静态纯核:选中匹配条件是否"全为仅写文件模式(SaveToFile)"。空集 -> false
+	// (注意 Enumerable.All 对空集返回 true,故 .Any() 守卫不可省:空选择不算"仅写文件")。
+	// instance 重载保留 -> caller(StateFieldInstance:6311)零改动;SelectedMatchConditions 是纯字段 getter,传入等价。
 	internal bool IsOnlyWriteFileModeSelected()
 	{
-		if (SelectedMatchConditions.Any())
+		return IsOnlyWriteFileModeSelected(SelectedMatchConditions);
+	}
+
+	internal static bool IsOnlyWriteFileModeSelected(Dictionary<string, (string writeMode, bool overwrite)> conditions)
+	{
+		if (conditions.Any())
 		{
-			return SelectedMatchConditions.Values.All((value) => value.writeMode == "SaveToFile");
+			return conditions.Values.All((value) => value.writeMode == "SaveToFile");
 		}
 		return false;
 	}
