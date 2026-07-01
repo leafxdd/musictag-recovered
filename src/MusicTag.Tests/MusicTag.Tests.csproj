@@ -17,6 +17,10 @@
     <Reference Include="TagLibSharp">
       <HintPath>..\MusicTag\musictag\TagLibSharp.dll</HintPath>
     </Reference>
+    <!-- Newtonsoft.Json：GetFirstField / provider 解码器 characterization 需直接构造 JObject/JToken(与 MusicTag.csproj 同一 dll)。 -->
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>..\MusicTag\musictag\Newtonsoft.Json.dll</HintPath>
+    </Reference>
     <ProjectReference Include="..\MusicTag\MusicTag.csproj" />
   </ItemGroup>
 </Project>

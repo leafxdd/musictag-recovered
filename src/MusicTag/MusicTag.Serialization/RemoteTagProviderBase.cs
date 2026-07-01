@@ -120,7 +120,15 @@ internal abstract class RemoteTagProviderBase : IDisposable
 	// 用户/全局取消不算错误,返回 None。
 	private HttpResult ClassifyException(Exception exception)
 	{
-		if (cancellationSource.IsCancellationRequested)
+		return ClassifyException(exception, cancellationSource.IsCancellationRequested);
+	}
+
+	// 传输异常归类的纯核(提取供 characterization):取消优先 -> None;AggregateException 经
+	// GetBaseException 解包后 TaskCanceled/Timeout -> Timeout;否则 -> Network。实例方法委托,
+	// 读取消状态的时机(方法入口)不变。
+	internal static HttpResult ClassifyException(Exception exception, bool cancellationRequested)
+	{
+		if (cancellationRequested)
 		{
 			return new HttpResult { Error = RemoteErrorKind.None };
 		}
@@ -392,7 +400,7 @@ internal abstract class RemoteTagProviderBase : IDisposable
 		return token?.ToString() ?? "";
 	}
 
-	protected static JToken GetFirstField(JToken token, params string[] fieldNames)
+	protected internal static JToken GetFirstField(JToken token, params string[] fieldNames)
 	{
 		if (token?.Type != JTokenType.Object)
 		{
