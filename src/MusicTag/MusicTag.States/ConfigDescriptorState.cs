@@ -947,7 +947,7 @@ internal class ConfigDescriptorState : IDisposable
 
 	// --- picture type name <-> code (native 20-entry list; index = ID3v2 APIC type code) ---
 
-	private static string PictureTypeToName(TagLib.PictureType pictureType)
+	internal static string PictureTypeToName(TagLib.PictureType pictureType)
 	{
 		int code = (int)pictureType;
 		if (code >= 0 && code < pictureTypeNames.Count)
@@ -957,7 +957,7 @@ internal class ConfigDescriptorState : IDisposable
 		return pictureTypeNames[0];
 	}
 
-	private static TagLib.PictureType NameToPictureType(string name)
+	internal static TagLib.PictureType NameToPictureType(string name)
 	{
 		if (name != null)
 		{
