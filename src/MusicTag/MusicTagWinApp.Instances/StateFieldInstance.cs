@@ -1431,6 +1431,15 @@ internal class StateFieldInstance : Form
 		public SaveTagsTaskContext batchContext;
 	}
 
+	// 收敛下方 3 个 *FailureReporter 的失败消息优先级:非空 loadError 优先,否则回退 fallbackMessage ?? Msg_SaveFail。
+	// 三处原写法等价——SaveTag/UndoSaveTag 版"先算 fallback 再被非空 loadError 覆盖";TagSave 版"先取 loadError,
+	// 空则回退 fallback",同归此三元式。GetLoadError() 为纯 getter(return loadError;),SaveTag 版原 2 次调用坍缩
+	// 为 1 次不可观测。
+	internal static string ResolveFailureMessage(string loadError, string fallbackMessage)
+	{
+		return !string.IsNullOrWhiteSpace(loadError) ? loadError : (fallbackMessage ?? Resources.Msg_SaveFail);
+	}
+
 	private sealed class SaveTagFailureReporter
 	{
 		public ConfigDescriptorState tagState;
@@ -1439,11 +1448,7 @@ internal class StateFieldInstance : Form
 
 		internal void ReportFailure(string message)
 		{
-			string text = message ?? Resources.Msg_SaveFail;
-			if (!string.IsNullOrWhiteSpace(tagState.GetLoadError()))
-			{
-				text = tagState.GetLoadError();
-			}
+			string text = ResolveFailureMessage(tagState.GetLoadError(), message);
 			LogService.WriteSaveTagsLog(fileContext.filePath + ": " + text);
 			fileContext.batchContext.messageLog.AddLine(fileContext.batchContext.currentFile.Name);
 			fileContext.batchContext.messageLog.AddLine(text);
@@ -1616,13 +1621,7 @@ internal class StateFieldInstance : Form
 
 		internal void ReportFailure(string fallbackMessage)
 		{
-			string errorMessage = fallbackMessage ?? Resources.Msg_SaveFail;
-			string saveError = tagState.GetLoadError();
-			if (!string.IsNullOrWhiteSpace(saveError))
-			{
-				errorMessage = saveError;
-			}
-
+			string errorMessage = ResolveFailureMessage(tagState.GetLoadError(), fallbackMessage);
 			LogService.WriteSaveTagsLog(fileContext.filePath + ": " + errorMessage);
 			fileContext.taskContext.messageLog.AddLine(fileContext.taskContext.currentFile.Name);
 			fileContext.taskContext.messageLog.AddLine(errorMessage);
@@ -1905,11 +1904,7 @@ internal class StateFieldInstance : Form
 
 		internal void ReportFailure(string fallbackMessage)
 		{
-			string message = TagFile.GetLoadError();
-			if (string.IsNullOrWhiteSpace(message))
-			{
-				message = fallbackMessage ?? Resources.Msg_SaveFail;
-			}
+			string message = ResolveFailureMessage(TagFile.GetLoadError(), fallbackMessage);
 			LogService.WriteClearTagsLog(FileContext.FilePath + ": " + message);
 			FileContext.Owner.errorLog.AddLine(FileContext.Owner.currentFile.Name);
 			FileContext.Owner.errorLog.AddLine(message);

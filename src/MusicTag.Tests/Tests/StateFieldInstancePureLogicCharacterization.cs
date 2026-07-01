@@ -4,6 +4,7 @@ using System.Threading;
 using System.Windows.Forms;
 using MusicTagWinApp;
 using MusicTagWinApp.Instances;
+using MusicTagWinApp.Properties;
 
 namespace MusicTag.Tests;
 
@@ -813,6 +814,37 @@ internal static class StateFieldInstancePureLogicCharacterization
 		{
 			Check.Equal("\n", StateFieldInstance.BuildSelectedFilePreview(new List<string> { null }), "single null -> newline only");
 			Check.Equal("a\n\nb\n", StateFieldInstance.BuildSelectedFilePreview(new List<string> { "a", null, "b" }), "null in middle -> empty segment, order kept");
+		});
+
+		// ===== ResolveFailureMessage:收敛 3 个 *FailureReporter 失败消息优先级(loadError 优先,回退 fallback ?? Msg_SaveFail)=====
+		// SaveTag/UndoSaveTag/TagSave 三处消息选择逻辑归约到此纯三元式,锁定优先级 + IsNullOrWhiteSpace 三态 + ?? 回退链。
+
+		// loadError 非空时优先返回它,完全忽略 fallback(fallback 为 null 或非空皆然)。
+		yield return ("ResolveFailureMessage: non-empty loadError wins over any fallback", delegate
+		{
+			Check.Equal("ERR", StateFieldInstance.ResolveFailureMessage("ERR", "FB"), "loadError beats non-null fallback");
+			Check.Equal("ERR", StateFieldInstance.ResolveFailureMessage("ERR", null), "loadError beats null fallback");
+		});
+
+		// loadError 为 null/empty/whitespace(IsNullOrWhiteSpace 三态皆真)时落到 fallback。
+		yield return ("ResolveFailureMessage: null/empty/whitespace loadError -> fallback", delegate
+		{
+			Check.Equal("FB", StateFieldInstance.ResolveFailureMessage(null, "FB"), "null loadError -> fallback");
+			Check.Equal("FB", StateFieldInstance.ResolveFailureMessage("", "FB"), "empty loadError -> fallback");
+			Check.Equal("FB", StateFieldInstance.ResolveFailureMessage("   ", "FB"), "whitespace loadError -> fallback");
+		});
+
+		// loadError 与 fallback 皆空 -> 回退链终点 Resources.Msg_SaveFail(与产品同源常量)。
+		yield return ("ResolveFailureMessage: both empty -> Msg_SaveFail", delegate
+		{
+			Check.Equal(Resources.Msg_SaveFail, StateFieldInstance.ResolveFailureMessage(null, null), "null+null -> Msg_SaveFail");
+			Check.Equal(Resources.Msg_SaveFail, StateFieldInstance.ResolveFailureMessage("", null), "empty loadError + null fallback -> Msg_SaveFail");
+		});
+
+		// IsNullOrWhiteSpace 仅对纯空白为真:含实字符(即便前后有空格)的 loadError 视为非空并原样返回(不 trim)。
+		yield return ("ResolveFailureMessage: loadError with real chars kept verbatim (no trim)", delegate
+		{
+			Check.Equal(" x ", StateFieldInstance.ResolveFailureMessage(" x ", "FB"), "padded real content is non-empty, returned verbatim");
 		});
 	}
 }
