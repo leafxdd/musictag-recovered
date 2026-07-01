@@ -184,7 +184,7 @@ internal class ConfigDescriptorState : IDisposable
 		}
 		if (!TagValues.ContainsKey("fileext"))
 		{
-			TagValues.Add("fileext", BuildFileExtension());
+			TagValues.Add("fileext", BuildFileExtension(filePath));
 		}
 		string[] tagFields = new string[13]
 		{
@@ -670,8 +670,9 @@ internal class ConfigDescriptorState : IDisposable
 		return string.Join(",", parts);
 	}
 
-	// Native p(fileext): uppercase, no leading dot (e.g. "MP3").
-	private string BuildFileExtension()
+	// Native p(fileext): uppercase, no leading dot (e.g. "MP3")。从实例方法提取 static 纯核(filePath 传参),
+	// 便于表征;Path.GetExtension 对 null/无扩展名返回 null/"" -> "",否则去点大写(ToUpperInvariant culture 无关)。
+	internal static string BuildFileExtension(string filePath)
 	{
 		string extension = Path.GetExtension(filePath);
 		if (string.IsNullOrEmpty(extension))

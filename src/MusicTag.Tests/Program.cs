@@ -63,6 +63,7 @@ internal static class Program
 			tests.AddRange(AutoMatchFieldClassificationCharacterization.All());
 			tests.AddRange(PureHelperTailCharacterization.All());
 			tests.AddRange(AutoMatchDialogCharacterization.All());
+			tests.AddRange(PureCoreExtractionTailCharacterization.All());
 		return TestRunner.RunAll(tests);
 	}
 }

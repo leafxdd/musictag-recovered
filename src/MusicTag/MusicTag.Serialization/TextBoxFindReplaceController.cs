@@ -105,7 +105,7 @@ internal sealed class TextBoxFindReplaceController
 
 		// 用 SelectAll + Paste 写回(可撤销),与单匹配分支一致;
 		// 直接给 textBox.Text 赋值会清空撤销缓冲区,导致整批替换无法 Ctrl+Z 撤销。
-		string replacedText = ReplaceAllMatches(sourceText, replacementText);
+		string replacedText = ReplaceAllMatches(sourceText, SearchText, replacementText, GetStringComparison());
 		textBox.SelectAll();
 		textBox.Paste(replacedText);
 		textBox.SelectionStart = 0;
@@ -113,13 +113,16 @@ internal sealed class TextBoxFindReplaceController
 		textBox.ScrollToCaret();
 	}
 
-	private string ReplaceAllMatches(string text, string replacementText)
+	// 从实例方法提取 static 纯核:全量替换(所有 searchText 出现处替为 replacementText,与 ReplaceAll 计数循环
+	// 同一 comparison)。SearchText(纯 auto-property)/GetStringComparison()(纯,基于 MatchCase)在同步 ReplaceAll
+	// 执行期间不变,故循环内每迭代读归约为调用点一次求值等价。
+	internal static string ReplaceAllMatches(string text, string searchText, string replacementText, StringComparison comparison)
 	{
 		StringBuilder result = new StringBuilder(text.Length);
 		int startIndex = 0;
 		while (true)
 		{
-			int matchIndex = text.IndexOf(SearchText, startIndex, GetStringComparison());
+			int matchIndex = text.IndexOf(searchText, startIndex, comparison);
 			if (matchIndex < 0)
 			{
 				result.Append(text, startIndex, text.Length - startIndex);
@@ -128,7 +131,7 @@ internal sealed class TextBoxFindReplaceController
 
 			result.Append(text, startIndex, matchIndex - startIndex);
 			result.Append(replacementText);
-			startIndex = matchIndex + SearchText.Length;
+			startIndex = matchIndex + searchText.Length;
 		}
 	}
 

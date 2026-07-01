@@ -499,6 +499,22 @@ internal class LyricSearchDialog : Form
 		outcomeTracker.ReportFinal(GetEnabledLyricSearchSources(), searchStatusIndicator.Report);
 	}
 
+	// 从 AddLyricsToList 提取:歌词列表项图标索引。0=有内嵌可下载歌词(hasDownloadableInlineLyric,由调用点预计算
+	// lyricUrl==null && lyric.HasDownloadableLyric() —— 保留短路使 HasDownloadableLyric() 仅 lyricUrl==null 时求值)
+	// 或 lyricUrl 以 .lrc 结尾(OrdinalIgnoreCase);否则 1。
+	internal static int ResolveLyricIconIndex(string lyricUrl, bool hasDownloadableInlineLyric)
+	{
+		if (hasDownloadableInlineLyric)
+		{
+			return 0;
+		}
+		if (!string.IsNullOrEmpty(lyricUrl) && lyricUrl.EndsWith(".lrc", StringComparison.OrdinalIgnoreCase))
+		{
+			return 0;
+		}
+		return 1;
+	}
+
 	private void AddLyricsToList(List<LyricSearchResult> lyricsToAdd = null)
 	{
 		List<LyricSearchResult> lyricsToDisplay = new List<LyricSearchResult>();
@@ -525,18 +541,7 @@ internal class LyricSearchDialog : Form
 		{
 			ListViewItem listViewItem = new ListViewItem("");
 			string lyricUrl = lyric.LyricUrl;
-			if (lyricUrl == null && lyric.HasDownloadableLyric())
-			{
-				listViewItem.ImageIndex = 0;
-			}
-			else if (!string.IsNullOrEmpty(lyricUrl) && lyricUrl.EndsWith(".lrc", StringComparison.OrdinalIgnoreCase))
-			{
-				listViewItem.ImageIndex = 0;
-			}
-			else
-			{
-				listViewItem.ImageIndex = 1;
-			}
+			listViewItem.ImageIndex = ResolveLyricIconIndex(lyricUrl, lyricUrl == null && lyric.HasDownloadableLyric());
 			listViewItem.SubItems.Add(lyric.SearchSource.GetDisplayName());
 			listViewItem.SubItems.Add(lyric.Title);
 			listViewItem.SubItems.Add(lyric.Artist);
