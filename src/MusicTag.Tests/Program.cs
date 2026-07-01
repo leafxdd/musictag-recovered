@@ -44,6 +44,8 @@ internal static class Program
 		tests.AddRange(StateFieldInstancePureLogicCharacterization.All());
 		tests.AddRange(CombinedTagSearchDialogCharacterization.All());
 		tests.AddRange(ApplicationInfoServiceCharacterization.All());
+		tests.AddRange(SourceItemCharacterization.All());
+		tests.AddRange(SearchProviderPolicyCharacterization.All());
 		return TestRunner.RunAll(tests);
 	}
 }
