@@ -537,7 +537,7 @@ namespace MusicTagWinApp.Roles;
 			ConvertTextCandidatesChineseCharacters(textCandidates);
 		}
 
-	private static string NormalizeForMatch(string text)
+	internal static string NormalizeForMatch(string text)
 	{
 		text = TextUtilities.CoalesceNonBlank(text);
 		text = text.Replace("（", "(");

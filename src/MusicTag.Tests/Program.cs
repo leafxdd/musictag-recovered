@@ -49,6 +49,7 @@ internal static class Program
 		tests.AddRange(SearchStatusIndicatorCharacterization.All());
 		tests.AddRange(NetEaseCryptoCharacterization.All());
 		tests.AddRange(RemoteTagProviderBaseCharacterization.All());
+		tests.AddRange(TrackSearchResultCharacterization.All());
 		return TestRunner.RunAll(tests);
 	}
 }
