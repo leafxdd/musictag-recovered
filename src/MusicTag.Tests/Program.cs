@@ -46,6 +46,7 @@ internal static class Program
 		tests.AddRange(ApplicationInfoServiceCharacterization.All());
 		tests.AddRange(SourceItemCharacterization.All());
 		tests.AddRange(SearchProviderPolicyCharacterization.All());
+		tests.AddRange(SearchStatusIndicatorCharacterization.All());
 		return TestRunner.RunAll(tests);
 	}
 }

@@ -172,8 +172,14 @@ internal sealed class SearchStatusIndicator
 	// 仍在搜索(尚未完成)的源:出错 / 重试中的源不出现在此行。
 	private string BuildSearchingLine()
 	{
+		return BuildSearchingLine(GetStatusesInDisplayOrder());
+	}
+
+	// 从已按显示序枚举的源状态构造"正在搜索"行(纯逻辑,提取供 characterization;实例方法委托)。
+	internal static string BuildSearchingLine(IEnumerable<SourceSearchStatus> statusesInDisplayOrder)
+	{
 		List<string> sourceNames = new List<string>();
-		foreach (SourceSearchStatus status in GetStatusesInDisplayOrder())
+		foreach (SourceSearchStatus status in statusesInDisplayOrder)
 		{
 			if (status.Phase == SourceSearchPhase.Searching || status.Phase == SourceSearchPhase.Pending)
 			{
@@ -190,7 +196,15 @@ internal sealed class SearchStatusIndicator
 	// 错误 / 重试行:重试中优先;多个普通错误时合并源名(最多一行)。
 	private string BuildErrorOrRetryLine()
 	{
-		foreach (SourceSearchStatus status in GetStatusesInDisplayOrder())
+		return BuildErrorOrRetryLine(new List<SourceSearchStatus>(GetStatusesInDisplayOrder()));
+	}
+
+	// 从已按显示序【物化】的源状态构造错误/重试行(纯逻辑,提取供 characterization;实例方法委托)。
+	// 内部二次遍历(先找 Retrying 再收集 Error),故须传已物化序列(非惰性迭代器),
+	// 与原实例方法两次独立枚举 statuses 字典的结果等价。
+	internal static string BuildErrorOrRetryLine(IEnumerable<SourceSearchStatus> statusesInDisplayOrder)
+	{
+		foreach (SourceSearchStatus status in statusesInDisplayOrder)
 		{
 			if (status.Phase == SourceSearchPhase.Retrying)
 			{
@@ -198,7 +212,7 @@ internal sealed class SearchStatusIndicator
 			}
 		}
 		List<SourceSearchStatus> erroredSources = new List<SourceSearchStatus>();
-		foreach (SourceSearchStatus status in GetStatusesInDisplayOrder())
+		foreach (SourceSearchStatus status in statusesInDisplayOrder)
 		{
 			if (status.Phase == SourceSearchPhase.Error)
 			{
