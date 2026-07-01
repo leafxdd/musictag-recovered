@@ -1077,5 +1077,33 @@ internal static class StateFieldInstancePureLogicCharacterization
 			try { StateFieldInstance.IsInvalidRenameFileName("a<b>.mp3"); } catch (ArgumentException) { threwOnPathChar = true; }
 			Check.True(threwOnPathChar, "'<' '>' are InvalidPathChars -> Path.GetFileName throws ArgumentException (.NET FW boundary, behavior-preserved)");
 		});
+
+		// ===== ResolvePictureCompressionLimits:还原模式固定上限 / 否则 Settings 配置;
+		//  锁定 sizeLimitKB*1024 的 int 乘法溢出边界(溢出成负 -> <=0L -> long.MaxValue),严禁提升 long 乘法。=====
+		yield return ("StateFieldInstance.ResolvePictureCompressionLimits: restore/config + int-multiply overflow boundary", delegate
+		{
+			var restore = StateFieldInstance.ResolvePictureCompressionLimits(true, 5000, 720, "JPEG");
+			Check.Equal(10240000L, restore.MaxByteLength, "restore -> fixed 10MB (ignores passed size)");
+			Check.Equal(0, restore.MaxResolution, "restore -> no resolution limit");
+			Check.Equal("AUTO", restore.FormatMode, "restore -> AUTO format");
+
+			var normal = StateFieldInstance.ResolvePictureCompressionLimits(false, 2000, 1080, "PNG");
+			Check.Equal(2048000L, normal.MaxByteLength, "2000 KB * 1024 = 2048000 bytes");
+			Check.Equal(1080, normal.MaxResolution, "config resolution");
+			Check.Equal("PNG", normal.FormatMode, "config format");
+
+			var zero = StateFieldInstance.ResolvePictureCompressionLimits(false, 0, 0, "AUTO");
+			Check.Equal(long.MaxValue, zero.MaxByteLength, "0 KB -> 0 bytes -> <=0 -> long.MaxValue");
+
+			var negative = StateFieldInstance.ResolvePictureCompressionLimits(false, -1, 5, "X");
+			Check.Equal(long.MaxValue, negative.MaxByteLength, "-1 KB -> -1024 -> <=0 -> long.MaxValue");
+			Check.Equal(5, negative.MaxResolution, "negative size still passes resolution through");
+
+			var noOverflow = StateFieldInstance.ResolvePictureCompressionLimits(false, 2097151, 0, "A");
+			Check.Equal(2147482624L, noOverflow.MaxByteLength, "2097151 * 1024 = 2147482624 (just under int.MaxValue, no overflow)");
+
+			var overflow = StateFieldInstance.ResolvePictureCompressionLimits(false, 2097152, 0, "A");
+			Check.Equal(long.MaxValue, overflow.MaxByteLength, "2097152 * 1024 int-overflows to negative -> <=0 -> long.MaxValue (int multiply preserved, NOT long)");
+		});
 	}
 }

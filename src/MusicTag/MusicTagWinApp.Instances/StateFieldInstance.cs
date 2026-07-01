@@ -5453,16 +5453,28 @@ internal partial class StateFieldInstance : Form
 		fileListView.Refresh();
 	}
 
+	// 从 CompressPictures prologue 提取:图片压缩上限解算。还原模式用固定 10MB/无分辨率限制/AUTO;否则取 Settings
+	// 配置值。关键:sizeLimitKB * 1024 保持 int 乘法(sizeLimitKB 为 int),溢出成负后经 <=0L 归一为 long.MaxValue
+	// —— 严禁提升为 long 乘法(会消除溢出边界);Settings 值由调用点读入传参(getter 纯 (T)this[...],eager 读无副作用)。
+	internal static (long MaxByteLength, int MaxResolution, string FormatMode) ResolvePictureCompressionLimits(bool useRestoreLimits, int sizeLimitKB, int resolutionLimit, string formatLimit)
+	{
+		long maxByteLength = useRestoreLimits ? 10240000 : (sizeLimitKB * 1024);
+		int maxResolution = (!useRestoreLimits) ? resolutionLimit : 0;
+		string formatMode = useRestoreLimits ? "AUTO" : formatLimit;
+		if (maxByteLength <= 0L)
+		{
+			maxByteLength = long.MaxValue;
+		}
+		return (maxByteLength, maxResolution, formatMode);
+	}
+
 	public static void CompressPictures(List<ConfigDescriptorState.PictureData> pictures, bool useRestoreLimits)
 	{
+		var compressionLimits = ResolvePictureCompressionLimits(useRestoreLimits, Settings.Default.PictureSizeLimitsKB, Settings.Default.PictureResolutionLimits, Settings.Default.PictureFormatLimits);
 		PictureCompressionOptions pictureCompressionOptions = new PictureCompressionOptions();
-		pictureCompressionOptions.maxByteLength = (useRestoreLimits ? 10240000 : (Settings.Default.PictureSizeLimitsKB * 1024));
-		pictureCompressionOptions.maxResolution = ((!useRestoreLimits) ? Settings.Default.PictureResolutionLimits : 0);
-		pictureCompressionOptions.formatMode = (useRestoreLimits ? "AUTO" : Settings.Default.PictureFormatLimits);
-		if (pictureCompressionOptions.maxByteLength <= 0L)
-		{
-			pictureCompressionOptions.maxByteLength = long.MaxValue;
-		}
+		pictureCompressionOptions.maxByteLength = compressionLimits.MaxByteLength;
+		pictureCompressionOptions.maxResolution = compressionLimits.MaxResolution;
+		pictureCompressionOptions.formatMode = compressionLimits.FormatMode;
 		using List<ConfigDescriptorState.PictureData>.Enumerator enumerator = pictures.GetEnumerator();
 		while (enumerator.MoveNext())
 		{
