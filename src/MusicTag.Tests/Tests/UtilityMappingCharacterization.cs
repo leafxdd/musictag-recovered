@@ -99,5 +99,27 @@ internal static class UtilityMappingCharacterization
 		{
 			Check.Equal("", ImageUtilities.GetImageFileDialogFilterForMimeType("image/webp"), "unknown filter");
 		});
+
+		// ===== JavaScriptStringEncode(HttpUtility 委托,转义由 Unicode 码点驱动,locale 无关)=====
+
+		yield return ("JavaScriptStringEncode: plain text identity", delegate
+		{
+			Check.Equal("abc", TextEncodingService.JavaScriptStringEncode("abc"), "plain unchanged");
+		});
+
+		yield return ("JavaScriptStringEncode: double-quote -> backslash-escaped", delegate
+		{
+			Check.Equal("a\\\"b", TextEncodingService.JavaScriptStringEncode("a\"b"), "double quote escaped");
+		});
+
+		yield return ("JavaScriptStringEncode: angle brackets -> unicode escape", delegate
+		{
+			Check.Equal("\\u003cx\\u003e", TextEncodingService.JavaScriptStringEncode("<x>"), "< > unicode-escaped (XSS-safe)");
+		});
+
+		yield return ("JavaScriptStringEncode: newline -> backslash-n", delegate
+		{
+			Check.Equal("a\\nb", TextEncodingService.JavaScriptStringEncode("a\nb"), "newline escaped");
+		});
 	}
 }
