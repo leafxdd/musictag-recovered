@@ -99,5 +99,24 @@ internal static class ConfigDescriptorStateCharacterization
 			Check.Equal(1, result.Length, "Length");
 			Check.Equal(" ", result[0], "[0]");
 		});
+
+		// ===== GetGenreNameByIndex:TagLib.Genres.Audio(ID3v1 规范表)按索引 + 越界守卫 =====
+		yield return ("ConfigDescriptorState.GetGenreNameByIndex: bounds guard + ID3v1 genre lookup", delegate
+		{
+			Check.Equal("", ConfigDescriptorState.GetGenreNameByIndex(-1), "negative -> empty (lower guard)");
+			Check.Equal("", ConfigDescriptorState.GetGenreNameByIndex(10000), "far out of range -> empty (upper guard)");
+			Check.Equal("Blues", ConfigDescriptorState.GetGenreNameByIndex(0), "index 0 -> Blues (ID3v1 canonical)");
+			Check.Equal("Classic Rock", ConfigDescriptorState.GetGenreNameByIndex(1), "index 1 -> Classic Rock");
+		});
+
+		// ===== SupportedPictureMimeTypes:固定 3 项(勿 mutate,返回 live 数组引用)=====
+		yield return ("ConfigDescriptorState.SupportedPictureMimeTypes: fixed 3-entry list", delegate
+		{
+			string[] mimes = ConfigDescriptorState.SupportedPictureMimeTypes();
+			Check.Equal(3, mimes.Length, "3 entries");
+			Check.Equal("image/jpeg", mimes[0], "[0] jpeg");
+			Check.Equal("image/png", mimes[1], "[1] png");
+			Check.Equal("image/gif", mimes[2], "[2] gif");
+		});
 	}
 }
