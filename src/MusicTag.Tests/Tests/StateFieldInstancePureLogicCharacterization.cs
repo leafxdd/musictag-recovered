@@ -1028,5 +1028,54 @@ internal static class StateFieldInstancePureLogicCharacterization
 			Check.Equal(0, StateFieldInstance.CompareColumnText("5", "5", "trackstr", SortOrder.Descending), "natural equal desc -> 0");
 			Check.Equal(0, StateFieldInstance.CompareColumnText("abc", "abc", "title", SortOrder.Ascending), "string.Compare equal -> 0");
 		});
+
+		// ===== IsNumberedTagFieldValueValid:track/disc 数字字段接受谓词(空白 / <keep> / <blank> 哨兵 / 前导正数)=====
+		yield return ("StateFieldInstance.IsNumberedTagFieldValueValid: blank/sentinel/leading-positive accept", delegate
+		{
+			Check.True(StateFieldInstance.IsNumberedTagFieldValueValid(null), "null -> true (IsNullOrWhiteSpace)");
+			Check.True(StateFieldInstance.IsNumberedTagFieldValueValid(""), "empty -> true");
+			Check.True(StateFieldInstance.IsNumberedTagFieldValueValid("  "), "whitespace -> true");
+			Check.True(StateFieldInstance.IsNumberedTagFieldValueValid("<keep>"), "<keep> sentinel -> true");
+			Check.True(StateFieldInstance.IsNumberedTagFieldValueValid("<blank>"), "<blank> sentinel -> true");
+			Check.True(StateFieldInstance.IsNumberedTagFieldValueValid("12"), "leading number 12 > 0 -> true");
+			Check.True(StateFieldInstance.IsNumberedTagFieldValueValid("12abc"), "leading 12 (trailing junk) -> true");
+			Check.True(!StateFieldInstance.IsNumberedTagFieldValueValid("0"), "0 not > 0, not sentinel -> false (track '0' rejected)");
+			Check.True(!StateFieldInstance.IsNumberedTagFieldValueValid("abc"), "no leading digit (-1) -> false");
+			Check.True(!StateFieldInstance.IsNumberedTagFieldValueValid("-3"), "leading '-' non-digit (-1) -> false");
+			Check.True(!StateFieldInstance.IsNumberedTagFieldValueValid("99999999999999999999"), "overflow -> 0, not > 0 -> false");
+		});
+
+		// ===== ResolveSelectedFilterValue:comment 截断哨兵 / 空白->"" / lyrics->"Y" / 否则原值(comment+null 保留 latent NRE)=====
+		yield return ("StateFieldInstance.ResolveSelectedFilterValue: comment-truncation sentinel + blank + lyrics + latent NRE", delegate
+		{
+			Check.Equal("abc", StateFieldInstance.ResolveSelectedFilterValue("comment", "abc", 3), "comment len matches -> value");
+			Check.Equal("Y\tT", StateFieldInstance.ResolveSelectedFilterValue("comment", "abcde", 10), "comment len mismatch (5!=10) -> Y\\tT sentinel");
+			Check.Equal("Y", StateFieldInstance.ResolveSelectedFilterValue("lyrics", "whatever", 0), "lyrics non-blank -> Y");
+			Check.Equal("", StateFieldInstance.ResolveSelectedFilterValue("lyrics", "  ", 0), "whitespace check precedes lyrics -> empty");
+			Check.Equal("xyz", StateFieldInstance.ResolveSelectedFilterValue("title", "xyz", 0), "other column non-blank -> value");
+			Check.Equal("", StateFieldInstance.ResolveSelectedFilterValue("title", "", 0), "empty -> empty");
+			Check.Equal("", StateFieldInstance.ResolveSelectedFilterValue("lyrics", null, 0), "lyrics null -> empty (IsNullOrWhiteSpace)");
+			Check.Equal("ab", StateFieldInstance.ResolveSelectedFilterValue("comment", "ab", 2), "comment match len -> value (not sentinel)");
+			bool threw = false;
+			try { StateFieldInstance.ResolveSelectedFilterValue("comment", null, 0); } catch (NullReferenceException) { threw = true; }
+			Check.True(threw, "comment + null value -> latent NRE (value.Length on null in comment branch)");
+		});
+
+		// ===== IsInvalidRenameFileName:含路径分量(GetFileName 不等自身)或 InvalidFileNameChar -> true。
+		//  关键 .NET Framework 边界:Path.GetFileName 对 InvalidPathChars('<' '>' '|' '"')抛 ArgumentException
+		//  (.NET Core 改为不抛),而 '?' ':' '/' '\' 仅是 InvalidFileNameChar 不触发。原 inline 同在 PerformInPlaceRename
+		//  的 try 块内,该异常经 catch -> ShowRenameError,与 Msg_InvalidFile 路径同为弹错拒绝;提取一字不差保留。=====
+		yield return ("StateFieldInstance.IsInvalidRenameFileName: path-component or invalid-char rejection (+.NET FW GetFileName throw boundary)", delegate
+		{
+			Check.True(!StateFieldInstance.IsInvalidRenameFileName("song.mp3"), "plain filename -> valid");
+			Check.True(!StateFieldInstance.IsInvalidRenameFileName("plain"), "no extension -> valid");
+			Check.True(StateFieldInstance.IsInvalidRenameFileName("a/b.mp3"), "forward-slash path component -> GetFileName != self -> invalid");
+			Check.True(StateFieldInstance.IsInvalidRenameFileName("a\\b.mp3"), "backslash path component -> GetFileName != self -> invalid");
+			Check.True(StateFieldInstance.IsInvalidRenameFileName("na?me.mp3"), "invalid filename char '?' (not a path char) -> IndexOfAny -> invalid");
+			Check.True(StateFieldInstance.IsInvalidRenameFileName("co:m.mp3"), "volume-separator ':' -> GetFileName drops prefix -> invalid");
+			bool threwOnPathChar = false;
+			try { StateFieldInstance.IsInvalidRenameFileName("a<b>.mp3"); } catch (ArgumentException) { threwOnPathChar = true; }
+			Check.True(threwOnPathChar, "'<' '>' are InvalidPathChars -> Path.GetFileName throws ArgumentException (.NET FW boundary, behavior-preserved)");
+		});
 	}
 }

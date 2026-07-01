@@ -4804,11 +4804,12 @@ internal partial class StateFieldInstance : Form
 		return -1;
 	}
 
-	private string GetSelectedFilterValue(FileRow fileRow, string columnName)
+	// 从 GetSelectedFilterValue 提取:列筛选值归一纯核。comment 列显示截断(commentFullLength != 已截断 value.Length)
+	// -> "Y\tT" 哨兵;空白 -> "";lyrics 列 -> "Y";否则原值。commentFullLength 传参(原 public 字段读,无副作用,
+	// 由 && 条件求值变 callsite 无条件求值不可观测);value==null 且 comment 列时 value.Length 的 latent NRE 保留。
+	internal static string ResolveSelectedFilterValue(string columnName, string value, int commentFullLength)
 	{
-		int index = FindColumnHeaderIndexByName(columnName);
-		string value = fileRow.CellTexts[index];
-		if (columnName == "comment" && fileRow.CommentFullLength != value.Length)
+		if (columnName == "comment" && commentFullLength != value.Length)
 		{
 			value = "Y\tT";
 		}
@@ -4821,6 +4822,13 @@ internal partial class StateFieldInstance : Form
 			return "Y";
 		}
 		return value;
+	}
+
+	private string GetSelectedFilterValue(FileRow fileRow, string columnName)
+	{
+		int index = FindColumnHeaderIndexByName(columnName);
+		string value = fileRow.CellTexts[index];
+		return ResolveSelectedFilterValue(columnName, value, fileRow.CommentFullLength);
 	}
 
 	private void SelectAllFiles_Click(object sender, EventArgs e)
@@ -6699,6 +6707,15 @@ internal partial class StateFieldInstance : Form
 		PerformInPlaceRename(row, requestedFileName);
 	}
 
+	// 从 PerformInPlaceRename 提取:就地改名的非法文件名谓词(含路径分量 -> GetFileName 不等自身,或含非法字符)。
+	// Path.GetFileName / Path.GetInvalidFileNameChars 在 net481 x86 Windows 目标确定;requestedFileName 传参
+	// (原 editContext.RequestedFileName 为 public 字段,读 3 次归约为 1 次求值不可观测)。
+	internal static bool IsInvalidRenameFileName(string requestedFileName)
+	{
+		return !string.Equals(Path.GetFileName(requestedFileName), requestedFileName, StringComparison.Ordinal)
+			|| requestedFileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0;
+	}
+
 	private void PerformInPlaceRename(FileRow row, string requestedFileName)
 	{
 		FileListLabelEditContext editContext = new FileListLabelEditContext
@@ -6722,8 +6739,7 @@ internal partial class StateFieldInstance : Form
 				return;
 			}
 
-			if (!string.Equals(Path.GetFileName(editContext.RequestedFileName), editContext.RequestedFileName, StringComparison.Ordinal)
-				|| editContext.RequestedFileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+			if (IsInvalidRenameFileName(editContext.RequestedFileName))
 			{
 				editContext.RenameError = new ArgumentException(Resources.Msg_InvalidFile);
 				BeginInvoke(new Action(editContext.ShowRenameError));
@@ -6934,11 +6950,18 @@ internal partial class StateFieldInstance : Form
 		filterOptions.Clear();
 	}
 
+	// 从 ValidateNumberedTagField 提取:track/disc 数字字段接受谓词(空白 / <keep> / <blank> 哨兵 / 前导正数)。
+	// 逐字节保留 !(text != "...") 双否定与短路序(IsNullOrWhiteSpace 先行 -> ParseLeadingNumber 不遇 null)。
+	internal static bool IsNumberedTagFieldValueValid(string text)
+	{
+		return string.IsNullOrWhiteSpace(text) || !(text != "<keep>") || !(text != "<blank>") || ParseLeadingNumber(text) > 0;
+	}
+
 	private bool ValidateNumberedTagField(string fieldName, string message)
 	{
 		ComboBox comboBox = tagComboBoxes[fieldName];
 		string text = comboBox.Text;
-		if (string.IsNullOrWhiteSpace(text) || !(text != "<keep>") || !(text != "<blank>") || ParseLeadingNumber(text) > 0)
+		if (IsNumberedTagFieldValueValid(text))
 		{
 			return true;
 		}
