@@ -383,7 +383,7 @@ internal class KuwoTagProvider : RemoteTagProviderBase, ITrackSearchProvider, IL
 		return AlbumCoverUrlPrefix + Regex.Replace(webAlbumPicShort.Trim(), "^\\d+/", "500/");
 	}
 
-	private void PopulateSongDetails(KuwoSongInfo song, string detailsJson)
+	internal void PopulateSongDetails(KuwoSongInfo song, string detailsJson)
 	{
 		song.CoverUrl = "";
 

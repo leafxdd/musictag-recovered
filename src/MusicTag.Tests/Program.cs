@@ -52,6 +52,7 @@ internal static class Program
 		tests.AddRange(TrackSearchResultCharacterization.All());
 		tests.AddRange(ProviderDecodersCharacterization.All());
 		tests.AddRange(LyricProcessingCharacterization.All());
+		tests.AddRange(KuwoLyricBuildCharacterization.All());
 		return TestRunner.RunAll(tests);
 	}
 }
