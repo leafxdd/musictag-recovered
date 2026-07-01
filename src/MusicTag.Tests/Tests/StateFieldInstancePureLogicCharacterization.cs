@@ -899,5 +899,87 @@ internal static class StateFieldInstancePureLogicCharacterization
 			Check.Equal(new string('a', 20), StateFieldInstance.TruncateLyricsOrCommentDisplayValue("lyrics", new string('a', 20)), "exactly 20 (not >20) -> verbatim");
 			Check.Equal("abcdefghijklmnopqr", StateFieldInstance.TruncateLyricsOrCommentDisplayValue("lyrics", "abcdefghijklmnopqr  Z"), "cut@20 (18 letters + 2 spaces) then Trim trailing spaces");
 		});
+
+		// ===== BuildDeleteFilesResultMessage:收敛 DeleteFilesTaskContext.ShowCompletionResult 三路(itemCount>1 / deleted>0 / else)=====
+		// 与 BuildClearTags 同构:传 Page 保 errorLog.ToString 次数;返回 (消息 Item1, 是否错误 Item2);Item2 只在单项全败为 true。
+		yield return ("BuildDeleteFilesResultMessage: itemCount>1 -> completed header + trailing errorLog, not error", delegate
+		{
+			Page log = new Page();
+			log.AddLine("D1");
+			log.AddLine("D2");
+			(string, bool) r = StateFieldInstance.BuildDeleteFilesResultMessage(3, 2, 1, 3, log);
+			Check.True(!r.Item2, "multi-file -> Item2 false (not error)");
+			Check.True(r.Item1.StartsWith(Resources.Msg_DeleteFilesCompleted), "multi-file starts with completed header");
+			Check.True(r.Item1.EndsWith("\n" + log.ToString()), "multi-file appends newline+errorLog at tail");
+			Check.True(r.Item1.Length > log.ToString().Length + 1, "multi-file has header before errorLog (distinguishes else branch)");
+		});
+
+		yield return ("BuildDeleteFilesResultMessage: single-file success -> bare completed message", delegate
+		{
+			Page log = new Page();
+			log.AddLine("ignored");
+			(string, bool) r = StateFieldInstance.BuildDeleteFilesResultMessage(1, 1, 0, 1, log);
+			Check.Equal(Resources.Msg_DeleteFilesCompleted, r.Item1, "success branch -> bare Msg_DeleteFilesCompleted (no count, no errorLog)");
+			Check.True(!r.Item2, "success branch -> Item2 false");
+		});
+
+		yield return ("BuildDeleteFilesResultMessage: single-file all-fail -> bare errorLog + error flag", delegate
+		{
+			Page log = new Page();
+			log.AddLine("boom");
+			(string, bool) r = StateFieldInstance.BuildDeleteFilesResultMessage(1, 0, 1, 1, log);
+			Check.Equal(log.ToString(), r.Item1, "else branch -> bare errorLog (no header)");
+			Check.True(r.Item2, "else branch -> Item2 true (error)");
+		});
+
+		yield return ("BuildDeleteFilesResultMessage: itemCount<=1 boundary -> else branch (empty log / zero count)", delegate
+		{
+			(string, bool) r1 = StateFieldInstance.BuildDeleteFilesResultMessage(1, 0, 0, 1, new Page());
+			Check.Equal("", r1.Item1, "single empty-log all-fail -> empty message");
+			Check.True(r1.Item2, "single empty-log all-fail -> Item2 true");
+			(string, bool) r2 = StateFieldInstance.BuildDeleteFilesResultMessage(0, 0, 0, 0, new Page());
+			Check.True(r2.Item2, "itemCount 0 -> else (0>1 false, 0>0 false) -> Item2 true");
+		});
+
+		// ===== BuildExtractCoversResultMessage:收敛 ExtractCoversTaskContext.ShowCompletionResult 三路(with-skip 变体)=====
+		// 同构 with-skip:参数 (itemCount, extractedCount, failedCount, skippedCount, processedCount, errorLog);多项用 Msg_OK_Fail_Skip_Count。
+		yield return ("BuildExtractCoversResultMessage: itemCount>1 -> completed header + trailing errorLog, not error", delegate
+		{
+			Page log = new Page();
+			log.AddLine("X1");
+			log.AddLine("X2");
+			(string, bool) r = StateFieldInstance.BuildExtractCoversResultMessage(3, 2, 1, 0, 3, log);
+			Check.True(!r.Item2, "multi-file -> Item2 false (not error)");
+			Check.True(r.Item1.StartsWith(Resources.Msg_ExtractCoversComplete), "multi-file starts with completed header");
+			Check.True(r.Item1.EndsWith("\n" + log.ToString()), "multi-file appends newline+errorLog at tail");
+			Check.True(r.Item1.Length > log.ToString().Length + 1, "multi-file has header before errorLog (distinguishes else branch)");
+		});
+
+		yield return ("BuildExtractCoversResultMessage: single-file success -> bare completed message", delegate
+		{
+			Page log = new Page();
+			log.AddLine("ignored");
+			(string, bool) r = StateFieldInstance.BuildExtractCoversResultMessage(1, 1, 0, 0, 1, log);
+			Check.Equal(Resources.Msg_ExtractCoversComplete, r.Item1, "success branch -> bare Msg_ExtractCoversComplete (no count, no errorLog)");
+			Check.True(!r.Item2, "success branch -> Item2 false");
+		});
+
+		yield return ("BuildExtractCoversResultMessage: single-file all-fail -> bare errorLog + error flag", delegate
+		{
+			Page log = new Page();
+			log.AddLine("boom");
+			(string, bool) r = StateFieldInstance.BuildExtractCoversResultMessage(1, 0, 1, 0, 1, log);
+			Check.Equal(log.ToString(), r.Item1, "else branch -> bare errorLog (no header)");
+			Check.True(r.Item2, "else branch -> Item2 true (error)");
+		});
+
+		yield return ("BuildExtractCoversResultMessage: itemCount<=1 boundary -> else branch (empty log / zero count)", delegate
+		{
+			(string, bool) r1 = StateFieldInstance.BuildExtractCoversResultMessage(1, 0, 0, 0, 1, new Page());
+			Check.Equal("", r1.Item1, "single empty-log all-fail -> empty message");
+			Check.True(r1.Item2, "single empty-log all-fail -> Item2 true");
+			(string, bool) r2 = StateFieldInstance.BuildExtractCoversResultMessage(0, 0, 0, 0, 0, new Page());
+			Check.True(r2.Item2, "itemCount 0 -> else -> Item2 true");
+		});
 	}
 }

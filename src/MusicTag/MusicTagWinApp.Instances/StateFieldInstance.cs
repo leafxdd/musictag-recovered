@@ -1897,20 +1897,14 @@ internal partial class StateFieldInstance : Form
 
 		internal void ShowCompletionResult()
 		{
-			if (itemsToDelete.Length <= 1)
+			(string, bool) result = BuildDeleteFilesResultMessage(itemsToDelete.Length, deletedCount, failedCount, processedCount, errorLog);
+			if (result.Item2)
 			{
-				if (deletedCount > 0)
-				{
-					DialogService.ShowInformationMessage(Resources.Msg_DeleteFilesCompleted);
-				}
-				else
-				{
-					DialogService.ShowErrorMessage(errorLog.ToString());
-				}
+				DialogService.ShowErrorMessage(result.Item1);
 			}
 			else
 			{
-				DialogService.ShowInformationMessage(string.Format(Resources.Msg_DeleteFilesCompleted + "\n" + Resources.Msg_OK_Fail_Count, deletedCount, failedCount, processedCount) + "\n" + errorLog.ToString());
+				DialogService.ShowInformationMessage(result.Item1);
 			}
 
 			owner.removeItemsMenuItem.PerformClick();
@@ -2093,20 +2087,14 @@ internal partial class StateFieldInstance : Form
 
 		internal void ShowCompletionResult()
 		{
-			if (itemsToExtract.Length <= 1)
+			(string, bool) result = BuildExtractCoversResultMessage(itemsToExtract.Length, extractedCount, failedCount, skippedCount, processedCount, errorLog);
+			if (result.Item2)
 			{
-				if (extractedCount > 0)
-				{
-					DialogService.ShowInformationMessage(Resources.Msg_ExtractCoversComplete);
-				}
-				else
-				{
-					DialogService.ShowErrorMessage(errorLog.ToString());
-				}
+				DialogService.ShowErrorMessage(result.Item1);
 			}
 			else
 			{
-				DialogService.ShowInformationMessage(string.Format(Resources.Msg_ExtractCoversComplete + "\n" + Resources.Msg_OK_Fail_Skip_Count, extractedCount, failedCount, skippedCount, processedCount) + "\n" + errorLog.ToString());
+				DialogService.ShowInformationMessage(result.Item1);
 			}
 		}
 	}
@@ -5880,6 +5868,53 @@ internal partial class StateFieldInstance : Form
 		if ((columnName == "lyrics" || columnName == "comment") && value.Length > 20)
 		{
 			return value.Substring(0, 20).Trim();
+		}
+		return value;
+	}
+
+	// 从 DeleteFilesTaskContext.ShowCompletionResult 提取:三路(单项成功/单项全败/多项)构造 (消息, 是否错误);
+	// errorLog 传 Page 保 ToString 求值次数(单成功 0 / 单败 1 / 多项 1);UI 派发(isError?ShowError:ShowInfo)+ PerformClick 留原处。
+	internal static (string, bool) BuildDeleteFilesResultMessage(int itemCount, int deletedCount, int failedCount, int processedCount, Page errorLog)
+	{
+		(string, bool) value = default((string, bool));
+		if (itemCount <= 1)
+		{
+			if (deletedCount > 0)
+			{
+				value.Item1 = Resources.Msg_DeleteFilesCompleted;
+			}
+			else
+			{
+				value.Item1 = errorLog.ToString();
+				value.Item2 = true;
+			}
+		}
+		else
+		{
+			value.Item1 = string.Format(Resources.Msg_DeleteFilesCompleted + "\n" + Resources.Msg_OK_Fail_Count, deletedCount, failedCount, processedCount) + "\n" + errorLog.ToString();
+		}
+		return value;
+	}
+
+	// 从 ExtractCoversTaskContext.ShowCompletionResult 提取(with-skip 变体):三路构造 (消息, 是否错误);errorLog 传 Page。
+	internal static (string, bool) BuildExtractCoversResultMessage(int itemCount, int extractedCount, int failedCount, int skippedCount, int processedCount, Page errorLog)
+	{
+		(string, bool) value = default((string, bool));
+		if (itemCount <= 1)
+		{
+			if (extractedCount > 0)
+			{
+				value.Item1 = Resources.Msg_ExtractCoversComplete;
+			}
+			else
+			{
+				value.Item1 = errorLog.ToString();
+				value.Item2 = true;
+			}
+		}
+		else
+		{
+			value.Item1 = string.Format(Resources.Msg_ExtractCoversComplete + "\n" + Resources.Msg_OK_Fail_Skip_Count, extractedCount, failedCount, skippedCount, processedCount) + "\n" + errorLog.ToString();
 		}
 		return value;
 	}
