@@ -1197,21 +1197,10 @@ internal partial class StateFieldInstance : Form
 								{
 									if (tagValueEntry.Value is string text)
 									{
-										if (text == "<blank>")
+										var (shouldAssign, resolvedValue) = ResolveTagFieldTemplateValue(text, () => (failureReporter.tagState[tagValueEntry.Key] != null) ? failureReporter.tagState[tagValueEntry.Key].ToString() : "");
+										if (shouldAssign)
 										{
-											failureReporter.tagState[tagValueEntry.Key] = "";
-										}
-										else if (text != "<keep>")
-										{
-											if (text.Contains("<keep>"))
-											{
-												string newValue = ((failureReporter.tagState[tagValueEntry.Key] != null) ? failureReporter.tagState[tagValueEntry.Key].ToString() : "");
-												failureReporter.tagState[tagValueEntry.Key] = text.Replace("<keep>", newValue);
-											}
-											else
-											{
-												failureReporter.tagState[tagValueEntry.Key] = text;
-											}
+											failureReporter.tagState[tagValueEntry.Key] = resolvedValue;
 										}
 										continue;
 									}
@@ -6977,6 +6966,27 @@ internal partial class StateFieldInstance : Form
 	internal static bool IsNumberedTagFieldValueValid(string text)
 	{
 		return string.IsNullOrWhiteSpace(text) || !(text != "<keep>") || !(text != "<blank>") || ParseLeadingNumber(text) > 0;
+	}
+
+	// 从 SaveTags 提取:批量写回时单个 tag 字段的模板值解析(behavior-preserving)。
+	// <blank> -> 写空串;纯 <keep> -> 不写(ShouldAssign=false);含 <keep>(非纯 <keep>)-> 写 Replace 后的值;
+	// 否则 -> 写原文。currentValueProvider 为 lazy Func:仅在"含 <keep>"分支调用(逐字节保留原
+	// currentValue 只在该分支读 tagState 索引器的求值语义,规避 eager-eval 陷阱)。
+	internal static (bool ShouldAssign, string Value) ResolveTagFieldTemplateValue(string text, Func<string> currentValueProvider)
+	{
+		if (text == "<blank>")
+		{
+			return (true, "");
+		}
+		if (text == "<keep>")
+		{
+			return (false, null);
+		}
+		if (text.Contains("<keep>"))
+		{
+			return (true, text.Replace("<keep>", currentValueProvider()));
+		}
+		return (true, text);
 	}
 
 	private bool ValidateNumberedTagField(string fieldName, string message)

@@ -67,6 +67,7 @@ internal static class Program
 			tests.AddRange(TrieMatcherCharacterization.All());
 			tests.AddRange(LyricTextProcessorCharacterization.All());
 			tests.AddRange(TrackResultLimitCharacterization.All());
+			tests.AddRange(TagFieldTemplateCharacterization.All());
 		return TestRunner.RunAll(tests);
 	}
 }
