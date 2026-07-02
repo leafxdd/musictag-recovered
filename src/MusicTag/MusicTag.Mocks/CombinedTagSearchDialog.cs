@@ -78,7 +78,7 @@ internal class CombinedTagSearchDialog : Form
 			CoverDownloadFile coverDownload = new CoverDownloadFile
 			{
 				LoadTask = this,
-				LocalCoverPath = Request.CoverResult.LocalCoverPath ?? PathFileUtilities.GetPictureCacheDirectory() + TextUtilities.ComputeMd5HashString(Request.CoverResult.CoverUrl, "UTF-8").Replace("-", ""),
+				LocalCoverPath = Request.CoverResult.LocalCoverPath ?? PathFileUtilities.GetPictureCacheDirectory() + TextUtilities.ComputeMd5HashString(Request.CoverResult.CoverUrl).Replace("-", ""),
 				DownloadedBytes = 0L
 			};
 			Request.CoverResult.LocalCoverPath = coverDownload.LocalCoverPath;

@@ -231,7 +231,7 @@ internal abstract class RemoteTagProviderBase : IDisposable
 		return GetResponseStringResult(url).Body ?? "";
 	}
 
-	protected virtual DownloadStatus DownloadToStream(string url, Stream destination, int readWriteTimeout = 30000, int requestTimeout = 300000)
+	protected virtual DownloadStatus DownloadToStream(string url, Stream destination, int requestTimeout = 300000)
 	{
 		try
 		{
@@ -239,7 +239,7 @@ internal abstract class RemoteTagProviderBase : IDisposable
 			using HttpClient downloadClient = new HttpClient(new WebRequestHandler
 			{
 				AutomaticDecompression = (DecompressionMethods.GZip | DecompressionMethods.Deflate),
-				ReadWriteTimeout = readWriteTimeout
+				ReadWriteTimeout = 30000
 			});
 			downloadClient.Timeout = TimeSpan.FromMilliseconds(requestTimeout);
 			downloadClient.DefaultRequestHeaders.Add("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
@@ -283,7 +283,7 @@ internal abstract class RemoteTagProviderBase : IDisposable
 			using T downloader = new T();
 			downloader.SetCancellationSource(cancellation);
 			using FileStream fileStream = new FileStream(filePath, FileMode.Create);
-			return (downloader.DownloadToStream(url, fileStream, 30000, timeout), fileStream.Length);
+			return (downloader.DownloadToStream(url, fileStream, timeout), fileStream.Length);
 		};
 	}
 

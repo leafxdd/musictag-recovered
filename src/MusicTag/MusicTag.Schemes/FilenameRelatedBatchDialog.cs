@@ -151,11 +151,6 @@ internal class FilenameRelatedBatchDialog : Form
 		return item.SelectedIndex > 0;
 	}
 
-	private static bool IsDigitCharacter(char character)
-	{
-		return char.IsDigit(character);
-	}
-
 	// 由文件名模板(@1..@8 占位符)与各 tag 字段渲染目标文件名,并清理为合法文件名:
 	// 路径分隔符 \ / -> ;,其余文件名非法字符(空白及 " : * ? < > |)-> 空格。
 	// 提取自 RenameFilesBatchWorker.RenameFiles 的内联逻辑(行为逐字保持),供 characterization 锁定。
@@ -194,20 +189,12 @@ internal class FilenameRelatedBatchDialog : Form
 	}
 
 	// @1/@2 必填校验:重命名模板含 @1(标题)/@2(艺术家)占位符却对应 tag 为空时,该文件跳过(计为失败,
-	// 报 "Title or artist tags are empty")。else if 短路:@1 缺失即判定,不再查 @2。
+	// 报 "Title or artist tags are empty")。|| 短路:@1 缺失即判定,不再查 @2。
 	// 提取自 RenameFilesBatchWorker.RenameFiles 的内联逻辑(行为逐字保持),供 characterization 锁定。
 	internal static bool IsRequiredTagMissing(string filenamePattern, string title, string artist)
 	{
-		bool isMissingRequiredTag = false;
-		if (filenamePattern.Contains("@1") && !title.Any())
-		{
-			isMissingRequiredTag = true;
-		}
-		else if (filenamePattern.Contains("@2") && !artist.Any())
-		{
-			isMissingRequiredTag = true;
-		}
-		return isMissingRequiredTag;
+		return (filenamePattern.Contains("@1") && !title.Any())
+			|| (filenamePattern.Contains("@2") && !artist.Any());
 	}
 
 	// 关联文件(歌词/封面)目标路径 + 防覆盖:source 为 null 直接返回 null(无该关联文件);否则目标 = 目标音频
@@ -382,7 +369,7 @@ internal class FilenameRelatedBatchDialog : Form
 									}
 									string destinationAudioPath = ResolveDestinationAudioPath(originalPath, newFilename, File.Exists);
 									string destinationLrcPath = ResolveRelatedFileTarget(destinationAudioPath, sourceLrcPath, ".lrc", File.Exists);
-									string destinationImagePath = ResolveRelatedFileTarget(destinationAudioPath, sourceImagePath, sourceImagePath != null ? Path.GetExtension(sourceImagePath) : null, File.Exists);
+									string destinationImagePath = ResolveRelatedFileTarget(destinationAudioPath, sourceImagePath, Path.GetExtension(sourceImagePath), File.Exists);
 									newFilename = Path.GetFileName(destinationAudioPath);
 									if (newFilename != Path.GetFileName(originalPath))
 									{
@@ -629,7 +616,7 @@ internal class FilenameRelatedBatchDialog : Form
 
 		public void SetNumberedTag(string tagName, string value)
 		{
-			if (value.All(IsDigitCharacter) && int.TryParse(value, out var number))
+			if (value.All(char.IsDigit) && int.TryParse(value, out var number))
 			{
 				Changes[tagName] = (number > 0) ? number.ToString() : "";
 			}

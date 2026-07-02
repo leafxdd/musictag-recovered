@@ -946,6 +946,11 @@ internal partial class StateFieldInstance : Form
 				workingImage = Image.FromStream(stream);
 				int retryStepIndex = 0;
 				int compressionPassCount = 0;
+				// 重试步梯队(两处循环分支共用):越界即失败;否则后置自增并执行当前步。
+				bool tryNextRetryStep()
+				{
+					return retryStepIndex < compressionRetrySteps.Length && compressionRetrySteps[retryStepIndex++]();
+				}
 				if (compressionItem.options.maxResolution != 0 && compressionItem.options.maxResolution != Math.Max(workingImage.Width, workingImage.Height))
 				{
 					if (!resizeWorkingImageAndEncode(compressionItem.options.maxResolution, 85L))
@@ -977,16 +982,9 @@ internal partial class StateFieldInstance : Form
 									return false;
 								}
 							}
-							else
+							else if (!tryNextRetryStep())
 							{
-								if (retryStepIndex >= compressionRetrySteps.Length)
-								{
-									return false;
-								}
-								if (!compressionRetrySteps[retryStepIndex++]())
-								{
-									return false;
-								}
+								return false;
 							}
 						}
 						else if (!encodeWorkingImageAsJpeg(85L))
@@ -994,16 +992,9 @@ internal partial class StateFieldInstance : Form
 							return false;
 						}
 					}
-					else
+					else if (!tryNextRetryStep())
 					{
-						if (retryStepIndex >= compressionRetrySteps.Length)
-						{
-							return false;
-						}
-						if (!compressionRetrySteps[retryStepIndex++]())
-						{
-							return false;
-						}
+						return false;
 					}
 					compressionPassCount++;
 				}
@@ -3471,7 +3462,7 @@ internal partial class StateFieldInstance : Form
 				selectedFileCount++;
 			}
 		}
-		else if (!selected && isVisible)
+		else if (isVisible)
 		{
 			if (selectedVisibleRows.Remove(fileRow) && selectedFileCount > 0)
 			{
@@ -5326,7 +5317,7 @@ internal partial class StateFieldInstance : Form
 
 	private void ExtractCover_Click(object sender, EventArgs e)
 	{
-		SaveCurrentCover(showSaveDialog: true);
+		SaveCurrentCover();
 	}
 
 	private void OpenCurrentCover_Click(object sender, EventArgs e)
@@ -6239,7 +6230,7 @@ internal partial class StateFieldInstance : Form
 		{
 			if (SelectedFileCount == 1)
 			{
-				SaveCurrentCover(showSaveDialog: true);
+				SaveCurrentCover();
 			}
 		}
 		else if (DialogService.ConfirmYesNo(string.Format(Resources.Msg_ConfirmExtractCovers, SelectedFileCount) + "\n" + BuildSelectedFilePreview()))
@@ -6251,7 +6242,7 @@ internal partial class StateFieldInstance : Form
 		}
 	}
 
-	private void SaveCurrentCover(bool showSaveDialog)
+	private void SaveCurrentCover()
 	{
 		if (selectedTagState == null || !selectedTagState.IsLoadedSuccessfully())
 		{
@@ -6275,12 +6266,6 @@ internal partial class StateFieldInstance : Form
 			string directoryName = Path.GetDirectoryName(selectedTagState.GetFilePath());
 			string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(selectedTagState.GetFilePath());
 			string defaultCoverPath = directoryName + "\\" + fileNameWithoutExtension + ImageUtilities.GetImageExtensionForMimeType(selectedCover.MimeType, ".jpg");
-			if (!showSaveDialog && !File.Exists(defaultCoverPath))
-			{
-				File.WriteAllBytes(defaultCoverPath, selectedCover.ImageBytes);
-				DialogService.ShowInformationMessage(Resources.Msg_FilesSavedInLocalDir);
-				return;
-			}
 
 			string filter = ImageUtilities.GetImageFileDialogFilterForMimeType(selectedCover.MimeType);
 			if (!string.IsNullOrWhiteSpace(filter))
@@ -6962,10 +6947,10 @@ internal partial class StateFieldInstance : Form
 	}
 
 	// 从 ValidateNumberedTagField 提取:track/disc 数字字段接受谓词(空白 / <keep> / <blank> 哨兵 / 前导正数)。
-	// 逐字节保留 !(text != "...") 双否定与短路序(IsNullOrWhiteSpace 先行 -> ParseLeadingNumber 不遇 null)。
+	// 保留短路序:IsNullOrWhiteSpace 先行 -> ParseLeadingNumber 不遇 null。
 	internal static bool IsNumberedTagFieldValueValid(string text)
 	{
-		return string.IsNullOrWhiteSpace(text) || !(text != "<keep>") || !(text != "<blank>") || ParseLeadingNumber(text) > 0;
+		return string.IsNullOrWhiteSpace(text) || text == "<keep>" || text == "<blank>" || ParseLeadingNumber(text) > 0;
 	}
 
 	// 从 SaveTags 提取:批量写回时单个 tag 字段的模板值解析(behavior-preserving)。

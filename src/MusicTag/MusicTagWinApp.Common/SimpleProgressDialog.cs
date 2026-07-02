@@ -50,9 +50,9 @@ internal class SimpleProgressDialog : Form
 		CloseIfNotDisposed();
 	}
 
-	public void SetCancelButtonHidden(bool hidden = true)
+	public void SetCancelButtonHidden()
 	{
-		cancelButton.Visible = !hidden;
+		cancelButton.Visible = false;
 		Height = ImageUtilities.ScaleByDpi(cancelButton.Visible ? 100 : 60, roundUp: true);
 	}
 

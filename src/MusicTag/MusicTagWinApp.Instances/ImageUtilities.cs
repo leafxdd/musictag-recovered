@@ -29,14 +29,14 @@ internal static class ImageUtilities
 		return dpiScale = GetSystemDpi().Width / 96f;
 	}
 
-	public static Bitmap ScaleImage(Image image, float scale, InterpolationMode interpolationMode = InterpolationMode.HighQualityBicubic)
+	public static Bitmap ScaleImage(Image image, float scale)
 	{
 		try
 		{
 			Size size = new Size((int)Math.Round((float)image.Width * scale), (int)Math.Round((float)image.Height * scale));
 			Bitmap bitmap = new Bitmap(size.Width, size.Height);
 			Graphics graphics = Graphics.FromImage(bitmap);
-			graphics.InterpolationMode = interpolationMode;
+			graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
 			graphics.DrawImage(image, new Rectangle(new Point(0, 0), size), new Rectangle(new Point(0, 0), image.Size), GraphicsUnit.Pixel);
 			graphics.Dispose();
 			return bitmap;
@@ -48,13 +48,13 @@ internal static class ImageUtilities
 		}
 	}
 
-	public static Bitmap ResizeImageToFit(Image image, Size targetSize, bool centerOnCanvas = false, InterpolationMode interpolationMode = InterpolationMode.HighQualityBicubic)
+	public static Bitmap ResizeImageToFit(Image image, Size targetSize, bool centerOnCanvas = false)
 	{
 		try
 		{
 			float widthScale = (float)targetSize.Width / (float)image.Width;
 			float heightScale = (float)targetSize.Height / (float)image.Height;
-			Size scaledSize = ((widthScale == heightScale) ? targetSize : ((!(widthScale < heightScale)) ? new Size((int)Math.Round((float)image.Width * heightScale), targetSize.Height) : new Size(targetSize.Width, (int)Math.Round((float)image.Height * widthScale))));
+			Size scaledSize = ((widthScale == heightScale) ? targetSize : ((widthScale < heightScale) ? new Size(targetSize.Width, (int)Math.Round((float)image.Height * widthScale)) : new Size((int)Math.Round((float)image.Width * heightScale), targetSize.Height)));
 			Rectangle destRect;
 			Bitmap bitmap = default(Bitmap);
 			if (centerOnCanvas)
@@ -68,7 +68,7 @@ internal static class ImageUtilities
 				bitmap = new Bitmap(scaledSize.Width, scaledSize.Height);
 			}
 			Graphics graphics = Graphics.FromImage(bitmap);
-			graphics.InterpolationMode = interpolationMode;
+			graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
 			graphics.DrawImage(image, destRect, new Rectangle(new Point(0, 0), image.Size), GraphicsUnit.Pixel);
 			graphics.Dispose();
 			return bitmap;

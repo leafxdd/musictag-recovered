@@ -72,7 +72,7 @@ internal class CoverSearchDialog : Form
 			{
 				if (sourceItem.Enabled)
 				{
-					ReportStatus(sourceItem.SearchSource, SourceSearchPhase.Searching);
+					ReportSearching(sourceItem.SearchSource);
 				}
 			}
 
@@ -138,7 +138,7 @@ internal class CoverSearchDialog : Form
 			}
 
 			remainingBySource[sourceItem] = sourceItem.GetEffectiveSearchResultLimit();
-			ReportStatus(preferredSource, SourceSearchPhase.Searching);
+			ReportSearching(preferredSource);
 
 			if (!string.IsNullOrWhiteSpace(dialog.GetCurrentTrack().Album) || !string.IsNullOrWhiteSpace(dialog.GetCurrentTrack().Artist))
 			{
@@ -166,13 +166,12 @@ internal class CoverSearchDialog : Form
 		}
 
 		// 状态上报:经 dialog 的 reporter(Progress<T>)编组回 UI 线程。
-		private void ReportStatus(SearchSource source, SourceSearchPhase phase, string errorCode = null)
+		private void ReportSearching(SearchSource source)
 		{
 			dialog.searchStatusReporter?.Invoke(new SourceSearchStatus
 			{
 				Source = source,
-				Phase = phase,
-				ErrorCode = errorCode
+				Phase = SourceSearchPhase.Searching
 			});
 		}
 
@@ -240,7 +239,7 @@ internal class CoverSearchDialog : Form
 
 		public Image Load()
 		{
-			coverPath = candidate.LocalCoverPath ?? (PathFileUtilities.GetPictureCacheDirectory() + TextUtilities.ComputeMd5HashString(candidate.CoverUrl, "UTF-8").Replace("-", ""));
+			coverPath = candidate.LocalCoverPath ?? (PathFileUtilities.GetPictureCacheDirectory() + TextUtilities.ComputeMd5HashString(candidate.CoverUrl).Replace("-", ""));
 			candidate.LocalCoverPath = coverPath;
 
 			if (!TryReserveCoverPath())

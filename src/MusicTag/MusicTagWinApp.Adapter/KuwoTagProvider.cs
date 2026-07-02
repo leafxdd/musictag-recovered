@@ -409,9 +409,8 @@ internal class KuwoTagProvider : RemoteTagProviderBase, ITrackSearchProvider, IL
 
 						long timestampMs = Convert.ToInt64(double.Parse(ReadJsonString(lyricToken, "time"), CultureInfo.InvariantCulture) * 1000.0);
 						string lyricText = TextEncodingService.DecodeBasicHtmlEntities(ReadJsonString(lyricToken, "lineLyric"));
-						if (timedLines.ContainsKey(timestampMs))
+						if (timedLines.TryGetValue(timestampMs, out (string PrimaryText, List<string> AlternateText) line))
 						{
-							(string PrimaryText, List<string> AlternateText) line = timedLines[timestampMs];
 							if (timedLines.Count == 1)
 							{
 								timedLines[timestampMs] = (line.PrimaryText + " " + lyricText, new List<string>());

@@ -170,9 +170,9 @@ internal class CombinedTagOverwriteOptionsDialog : Form
 
 	private static void ApplySavedOverwriteOption(KeyValuePair<string, bool> entry)
 	{
-		if (GetOverwriteOptions().ContainsKey(entry.Key))
+		if (overwriteOptions.ContainsKey(entry.Key))
 		{
-			GetOverwriteOptions()[entry.Key] = entry.Value;
+			overwriteOptions[entry.Key] = entry.Value;
 		}
 	}
 

@@ -41,7 +41,7 @@ internal class TrieMatcher<T>
 
 	private string ApplyAsciiBoundaryFilter(string matchedKey)
 	{
-		if (matchedKey != null && !(matchedKey == ""))
+		if (matchedKey != null && matchedKey != "")
 		{
 			char firstCharacter = matchedKey[0];
 			if (firstCharacter < '\u007f' && MatchStartIndex > 0 && IsSameAsciiTokenClass(firstCharacter, textCharacters[MatchStartIndex - 1]))
@@ -64,15 +64,8 @@ internal class TrieMatcher<T>
 
 	private bool IsSameAsciiTokenClass(char first, char second)
 	{
-		if (AsciiTokenClassifier.IsAsciiLetterLike(first) && AsciiTokenClassifier.IsAsciiLetterLike(second))
-		{
-			return true;
-		}
-		if (AsciiTokenClassifier.IsAsciiDigitLike(first) && AsciiTokenClassifier.IsAsciiDigitLike(second))
-		{
-			return true;
-		}
-		return false;
+		return (AsciiTokenClassifier.IsAsciiLetterLike(first) && AsciiTokenClassifier.IsAsciiLetterLike(second))
+			|| (AsciiTokenClassifier.IsAsciiDigitLike(first) && AsciiTokenClassifier.IsAsciiDigitLike(second));
 	}
 
 	public string NextMatch()
@@ -83,7 +76,7 @@ internal class TrieMatcher<T>
 			key = FindNextMatch();
 			key = ApplyAsciiBoundaryFilter(key);
 		}
-		while ("".Equals(key));
+		while (key == "");
 		return key;
 	}
 

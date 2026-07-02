@@ -62,7 +62,7 @@ internal static class DialogService
 				return;
 			}
 			IntPtr intPtr = NativeMethods.CreateItemIdListFromPath(path);
-			if (!(intPtr != IntPtr.Zero))
+			if (intPtr == IntPtr.Zero)
 			{
 				return;
 			}

@@ -71,9 +71,9 @@ internal static class TextUtilities
 		return BitConverter.ToString(ComputeMd5Hash(bytes));
 	}
 
-	public static string ComputeMd5HashString(string text, string encodingName = "UniCode")
+	public static string ComputeMd5HashString(string text)
 	{
-		return ComputeMd5HashString(Encoding.GetEncoding(encodingName).GetBytes(text));
+		return ComputeMd5HashString(Encoding.GetEncoding("UTF-8").GetBytes(text));
 	}
 
 	public static string UrlEncodeUtf8(string text)

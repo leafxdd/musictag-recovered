@@ -404,7 +404,7 @@ namespace MusicTag.Composer;
 			lineBuilder.Append("\n");
 			break;
 		case 2:
-			if (previousLine.HasValue && previousLine?.Value.TranslatedText != null)
+			if (previousLine?.Value.TranslatedText != null)
 			{
 				AppendTimestamp(currentLine.Key - 10L);
 				lineBuilder.Append(previousLine?.Value.TranslatedText + "\n");

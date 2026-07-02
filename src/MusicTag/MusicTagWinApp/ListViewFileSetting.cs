@@ -99,14 +99,11 @@ internal class ListViewFileSetting
 	}
 
 	[MethodImpl(MethodImplOptions.Synchronized)]
-	public void ClearForAnyFile(bool isDisable = true)
+	public void ClearForAnyFile()
 	{
 		if (listDirMap.TryGetValue(ListViewFileSettingFileInfo.ANY_FILE_DUMMY_PATH, out ListViewFileSettingFileInfo anyFileInfo) && !anyFileInfo.Disabled)
 		{
-			if (isDisable)
-			{
-				anyFileInfo.Disabled = true;
-			}
+			anyFileInfo.Disabled = true;
 			anyFileInfo.AnyFileList.Clear();
 			listAnyFileSet.Clear();
 		}
