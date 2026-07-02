@@ -215,12 +215,7 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 			}
 		}
 
-		string coverUrl = string.Format(albumCoverUrlTemplate, songInfo.Album.Mid);
-		CoverSearchResult cover = new CoverSearchResult();
-		cover.CoverUrl = coverUrl;
-		cover.SearchSource = GetSource();
-		cover.CoverDownloader = CreateCoverDownloader<QqMusicTagProvider>(coverUrl);
-		track.Cover = cover;
+		track.Cover = BuildCoverResult(songInfo);
 
 		LyricSearchResult lyric = new LyricSearchResult();
 		lyric.LyricUrl = string.Format(lyricUrlTemplate, songInfo.Mid, callbackName);

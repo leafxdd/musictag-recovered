@@ -239,7 +239,7 @@ internal class CoverSearchDialog : Form
 
 		public Image Load()
 		{
-			coverPath = candidate.LocalCoverPath ?? (PathFileUtilities.GetPictureCacheDirectory() + TextUtilities.ComputeMd5HashString(candidate.CoverUrl).Replace("-", ""));
+			coverPath = candidate.LocalCoverPath ?? PathFileUtilities.GetCoverCacheFilePath(candidate.CoverUrl);
 			candidate.LocalCoverPath = coverPath;
 
 			if (!TryReserveCoverPath())
@@ -335,14 +335,6 @@ internal class CoverSearchDialog : Form
 				return null;
 			}
 		}
-	}
-
-	private static void OpenCoverImage(ConfigDescriptorState.PictureData pictureData)
-	{
-		string fileExtension = ImageUtilities.GetImageExtensionForMimeType(pictureData.MimeType, "");
-		string tempCoverPath = PathFileUtilities.GetPictureCacheDirectory() + "tempcover" + fileExtension;
-		File.WriteAllBytes(tempCoverPath, pictureData.ImageBytes);
-		Process.Start(tempCoverPath);
 	}
 
 	private int startedCoverDownloadCount;
@@ -469,10 +461,7 @@ internal class CoverSearchDialog : Form
 
 	private void InitializeCandidateImages()
 	{
-		candidateImageList.Images.Clear();
-		candidateImageList.ImageSize = new Size(ImageUtilities.ScaleByDpi(candidateImageList.ImageSize.Width), ImageUtilities.ScaleByDpi(candidateImageList.ImageSize.Height));
-		candidateImageList.ColorDepth = ColorDepth.Depth24Bit;
-		candidateImageList.TransparentColor = Color.Transparent;
+		ImageUtilities.PrepareScaledImageList(candidateImageList);
 		candidateImageList.Images.Add("loading", ImageUtilities.LoadResourceBitmap("loading", candidateImageList.ImageSize));
 		candidateImageList.Images.Add("download_failed", ImageUtilities.LoadResourceBitmap("download_failed", candidateImageList.ImageSize));
 		candidateImageList.Images.Add("image_not_found", ImageUtilities.LoadResourceBitmap("imagenotfound", candidateImageList.ImageSize));
@@ -736,22 +725,12 @@ internal class CoverSearchDialog : Form
 		{
 			return;
 		}
-		ConfigDescriptorState.PictureData pictureData = new ConfigDescriptorState.PictureData
-		{
-			ImageBytes = File.ReadAllBytes(imageKey)
-		};
-		using (ConfigDescriptorState.LoadPictureImage(pictureData))
-		{
-			if (pictureData.MimeType != null && pictureData.Width > 0 && pictureData.Height > 0)
-			{
-				useImage(pictureData);
-			}
-		}
+		CoverImageActions.LoadAndUseCoverImage(imageKey, useImage);
 	}
 
 	private void OpenSelectedCover(object sender, EventArgs e)
 	{
-		UseSelectedCoverImage(OpenCoverImage);
+		UseSelectedCoverImage(CoverImageActions.OpenCoverImage);
 	}
 
 	private void ExtractSelectedCover(object sender, EventArgs e)
@@ -908,16 +887,7 @@ internal class CoverSearchDialog : Form
 
 	private void SaveCoverImage(ConfigDescriptorState.PictureData pictureData)
 	{
-		string imageFilter = ImageUtilities.GetImageFileDialogFilterForMimeType(pictureData.MimeType);
-		if (!string.IsNullOrWhiteSpace(imageFilter))
-		{
-			coverSaveDialog.Filter = imageFilter;
-		}
-		if (coverSaveDialog.ShowDialog() != DialogResult.OK)
-		{
-			return;
-		}
-		File.WriteAllBytes(coverSaveDialog.FileName, pictureData.ImageBytes);
+		CoverImageActions.SaveCoverImageAs(coverSaveDialog, pictureData);
 	}
 
 }

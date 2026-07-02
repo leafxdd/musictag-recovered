@@ -433,7 +433,7 @@ internal class ConfigDescriptorState : IDisposable
 			}
 			catch (Exception ex)
 			{
-				loadError = string.IsNullOrWhiteSpace(ex.Message) ? Resources.Msg_SaveFail : ex.Message;
+				loadError = StateFieldInstance.ResolveFailureMessage(ex.Message);
 				return false;
 			}
 			finally

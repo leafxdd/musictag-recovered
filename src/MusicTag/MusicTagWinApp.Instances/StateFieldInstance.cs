@@ -1387,6 +1387,12 @@ internal partial class StateFieldInstance : Form
 		return !string.IsNullOrWhiteSpace(loadError) ? loadError : (fallbackMessage ?? Resources.Msg_SaveFail);
 	}
 
+	// 单参重载:7 处内联「空白(或 null)则回退 Msg_SaveFail」的收敛(errorMessage / ex.Message 均经此)。
+	internal static string ResolveFailureMessage(string message)
+	{
+		return string.IsNullOrWhiteSpace(message) ? Resources.Msg_SaveFail : message;
+	}
+
 	private sealed class SaveTagFailureReporter
 	{
 		public ConfigDescriptorState tagState;
@@ -1978,7 +1984,7 @@ internal partial class StateFieldInstance : Form
 
 		internal void RecordError(string errorMessage)
 		{
-			string message = string.IsNullOrWhiteSpace(errorMessage) ? Resources.Msg_SaveFail : errorMessage;
+			string message = ResolveFailureMessage(errorMessage);
 			LogService.WriteSaveLyricsLog(filePath + ": " + message);
 			taskContext.errorLog.AddLine(taskContext.currentFile.Name);
 			taskContext.errorLog.AddLine(message);
@@ -2081,7 +2087,7 @@ internal partial class StateFieldInstance : Form
 
 		internal void RecordError(string errorMessage)
 		{
-			string text = string.IsNullOrWhiteSpace(errorMessage) ? Resources.Msg_SaveFail : errorMessage;
+			string text = ResolveFailureMessage(errorMessage);
 			LogService.WriteSaveCoversLog(FilePath + ": " + text);
 			TaskContext.errorLog.AddLine(TaskContext.currentFile.Name);
 			TaskContext.errorLog.AddLine(text);

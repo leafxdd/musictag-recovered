@@ -66,10 +66,7 @@ internal class TagHistorySelectionDialog : Form
 	private void ScaleControlsForDpi()
 	{
 		rowHeightImageList.ImageSize = new Size(1, ImageUtilities.ScaleByDpi(40f));
-		foreach (ColumnHeader column in historyListView.Columns)
-		{
-			column.Width = ImageUtilities.ScaleByDpi(column.Width);
-		}
+		ImageUtilities.ScaleColumnWidthsForDpi(historyListView);
 	}
 
 	private void UpdateLayout()

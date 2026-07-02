@@ -109,10 +109,7 @@ internal class PictureFromTagsDialog : Form
 
 	private void InitializeImageList()
 	{
-		pictureImageList.Images.Clear();
-		pictureImageList.ImageSize = new Size(ImageUtilities.ScaleByDpi(pictureImageList.ImageSize.Width), ImageUtilities.ScaleByDpi(pictureImageList.ImageSize.Height));
-		pictureImageList.ColorDepth = ColorDepth.Depth24Bit;
-		pictureImageList.TransparentColor = Color.Transparent;
+		ImageUtilities.PrepareScaledImageList(pictureImageList);
 		pictureImageList.Images.Add("loading", ImageUtilities.LoadResourceBitmap("loading", pictureImageList.ImageSize));
 		pictureImageList.Images.Add("download_failed", ImageUtilities.LoadResourceBitmap("download_failed", pictureImageList.ImageSize));
 		progressPictureBox.Image = ImageUtilities.LoadResourceBitmap("img_wait");
@@ -271,7 +268,7 @@ internal class PictureFromTagsDialog : Form
 		{
 			return;
 		}
-		UseSelectedPictureData(SelectPicture);
+		UseSelectedPictureData(SetSelectedPicture);
 		base.DialogResult = DialogResult.OK;
 		Close();
 	}
@@ -342,15 +339,7 @@ internal class PictureFromTagsDialog : Form
 
 	private void OpenCover_Click(object sender, EventArgs e)
 	{
-		UseSelectedPictureData(OpenCoverImage);
-	}
-
-	private static void OpenCoverImage(ConfigDescriptorState.PictureData pictureData)
-	{
-		string extension = ImageUtilities.GetImageExtensionForMimeType(pictureData.MimeType, "");
-		string tempCoverPath = PathFileUtilities.GetPictureCacheDirectory() + "tempcover" + extension;
-		File.WriteAllBytes(tempCoverPath, pictureData.ImageBytes);
-		Process.Start(tempCoverPath);
+		UseSelectedPictureData(CoverImageActions.OpenCoverImage);
 	}
 
 	private void ExtractCover_Click(object sender, EventArgs e)
@@ -502,25 +491,9 @@ internal class PictureFromTagsDialog : Form
 		ResumeLayout(performLayout: false);
 	}
 
-	private void SelectPicture(ConfigDescriptorState.PictureData pictureData)
-	{
-		SetSelectedPicture(pictureData);
-	}
-
 	private void ExtractCover(ConfigDescriptorState.PictureData pictureData)
 	{
-		string fileFilter = ImageUtilities.GetImageFileDialogFilterForMimeType(pictureData.MimeType);
-		if (!string.IsNullOrWhiteSpace(fileFilter))
-		{
-			saveCoverDialog.Filter = fileFilter;
-		}
-
-		if (saveCoverDialog.ShowDialog() != DialogResult.OK)
-		{
-			return;
-		}
-
-		File.WriteAllBytes(saveCoverDialog.FileName, pictureData.ImageBytes);
+		CoverImageActions.SaveCoverImageAs(saveCoverDialog, pictureData);
 	}
 }
 

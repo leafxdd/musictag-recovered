@@ -319,7 +319,7 @@ internal class FilenameRelatedBatchDialog : Form
 
 		internal void ReportRenameFailure(string path, string message)
 		{
-			string failureMessage = string.IsNullOrWhiteSpace(message) ? Resources.Msg_SaveFail : message;
+			string failureMessage = StateFieldInstance.ResolveFailureMessage(message);
 			LogService.WriteRenameLog(path + ": " + failureMessage);
 			Owner.batchMessages.AddLine(Path.GetFileName(path));
 			Owner.batchMessages.AddLine(failureMessage);
@@ -466,7 +466,7 @@ internal class FilenameRelatedBatchDialog : Form
 
 		internal void ReportTagSaveFailure(string path, string message)
 		{
-			string failureMessage = string.IsNullOrWhiteSpace(message) ? Resources.Msg_SaveFail : message;
+			string failureMessage = StateFieldInstance.ResolveFailureMessage(message);
 			LogService.WriteSaveTagsLog(path + ": " + failureMessage);
 			Owner.batchMessages.AddLine(Path.GetFileName(path));
 			Owner.batchMessages.AddLine(failureMessage);
@@ -941,10 +941,7 @@ internal class FilenameRelatedBatchDialog : Form
 	private void InitializeCaptureGroupList()
 	{
 		captureGroupRowHeightImageList.ImageSize = new Size(1, ImageUtilities.ScaleByDpi(23f));
-		foreach (ColumnHeader column in captureGroupListView.Columns)
-		{
-			column.Width = ImageUtilities.ScaleByDpi(column.Width);
-		}
+		ImageUtilities.ScaleColumnWidthsForDpi(captureGroupListView);
 		object[] captureGroupOptions = new string[8]
 		{
 			"",
@@ -1337,26 +1334,14 @@ internal class FilenameRelatedBatchDialog : Form
 		return BuildBatchCompletionResult(totalCount, successCount, failureCount, skippedCount, processedCount, batchMessages.ToString());
 	}
 
-	// 批处理完成消息的纯构建核(无 UI):提取自 BuildBatchCompletionResult 实例方法,原方法转发各计数字段 +
-	// batchMessages.ToString()。逐字保持:原方法所有路径均恰好求值一次 batchMessages.ToString(),故提取为
-	// 无条件实参不改变求值次数。totalCount<=1 时按 success>0 / skipped>0 / else 三分支(末分支 isErr=true);
-	// totalCount>1 用 Msg_OK_Fail_Skip_Count 模板(参数序 success,failure,skipped,processed)。
-	// characterization 见 BatchCompletionResultCharacterization。
+	// 批处理完成消息的纯构建核(无 UI):真值表与 StateFieldInstance.BuildBatchResultMessage
+	// (includeSkippedBranch: true)逐分支相同(<=1 与 >1 判定反转不改变真值表),收敛为转发。
+	// Msg_SaveCompleted 由条件读变无条件实参:ResourceManager.GetString 纯读且缓存,与
+	// StateFieldInstance 4 个既有调用点同形。characterization 见 BatchCompletionResultCharacterization
+	// (仍打本入口,转发正确性被其锁定)。
 	internal static (string msg, bool isErr) BuildBatchCompletionResult(int totalCount, int successCount, int failureCount, int skippedCount, int processedCount, string batchMessagesText)
 	{
-		if (totalCount <= 1)
-		{
-			if (successCount > 0)
-			{
-				return (Resources.Msg_SaveCompleted + "\n" + batchMessagesText, false);
-			}
-			if (skippedCount > 0)
-			{
-				return (Resources.Msg_Skipped + "\n" + batchMessagesText, false);
-			}
-			return (batchMessagesText, true);
-		}
-		return (string.Format(Resources.Msg_SaveCompleted + "\n" + Resources.Msg_OK_Fail_Skip_Count, successCount, failureCount, skippedCount, processedCount) + "\n" + batchMessagesText, false);
+		return StateFieldInstance.BuildBatchResultMessage(totalCount, Resources.Msg_SaveCompleted, successCount, failureCount, skippedCount, processedCount, batchMessagesText, includeSkippedBranch: true);
 	}
 
 	protected override void Dispose(bool disposing)

@@ -6,6 +6,7 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Windows.Forms;
 using MusicTagWinApp.Containers;
 using MusicTagWinApp.Properties;
 
@@ -229,6 +230,25 @@ internal static class ImageUtilities
 			return (int)scaledValue;
 		}
 		return (int)Math.Ceiling(scaledValue);
+	}
+
+	// 搜索/图片弹窗 ImageList 的统一 DPI 预备(原 4 个弹窗各自内联重复):
+	// 清空 → 按当前 DPI 缩放自身 ImageSize → 24 位色 → 透明背景。
+	public static void PrepareScaledImageList(ImageList imageList)
+	{
+		imageList.Images.Clear();
+		imageList.ImageSize = new Size(ScaleByDpi(imageList.ImageSize.Width), ScaleByDpi(imageList.ImageSize.Height));
+		imageList.ColorDepth = ColorDepth.Depth24Bit;
+		imageList.TransparentColor = Color.Transparent;
+	}
+
+	// ListView 各列宽按 DPI 缩放(Designer 以 96 DPI 基准写死的列宽,原 5 个弹窗各自内联重复)。
+	public static void ScaleColumnWidthsForDpi(ListView listView)
+	{
+		foreach (ColumnHeader column in listView.Columns)
+		{
+			column.Width = ScaleByDpi(column.Width);
+		}
 	}
 
 	static ImageUtilities()

@@ -78,7 +78,7 @@ internal class CombinedTagSearchDialog : Form
 			CoverDownloadFile coverDownload = new CoverDownloadFile
 			{
 				LoadTask = this,
-				LocalCoverPath = Request.CoverResult.LocalCoverPath ?? PathFileUtilities.GetPictureCacheDirectory() + TextUtilities.ComputeMd5HashString(Request.CoverResult.CoverUrl).Replace("-", ""),
+				LocalCoverPath = Request.CoverResult.LocalCoverPath ?? PathFileUtilities.GetCoverCacheFilePath(Request.CoverResult.CoverUrl),
 				DownloadedBytes = 0L
 			};
 			Request.CoverResult.LocalCoverPath = coverDownload.LocalCoverPath;
@@ -517,17 +517,11 @@ internal class CombinedTagSearchDialog : Form
 
 	private void InitializeResultListImagesAndScaling()
 	{
-		coverImageList.Images.Clear();
-		coverImageList.ImageSize = new Size(ImageUtilities.ScaleByDpi(coverImageList.ImageSize.Width), ImageUtilities.ScaleByDpi(coverImageList.ImageSize.Height));
-		coverImageList.ColorDepth = ColorDepth.Depth24Bit;
-		coverImageList.TransparentColor = Color.Transparent;
+		ImageUtilities.PrepareScaledImageList(coverImageList);
 		coverImageList.Images.Add("download_failed", ImageUtilities.LoadResourceBitmap("download_failed", coverImageList.ImageSize));
 		coverImageList.Images.Add("image_not_found", ImageUtilities.LoadResourceBitmap("imagenotfound", coverImageList.ImageSize));
 		coverImageList.Images.Add("loading", ImageUtilities.LoadResourceBitmap("downloading", coverImageList.ImageSize));
-		foreach (ColumnHeader column in searchResultsListView.Columns)
-		{
-			column.Width = ImageUtilities.ScaleByDpi(column.Width);
-		}
+		ImageUtilities.ScaleColumnWidthsForDpi(searchResultsListView);
 		okSplitButton.AutoSize = false;
 		FontAwesome.Properties fontProperties = new FontAwesome.Properties
 		{
@@ -1070,30 +1064,12 @@ internal class CombinedTagSearchDialog : Form
 		{
 			return;
 		}
-		ConfigDescriptorState.PictureData imageData = new ConfigDescriptorState.PictureData
-		{
-			ImageBytes = File.ReadAllBytes(selectedItem.AssociatedValue)
-		};
-		using (ConfigDescriptorState.LoadPictureImage(imageData))
-		{
-			if (imageData.MimeType != null && imageData.Width > 0 && imageData.Height > 0)
-			{
-				imageAction(imageData);
-			}
-		}
+		CoverImageActions.LoadAndUseCoverImage(selectedItem.AssociatedValue, imageAction);
 	}
 
 	private void OpenCoverMenuClick(object sender, EventArgs args)
 	{
-		WithSelectedCoverImageData(OpenCoverImage);
-	}
-
-	private static void OpenCoverImage(ConfigDescriptorState.PictureData pictureData)
-	{
-		string extension = ImageUtilities.GetImageExtensionForMimeType(pictureData.MimeType, "");
-		string tempCoverPath = PathFileUtilities.GetPictureCacheDirectory() + "tempcover" + extension;
-		File.WriteAllBytes(tempCoverPath, pictureData.ImageBytes);
-		Process.Start(tempCoverPath);
+		WithSelectedCoverImageData(CoverImageActions.OpenCoverImage);
 	}
 
 	private void ExtractCoverMenuClick(object sender, EventArgs args)
@@ -1290,15 +1266,7 @@ internal class CombinedTagSearchDialog : Form
 
 	private void ExtractCoverImage(ConfigDescriptorState.PictureData imageData)
 	{
-		string filter = ImageUtilities.GetImageFileDialogFilterForMimeType(imageData.MimeType);
-		if (!string.IsNullOrWhiteSpace(filter))
-		{
-			saveCoverDialog.Filter = filter;
-		}
-		if (saveCoverDialog.ShowDialog() == DialogResult.OK)
-		{
-			File.WriteAllBytes(saveCoverDialog.FileName, imageData.ImageBytes);
-		}
+		CoverImageActions.SaveCoverImageAs(saveCoverDialog, imageData);
 	}
 
 }

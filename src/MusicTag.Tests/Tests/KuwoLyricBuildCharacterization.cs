@@ -49,6 +49,15 @@ internal static class KuwoLyricBuildCharacterization
 			Check.Equal("http://y.jpg", song.CoverUrl, "cover still set");
 		});
 
+		yield return ("PopulateSongDetails: 3 lines same tail ts (multi-ts) -> alternates split to +5s line (tail-split branch)", delegate
+		{
+			KuwoSongInfo song = new KuwoSongInfo();
+			new KuwoTagProvider().PopulateSongDetails(song, "{\"data\":{\"lrclist\":[{\"time\":\"1\",\"lineLyric\":\"L1\"},{\"time\":\"2\",\"lineLyric\":\"A\"},{\"time\":\"2\",\"lineLyric\":\"B\"},{\"time\":\"2\",\"lineLyric\":\"C\"}],\"songinfo\":{\"pic\":\"\"}}}");
+			Check.NotNull(song.LoadedLyric, "lyric produced");
+			Check.Equal("[00:01.00]L1\n[00:02.00]B\n", song.LoadedLyric.Lyric, "tail alternates: B stays at 2s primary track");
+			Check.Equal("[00:01.00]A\n[00:02.00]C\n", song.LoadedLyric.TranslatedLyric, "A/C flow to translated track (split C rejoins alignment)");
+		});
+
 		yield return ("PopulateSongDetails: missing lrclist -> no LoadedLyric", delegate
 		{
 			KuwoSongInfo song = new KuwoSongInfo();

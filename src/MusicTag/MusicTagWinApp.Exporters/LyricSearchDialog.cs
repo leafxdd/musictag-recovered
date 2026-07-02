@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using MusicTag.Consumers;
+using MusicTag.Mocks;
 using MusicTag.Serialization;
 using MusicTag.Services;
 using MusicTagWinApp.Adapter;
@@ -103,10 +104,7 @@ internal class LyricSearchDialog : Form
 
 		private void AddResults(SourceItem sourceItem, List<LyricSearchResult> candidates, List<LyricSearchResult> target)
 		{
-			List<LyricSearchResult> accepted = candidates.Take(Math.Min(Math.Min(remainingResultLimit, candidates.Count), sourceResultLimits[sourceItem])).ToList();
-			target.AddRange(accepted);
-			remainingResultLimit -= accepted.Count;
-			sourceResultLimits[sourceItem] -= accepted.Count;
+			LyricSearchResult.TakeWithinCaps(sourceItem, candidates, target, sourceResultLimits, ref remainingResultLimit);
 		}
 
 		private List<LyricSearchResult> SearchLyricsFromTrackCandidates()
@@ -134,11 +132,7 @@ internal class LyricSearchDialog : Form
 			{
 				tracks.RemoveAll(track => track.SourceTrackId == knownIdLyrics[0].TrackId);
 			}
-			foreach (TrackSearchResult track in tracks)
-			{
-				track.UpdateSimilarityScores(dialog.trackInfo.Title, dialog.trackInfo.Artist, dialog.trackInfo.Album);
-			}
-			TrackSearchResult.SortBySimilarity(tracks);
+			CombinedTagSearchDialog.SortBySearchContextSimilarity(tracks, dialog.trackInfo);
 			List<LyricSearchResult> lyrics = new List<LyricSearchResult>();
 			foreach (TrackSearchResult track in tracks)
 			{
@@ -174,11 +168,7 @@ internal class LyricSearchDialog : Form
 			{
 				return null;
 			}
-			foreach (LyricSearchResult lyric in lyrics)
-			{
-				lyric.UpdateSimilarityScores(dialog.trackInfo.Title, dialog.trackInfo.Artist, dialog.trackInfo.Album);
-			}
-			LyricSearchResult.SortLyricResults(lyrics);
+			LyricSearchResult.SortByContextSimilarity(lyrics, dialog.trackInfo);
 			return lyrics;
 		}
 	}
@@ -271,16 +261,10 @@ internal class LyricSearchDialog : Form
 
 	private void InitializeImagesAndColumns()
 	{
-		lyricIconImages.Images.Clear();
-		lyricIconImages.ImageSize = new Size(ImageUtilities.ScaleByDpi(lyricIconImages.ImageSize.Width), ImageUtilities.ScaleByDpi(lyricIconImages.ImageSize.Height));
-		lyricIconImages.ColorDepth = ColorDepth.Depth24Bit;
-		lyricIconImages.TransparentColor = Color.Transparent;
+		ImageUtilities.PrepareScaledImageList(lyricIconImages);
 		lyricIconImages.Images.Add("fileext_lrc.png", ImageUtilities.LoadResourceBitmap("fileext_lrc", lyricIconImages.ImageSize));
 		lyricIconImages.Images.Add("fileext_txt.png", ImageUtilities.LoadResourceBitmap("fileext_txt", lyricIconImages.ImageSize));
-		foreach (ColumnHeader item in lyricListView.Columns)
-		{
-			item.Width = ImageUtilities.ScaleByDpi(item.Width);
-		}
+		ImageUtilities.ScaleColumnWidthsForDpi(lyricListView);
 	}
 
 	private void ApplyLocalizedText()

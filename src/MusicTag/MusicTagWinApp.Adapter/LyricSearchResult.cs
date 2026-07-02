@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using MusicTag.Composer;
 using MusicTagWinApp.Containers;
@@ -159,6 +160,27 @@ internal class LyricSearchResult
 	public void UpdateSimilarityScores(string title, string artist, string album)
 	{
 		TrackSearchResult.CalculateSimilarityScores(title, artist, album, Title, Artist, Album, OriginalTitle, GetSimilarityScores());
+	}
+
+	// 词搜索的每源+全局配额过滤(原 LyricSearchDialog.AddResults 与 AutoMatchTagsDialog 内嵌
+	// AddLimitedLyricResults 字段名不同、逻辑逐字相同):一次收录 min(全局余额, 本批数, 该源余额)
+	// 条到 target,并同步扣减两个余额(perSourceRemaining 原地递减,globalRemaining 经 ref 回写)。
+	internal static void TakeWithinCaps(SourceItem sourceItem, List<LyricSearchResult> candidates, List<LyricSearchResult> target, Dictionary<SourceItem, int> perSourceRemaining, ref int globalRemaining)
+	{
+		List<LyricSearchResult> accepted = candidates.Take(Math.Min(Math.Min(globalRemaining, candidates.Count), perSourceRemaining[sourceItem])).ToList();
+		target.AddRange(accepted);
+		globalRemaining -= accepted.Count;
+		perSourceRemaining[sourceItem] -= accepted.Count;
+	}
+
+	// 「按搜索上下文刷新相似度分数 + 排序」二连(原 LyricSearchDialog / AutoMatchTagsDialog 各自内联重复)。
+	internal static void SortByContextSimilarity(List<LyricSearchResult> lyrics, TrackSearchContext searchContext)
+	{
+		foreach (LyricSearchResult lyric in lyrics)
+		{
+			lyric.UpdateSimilarityScores(searchContext.Title, searchContext.Artist, searchContext.Album);
+		}
+		SortLyricResults(lyrics);
 	}
 
 	public static void SortLyricResults(List<LyricSearchResult> lyrics)

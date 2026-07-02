@@ -269,7 +269,7 @@ internal class AutoMatchTagsDialog : Form
 				}
 				catch (Exception ex)
 				{
-					worker.loadErrorMessage = string.IsNullOrWhiteSpace(ex.Message) ? Resources.Msg_SaveFail : ex.Message;
+					worker.loadErrorMessage = StateFieldInstance.ResolveFailureMessage(ex.Message);
 				}
 				finally
 				{
@@ -485,10 +485,6 @@ internal class AutoMatchTagsDialog : Form
 
 			internal void AddRankedCandidates(bool useProviderRanking)
 			{
-				TrackResultLimiter resultLimiter = new TrackResultLimiter
-				{
-					searchState = this
-				};
 				if (!useProviderRanking)
 				{
 					CombinedTagSearchDialog.SortBySearchContextSimilarity(candidateTracks, searchContext);
@@ -497,9 +493,7 @@ internal class AutoMatchTagsDialog : Form
 				{
 					CombinedTagSearchDialog.RankSearchResults(candidateTracks, searchContext);
 				}
-				resultLimiter.limitedResults = new List<TrackSearchResult>();
-				candidateTracks.ForEach(resultLimiter.AddIfWithinLimit);
-				rankedTracks.AddRange(resultLimiter.limitedResults);
+				rankedTracks.AddRange(CombinedTagSearchDialog.SelectResultsWithinSourceCaps(candidateTracks, remainingResultsBySource, ref remainingGlobalResults));
 			}
 
 			internal bool IsPrimaryNetEaseSourceAvailable(SourceItem sourceItem)
@@ -570,33 +564,8 @@ internal class AutoMatchTagsDialog : Form
 			}
 			}
 
-		private sealed class TrackResultLimiter
-		{
-			public List<TrackSearchResult> limitedResults;
-
-			public MetadataSearchState searchState;
-
-			internal void AddIfWithinLimit(TrackSearchResult searchResult)
-			{
-				if (searchState.remainingGlobalResults <= 0)
-				{
-					return;
-				}
-				if (searchState.remainingResultsBySource[searchResult.SearchSource] <= 0)
-				{
-					return;
-				}
-				limitedResults.Add(searchResult);
-				searchState.remainingResultsBySource[searchResult.SearchSource]--;
-				int remainingResults = searchState.remainingGlobalResults;
-				searchState.remainingGlobalResults = remainingResults - 1;
-			}
-		}
-
 		private sealed class LyricSearchState
 		{
-			private List<LyricSearchResult> limitedResults;
-
 			public Dictionary<SourceItem, int> remainingResultsBySourceItem;
 
 			public int remainingGlobalResults;
@@ -608,10 +577,7 @@ internal class AutoMatchTagsDialog : Form
 
 			internal void AddLimitedLyricResults(SourceItem sourceItem, List<LyricSearchResult> candidates, List<LyricSearchResult> accumulatedResults)
 			{
-				limitedResults = candidates.Take(Math.Min(Math.Min(remainingGlobalResults, candidates.Count), remainingResultsBySourceItem[sourceItem])).ToList();
-				accumulatedResults.AddRange(limitedResults);
-				remainingGlobalResults -= limitedResults.Count;
-				remainingResultsBySourceItem[sourceItem] -= limitedResults.Count;
+				LyricSearchResult.TakeWithinCaps(sourceItem, candidates, accumulatedResults, remainingResultsBySourceItem, ref remainingGlobalResults);
 			}
 
 			internal bool IsNetEaseSourceAvailable(SourceItem sourceItem)
@@ -885,7 +851,7 @@ internal class AutoMatchTagsDialog : Form
 
 		private void RecordAutoMatchError(string errorMessage)
 		{
-			string message = string.IsNullOrWhiteSpace(errorMessage) ? Resources.Msg_SaveFail : errorMessage;
+			string message = StateFieldInstance.ResolveFailureMessage(errorMessage);
 			LogService.WriteAutoMatchLog(GetCurrentFilePath() + ": " + message);
 			GetOwnerDialog().autoMatchLog.AddLine(Path.GetFileName(GetCurrentFilePath()));
 			GetOwnerDialog().autoMatchLog.AddLine(message);
@@ -1151,43 +1117,7 @@ internal class AutoMatchTagsDialog : Form
 					{
 						bestTrack.Year = CombinedTagSearchDialog.FetchMissingNetEaseReleaseYear(bestTrack, GetCancellationSource());
 					}
-					metadataSearch.resultValues.Add("textTags", new Dictionary<string, object>
-					{
-						{
-							"title",
-							(bestTrack.Title ?? "").Trim()
-						},
-						{
-							"artist",
-							(bestTrack.Artist ?? "").Trim()
-						},
-						{
-							"album",
-							(bestTrack.Album ?? "").Trim()
-						},
-						{
-							"year",
-							(bestTrack.Year ?? "").Trim()
-						},
-						{ "track", bestTrack.Track },
-						{
-							"trackstr",
-							(bestTrack.Track > 0) ? bestTrack.Track.ToString() : ""
-						},
-						{ "disc", bestTrack.Disc },
-						{
-							"discstr",
-							(bestTrack.Disc > 0) ? bestTrack.Disc.ToString() : ""
-						},
-						{
-							"genre",
-							(bestTrack.Genre ?? "").Trim()
-						},
-						{
-							"comment",
-							(bestTrack.Comment ?? "").Trim()
-						}
-					});
+					metadataSearch.resultValues.Add("textTags", BuildTextTagCandidates(bestTrack));
 				}
 				if (!GetCancellationSource().IsCancellationRequested && shouldSearchLyrics && !metadataSearch.resultValues.ContainsKey("lyric") && !TrackSearchResult.IsInstrumentalTitle(TextUtilities.CoalesceNonBlank(metadataSearch.searchContext.Title).ToLower()))
 				{
@@ -1228,11 +1158,7 @@ internal class AutoMatchTagsDialog : Form
 								candidateTracks.AddRange(LyricSearchDialog.SearchTracksBySource(lyricSource.SearchSource, searchContext, searchPass++, GetCancellationSource(), fromCandidateSearch: false));
 							}
 						}
-						foreach (TrackSearchResult candidateTrack in candidateTracks)
-						{
-							candidateTrack.UpdateSimilarityScores(searchContext.Title, searchContext.Artist, searchContext.Album);
-						}
-						TrackSearchResult.SortBySimilarity(candidateTracks);
+						CombinedTagSearchDialog.SortBySearchContextSimilarity(candidateTracks, searchContext);
 						foreach (TrackSearchResult candidateTrack in candidateTracks)
 						{
 							LyricSourceMatchPredicate sourceMatch = new LyricSourceMatchPredicate();
@@ -1254,11 +1180,7 @@ internal class AutoMatchTagsDialog : Form
 								addLimitedLyricResults(lyricSource, LyricSearchDialog.SearchLyricsBySource(lyricSource.SearchSource, useKnownMusicId: false, searchContext, maxResults, lyricResults, searchPass++, GetCancellationSource(), searchCandidateTracks: false), lyricResults);
 							}
 						}
-						foreach (LyricSearchResult lyricResult in lyricResults)
-						{
-							lyricResult.UpdateSimilarityScores(searchContext.Title, searchContext.Artist, searchContext.Album);
-						}
-						LyricSearchResult.SortLyricResults(lyricResults);
+						LyricSearchResult.SortByContextSimilarity(lyricResults, searchContext);
 					}
 				}
 				if (!GetCancellationSource().IsCancellationRequested && lyricResults.Any())
@@ -1658,10 +1580,7 @@ internal class AutoMatchTagsDialog : Form
 	{
 		MatchConditionListBuilder listBuilder = new MatchConditionListBuilder(this);
 		rowImageList.ImageSize = new Size(1, ImageUtilities.ScaleByDpi(40f));
-		foreach (ColumnHeader column in tagListView.Columns)
-		{
-			column.Width = ImageUtilities.ScaleByDpi(column.Width);
-		}
+		ImageUtilities.ScaleColumnWidthsForDpi(tagListView);
 		try
 		{
 			listBuilder.SavedConditions = JsonConvert.DeserializeObject<Dictionary<string, (string, bool)>>(Settings.Default.AutoMatchTagsCondition);
@@ -1842,26 +1761,32 @@ internal class AutoMatchTagsDialog : Form
 		}
 	}
 
-	// 从 StartAutoMatchTags 提取:批量/单文件自动匹配的完成文案纯核(4 路径,与
-	// FilenameRelatedBatchDialog.BuildBatchCompletionResult 同构)。totalCount>1 -> 批量 OK/失败/跳过统计;
-	// 否则 success>0 -> 已保存;skipped>0 -> 已跳过;else -> 纯日志+错误标志。logText 由调用点预求值
-	// (autoMatchLog.ToString() 纯,且 4 路径 BEFORE 均用到 log,故无条件预求值等价);successCount 等为
-	// volatile int,worker 已 join(await Task.Run 完成)后值已定,eager 读全 4 字段无副作用不可观测。
+	// 批量/单文件自动匹配的完成文案纯核:真值表与 StateFieldInstance.BuildBatchResultMessage
+	// (includeSkippedBranch: true)完全一致,收敛为转发(Msg_SaveCompleted 变无条件读,
+	// ResourceManager.GetString 纯读且缓存)。logText 由调用点预求值;characterization 仍打本入口。
 	internal static (string msg, bool isErr) BuildAutoMatchCompletionResult(int totalCount, int successCount, int failedCount, int skippedCount, int processedCount, string logText)
 	{
-		if (totalCount > 1)
+		return StateFieldInstance.BuildBatchResultMessage(totalCount, Resources.Msg_SaveCompleted, successCount, failedCount, skippedCount, processedCount, logText, includeSkippedBranch: true);
+	}
+
+	// 最佳匹配 track → 文本 tag 候选载荷("textTags" 字典,写回引擎按匹配条件挑用):字符串字段
+	// null 合并后 Trim;track/disc 同时给 int 原值与 >0 才非空的字符串形态。构造序与原内联初始化器一致。
+	// characterization 见 BuildTextTagCandidatesCharacterization。
+	internal static Dictionary<string, object> BuildTextTagCandidates(TrackSearchResult bestTrack)
+	{
+		return new Dictionary<string, object>
 		{
-			return (string.Format(Resources.Msg_SaveCompleted + "\n" + Resources.Msg_OK_Fail_Skip_Count, successCount, failedCount, skippedCount, processedCount) + "\n" + logText, false);
-		}
-		if (successCount > 0)
-		{
-			return (Resources.Msg_SaveCompleted + "\n" + logText, false);
-		}
-		if (skippedCount > 0)
-		{
-			return (Resources.Msg_Skipped + "\n" + logText, false);
-		}
-		return (logText, true);
+			{ "title", (bestTrack.Title ?? "").Trim() },
+			{ "artist", (bestTrack.Artist ?? "").Trim() },
+			{ "album", (bestTrack.Album ?? "").Trim() },
+			{ "year", (bestTrack.Year ?? "").Trim() },
+			{ "track", bestTrack.Track },
+			{ "trackstr", (bestTrack.Track > 0) ? bestTrack.Track.ToString() : "" },
+			{ "disc", bestTrack.Disc },
+			{ "discstr", (bestTrack.Disc > 0) ? bestTrack.Disc.ToString() : "" },
+			{ "genre", (bestTrack.Genre ?? "").Trim() },
+			{ "comment", (bestTrack.Comment ?? "").Trim() }
+		};
 	}
 
 	// 从实例谓词提取静态纯核:选中匹配条件是否"全为仅写文件模式(SaveToFile)"。空集 -> false

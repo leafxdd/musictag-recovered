@@ -431,12 +431,15 @@ internal class KuwoTagProvider : RemoteTagProviderBase, ITrackSearchProvider, IL
 					}
 				}
 
-				if (timedLines.Any() && timedLines.Last().Value.AlternateText.Count > 1)
+				if (timedLines.Any())
 				{
 					KeyValuePair<long, (string PrimaryText, List<string> AlternateText)> lastLine = timedLines.Last();
 					List<string> alternateText = lastLine.Value.AlternateText;
-					timedLines.Add(lastLine.Key + 5000L, (string.Join(" ", alternateText.Skip(1)), new List<string>()));
-					alternateText.RemoveRange(1, alternateText.Count - 1);
+					if (alternateText.Count > 1)
+					{
+						timedLines.Add(lastLine.Key + 5000L, (string.Join(" ", alternateText.Skip(1)), new List<string>()));
+						alternateText.RemoveRange(1, alternateText.Count - 1);
+					}
 				}
 
 				List<(long TimestampMs, string PrimaryText, string AlternateText)> normalizedLines = new List<(long, string, string)>();

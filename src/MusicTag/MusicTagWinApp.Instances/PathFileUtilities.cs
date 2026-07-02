@@ -82,6 +82,13 @@ internal static class PathFileUtilities
 		return EnsureDirectoryExists(GetApplicationDirectory() + "temp\\PictureCache") + "\\";
 	}
 
+	// 封面 URL 的本地缓存文件全路径:图片缓存目录(确保存在)+ MD5 十六进制(去连字符)文件名。
+	// 两个搜索弹窗(封面 / 综合 tag)共用,原各自内联同一表达式。
+	public static string GetCoverCacheFilePath(string coverUrl)
+	{
+		return GetPictureCacheDirectory() + TextUtilities.ComputeMd5HashString(coverUrl).Replace("-", "");
+	}
+
 	public static string GetUndoTempDirectory()
 	{
 		return EnsureDirectoryExists(GetApplicationDirectory() + "temp\\Undo") + "\\";
