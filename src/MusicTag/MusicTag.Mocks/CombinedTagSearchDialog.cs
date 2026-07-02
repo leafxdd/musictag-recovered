@@ -365,8 +365,6 @@ internal class CombinedTagSearchDialog : Form
 
 		internal void RankLimitAndReportCurrentBatch(bool useProviderRanking)
 		{
-			TrackResultLimitCollector resultLimiter = new TrackResultLimitCollector();
-			resultLimiter.SearchLimits = this;
 			if (useProviderRanking)
 			{
 				Coordinator.Owner.RankCurrentSearchResults(CurrentBatch);
@@ -375,10 +373,9 @@ internal class CombinedTagSearchDialog : Form
 			{
 				Coordinator.Owner.SortCurrentSearchResults(CurrentBatch);
 			}
-			resultLimiter.LimitedResults = new List<TrackSearchResult>();
-			CurrentBatch.ForEach(resultLimiter.AddIfWithinLimit);
-			AccumulatedResults.AddRange(resultLimiter.LimitedResults);
-			Coordinator.ProgressReporter.Report(resultLimiter.LimitedResults);
+			List<TrackSearchResult> limitedResults = SelectResultsWithinSourceCaps(CurrentBatch, RemainingResultsBySource, ref RemainingGlobalResults);
+			AccumulatedResults.AddRange(limitedResults);
+			Coordinator.ProgressReporter.Report(limitedResults);
 		}
 
 		internal void InitializeSourceLimit(SourceItem sourceItem)
@@ -392,23 +389,24 @@ internal class CombinedTagSearchDialog : Form
 		}
 	}
 
-	private sealed class TrackResultLimitCollector
+	// 按全局上限 + 每源上限过滤本批结果(原 TrackResultLimitCollector.AddIfWithinLimit 的纯计数器数学，
+	// 提取为可测 static)：逐个结果，若全局余额 <= 0 或该源余额 <= 0 则跳过，否则收录并同时递减两个计数器。
+	// remainingGlobalResults 以 ref 回写(原经 collector.SearchLimits 更新同一字段);remainingResultsBySource
+	// 原地递减(同一 dict 引用)。全局余额的 || 短路保留 —— 全局耗尽时不索引 dict(保留原 KeyNotFound 边界不变)。
+	internal static List<TrackSearchResult> SelectResultsWithinSourceCaps(List<TrackSearchResult> batch, Dictionary<SearchSource, int> remainingResultsBySource, ref int remainingGlobalResults)
 	{
-		public List<TrackSearchResult> LimitedResults;
-
-		public TrackSearchLimitState SearchLimits;
-
-		internal void AddIfWithinLimit(TrackSearchResult trackResult)
+		List<TrackSearchResult> limitedResults = new List<TrackSearchResult>();
+		foreach (TrackSearchResult trackResult in batch)
 		{
-			if (SearchLimits.RemainingGlobalResults <= 0 || SearchLimits.RemainingResultsBySource[trackResult.SearchSource] <= 0)
+			if (remainingGlobalResults <= 0 || remainingResultsBySource[trackResult.SearchSource] <= 0)
 			{
-				return;
+				continue;
 			}
-			LimitedResults.Add(trackResult);
-			SearchLimits.RemainingResultsBySource[trackResult.SearchSource]--;
-			int remainingResults = SearchLimits.RemainingGlobalResults;
-			SearchLimits.RemainingGlobalResults = remainingResults - 1;
+			limitedResults.Add(trackResult);
+			remainingResultsBySource[trackResult.SearchSource]--;
+			remainingGlobalResults--;
 		}
+		return limitedResults;
 	}
 
 	private int activeMediaDownloadCount;
