@@ -547,8 +547,7 @@ internal class OptionsDialog : Form
 			durationFilterComboBox.Items.Add(durationFilterParts[0]);
 			durationFilterOptions.Add(int.Parse(durationFilterParts[1]));
 		}
-		int durationFilterIndex = durationFilterOptions.IndexOf(Settings.Default.FileFilterByDuration);
-		durationFilterComboBox.SelectedIndex = durationFilterIndex >= 0 ? durationFilterIndex : 0;
+		durationFilterComboBox.SelectedIndex = ResolveIndexOrDefault(durationFilterOptions, Settings.Default.FileFilterByDuration);
 		ignoreVideoFilesCheckBox.Checked = Settings.Default.FileFilterIgnoreVideoFile;
 
 		keepFileUpdateTimeCheckBox.Checked = Settings.Default.SaveTagsKeepUpdateTime;
@@ -556,22 +555,14 @@ internal class OptionsDialog : Form
 		checkForUpdatesOnStartupCheckBox.Checked = Settings.Default.CheckForUpdatesOnStartup;
 		writeNetEaseCommentKeyCheckBox.Checked = Settings.Default.CommentTagWrite163Key;
 		lrcFilenameFormatComboBox.Items.AddRange(GetResourceText(Resources.LrcFilenameFormatDesc, DefaultLrcFilenameFormatDescriptions).Split('|'));
-		int lyricFilenameFormatIndex = GetResourceText(Resources.LrcFilenameFormat, DefaultLrcFilenameFormatValues)
-			.Split('|')
-			.ToList()
-			.IndexOf(Settings.Default.SaveLrcFilenameFormat);
-		lrcFilenameFormatComboBox.SelectedIndex = lyricFilenameFormatIndex >= 0 ? lyricFilenameFormatIndex : 0;
+		lrcFilenameFormatComboBox.SelectedIndex = ResolveIndexOrDefault(GetResourceText(Resources.LrcFilenameFormat, DefaultLrcFilenameFormatValues).Split('|').ToList(), Settings.Default.SaveLrcFilenameFormat);
 		lrcDirectoryTextBox.Text = Settings.Default.SaveLrcDirectory;
 		alwaysShowNotifyIconCheckBox.Checked = Settings.Default.AlwaysShowIconInNofiArea;
 		minimizeToNotifyAreaCheckBox.Checked = Settings.Default.MinimizeToNotiArea;
 		restrictedExtensionsTextBox.Text = Settings.Default.RestrictFileExts;
 
 		pictureFormatLimitComboBox.Items.AddRange(GetResourceText(Resources.PictureFormatLimitsEntries, DefaultPictureFormatLimitEntries).Split('|'));
-		int pictureFormatLimitIndex = GetResourceText(Resources.PictureFormatLimitsKeys, DefaultPictureFormatLimitValues)
-			.Split('|')
-			.ToList()
-			.IndexOf(Settings.Default.PictureFormatLimits);
-		pictureFormatLimitComboBox.SelectedIndex = pictureFormatLimitIndex >= 0 ? pictureFormatLimitIndex : 0;
+		pictureFormatLimitComboBox.SelectedIndex = ResolveIndexOrDefault(GetResourceText(Resources.PictureFormatLimitsKeys, DefaultPictureFormatLimitValues).Split('|').ToList(), Settings.Default.PictureFormatLimits);
 
 		qqCookieTextBox.Text = Settings.Default.QQMusic_Cookie;
 		customUserAgentTextBox.Text = Settings.Default.WebSearch_CustomUserAgent;
@@ -748,8 +739,8 @@ internal class OptionsDialog : Form
 		Settings.Default.ConnectorsLyricAndTLyric = lyricTranslationSeparatorComboBox.Text;
 		Settings.Default.LyricDownload_DownloadTrans_Enable = downloadTranslatedLyricsCheckBox.Checked;
 		Settings.Default.LyricDownload_DownloadTrans_DontDownloadOrigLyric = skipOriginalLyricCheckBox.Checked;
-		Settings.Default.LyricDownload_DownloadTrans_LyricFormat = translatedLyricFormat2RadioButton.Checked ? 1 : (translatedLyricFormat3RadioButton.Checked ? 2 : (translatedLyricFormat4RadioButton.Checked ? 3 : 0));
-		Settings.Default.LyricDownload_DownloadTrans_ChineseConvMode = traditionalToSimplifiedRadioButton.Checked ? 1 : (simplifiedToTraditionalRadioButton.Checked ? 2 : 0);
+		Settings.Default.LyricDownload_DownloadTrans_LyricFormat = ResolveTranslatedLyricFormatSetting(translatedLyricFormat2RadioButton.Checked, translatedLyricFormat3RadioButton.Checked, translatedLyricFormat4RadioButton.Checked);
+		Settings.Default.LyricDownload_DownloadTrans_ChineseConvMode = ResolveChineseConversionModeSetting(traditionalToSimplifiedRadioButton.Checked, simplifiedToTraditionalRadioButton.Checked);
 		Settings.Default.LyricDownload_ReformatTimetag = reformatTimestampCheckBox.Checked;
 		Settings.Default.LyricDownload_RemoveTimetag = removeTimestampCheckBox.Checked;
 		Settings.Default.LyricDownload_DeleteLinesOfBlankText = removeBlankLyricLinesCheckBox.Checked;
@@ -2102,6 +2093,26 @@ internal class OptionsDialog : Form
 	internal static int ClampToRange(int value, int min, int max)
 	{
 		return Math.Max(min, Math.Min(max, value));
+	}
+
+	// 译文歌词格式 radio -> 持久化 int(save 端 reduction，从 SaveOptionsAndClose 内联三元提取，behavior-preserving)：
+	// fmt2->1 / fmt3->2 / fmt4->3 / 皆未选->0(对应 load switch 的 default=fmt1)。
+	internal static int ResolveTranslatedLyricFormatSetting(bool format2Selected, bool format3Selected, bool format4Selected)
+	{
+		return format2Selected ? 1 : (format3Selected ? 2 : (format4Selected ? 3 : 0));
+	}
+
+	// 中文转换模式 radio -> 持久化 int：繁转简->1 / 简转繁->2 / 皆未选->0(对应 load switch 的 default=不转换)。
+	internal static int ResolveChineseConversionModeSetting(bool traditionalToSimplified, bool simplifiedToTraditional)
+	{
+		return traditionalToSimplified ? 1 : (simplifiedToTraditional ? 2 : 0);
+	}
+
+	// 在 pipe 分隔的资源/选项列表里定位已保存值的下标，未命中回退 0(从 LoadSavedOptions 三处重复惯用法提取)。
+	internal static int ResolveIndexOrDefault<T>(IList<T> options, T value)
+	{
+		int index = options.IndexOf(value);
+		return index >= 0 ? index : 0;
 	}
 
 }

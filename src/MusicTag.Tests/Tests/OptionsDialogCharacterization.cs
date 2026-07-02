@@ -220,5 +220,95 @@ internal static class OptionsDialogCharacterization
 			Check.True(!options.Contains(50), "no 50 (0 jumps straight to 100)");
 			Check.True(!options.Contains(105), "no 105 (step-10 off-grid)");
 		});
+
+		// ===== ResolveTranslatedLyricFormatSetting:save 端 radio->int(fmt2?1:fmt3?2:fmt4?3:0)=====
+
+		yield return ("ResolveTranslatedLyricFormatSetting: fmt2 -> 1", delegate
+		{
+			Check.Equal(1, OptionsDialog.ResolveTranslatedLyricFormatSetting(true, false, false), "fmt2");
+		});
+
+		yield return ("ResolveTranslatedLyricFormatSetting: fmt3 -> 2", delegate
+		{
+			Check.Equal(2, OptionsDialog.ResolveTranslatedLyricFormatSetting(false, true, false), "fmt3");
+		});
+
+		yield return ("ResolveTranslatedLyricFormatSetting: fmt4 -> 3", delegate
+		{
+			Check.Equal(3, OptionsDialog.ResolveTranslatedLyricFormatSetting(false, false, true), "fmt4");
+		});
+
+		// 皆未选 -> 0(对应 load switch 的 default = fmt1)
+		yield return ("ResolveTranslatedLyricFormatSetting: none -> 0", delegate
+		{
+			Check.Equal(0, OptionsDialog.ResolveTranslatedLyricFormatSetting(false, false, false), "none");
+		});
+
+		// 多选时 fmt2 短路优先(镜像原三元 fmt2?1:...)
+		yield return ("ResolveTranslatedLyricFormatSetting: fmt2 wins when multiple set", delegate
+		{
+			Check.Equal(1, OptionsDialog.ResolveTranslatedLyricFormatSetting(true, true, true), "priority fmt2");
+		});
+
+		// ===== ResolveChineseConversionModeSetting:trad?1:simp?2:0 =====
+
+		yield return ("ResolveChineseConversionModeSetting: traditional->simplified -> 1", delegate
+		{
+			Check.Equal(1, OptionsDialog.ResolveChineseConversionModeSetting(true, false), "t2s");
+		});
+
+		yield return ("ResolveChineseConversionModeSetting: simplified->traditional -> 2", delegate
+		{
+			Check.Equal(2, OptionsDialog.ResolveChineseConversionModeSetting(false, true), "s2t");
+		});
+
+		yield return ("ResolveChineseConversionModeSetting: none -> 0", delegate
+		{
+			Check.Equal(0, OptionsDialog.ResolveChineseConversionModeSetting(false, false), "none");
+		});
+
+		yield return ("ResolveChineseConversionModeSetting: traditional wins when both set", delegate
+		{
+			Check.Equal(1, OptionsDialog.ResolveChineseConversionModeSetting(true, true), "priority t2s");
+		});
+
+		// ===== ResolveIndexOrDefault<T>:options.IndexOf(value) 后 idx>=0?idx:0(pipe 列表下标回退)=====
+
+		yield return ("ResolveIndexOrDefault: int list found -> index", delegate
+		{
+			Check.Equal(1, OptionsDialog.ResolveIndexOrDefault(new List<int> { 10, 20, 30 }, 20), "found at 1");
+		});
+
+		yield return ("ResolveIndexOrDefault: int list not found -> 0", delegate
+		{
+			Check.Equal(0, OptionsDialog.ResolveIndexOrDefault(new List<int> { 10, 20, 30 }, 99), "not found");
+		});
+
+		// 命中首位返回 0(与未命中回退 0 同值，但语义不同 —— 锁定 found-at-0 走 IndexOf==0 分支)
+		yield return ("ResolveIndexOrDefault: int found at index 0 -> 0", delegate
+		{
+			Check.Equal(0, OptionsDialog.ResolveIndexOrDefault(new List<int> { 5, 6 }, 5), "found at 0");
+		});
+
+		yield return ("ResolveIndexOrDefault: string list found -> index", delegate
+		{
+			Check.Equal(2, OptionsDialog.ResolveIndexOrDefault(new List<string> { "a", "b", "c" }, "c"), "found at 2");
+		});
+
+		yield return ("ResolveIndexOrDefault: string list not found -> 0", delegate
+		{
+			Check.Equal(0, OptionsDialog.ResolveIndexOrDefault(new List<string> { "a", "b" }, "z"), "not found");
+		});
+
+		// string 用 EqualityComparer 序数相等 -> 大小写敏感未命中回退 0
+		yield return ("ResolveIndexOrDefault: string case-sensitive miss -> 0", delegate
+		{
+			Check.Equal(0, OptionsDialog.ResolveIndexOrDefault(new List<string> { "A" }, "a"), "ordinal miss");
+		});
+
+		yield return ("ResolveIndexOrDefault: empty list -> 0", delegate
+		{
+			Check.Equal(0, OptionsDialog.ResolveIndexOrDefault(new List<int>(), 1), "empty");
+		});
 	}
 }
