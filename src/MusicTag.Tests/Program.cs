@@ -69,6 +69,7 @@ internal static class Program
 			tests.AddRange(TrackResultLimitCharacterization.All());
 			tests.AddRange(TagFieldTemplateCharacterization.All());
 			tests.AddRange(BuildTextTagCandidatesCharacterization.All());
+			tests.AddRange(CoverDownloadCoreCharacterization.All());
 		return TestRunner.RunAll(tests);
 	}
 }

@@ -75,122 +75,22 @@ internal class CombinedTagSearchDialog : Form
 
 		internal Image LoadOrDownloadImage()
 		{
-			CoverDownloadFile coverDownload = new CoverDownloadFile
-			{
-				LoadTask = this,
-				LocalCoverPath = Request.CoverResult.LocalCoverPath ?? PathFileUtilities.GetCoverCacheFilePath(Request.CoverResult.CoverUrl),
-				DownloadedBytes = 0L
-			};
-			Request.CoverResult.LocalCoverPath = coverDownload.LocalCoverPath;
-			if (coverDownload.IsAlreadyDownloading())
+			CoverDownloadOutcome outcome = CoverDownloadCore.LoadOrDownloadCover(Request.CoverResult, Request.Owner.queuedCoverDownloadPaths, Request.Owner.cancellationSource, Request.Owner.coverImageList.ImageSize);
+			if (!outcome.PathReserved)
 			{
 				return null;
 			}
-			RemoteTagProviderBase.DownloadStatus dlStatus = RemoteTagProviderBase.DownloadStatus.Error;
-			Bitmap bitmap = null;
-			if (File.Exists(coverDownload.LocalCoverPath))
+			OriginalImageSize = outcome.OriginalSize;
+			if (outcome.Bitmap == null)
 			{
-				bitmap = coverDownload.DecodeAndResizeImage();
-			}
-			if (bitmap == null)
-			{
-				dlStatus = coverDownload.DownloadCoverFile();
-				if (dlStatus == RemoteTagProviderBase.DownloadStatus.Success)
-				{
-					bitmap = coverDownload.DecodeAndResizeImage();
-				}
-				else
-				{
-					coverDownload.DeleteFailedDownload();
-				}
-			}
-			if (bitmap == null)
-			{
-				Console.WriteLine(string.Concat("bmp fail:", Request.CoverResult.CoverUrl, ",", coverDownload.LocalCoverPath, ",", coverDownload.DownloadedBytes));
-				if (dlStatus != RemoteTagProviderBase.DownloadStatus.NotFound)
+				Console.WriteLine(string.Concat("bmp fail:", Request.CoverResult.CoverUrl, ",", outcome.CoverPath, ",", outcome.DownloadedBytes));
+				if (outcome.Status != RemoteTagProviderBase.DownloadStatus.NotFound)
 				{
 					return Request.Owner.coverImageList.Images["download_failed"];
 				}
 				return Request.Owner.coverImageList.Images["image_not_found"];
 			}
-			return bitmap;
-		}
-	}
-
-	private sealed class CoverDownloadFile
-	{
-		public string LocalCoverPath;
-
-		public long DownloadedBytes;
-
-		public CoverImageLoadTask LoadTask;
-
-		internal bool IsAlreadyDownloading()
-		{
-			HashSet<string> queuedCoverDownloadPaths = LoadTask.Request.Owner.queuedCoverDownloadPaths;
-			bool lockTaken = false;
-			try
-			{
-				Monitor.Enter(queuedCoverDownloadPaths, ref lockTaken);
-				if (!queuedCoverDownloadPaths.Contains(LocalCoverPath))
-				{
-					queuedCoverDownloadPaths.Add(LocalCoverPath);
-					return false;
-				}
-				return true;
-			}
-			finally
-			{
-				if (lockTaken)
-				{
-					Monitor.Exit(queuedCoverDownloadPaths);
-				}
-			}
-		}
-
-		internal RemoteTagProviderBase.DownloadStatus DownloadCoverFile()
-		{
-			try
-			{
-				var (result, downloadedBytes) = LoadTask.Request.CoverResult.CoverDownloader(LoadTask.Request.Owner.cancellationSource, LocalCoverPath, 300000);
-				DownloadedBytes = downloadedBytes;
-				return result;
-			}
-			catch (System.Exception ex)
-			{
-				Console.WriteLine("downloadfile fail:" + ex.Message);
-			}
-			return RemoteTagProviderBase.DownloadStatus.Error;
-		}
-
-		internal void DeleteFailedDownload()
-		{
-			try
-			{
-				if (File.Exists(LocalCoverPath))
-				{
-					File.Delete(LocalCoverPath);
-				}
-			}
-			catch (System.Exception ex)
-			{
-				Console.WriteLine("deletefile fail:" + ex.Message);
-			}
-		}
-
-		internal Bitmap DecodeAndResizeImage()
-		{
-			try
-			{
-				using Bitmap bitmap = new Bitmap(LocalCoverPath);
-				LoadTask.OriginalImageSize = bitmap.Size;
-				return ImageUtilities.ResizeImageToFit(bitmap, LoadTask.Request.Owner.coverImageList.ImageSize, centerOnCanvas: true);
-			}
-			catch (System.Exception ex)
-			{
-				Console.WriteLine("decode bitmap fail " + ex.Message);
-			}
-			return null;
+			return outcome.Bitmap;
 		}
 	}
 
