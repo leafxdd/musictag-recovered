@@ -38,3 +38,10 @@ docs/汉化/
 # Original (pre-recovery) program kept locally as a reverse-engineering reference:
 # copyrighted binaries incl. the native MusicTag.dll the project removed from history.
 docs/old/
+
+# Local agent / IDE tooling, config, and scratch — never published.
+.claude/
+.mcp.json
+.repowise/
+AGENTS.md
+cctortest/
