@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net481</TargetFramework>
+    <UseWindowsForms>True</UseWindowsForms>
+    <Prefer32Bit>True</Prefer32Bit>
+    <AssemblyName>MusicTag.Tests</AssemblyName>
+    <RootNamespace>MusicTag.Tests</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <!-- characterization 测试宿主：独立 net481 x86 console exe，自写极简断言（零 NuGet，
+         保持主项目零-NuGet 纯净度）。经 InternalsVisibleTo 访问主程序集 internal 类型。 -->
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- HttpClient：override provider 的 protected virtual PostString 需匹配签名。net481 下 System.Net.Http 需显式引用。 -->
+    <Reference Include="System.Net.Http" />
+    <!-- TagLibSharp：163-key COMM round-trip 测试需直接构造 ID3v2 CommentsFrame 预置 fixture(与 MusicTag.csproj 同一 dll)。 -->
+    <Reference Include="TagLibSharp">
+      <HintPath>..\MusicTag\musictag\TagLibSharp.dll</HintPath>
+    </Reference>
+    <!-- Newtonsoft.Json：GetFirstField / provider 解码器 characterization 需直接构造 JObject/JToken(与 MusicTag.csproj 同一 dll)。 -->
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>..\MusicTag\musictag\Newtonsoft.Json.dll</HintPath>
+    </Reference>
+    <ProjectReference Include="..\MusicTag\MusicTag.csproj" />
+  </ItemGroup>
+</Project>
