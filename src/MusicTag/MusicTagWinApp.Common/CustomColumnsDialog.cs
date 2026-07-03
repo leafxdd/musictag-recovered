@@ -80,7 +80,11 @@ internal class CustomColumnsDialog : Form
 	public CustomColumnsDialog()
 	{
 		InitializeComponent();
-		ComponentResourceManager resources = new ComponentResourceManager(typeof(StateFieldInstance));
+		// 本对话框反编译前原类名为 MusicTagWinApp.Common.SetterObject —— 三个按钮(上移/下移/重置)的
+		// 各语言译文存在附属程序集(zh-CHS/zh-CHT/en 的 MusicTag.resources.dll)的 SetterObject 资源里。
+		// 恢复时窗体改名为 CustomColumnsDialog,但查表基名误用了 StateFieldInstance(其中无这三个键),
+		// 导致中文简/繁下始终回退到硬编码英文。此处按原始基名 SetterObject 取译文。
+		ResourceManager resources = new ResourceManager("MusicTagWinApp.Common.SetterObject", typeof(CustomColumnsDialog).Assembly);
 		Text = Resources.customcolumns;
 		moveUpButton.Text = GetDialogText(resources, "btnMoveUp", moveUpButton.Text);
 		moveDownButton.Text = GetDialogText(resources, "btnMoveDown", moveDownButton.Text);
@@ -113,10 +117,19 @@ internal class CustomColumnsDialog : Form
 		UpdateLayout(null, null);
 	}
 
-	private static string GetDialogText(ComponentResourceManager resources, string resourceName, string fallbackText)
+	private static string GetDialogText(ResourceManager resources, string resourceName, string fallbackText)
 	{
-		string resourceText = resources.GetString(resourceName);
-		return string.IsNullOrEmpty(resourceText) ? fallbackText : resourceText;
+		try
+		{
+			string resourceText = resources.GetString(resourceName);
+			return string.IsNullOrEmpty(resourceText) ? fallbackText : resourceText;
+		}
+		catch (MissingManifestResourceException)
+		{
+			// SetterObject 无中性(主程序集内)资源集;若当前区域性又无对应附属程序集,GetString 会抛此异常。
+			// 实际区域性恒为 zh-CHS/zh-CHT/en(均有附属),此 catch 仅作防御,保持原「取不到就回退」契约不崩。
+			return fallbackText;
+		}
 	}
 
 	internal static int CompareColumnDisplayOrder(ColumnHeaderInfo left, ColumnHeaderInfo right)
