@@ -25,15 +25,22 @@
     </application>
   </compatibility>
 
-  <!-- System DPI awareness. The app computes its scale once at startup
-       (DatabaseMapper.GetDpiScale) and lays out via AutoScaleMode.Dpi + ScaleByDpi,
-       so System awareness (not Per-Monitor) is the matching model: it stops Windows
-       from bitmap-stretching the window at >100% scaling, which was causing blurry
-       text and icons. -->
+  <!-- EXPERIMENTAL (branch experiment/per-monitor-dpi-v2 only — NOT on develop): Per-Monitor
+       V2 DPI awareness. Goal: keep the window crisp instead of OS bitmap-stretched (blurry)
+       when dragged between monitors of different scale. UNVERIFIED / LIKELY-REGRESSES: the
+       app computes its scale ONCE at startup (DatabaseMapper.GetDpiScale) and applies a
+       pervasive custom ScaleByDpi across ~139 sites in 27 files, with ZERO WM_DPICHANGED /
+       DpiChanged handlers. Under PMv2 a cross-monitor move fires WM_DPICHANGED: WinForms
+       auto-resizing (EnableWindowsFormsHighDpiAutoResizing + the ApplicationConfigurationSection
+       in MusicTag.exe.config) rescales managed controls, but the custom-scaled ImageLists,
+       column widths and owner-drawn parts stay at the STARTUP DPI → expect inconsistent
+       layout until real per-monitor re-layout is written. Cannot be validated here (no
+       dual-DPI hardware). The PerMonitor/system tail keeps sane down-level behavior.
+       TO REVERT: set dpiAware back to `true` and dpiAwareness back to `system`. -->
   <application xmlns="urn:schemas-microsoft-com:asm.v3">
     <windowsSettings>
-      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true</dpiAware>
-      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">system</dpiAwareness>
+      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/PM</dpiAware>
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2, PerMonitor, system</dpiAwareness>
     </windowsSettings>
   </application>
 </assembly>
