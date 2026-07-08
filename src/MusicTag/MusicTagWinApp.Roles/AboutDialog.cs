@@ -164,6 +164,7 @@ internal class AboutDialog : Form
 		closeButton.Text = "Close";
 		closeButton.UseVisualStyleBackColor = true;
 		closeButton.Click += CloseButtonClick;
+		base.CancelButton = closeButton;
 		base.AutoScaleDimensions = new SizeF(96f, 96f);
 		base.AutoScaleMode = AutoScaleMode.Dpi;
 		base.ClientSize = new Size(406, 256);

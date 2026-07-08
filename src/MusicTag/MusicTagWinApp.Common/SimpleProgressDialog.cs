@@ -127,6 +127,7 @@ internal class SimpleProgressDialog : Form
 		cancelButton.Text = "Cancel";
 		cancelButton.UseVisualStyleBackColor = true;
 		cancelButton.Click += CancelButtonClick;
+		CancelButton = cancelButton;
 		progressImage.Image = Resources.img_wait;
 		progressImage.Location = new Point(16, 16);
 		progressImage.Name = "pbProgress";

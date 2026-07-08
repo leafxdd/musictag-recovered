@@ -646,6 +646,7 @@ internal class LyricEditorDialog : Form
 		cancelButton.Text = "Cancel";
 		cancelButton.UseVisualStyleBackColor = true;
 		cancelButton.Click += CancelButton_Click;
+		CancelButton = cancelButton;
 
 		downloadProgressPanel.Controls.Add(progressPictureBox);
 		downloadProgressPanel.Controls.Add(downloadingLabel);

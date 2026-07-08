@@ -91,6 +91,7 @@ internal class LyricTimeOffsetDialog : Form
 		cancelButton.Text = "Cancel";
 		cancelButton.UseVisualStyleBackColor = true;
 		cancelButton.Click += CancelButton_Click;
+		CancelButton = cancelButton;
 		AutoScaleDimensions = new SizeF(96f, 96f);
 		AutoScaleMode = AutoScaleMode.Dpi;
 		ClientSize = new Size(244, 106);

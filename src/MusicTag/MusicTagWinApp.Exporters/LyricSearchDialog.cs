@@ -632,6 +632,7 @@ internal class LyricSearchDialog : Form
 		cancelButton.Text = "Cancel";
 		cancelButton.UseVisualStyleBackColor = true;
 		cancelButton.Click += CancelSelection;
+		CancelButton = cancelButton;
 		searchStatusLabel.AutoSize = false;
 		searchStatusLabel.AutoEllipsis = true;
 		searchStatusLabel.Name = "searchStatusLabel";

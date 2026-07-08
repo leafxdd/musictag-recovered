@@ -1113,6 +1113,7 @@ internal class CombinedTagSearchDialog : Form
 		cancelButton.Text = "Cancel";
 		cancelButton.UseVisualStyleBackColor = true;
 		cancelButton.Click += CancelButtonClick;
+		CancelButton = cancelButton;
 		searchStatusLabel.AutoSize = false;
 		searchStatusLabel.AutoEllipsis = true;
 		searchStatusLabel.Margin = new Padding(0, 10, 0, 0);

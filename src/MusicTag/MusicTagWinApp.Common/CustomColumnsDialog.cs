@@ -522,6 +522,7 @@ internal class CustomColumnsDialog : Form
 		cancelButton.Text = "Cancel";
 		cancelButton.UseVisualStyleBackColor = true;
 		cancelButton.Click += CancelButtonClick;
+		CancelButton = cancelButton;
 
 		AutoScaleDimensions = new SizeF(96f, 96f);
 		AutoScaleMode = AutoScaleMode.Dpi;

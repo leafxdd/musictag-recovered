@@ -446,6 +446,7 @@ internal class PictureFromTagsDialog : Form
 		cancelButton.Text = "Cancel";
 		cancelButton.UseVisualStyleBackColor = true;
 		cancelButton.Click += CancelButton_Click;
+		CancelButton = cancelButton;
 
 		progressPictureBox.Image = Resources.img_wait;
 		progressPictureBox.Location = new Point(220, 13);

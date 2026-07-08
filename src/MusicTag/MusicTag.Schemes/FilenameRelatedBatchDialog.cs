@@ -1704,6 +1704,7 @@ internal class FilenameRelatedBatchDialog : Form
 		patternCancelButton.Text = "Cancel";
 		patternCancelButton.UseVisualStyleBackColor = true;
 		patternCancelButton.Click += CancelPatternSettings;
+		base.CancelButton = patternCancelButton;
 		regexTabPage.Controls.Add(regexTabPanel);
 		regexTabPage.Location = new Point(4, 23);
 		regexTabPage.Margin = new Padding(0);

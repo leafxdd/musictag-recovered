@@ -35,6 +35,17 @@ internal class DonateDialog : Form
 		base.Dispose(disposing);
 	}
 
+	// ESC 关闭本捐赠二维码窗口:此窗口无取消按钮可绑定 Form.CancelButton,故直接拦截 Esc。
+	protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+	{
+		if (keyData == Keys.Escape)
+		{
+			Close();
+			return true;
+		}
+		return base.ProcessCmdKey(ref msg, keyData);
+	}
+
 	private void InitializeComponent()
 	{
 		components = new Container();
