@@ -802,6 +802,35 @@ internal sealed class Settings : ApplicationSettingsBase
 	[SettingsProvider(typeof(XmlSettingsProvider))]
 	[SettingsManageability(SettingsManageability.Roaming)]
 	[UserScopedSetting]
+	public bool ConnectorsArtists_PadSpaces
+	{
+		get
+		{
+			return (bool)this["ConnectorsArtists_PadSpaces"];
+		}
+		set
+		{
+			this["ConnectorsArtists_PadSpaces"] = value;
+		}
+	}
+
+	// 艺术家分隔符的有效形态:按 ConnectorsArtists_PadSpaces 决定是否在两侧补空格(如 "/" ↔ " / ")。
+	// 供 QQ / 网易云拼接多艺术家时统一取用(酷我/酷狗的艺术家由 API 直接返回整串,不经此处)。
+	public string GetArtistConnector()
+	{
+		string connector = ConnectorsArtists;
+		if (ConnectorsArtists_PadSpaces && !string.IsNullOrEmpty(connector))
+		{
+			return " " + connector + " ";
+		}
+		return connector;
+	}
+
+	[DebuggerNonUserCode]
+	[DefaultSettingValue("False")]
+	[SettingsProvider(typeof(XmlSettingsProvider))]
+	[SettingsManageability(SettingsManageability.Roaming)]
+	[UserScopedSetting]
 	public bool DontDownloadLyricWithInstrumentInTitle
 	{
 		get

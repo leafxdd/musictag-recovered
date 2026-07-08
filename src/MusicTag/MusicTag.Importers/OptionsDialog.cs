@@ -188,6 +188,8 @@ internal class OptionsDialog : Form
 
 	private ComboBox artistConnectorComboBox;
 
+	private CheckBox artistConnectorPadSpacesCheckBox;
+
 	private FlowLayoutPanel saveAndNotificationOptionsPanel;
 
 	private GroupBox lrcFileGroupBox;
@@ -407,6 +409,7 @@ internal class OptionsDialog : Form
 		pictureResolutionLimitLabel.Text = GetDialogText("lblPictureResolution", pictureResolutionLimitLabel.Text);
 		pictureFormatLimitLabel.Text = GetDialogText("lblPictureFormatLimits", pictureFormatLimitLabel.Text);
 		artistConnectorLabel.Text = GetDialogText("lblConnectorsArtists", artistConnectorLabel.Text);
+		artistConnectorPadSpacesCheckBox.Text = GetDialogText("cbConnectorsArtistsPadSpaces", artistConnectorPadSpacesCheckBox.Text);
 		fileFilterLabel.Text = GetDialogText("lblFileFilter", fileFilterLabel.Text);
 		durationFilterLabel.Text = GetDialogText("lblFileFilterByDuration", durationFilterLabel.Text);
 		ignoreVideoFilesCheckBox.Text = GetDialogText("cbFileFilterIgnoreVideoFile", ignoreVideoFilesCheckBox.Text);
@@ -529,6 +532,7 @@ internal class OptionsDialog : Form
 		UpdatePictureResolutionLimitLabel(null, null);
 
 		artistConnectorComboBox.Text = Settings.Default.ConnectorsArtists;
+		artistConnectorPadSpacesCheckBox.Checked = Settings.Default.ConnectorsArtists_PadSpaces;
 		lrcEncodingComboBox.Items.AddRange(GetResourceText(Resources.LrcFileEncodings, DefaultLrcFileEncodings).Split('|'));
 		lrcEncodingComboBox.SelectedIndex = 0;
 		lrcEncodingComboBox.SelectedItem = Settings.Default.SaveLrcFileDefaultEncoding;
@@ -765,6 +769,7 @@ internal class OptionsDialog : Form
 		Settings.Default.RestrictFileExts = string.Join(";", StateFieldInstance.EnabledTagTypesByExtension.Keys) + ";";
 		Settings.Default.PictureFormatLimits = GetResourceText(Resources.PictureFormatLimitsKeys, DefaultPictureFormatLimitValues).Split('|')[pictureFormatLimitComboBox.SelectedIndex];
 		Settings.Default.ConnectorsArtists = artistConnectorComboBox.Text;
+		Settings.Default.ConnectorsArtists_PadSpaces = artistConnectorPadSpacesCheckBox.Checked;
 		Settings.Default.QQMusic_Cookie = qqCookieTextBox.Text.Trim();
 		Settings.Default.WebSearch_CustomUserAgent = customUserAgentTextBox.Text.Trim();
 		if (!DialogService.TrySaveApplicationSettings())
@@ -1038,6 +1043,7 @@ internal class OptionsDialog : Form
 		pictureFormatLimitComboBox = new ComboBox();
 		artistConnectorLabel = new Label();
 		artistConnectorComboBox = new ComboBox();
+		artistConnectorPadSpacesCheckBox = new CheckBox();
 		id3v2VersionPanel = new FlowLayoutPanel();
 		id3v2VersionLabel = new Label();
 		id3v24RadioButton = new RadioButton();
@@ -1405,6 +1411,7 @@ internal class OptionsDialog : Form
 		searchAndTagOptionsPanel.Controls.Add(pictureFormatLimitComboBox);
 		searchAndTagOptionsPanel.Controls.Add(artistConnectorLabel);
 		searchAndTagOptionsPanel.Controls.Add(artistConnectorComboBox);
+		searchAndTagOptionsPanel.Controls.Add(artistConnectorPadSpacesCheckBox);
 		searchAndTagOptionsPanel.Controls.Add(id3v2VersionPanel);
 		searchAndTagOptionsPanel.Controls.Add(fileFilterLabel);
 		searchAndTagOptionsPanel.Controls.Add(fileFilterPanel);
@@ -1528,6 +1535,12 @@ internal class OptionsDialog : Form
 		artistConnectorComboBox.Name = "cbConnectorsArtists";
 		artistConnectorComboBox.Size = new Size(155, 22);
 		artistConnectorComboBox.TabIndex = 18;
+		artistConnectorPadSpacesCheckBox.AutoSize = true;
+		artistConnectorPadSpacesCheckBox.Margin = new Padding(6, 6, 3, 0);
+		artistConnectorPadSpacesCheckBox.Name = "cbConnectorsArtistsPadSpaces";
+		artistConnectorPadSpacesCheckBox.TabIndex = 19;
+		artistConnectorPadSpacesCheckBox.Text = "在分隔符前后添加空格";
+		artistConnectorPadSpacesCheckBox.UseVisualStyleBackColor = true;
 		id3v2VersionPanel.Controls.Add(id3v2VersionLabel);
 		id3v2VersionPanel.Controls.Add(id3v24RadioButton);
 		id3v2VersionPanel.Controls.Add(id3v23RadioButton);
@@ -1963,6 +1976,7 @@ internal class OptionsDialog : Form
 		cancelButton.Text = "Cancel";
 		cancelButton.UseVisualStyleBackColor = true;
 		cancelButton.Click += CancelOptionsDialog;
+		CancelButton = cancelButton;
 		coverSourceOrderControl.Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 		coverSourceOrderControl.Location = new Point(6, 0);
 		coverSourceOrderControl.Margin = new Padding(0);

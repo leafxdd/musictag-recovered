@@ -44,7 +44,7 @@ internal class QqSongInfo
 
 			if (artistNames.Length > 0)
 			{
-				artistNames.Append(Settings.Default.ConnectorsArtists);
+				artistNames.Append(Settings.Default.GetArtistConnector());
 			}
 
 			artistNames.Append(TextEncodingService.DecodeBasicHtmlEntities(artist.Name));
