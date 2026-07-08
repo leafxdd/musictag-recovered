@@ -112,9 +112,9 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 			{
 				int retryNumber = attempt + 1;
 				int retryTotal = maxAttempts - 1;
-				// 指数退避:2/4/8/16/32 秒。倒计时按整秒显示,实际等待多留缓冲(见
-				// RetryCountdownBufferMs),确保倒计时能数到 0 再重试。
-				int countdownSeconds = 1 << (attempt + 1);
+				// 退避:2/4/4/4/4 秒(前两次 2、4,其后封顶 4;应用户要求缩短第 3–5 次等待)。
+				// 倒计时按整秒显示,实际等待多留缓冲(见 RetryCountdownBufferMs),确保数到 0 再重试。
+				int countdownSeconds = Math.Min(1 << (attempt + 1), 4);
 				int waitMilliseconds = countdownSeconds * 1000 + RetryCountdownBufferMs;
 				Console.WriteLine($"QQ search throttled (req_0.code 2001), retry {retryNumber}/{retryTotal}");
 				ReportStatus(SourceSearchPhase.Retrying, "2001", retryNumber, retryTotal, countdownSeconds);
