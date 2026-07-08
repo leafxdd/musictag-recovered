@@ -13,6 +13,7 @@ using MusicTag.Serialization;
 using MusicTag.Services;
 using MusicTagWinApp.Instances;
 using MusicTagWinApp.Listeners;
+using MusicTagWinApp.Properties;
 using MusicTagWinApp.Roles;
 using MusicTagWinApp.Web;
 using Newtonsoft.Json.Linq;
@@ -501,13 +502,13 @@ internal class KuwoTagProvider : RemoteTagProviderBase, ITrackSearchProvider, IL
 					bool appendedPrimaryLyric = false;
 					if (line.AlternateText != null)
 					{
-						lyricBuilder.Append(LyricTextProcessor.FormatTimestamp(line.TimestampMs, useThreeDigitMilliseconds: false));
+						lyricBuilder.Append(LyricTextProcessor.FormatTimestamp(line.TimestampMs, useThreeDigitMilliseconds: !Settings.Default.LyricDownload_ReformatTimetag));
 						lyricBuilder.Append(line.AlternateText);
 						lyricBuilder.Append("\n");
 					}
 					else if (index < normalizedLines.Count - 1 || translatedLyricBuilder.Length == 0)
 					{
-						lyricBuilder.Append(LyricTextProcessor.FormatTimestamp(line.TimestampMs, useThreeDigitMilliseconds: false));
+						lyricBuilder.Append(LyricTextProcessor.FormatTimestamp(line.TimestampMs, useThreeDigitMilliseconds: !Settings.Default.LyricDownload_ReformatTimetag));
 						lyricBuilder.Append(line.PrimaryText);
 						lyricBuilder.Append("\n");
 						appendedPrimaryLyric = true;
@@ -516,7 +517,7 @@ internal class KuwoTagProvider : RemoteTagProviderBase, ITrackSearchProvider, IL
 					if (!appendedPrimaryLyric)
 					{
 						long translatedTimestampMs = index > 0 ? normalizedLines[index - 1].TimestampMs : line.TimestampMs;
-						translatedLyricBuilder.Append(LyricTextProcessor.FormatTimestamp(translatedTimestampMs, useThreeDigitMilliseconds: false));
+						translatedLyricBuilder.Append(LyricTextProcessor.FormatTimestamp(translatedTimestampMs, useThreeDigitMilliseconds: !Settings.Default.LyricDownload_ReformatTimetag));
 						translatedLyricBuilder.Append(line.PrimaryText);
 						translatedLyricBuilder.Append("\n");
 					}

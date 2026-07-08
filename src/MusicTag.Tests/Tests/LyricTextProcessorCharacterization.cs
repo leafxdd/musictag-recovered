@@ -148,5 +148,29 @@ internal static class LyricTextProcessorCharacterization
 			Settings.Default.LyricDownload_DownloadTrans_LyricFormat = 1;
 			Check.Equal("[00:02.00]t", LyricTextProcessor.ReformatDownloadedLyrics("x", "[00:02.00]t", false, true, true), "prefer -> reformat translated, drop header");
 		});
+
+		// ===== 时间轴精度随 LyricDownload_ReformatTimetag(格式化时间轴)开关 =====
+		// 关闭:保留源 3 位毫秒(不再降位截断);开启:降到 2 位百分秒并四舍五入。
+		// off 用例局部置 false 并 finally 复位,避免泄漏(全局基线为 true,见 Program.Main)。
+		yield return ("LyricTextProcessor.ReformatLyric: ReformatTimetag OFF preserves 3-digit ms", delegate
+		{
+			Settings.Default.LyricDownload_DownloadTrans_LyricFormat = 1;
+			Settings.Default.LyricDownload_ReformatTimetag = false;
+			try
+			{
+				Check.Equal("[00:00.345]x", LyricTextProcessor.ReformatLyric("[00:00.345]x", false, false), "OFF -> 3-digit preserved");
+			}
+			finally
+			{
+				Settings.Default.LyricDownload_ReformatTimetag = true;
+			}
+		});
+
+		yield return ("LyricTextProcessor.ReformatLyric: ReformatTimetag ON rounds to 2-digit ms", delegate
+		{
+			Settings.Default.LyricDownload_DownloadTrans_LyricFormat = 1;
+			Settings.Default.LyricDownload_ReformatTimetag = true;
+			Check.Equal("[00:00.35]x", LyricTextProcessor.ReformatLyric("[00:00.345]x", false, false), "ON -> 2-digit rounded (.345 -> .35)");
+		});
 	}
 }

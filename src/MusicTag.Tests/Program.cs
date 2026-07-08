@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using MusicTagWinApp.Properties;
 
 namespace MusicTag.Tests;
 
@@ -70,6 +71,11 @@ internal static class Program
 			tests.AddRange(TagFieldTemplateCharacterization.All());
 			tests.AddRange(BuildTextTagCandidatesCharacterization.All());
 			tests.AddRange(CoverDownloadCoreCharacterization.All());
+		// Characterization 基线:歌词时间轴精度现由 LyricDownload_ReformatTimetag 控制(见
+		// LyricTextProcessor.FormatTimestamp 的两位/三位分支)。统一 pin 为 true(格式化开 → 2 位
+		// 百分秒、四舍五入),使既有断言确定;验证"关 → 保留 3 位"的用例在其内部局部置 false 并在
+		// finally 复位,避免泄漏到后续用例。运行时该项默认读作 false(XmlSettingsProvider 无持久值)。
+		Settings.Default.LyricDownload_ReformatTimetag = true;
 		return TestRunner.RunAll(tests);
 	}
 }

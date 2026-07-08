@@ -253,14 +253,20 @@ namespace MusicTag.Composer;
 
 	public static string FormatTimestamp(long timestampMilliseconds, bool useThreeDigitMilliseconds)
 	{
-		long milliseconds = timestampMilliseconds % 1000L;
-		long seconds = timestampMilliseconds / 1000L % 60L;
-		long minutes = timestampMilliseconds / 1000L / 60L;
 		if (useThreeDigitMilliseconds)
 		{
+			long milliseconds = timestampMilliseconds % 1000L;
+			long seconds = timestampMilliseconds / 1000L % 60L;
+			long minutes = timestampMilliseconds / 1000L / 60L;
 			return string.Format(CultureInfo.InvariantCulture, "[{0:D2}:{1:D2}.{2:D3}]", minutes, seconds, milliseconds);
 		}
-		return string.Format(CultureInfo.InvariantCulture, "[{0:D2}:{1:D2}.{2:D2}]", minutes, seconds, milliseconds / 10L);
+		// 降到 2 位百分秒时四舍五入到最近 10ms(取代原先 ms/10 直接丢弃末位)。先对整时间戳
+		// 取整,使进位正确(如 59_999ms → 60_000ms → [01:00.00],而非丢位后 [00:59.99])。
+		long roundedMilliseconds = (timestampMilliseconds + 5L) / 10L * 10L;
+		long centiseconds = roundedMilliseconds / 10L % 100L;
+		long roundedSeconds = roundedMilliseconds / 1000L % 60L;
+		long roundedMinutes = roundedMilliseconds / 1000L / 60L;
+		return string.Format(CultureInfo.InvariantCulture, "[{0:D2}:{1:D2}.{2:D2}]", roundedMinutes, roundedSeconds, centiseconds);
 	}
 
 	private string MergeMetadataValue(string currentValue, string incomingValue)
@@ -368,7 +374,7 @@ namespace MusicTag.Composer;
 		{
 			if (!omitTimestamps)
 			{
-				lineBuilder.Append(FormatTimestamp(timestampKey, useThreeDigitMilliseconds: false));
+				lineBuilder.Append(FormatTimestamp(timestampKey, useThreeDigitMilliseconds: !Settings.Default.LyricDownload_ReformatTimetag));
 			}
 		}
 		switch (lyricFormat)
@@ -560,11 +566,11 @@ namespace MusicTag.Composer;
 		{
 			long timestamp = lineEntry.Key;
 			LyricLine line = lineEntry.Value;
-			originalLyricBuilder.Append(FormatTimestamp(timestamp, useThreeDigitMilliseconds: false));
+			originalLyricBuilder.Append(FormatTimestamp(timestamp, useThreeDigitMilliseconds: !Settings.Default.LyricDownload_ReformatTimetag));
 			originalLyricBuilder.Append(line.OriginalText + "\n");
 			if (line.TranslatedText != null)
 			{
-				translatedLyricBuilder.Append(FormatTimestamp(timestamp, useThreeDigitMilliseconds: false));
+				translatedLyricBuilder.Append(FormatTimestamp(timestamp, useThreeDigitMilliseconds: !Settings.Default.LyricDownload_ReformatTimetag));
 				translatedLyricBuilder.Append(line.TranslatedText + "\n");
 			}
 		}

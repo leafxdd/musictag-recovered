@@ -8,7 +8,7 @@ namespace MusicTag.Tests;
 
 // 歌词处理三簇 characterization(均不改产品代码 / DecodeLyricPayload 仅可见性提升,纯净回归网):
 //   LyricTextProcessor.FormatTimestamp(public static):ms -> "[mm:ss.ff]"(2 位)/"[mm:ss.fff]"(3 位),
-//     InvariantCulture,ms/10 截断,分钟不 wrap(可 >60)。
+//     InvariantCulture,2 位为四舍五入到最近 10ms,分钟不 wrap(可 >60)。
 //   LyricTextProcessor.AlignAndSplitTranslatedLyric(public,经 public ctor 解析 lrc):双语行对齐并拆回
 //     (原文, 译文)。此处只锁"时间戳完全对齐"主干(每个 attach 分支极微妙,留待后续 extraction 时扩展)。
 //   QqMusicTagProvider.DecodeLyricPayload(private static -> internal static):jsonp 回调剥壳 +
@@ -45,7 +45,7 @@ internal static class LyricProcessingCharacterization
 			Check.Equal("[00:01.00]", LyricTextProcessor.FormatTimestamp(1000L, useThreeDigitMilliseconds: false), "1s");
 		});
 
-		yield return ("FormatTimestamp: (61500, 2-digit) -> [01:01.50] (ms/10 truncation)", delegate
+		yield return ("FormatTimestamp: (61500, 2-digit) -> [01:01.50] (round to nearest centisecond)", delegate
 		{
 			Check.Equal("[01:01.50]", LyricTextProcessor.FormatTimestamp(61500L, useThreeDigitMilliseconds: false), "1m1.5s 2-digit");
 		});
@@ -126,6 +126,27 @@ internal static class LyricProcessingCharacterization
 			var (lyric, translation) = QqMusicTagProvider.DecodeLyricPayload(body);
 			Check.Equal("[00:02.00]Solo", lyric, "decoded solo lyric");
 			Check.Equal("", translation, "no trans");
+		});
+
+		// ===== FormatTimestamp 2 位分支:四舍五入到最近 10ms(取代原先 ms/10 丢弃末位)=====
+		yield return ("FormatTimestamp: (345, 2-digit) -> [00:00.35] rounds up (was .34 truncated)", delegate
+		{
+			Check.Equal("[00:00.35]", LyricTextProcessor.FormatTimestamp(345L, useThreeDigitMilliseconds: false), "345ms -> .35 round half up");
+		});
+
+		yield return ("FormatTimestamp: (344, 2-digit) -> [00:00.34] rounds down", delegate
+		{
+			Check.Equal("[00:00.34]", LyricTextProcessor.FormatTimestamp(344L, useThreeDigitMilliseconds: false), "344ms -> .34 round down");
+		});
+
+		yield return ("FormatTimestamp: (999, 2-digit) -> [00:01.00] carry into second", delegate
+		{
+			Check.Equal("[00:01.00]", LyricTextProcessor.FormatTimestamp(999L, useThreeDigitMilliseconds: false), "999ms rounds up to 1.00s");
+		});
+
+		yield return ("FormatTimestamp: (345, 3-digit) -> [00:00.345] full precision (no rounding)", delegate
+		{
+			Check.Equal("[00:00.345]", LyricTextProcessor.FormatTimestamp(345L, useThreeDigitMilliseconds: true), "345ms -> .345 exact");
 		});
 	}
 }
