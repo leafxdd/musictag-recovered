@@ -27,11 +27,7 @@ public class SplitButton : Button
 
 	private ContextMenuStrip splitMenuStrip;
 
-	private ContextMenu splitMenu;
-
 	private TextFormatFlags textFormatFlags;
-
-	private bool mouseOverButton;
 
 	[Browsable(false)]
 	public override ContextMenuStrip ContextMenuStrip
@@ -46,32 +42,8 @@ public class SplitButton : Button
 		}
 	}
 
-	[DefaultValue(null)]
-	public ContextMenu SplitMenu
-	{
-		get
-		{
-			return splitMenu;
-		}
-		set
-		{
-			if (splitMenu != null)
-			{
-				splitMenu.Popup -= MarkLegacyMenuOpening;
-			}
-			if (value == null)
-			{
-				ShowSplit = false;
-			}
-			else
-			{
-				ShowSplit = true;
-				value.Popup += MarkLegacyMenuOpening;
-			}
-			splitMenu = value;
-		}
-	}
-
+	// net8 迁移:legacy ContextMenu(WinForms core 已移除该类型)的 SplitMenu 支路整体删除——
+	// 应用内零使用(全部走 SplitMenuStrip),删除为行为等价。
 	[DefaultValue(null)]
 	public ContextMenuStrip SplitMenuStrip
 	{
@@ -215,7 +187,6 @@ public class SplitButton : Button
 	{
 		if (showSplit)
 		{
-			mouseOverButton = true;
 			if (!GetButtonState().Equals(PushButtonState.Pressed) && !GetButtonState().Equals(PushButtonState.Disabled))
 			{
 				SetButtonState(PushButtonState.Hot);
@@ -233,7 +204,6 @@ public class SplitButton : Button
 			base.OnMouseLeave(e);
 			return;
 		}
-		mouseOverButton = false;
 		pushButtonState = GetButtonState();
 		if (!pushButtonState.Equals(PushButtonState.Pressed) && !GetButtonState().Equals(PushButtonState.Disabled))
 		{
@@ -247,10 +217,6 @@ public class SplitButton : Button
 		{
 			base.OnMouseDown(e);
 			return;
-		}
-		if (splitMenu != null && e.Button == MouseButtons.Left && !mouseOverButton)
-		{
-			suppressNextMenuOpen = true;
 		}
 		if (splitBounds.Contains(e.Location) && !menuVisible && e.Button == MouseButtons.Left)
 		{
@@ -272,7 +238,7 @@ public class SplitButton : Button
 			ShowDropdown();
 			return;
 		}
-		if ((splitMenuStrip == null && splitMenu == null) || !menuVisible)
+		if (splitMenuStrip == null || !menuVisible)
 		{
 			UpdateButtonStateAfterMenuClose();
 			if (base.ClientRectangle.Contains(mevent.Location) && !splitBounds.Contains(mevent.Location))
@@ -681,11 +647,7 @@ public class SplitButton : Button
 		if (!suppressNextMenuOpen)
 		{
 			SetButtonState(PushButtonState.Pressed);
-			if (splitMenu != null)
-			{
-				splitMenu.Show(this, new Point(0, base.Height));
-			}
-			else if (splitMenuStrip != null)
+			if (splitMenuStrip != null)
 			{
 				splitMenuStrip.Show(this, new Point(0, base.Height), ToolStripDropDownDirection.BelowRight);
 			}
@@ -710,11 +672,6 @@ public class SplitButton : Button
 			return;
 		}
 		suppressNextMenuOpen = splitBounds.Contains(PointToClient(Cursor.Position)) && Control.MouseButtons == MouseButtons.Left;
-	}
-
-	private void MarkLegacyMenuOpening(object sender, EventArgs e)
-	{
-		menuVisible = true;
 	}
 
 	protected override void WndProc(ref Message m)

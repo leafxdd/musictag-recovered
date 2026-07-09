@@ -1,11 +1,21 @@
-<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <AssemblyName>MusicTag</AssemblyName>
     <GenerateAssemblyInfo>False</GenerateAssemblyInfo>
     <OutputType>WinExe</OutputType>
     <UseWindowsForms>True</UseWindowsForms>
-    <TargetFramework>net481</TargetFramework>
-    <Prefer32Bit>True</Prefer32Bit>
+    <!-- EXPERIMENTAL (branch experiment/per-monitor-dpi-v2): net481 -> net8.0-windows。
+         动机:FW 4.8 的 WinForms DPI 代码自 2019 年冻结,副屏首显刻度错误与显式字体不随
+         WM_DPICHANGED 缩放属框架缺陷(两轮实测均无法在 4.8 上修复),.NET 8 已系统性修复。
+         回退 = 还原本文件与 MusicTag.Tests.csproj,并按各文件 "net8 迁移" 注释恢复代码。 -->
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <!-- net8:Prefer32Bit 是 netfx 语义;x86 硬约束来自 SQLite.Interop.dll(x86 原生库)。 -->
+    <PlatformTarget>x86</PlatformTarget>
+    <!-- net8:BinaryFormatter 默认禁用(net9 起整体移除)。ChineseTextConverter 反序列化内嵌
+         简繁字库资源 MappingChars(tsmap/tcmap,构建期内嵌、非用户输入)仍依赖它,显式启用。
+         resx 内的位图/图标资源同样经 BinaryFormatter(MSB3825),属同一知情决定,压掉逐条警告。 -->
+    <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
+    <GenerateResourceWarnOnBinaryFormatterUse>false</GenerateResourceWarnOnBinaryFormatterUse>
     <AppConfig>musictag\MusicTag.exe.config</AppConfig>
   </PropertyGroup>
   <PropertyGroup>
@@ -26,11 +36,17 @@
   </PropertyGroup>
   <ItemGroup />
   <ItemGroup>
-    <Reference Include="System.Xml" />
-    <Reference Include="System.Configuration" />
-    <Reference Include="System.Core" />
-    <Reference Include="System.Numerics" />
-    <Reference Include="System.Net.Http" />
+    <!-- net8:Fkosoft.FontAwesome4(netfx 程序集,原样引用)在构造时加载
+         System.Runtime.Caching 4.0.0.0(netfx BCL,net8 共享框架无)。此兼容包的程序集版本
+         特意保持 4.0.0.0,netfx 引用可直接绑定;缺它则启动即崩(FileNotFoundException)。 -->
+    <PackageReference Include="System.Runtime.Caching" Version="8.0.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- net8:framework References(System.Xml/Configuration/Core/Numerics/Net.Http/Data)由
+         共享框架隐式提供;System.Web(HttpUtility 在 core 内置)、System.Net.Http.WebRequest
+         (WebRequestHandler 已改 HttpClientHandler)、Microsoft.VisualBasic(源码零使用的
+         反编译残留引用)一并移除。以下本地 DLL 均为 netfx 构建,先原样引用试运行,
+         加载失败再逐个换 nupkg 内 netstandard 构建。 -->
     <Reference Include="Newtonsoft.Json">
       <HintPath>musictag/Newtonsoft.Json.dll</HintPath>
     </Reference>
@@ -43,13 +59,9 @@
     <Reference Include="Fkosoft.FontAwesome4">
       <HintPath>musictag/Fkosoft.FontAwesome4.dll</HintPath>
     </Reference>
-    <Reference Include="Microsoft.VisualBasic" />
     <Reference Include="System.Data.SQLite">
       <HintPath>musictag/System.Data.SQLite.dll</HintPath>
     </Reference>
-    <Reference Include="System.Data" />
-    <Reference Include="System.Web" />
-    <Reference Include="System.Net.Http.WebRequest" />
   </ItemGroup>
   <ItemGroup>
     <None Include="musictag\MusicTag.config" Link="MusicTag.config" CopyToOutputDirectory="PreserveNewest" />

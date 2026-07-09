@@ -8,7 +8,6 @@ using System.Drawing.Drawing2D;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Net;
 using System.Resources;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -2871,7 +2870,8 @@ internal partial class StateFieldInstance : Form
 			}
 		}
 		ThreadPool.SetMinThreads(20, 20);
-		ServicePointManager.SecurityProtocol = SecurityProtocolType.Ssl3 | SecurityProtocolType.Tls | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
+		// net8 迁移:移除 netfx 遗留的 ServicePointManager.SecurityProtocol 设置(Ssl3|Tls|Tls11|Tls12)。
+		// core 上包含 Ssl3 会抛 NotSupportedException,且 HttpClient 默认即系统 TLS 策略(1.2+)。
 	}
 
 	public StateFieldInstance(params string[] args)
@@ -6856,8 +6856,8 @@ internal partial class StateFieldInstance : Form
 	}
 
 	// 从 PerformInPlaceRename 提取:就地改名的非法文件名谓词(含路径分量 -> GetFileName 不等自身,或含非法字符)。
-	// Path.GetFileName / Path.GetInvalidFileNameChars 在 net481 x86 Windows 目标确定;requestedFileName 传参
-	// (原 editContext.RequestedFileName 为 public 字段,读 3 次归约为 1 次求值不可观测)。
+	// net8 基线:Path.GetFileName 不再对 '<' '>' 等 InvalidPathChars 抛(netfx 抛 ArgumentException,由外层
+	// catch 弹错拒绝);此类输入现落 IndexOfAny(InvalidFileNameChars) 支路返回 true,同为弹错拒绝(Msg_InvalidFile)。
 	internal static bool IsInvalidRenameFileName(string requestedFileName)
 	{
 		return !string.Equals(Path.GetFileName(requestedFileName), requestedFileName, StringComparison.Ordinal)

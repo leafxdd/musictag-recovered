@@ -27,6 +27,12 @@ internal static class Program
 	[STAThread]
 	private static void Main(string[] args)
 	{
+		// net8 迁移:注册 ANSI 代码页编码提供程序(gb2312/GBK/Big5/Shift_JIS 等在 .NET Core+
+		// 非内置)。乱码修复、标签编码列表与 SystemAnsiEncoding 都依赖,必须最先执行。
+		Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+		// net8 迁移:Per-Monitor V2 从 app.manifest 移到托管配置(manifest 声明触发 WFAC010,
+		// 且手写 Main 使 csproj 的 ApplicationHighDpiMode 属性不生效)。必须先于任何句柄创建。
+		Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
 		if (TryFindExistingInstance(out IntPtr existingWindowHandle))
 		{
 			if (existingWindowHandle != IntPtr.Zero)
@@ -40,7 +46,6 @@ internal static class Program
 		AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
 		Application.EnableVisualStyles();
 		Application.SetCompatibleTextRenderingDefault(defaultValue: false);
-		// DPI awareness is declared in the embedded application manifest (app.manifest).
 		Application.Run(new StateFieldInstance(args));
 	}
 

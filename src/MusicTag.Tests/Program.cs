@@ -10,6 +10,9 @@ internal static class Program
 	[STAThread]
 	private static int Main()
 	{
+		// net8:注册 ANSI 代码页编码提供程序(gb2312/GBK/Big5/Shift_JIS 等在 .NET Core+ 非内置),
+		// 与主程序 Program.Main 首行一致;必须先于任何触发 TagTextEncoding 静态构造器的用例。
+		System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
 		Console.WriteLine("MusicTag characterization tests");
 		Console.WriteLine();
 		List<(string, Action)> tests = new List<(string, Action)>();
@@ -71,6 +74,8 @@ internal static class Program
 			tests.AddRange(TagFieldTemplateCharacterization.All());
 			tests.AddRange(BuildTextTagCandidatesCharacterization.All());
 			tests.AddRange(CoverDownloadCoreCharacterization.All());
+			tests.AddRange(ChineseTextConverterCharacterization.All());
+			tests.AddRange(DialogConstructionSmoke.All());
 		// Characterization 基线:歌词时间轴精度现由 LyricDownload_ReformatTimetag 控制(见
 		// LyricTextProcessor.FormatTimestamp 的两位/三位分支)。统一 pin 为 true(格式化开 → 2 位
 		// 百分秒、四舍五入),使既有断言确定;验证"关 → 保留 3 位"的用例在其内部局部置 false 并在

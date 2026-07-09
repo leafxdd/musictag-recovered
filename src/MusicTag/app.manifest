@@ -25,22 +25,11 @@
     </application>
   </compatibility>
 
-  <!-- EXPERIMENTAL (branch experiment/per-monitor-dpi-v2 only — NOT on develop): Per-Monitor
-       V2 DPI awareness. Goal: keep the window crisp instead of OS bitmap-stretched (blurry)
-       when dragged between monitors of different scale. UNVERIFIED / LIKELY-REGRESSES: the
-       app computes its scale ONCE at startup (DatabaseMapper.GetDpiScale) and applies a
-       pervasive custom ScaleByDpi across ~139 sites in 27 files, with ZERO WM_DPICHANGED /
-       DpiChanged handlers. Under PMv2 a cross-monitor move fires WM_DPICHANGED: WinForms
-       auto-resizing (EnableWindowsFormsHighDpiAutoResizing + the ApplicationConfigurationSection
-       in MusicTag.exe.config) rescales managed controls, but the custom-scaled ImageLists,
-       column widths and owner-drawn parts stay at the STARTUP DPI → expect inconsistent
-       layout until real per-monitor re-layout is written. Cannot be validated here (no
-       dual-DPI hardware). The PerMonitor/system tail keeps sane down-level behavior.
-       TO REVERT: set dpiAware back to `true` and dpiAwareness back to `system`. -->
-  <application xmlns="urn:schemas-microsoft-com:asm.v3">
-    <windowsSettings>
-      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/PM</dpiAware>
-      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2, PerMonitor, system</dpiAwareness>
-    </windowsSettings>
-  </application>
+  <!-- EXPERIMENTAL (branch experiment/per-monitor-dpi-v2): DPI awareness moved OUT of this
+       manifest. On net8 WinForms a manifest DPI block triggers compiler warning WFAC010 and
+       bypasses the managed DPI configuration; Per-Monitor V2 is now set in Program.Main via
+       Application.SetHighDpiMode(HighDpiMode.PerMonitorV2) — the hand-written Main means the
+       ApplicationHighDpiMode csproj property would NOT apply. net8 itself handles the
+       secondary-monitor first-show scale and explicit fonts that FW 4.8 got wrong.
+       TO REVERT to netfx: restore the dpiAware/dpiAwareness windowsSettings block from git. -->
 </assembly>

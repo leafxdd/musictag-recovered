@@ -99,6 +99,11 @@ internal static class NativeMethods
 	[DllImport("shcore.dll", EntryPoint = "GetDpiForMonitor")]
 	public static extern int GetDpiForMonitor(IntPtr monitorHandle, int dpiType, out uint dpiX, out uint dpiY);
 
+	// net8 迁移:.NET Core+ 上 Encoding.Default 恒为 UTF-8,还原 netfx"系统 ANSI 代码页"
+	// 语义需查 GetACP(SystemAnsiEncoding 使用)。
+	[DllImport("kernel32.dll", EntryPoint = "GetACP")]
+	public static extern int GetSystemAnsiCodePage();
+
 	[DllImport("user32.dll", EntryPoint = "ShowWindowAsync")]
 	public static extern bool ShowWindowAsync(IntPtr windowHandle, int command);
 

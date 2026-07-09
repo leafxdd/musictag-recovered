@@ -1,90 +1,50 @@
 [CmdletBinding()]
 param(
     [string[]] $Configurations = @('Debug', 'Release'),
-    [string] $Platform = 'Any CPU',
     [string] $ArtifactsDir = 'artifacts',
     [switch] $RunSmokeTests
 )
 
 $ErrorActionPreference = 'Stop'
 
-function Resolve-MSBuild {
-    $command = Get-Command msbuild.exe -ErrorAction SilentlyContinue
-    if ($command) {
-        return $command.Source
-    }
-
-    $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
-    if (Test-Path -LiteralPath $vswhere) {
-        $msbuildPath = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1
-        if ($msbuildPath -and (Test-Path -LiteralPath $msbuildPath)) {
-            return $msbuildPath
-        }
-    }
-
-    $knownPaths = @(
-        'C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\MSBuild\Current\Bin\MSBuild.exe',
-        'C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe'
-    )
-    foreach ($path in $knownPaths) {
-        if (Test-Path -LiteralPath $path) {
-            return $path
-        }
-    }
-
-    throw 'MSBuild not found. Install Visual Studio Build Tools with the MSBuild component or run from a Developer PowerShell.'
-}
+# net8 迁移(experiment/per-monitor-dpi-v2):
+#   - msbuild.exe -> dotnet build(net8.0-windows SDK 项目;dotnet SDK 8+)。
+#   - 输出路径 net481 -> net8.0-windows。
+#   - 原两个"外部 PowerShell 反射构造对话框"冒烟并入 characterization 套件
+#     (Tests/DialogConstructionSmoke.cs)——外部 netfx/x64 宿主无法加载 x86 net8 程序集。
+#   - 启动冒烟新增异常日志扫描:net8 首启曾出现"进程活着但挂在未处理异常弹窗"的假阳性
+#     (FontAwesome 缺 System.Runtime.Caching),仅凭 StayedAlive 判定不可靠。
 
 function Invoke-CharacterizationTests {
-    $exe = Resolve-Path -LiteralPath 'src\MusicTag.Tests\bin\Release\net481\MusicTag.Tests.exe'
+    $exe = Resolve-Path -LiteralPath 'src\MusicTag.Tests\bin\Release\net8.0-windows\MusicTag.Tests.exe'
     & $exe.Path
     if ($LASTEXITCODE -ne 0) {
         throw 'Characterization tests failed.'
     }
 }
 
-function Invoke-FilenameRelatedBatchDialogSmokeTest {
-    $command = @'
-$ErrorActionPreference = 'Stop'
-$exe = Resolve-Path -LiteralPath 'src\MusicTag\bin\Release\net481\MusicTag.exe'
-Add-Type -AssemblyName System.Windows.Forms
-$assembly = [System.Reflection.Assembly]::LoadFrom($exe.Path)
-$type = $assembly.GetType('MusicTag.Schemes.FilenameRelatedBatchDialog', $true)
-$form = [Activator]::CreateInstance($type, $true)
-try { 'Constructed=' + $form.GetType().FullName } finally { if ($form -is [System.IDisposable]) { $form.Dispose() } }
-'@
-    & "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -Command $command
-    if ($LASTEXITCODE -ne 0) {
-        throw 'FilenameRelatedBatchDialog smoke test failed.'
-    }
-}
-
-function Invoke-OptionsDialogSmokeTest {
-    $command = @'
-$ErrorActionPreference = 'Stop'
-$exe = Resolve-Path -LiteralPath 'src\MusicTag\bin\Release\net481\MusicTag.exe'
-Add-Type -AssemblyName System.Windows.Forms
-$assembly = [System.Reflection.Assembly]::LoadFrom($exe.Path)
-$type = $assembly.GetType('MusicTag.Importers.OptionsDialog', $true)
-$form = [Activator]::CreateInstance($type, $true)
-try { 'Constructed=' + $form.GetType().FullName } finally { if ($form -is [System.IDisposable]) { $form.Dispose() } }
-'@
-    & "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -Command $command
-    if ($LASTEXITCODE -ne 0) {
-        throw 'OptionsDialog smoke test failed.'
-    }
-}
-
 function Invoke-ReleaseStartupSmokeTest {
     $command = @'
 $ErrorActionPreference = 'Stop'
-$exe = Resolve-Path -LiteralPath 'src\MusicTag\bin\Release\net481\MusicTag.exe'
+$exe = Resolve-Path -LiteralPath 'src\MusicTag\bin\Release\net8.0-windows\MusicTag.exe'
 Get-Process | Where-Object { $_.Path -eq $exe.Path } | Stop-Process -Force -ErrorAction SilentlyContinue
-$process = Start-Process -FilePath $exe.Path -WorkingDirectory (Split-Path -LiteralPath $exe.Path) -WindowStyle Hidden -PassThru
+$binDir = Split-Path -LiteralPath $exe.Path
+Remove-Item (Join-Path $binDir 'temp\Log') -Recurse -Force -ErrorAction SilentlyContinue
+$process = Start-Process -FilePath $exe.Path -WorkingDirectory $binDir -WindowStyle Hidden -PassThru
 Start-Sleep -Seconds 5
 $stayedAlive = -not $process.HasExited
 if ($stayedAlive) { Stop-Process -Id $process.Id -Force }
 'StartedAndStayedAlive=' + $stayedAlive
+# 未处理异常(UnhandledException / ThreadException)落盘即失败;LoadAppSettingData 的
+# JsonReaderException 是已知自愈路径(仓库自带旧版二进制 MusicTag.dat,读失败删除重建),放行。
+$fatalLogs = Get-ChildItem (Join-Path $binDir 'temp\Log') -Filter '*.log' -Recurse -ErrorAction SilentlyContinue |
+    Where-Object { (Get-Content $_.FullName -Raw) -match 'UnhandledException|ThreadException' }
+if ($fatalLogs) {
+    'FatalExceptionLogs:'
+    $fatalLogs | ForEach-Object { $_.FullName; Get-Content $_.FullName -Raw }
+    exit 1
+}
+'NoFatalExceptionLogs=True'
 if (-not $stayedAlive) { exit 1 }
 '@
     & "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -Command $command
@@ -93,20 +53,17 @@ if (-not $stayedAlive) { exit 1 }
     }
 }
 
-$msbuild = Resolve-MSBuild
 New-Item -ItemType Directory -Force -Path $ArtifactsDir | Out-Null
 
 foreach ($configuration in $Configurations) {
-    $logPath = Join-Path $ArtifactsDir "msbuild-sln-$($configuration.ToLowerInvariant()).log"
-    & $msbuild .\MusicTag.sln /restore "/p:Configuration=$configuration" "/p:Platform=$Platform" /m /v:minimal /fl "/flp:logfile=$logPath;verbosity=normal"
+    $logPath = Join-Path $ArtifactsDir "build-sln-$($configuration.ToLowerInvariant()).log"
+    dotnet build .\MusicTag.sln -c $configuration -v minimal "/flp:logfile=$logPath;verbosity=normal"
     if ($LASTEXITCODE -ne 0) {
-        throw "MSBuild failed for configuration '$configuration'. See '$logPath'."
+        throw "dotnet build failed for configuration '$configuration'. See '$logPath'."
     }
 }
 
 if ($RunSmokeTests) {
     Invoke-CharacterizationTests
-    Invoke-FilenameRelatedBatchDialogSmokeTest
-    Invoke-OptionsDialogSmokeTest
     Invoke-ReleaseStartupSmokeTest
 }

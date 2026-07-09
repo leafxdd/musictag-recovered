@@ -65,10 +65,11 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase, ITrackSearchProv
 
 	private HttpClient CreateAlbumHttpClient()
 	{
-		WebRequestHandler handler = new WebRequestHandler
+		// net8 迁移:WebRequestHandler(System.Net.Http.WebRequest,netfx-only)→ HttpClientHandler。
+		// 丢失 ReadWriteTimeout=5000(流级超时,HttpClientHandler 无对应物),albumClient.Timeout=5s 兜底。
+		HttpClientHandler handler = new HttpClientHandler
 		{
-			AutomaticDecompression = (DecompressionMethods.GZip | DecompressionMethods.Deflate),
-			ReadWriteTimeout = 5000
+			AutomaticDecompression = (DecompressionMethods.GZip | DecompressionMethods.Deflate)
 		};
 		HttpClient albumClient = new HttpClient(handler)
 		{

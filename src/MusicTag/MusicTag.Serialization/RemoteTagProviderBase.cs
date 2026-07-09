@@ -236,10 +236,11 @@ internal abstract class RemoteTagProviderBase : IDisposable
 		try
 		{
 			int bytesReadTotal = 0;
-			using HttpClient downloadClient = new HttpClient(new WebRequestHandler
+			// net8 迁移:WebRequestHandler → HttpClientHandler(同 NetEaseMusicTagProvider)。丢失
+			// ReadWriteTimeout=30000 流级超时,由 downloadClient.Timeout(requestTimeout)+ 取消令牌兜底。
+			using HttpClient downloadClient = new HttpClient(new HttpClientHandler
 			{
-				AutomaticDecompression = (DecompressionMethods.GZip | DecompressionMethods.Deflate),
-				ReadWriteTimeout = 30000
+				AutomaticDecompression = (DecompressionMethods.GZip | DecompressionMethods.Deflate)
 			});
 			downloadClient.Timeout = TimeSpan.FromMilliseconds(requestTimeout);
 			downloadClient.DefaultRequestHeaders.Add("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");

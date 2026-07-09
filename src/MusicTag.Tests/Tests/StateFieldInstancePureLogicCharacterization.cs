@@ -1063,10 +1063,11 @@ internal static class StateFieldInstancePureLogicCharacterization
 		});
 
 		// ===== IsInvalidRenameFileName:含路径分量(GetFileName 不等自身)或 InvalidFileNameChar -> true。
-		//  关键 .NET Framework 边界:Path.GetFileName 对 InvalidPathChars('<' '>' '|' '"')抛 ArgumentException
-		//  (.NET Core 改为不抛),而 '?' ':' '/' '\' 仅是 InvalidFileNameChar 不触发。原 inline 同在 PerformInPlaceRename
-		//  的 try 块内,该异常经 catch -> ShowRenameError,与 Msg_InvalidFile 路径同为弹错拒绝;提取一字不差保留。=====
-		yield return ("StateFieldInstance.IsInvalidRenameFileName: path-component or invalid-char rejection (+.NET FW GetFileName throw boundary)", delegate
+		//  net8 基线迁移:netfx 上 Path.GetFileName 对 InvalidPathChars('<' '>' '|' '"')抛 ArgumentException
+		//  (经 PerformInPlaceRename 外层 catch -> ShowRenameError 弹错拒绝);net8/core 的 GetFileName 不再抛,
+		//  '<' '>' 改落 IndexOfAny(InvalidFileNameChars) 支路返回 true -> Msg_InvalidFile 弹错拒绝。
+		//  两基线的用户可见行为同为"拒绝重命名 + 弹错",仅错误消息文本不同;'?' ':' '/' '\' 两基线路径一致。=====
+		yield return ("StateFieldInstance.IsInvalidRenameFileName: path-component or invalid-char rejection (net8 baseline: GetFileName no longer throws)", delegate
 		{
 			Check.True(!StateFieldInstance.IsInvalidRenameFileName("song.mp3"), "plain filename -> valid");
 			Check.True(!StateFieldInstance.IsInvalidRenameFileName("plain"), "no extension -> valid");
@@ -1074,9 +1075,7 @@ internal static class StateFieldInstancePureLogicCharacterization
 			Check.True(StateFieldInstance.IsInvalidRenameFileName("a\\b.mp3"), "backslash path component -> GetFileName != self -> invalid");
 			Check.True(StateFieldInstance.IsInvalidRenameFileName("na?me.mp3"), "invalid filename char '?' (not a path char) -> IndexOfAny -> invalid");
 			Check.True(StateFieldInstance.IsInvalidRenameFileName("co:m.mp3"), "volume-separator ':' -> GetFileName drops prefix -> invalid");
-			bool threwOnPathChar = false;
-			try { StateFieldInstance.IsInvalidRenameFileName("a<b>.mp3"); } catch (ArgumentException) { threwOnPathChar = true; }
-			Check.True(threwOnPathChar, "'<' '>' are InvalidPathChars -> Path.GetFileName throws ArgumentException (.NET FW boundary, behavior-preserved)");
+			Check.True(StateFieldInstance.IsInvalidRenameFileName("a<b>.mp3"), "'<' '>' are InvalidFileNameChars -> IndexOfAny -> invalid (net8: GetFileName no longer throws ArgumentException)");
 		});
 
 		// ===== ResolvePictureCompressionLimits:还原模式固定上限 / 否则 Settings 配置;

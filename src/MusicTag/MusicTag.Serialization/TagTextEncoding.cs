@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Text.RegularExpressions;
 using MusicTag.States;
+using MusicTagWinApp.Common;
 using MusicTagWinApp.Instances;
 
 namespace MusicTag.Serialization;
@@ -107,11 +108,13 @@ internal class TagTextEncoding
 		case "Latin1":
 			return "ISO-8859-1";
 		default:
-			if (Encoding.Default.HeaderName.Equals("gb2312", StringComparison.OrdinalIgnoreCase))
+			// net8 迁移:core 上 Encoding.Default 恒为 UTF-8,这里要的是 netfx 的"系统 ANSI
+			// 代码页"语义(中文系统 gb2312 → 提升 GB18030),改经 SystemAnsiEncoding。
+			if (SystemAnsiEncoding.Instance.HeaderName.Equals("gb2312", StringComparison.OrdinalIgnoreCase))
 			{
 				return "GB18030";
 			}
-			return Encoding.Default.HeaderName.ToUpperInvariant();
+			return SystemAnsiEncoding.Instance.HeaderName.ToUpperInvariant();
 		}
 	}
 
