@@ -285,6 +285,13 @@ internal class OptionsDialog : Form
 		ApplyLocalizedText();
 		LoadSavedOptions();
 		UpdateResponsiveLayout();
+		// 初始页显隐不能赌 TreeView 的原生"获得焦点后自动选中首节点":net8 + ShowDialog 下该
+		// 时序可晚于 OnShown,九个页面控件全部可见(Designer 不隐藏任何页),OnShown 的增高
+		// 公式按整叠内容把窗口拉高上千像素且只加不减(实测"设置窗口拉得很长、选项一股脑显示")。
+		// 构造期显式选中首节点并直接执行一次显隐切换,保证 OnShown 前初始页就位;随后焦点触发
+		// 的 AfterSelect 与此幂等。
+		optionsTreeView.SelectedNode = optionsTreeView.Nodes[0];
+		OptionsTreeSelectionChanged(optionsTreeView, new TreeViewEventArgs(optionsTreeView.Nodes[0]));
 		rootLayoutPanel.ResumeLayout(performLayout: false);
 		ResumeLayout(performLayout: true);
 	}
@@ -575,6 +582,10 @@ internal class OptionsDialog : Form
 	protected override void OnShown(EventArgs e)
 	{
 		base.OnShown(e);
+		// 构造期的 SplitterDistance 用静态 ScaleByDpi(启动主屏刻度);对话框打开在其他 DPI 屏
+		// 时按实际屏刻度重设(FixedPanel=Panel1 使其不随框架 bounds 缩放联动)。同屏打开时与
+		// 构造期同值,幂等无操作。
+		mainSplitContainer.SplitterDistance = ImageUtilities.ScaleByDpi(120f, this);
 		int requiredHeightIncrease = sourceLimitPanel.Location.Y + sourceLimitPanel.Height - sourceOrderPanel.Height;
 		if (requiredHeightIncrease > 0)
 		{

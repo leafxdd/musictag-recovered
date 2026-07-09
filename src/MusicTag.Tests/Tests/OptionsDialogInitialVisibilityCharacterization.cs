@@ -29,10 +29,11 @@ internal static class OptionsDialogInitialVisibilityCharacterization
 			Form dialog = (Form)Activator.CreateInstance(typeof(MusicTag.Importers.OptionsDialog), nonPublic: true);
 			try
 			{
+				TreeView tree = (TreeView)GetField(dialog, "optionsTreeView");
+				Check.Equal("TagSources", tree.SelectedNode?.Name, "first node selected at construction time (before Show)");
 				dialog.Show();
 				Application.DoEvents();
-				TreeView tree = (TreeView)GetField(dialog, "optionsTreeView");
-				Check.Equal("TagSources", tree.SelectedNode?.Name, "first node auto-selected");
+				Check.Equal("TagSources", tree.SelectedNode?.Name, "first node still selected after Show");
 				foreach (string fieldName in VisiblePageFields)
 				{
 					Check.True(((Control)GetField(dialog, fieldName)).Visible, fieldName + " visible on TagSources page");
@@ -41,6 +42,9 @@ internal static class OptionsDialogInitialVisibilityCharacterization
 				{
 					Check.True(!((Control)GetField(dialog, fieldName)).Visible, fieldName + " hidden on TagSources page");
 				}
+				// OnShown 增高公式只应做小量兜底;若初始显隐失效(九页全可见)会把窗口拉高数百
+				// 像素(96 DPI 下 ~1346),此断言抓住该回归。
+				Check.True(dialog.Height < 700, "dialog height stays near design height after OnShown, actual=" + dialog.Height);
 			}
 			finally
 			{

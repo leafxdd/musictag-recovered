@@ -2892,6 +2892,11 @@ internal partial class StateFieldInstance : Form
 		startupFileArgs = args;
 		taskbarProgress = new TaskbarProgressController(this);
 		InitializeComponent();
+		// 构造期 DeviceDpi = 启动屏刻度,与下方各 Initialize* 使用的静态 ScaleByDpi 同基准。
+		// startupDpi 供列宽持久化归一(见 SaveCurrentFileListColumnWidths);customAssetsDpi
+		// 台账有初值后,首次跨屏 WM_DPICHANGED 才能按 previous→target 比率补缩 DGV 列宽。
+		startupDpi = DeviceDpi;
+		customAssetsDpi = DeviceDpi;
 		RegisterEditableTagFields();
 		ApplyToolbarImagesAndScaling();
 		InitializeTagEditorControls();
@@ -2900,6 +2905,7 @@ internal partial class StateFieldInstance : Form
 		ApplyLanguageResources();
 		InitializeSourceMenus();
 		ApplyTagPanelLayout();
+		DpiTrace("ctor.done");
 	}
 
 	private void InitializeSourceMenus()
@@ -3076,7 +3082,7 @@ internal partial class StateFieldInstance : Form
 		previousCoverButton.Text = "";
 		nextCoverButton.Text = "";
 		editLyricsButton.Text = "";
-		coverPictureBox.Image = ImageUtilities.LoadCachedResourceBitmap("no_cover", new Size(ImageUtilities.ScaleByDpi(96f), ImageUtilities.ScaleByDpi(96f)));
+		coverPictureBox.Image = ImageUtilities.LoadCachedResourceBitmap("no_cover", new Size(ImageUtilities.ScaleByDpi(96f, this), ImageUtilities.ScaleByDpi(96f, this)));
 		coverPictureBox.SizeMode = PictureBoxSizeMode.CenterImage;
 		overwriteCoverCheckBox.Checked = Settings.Default.OverwritePictureboxPicture;
 	}
@@ -3384,6 +3390,18 @@ internal partial class StateFieldInstance : Form
 		filterTypeDropDownButton.Text = Resources.ResourceManager.GetString(filterTypeDropDownButton.Tag as string);
 	}
 
+	// 存储/默认列宽的刻度语义是"启动屏像素"(SaveCurrentFileListColumnWidths 归一化、
+	// CustomColumnsDialog 默认表为静态 ScaleByDpi);窗口跨屏后上屏前换算为当前屏刻度。
+	// 启动屏上恒等返回(customAssetsDpi == startupDpi),行为与历史版本一致。
+	private int ScaleStoredColumnWidthToCurrentDpi(int storedWidth)
+	{
+		if (customAssetsDpi > 0 && startupDpi > 0 && customAssetsDpi != startupDpi)
+		{
+			return Math.Max(5, (int)Math.Round((float)storedWidth * customAssetsDpi / startupDpi));
+		}
+		return storedWidth;
+	}
+
 	private void InitializeFileListColumnsAndIcons()
 	{
 		fileListView.Columns.Clear();
@@ -3393,7 +3411,7 @@ internal partial class StateFieldInstance : Form
 			{
 				Name = columnInfo.Name,
 				HeaderText = columnInfo.Name,
-				Width = columnInfo.width,
+				Width = ScaleStoredColumnWidthToCurrentDpi(columnInfo.width),
 				Visible = columnInfo.isShow,
 				SortMode = DataGridViewColumnSortMode.Programmatic,
 				ReadOnly = true,
@@ -4614,7 +4632,7 @@ internal partial class StateFieldInstance : Form
 
 	private Image GetNoCoverPreviewImage()
 	{
-		return ImageUtilities.LoadCachedResourceBitmap("no_cover", new Size(ImageUtilities.ScaleByDpi(96f), ImageUtilities.ScaleByDpi(96f)));
+		return ImageUtilities.LoadCachedResourceBitmap("no_cover", new Size(ImageUtilities.ScaleByDpi(96f, this), ImageUtilities.ScaleByDpi(96f, this)));
 	}
 
 	private void SetCoverPreviewImage(Image image)
@@ -5415,7 +5433,15 @@ internal partial class StateFieldInstance : Form
 			CustomColumnsDialog.ColumnHeaderInfo columnHeaderInfo = columnHeader.Tag as CustomColumnsDialog.ColumnHeaderInfo;
 			if (columnHeader.Width > 0)
 			{
-				columnHeaderInfo.width = columnHeader.Width;
+				// 持久化语义 = 启动屏刻度(恢复端 InitializeFileListColumnsAndIcons 在启动屏
+				// 原样使用)。窗口当前在其他 DPI 屏时,列宽已被 RescaleCustomAssetsForDpi 按屏
+				// 缩放,换算回启动刻度再存,避免在低 DPI 屏退出→下次启动列宽整体缩水。
+				int width = columnHeader.Width;
+				if (customAssetsDpi > 0 && customAssetsDpi != startupDpi)
+				{
+					width = Math.Max(5, (int)Math.Round((float)width * startupDpi / customAssetsDpi));
+				}
+				columnHeaderInfo.width = width;
 			}
 			else if (columnHeaderInfo.width == 0)
 			{
@@ -5462,7 +5488,7 @@ internal partial class StateFieldInstance : Form
 			columnHeader.Visible = columnHeaderInfo.isShow;
 			if (columnHeaderInfo.isShow)
 			{
-				columnHeader.Width = columnHeaderInfo.tempWidth;
+				columnHeader.Width = ScaleStoredColumnWidthToCurrentDpi(columnHeaderInfo.tempWidth);
 			}
 		}
 		// DisplayIndex 必须是 0..N-1 排列;按目标 displayIndex 升序顺次赋值,避免 DGV 中途重排冲突。
@@ -6521,6 +6547,7 @@ internal partial class StateFieldInstance : Form
 		{
 			Console.WriteLine("sortsetting fail " + ex.Message);
 		}
+		DpiTrace("OnLoad.done");
 	}
 
 	// OnLoad 恢复:设保存的位置/尺寸并钳制到工作区。位置先行 —— 跨 DPI 屏移动触发框架整树
@@ -6540,36 +6567,156 @@ internal partial class StateFieldInstance : Form
 		base.Location = ClampWindowToWorkingArea(base.Location, base.Size, workingArea);
 	}
 
-	// 自定义资产的当前刻度台账:同一 DPI 的重复 WM_DPICHANGED 幂等跳过(避免无谓重建位图)。
+	// 自定义资产的当前刻度台账:同一 DPI 的重复 WM_DPICHANGED 幂等跳过(避免无谓重建位图);
+	// 也是 DGV 列宽按 previous→target 比率补缩的"上一刻度"来源。构造期初始化为启动屏 DPI。
 	private int customAssetsDpi;
+
+	// 启动屏刻度:列宽持久化的历史语义是"启动屏像素"(net481/SystemAware 时代窗口恒为主屏
+	// 刻度)。跨屏台账缩放后列宽变为"当前屏刻度",保存时须换算回启动刻度,下次启动才不缩水。
+	private int startupDpi;
+
+	// 诊断插桩(实验分支):MUSICTAG_DPI_TRACE=1 时把 DPI 相关几何/字体度量追加写 exe 旁
+	// dpi-trace.log,配合外部移屏驱动脚本定位跨屏缩放问题。未开启时零行为影响。
+	private static readonly bool dpiTraceEnabled = Environment.GetEnvironmentVariable("MUSICTAG_DPI_TRACE") == "1";
+
+	private void DpiTrace(string eventName)
+	{
+		if (!dpiTraceEnabled)
+		{
+			return;
+		}
+		try
+		{
+			int columnWidthSum = 0;
+			foreach (DataGridViewColumn column in fileListView.Columns)
+			{
+				columnWidthSum += column.Width;
+			}
+			string line = string.Format(
+				"[{0:HH:mm:ss.fff}] {1,-26} dpi={2} bounds={3} client={4} font={5};{6:0.##} split={7} p1min={8} colSum={9} col0={10} tagPanelW={11} titleComboW={12} titleBtnRight={13} filterFont={14:0.##} filterH={15} summaryFont={16:0.##} menuFont={17:0.##} imgScale={18}",
+				DateTime.Now, eventName, DeviceDpi, Bounds, ClientSize,
+				Font.Name, Font.Size,
+				mainSplitContainer.SplitterDistance, mainSplitContainer.Panel1MinSize,
+				columnWidthSum,
+				fileListView.Columns.Count > 0 ? fileListView.Columns[0].Width : -1,
+				tagEditorPanel.ClientSize.Width,
+				titleComboBox != null ? titleComboBox.Width : -1,
+				titleEncodingButton != null ? titleEncodingButton.Right : -1,
+				fileFilterStatusStrip.Font.Size, fileFilterStatusStrip.Height,
+				fileSummaryStatusStrip.Font.Size,
+				mainMenuStrip.Font.Size,
+				mainToolStrip.ImageScalingSize)
+				+ string.Format(" ftbH={0} fddH={1} flabH={2} prefH={3} autoSize={4}",
+				filterTextBox.Height, filterTypeDropDownButton.Height, filterStatusLabel.Height,
+				fileFilterStatusStrip.GetPreferredSize(Size.Empty).Height, fileFilterStatusStrip.AutoSize);
+			File.AppendAllText(Path.Combine(PathFileUtilities.GetApplicationDirectory(), "dpi-trace.log"), line + Environment.NewLine);
+		}
+		catch (System.Exception)
+		{
+		}
+	}
 
 	protected override void OnDpiChanged(DpiChangedEventArgs e)
 	{
+		DpiTrace("OnDpiChanged.before " + e.DeviceDpiOld + "->" + e.DeviceDpiNew);
 		base.OnDpiChanged(e);
+		DpiTrace("OnDpiChanged.afterBase");
 		RescaleCustomAssetsForDpi(e.DeviceDpiNew);
+		DpiTrace("OnDpiChanged.afterCustom");
 	}
 
-	// net8:框架接管 WM_DPICHANGED 的整树缩放(含 DGV 列宽、SplitContainer、控件字体)——
-	// net481 时代的相对补缩(列宽/SplitterDistance ×ratio、状态条字体重算)与框架缩放叠加成
-	// 双重缩放(实测:跨屏后输入框拉长、扳手按钮被挤出可视区、表头列宽被压缩),全部退役。
-	// 仅保留框架不可能代劳的自绘资产重建(FontAwesome 按钮位图按当前屏刻度重生成)与
-	// 幂等的绝对值设置(工具栏项尺寸/过滤条宽:后写覆盖框架值,数值按当前屏计算,无累积风险)。
+	// net8(实测标定,见 dpi-trace 插桩):框架接管 WM_DPICHANGED 的整树 bounds 缩放(窗口、
+	// 子控件 bounds、SplitterDistance、ToolStrip ImageScalingSize),但四类对象不被接管或被
+	// 错误接管,在 OnDpiChanged(框架缩放完成之后触发)统一纠正:
+	// ① 不接管——DGV 列宽(colSum 跨屏恒定)按 previous→target 比率补缩(列宽用户可拖,无
+	//    设计基准值,只能相对缩;台账 customAssetsDpi 保证幂等);Panel1MinSize 绝对值重设。
+	// ② 错误接管——显式字体的 pt 值被框架按 DPI 比率缩(实测 Tahoma 9→6):pt 本是 DPI 无关
+	//    单位,恒 9pt 才物理尺寸恒定;且启动时框架并不缩 Font(9pt 原样),跨屏才缩,不对称。
+	//    绝对值钉回设计 pt(后写覆盖,幂等)。
+	// ③ 自绘资产——FontAwesome 位图按新刻度重生成;工具栏项/过滤条控件宽度绝对值重设。
+	// ④ 时序错值——框架逐控件缩放有先后,SizeChanged 联动(TagComboBoxWidthUpdater/
+	//    FilterBar_SizeChanged)在缩放中途按混合刻度算出错值并被框架二次缩放(实测 96→144 时
+	//    titleComboBox 宽 598 超过面板宽,编码按钮被挤折行 = 用户截图 pic3);结尾在整树刻度
+	//    一致后统一重算覆盖。
 	private void RescaleCustomAssetsForDpi(int targetDpi)
 	{
 		if (targetDpi == customAssetsDpi)
 		{
 			return;
 		}
+		int previousDpi = customAssetsDpi;
 		customAssetsDpi = targetDpi;
+
+		Font = fileListFont;
+		// ToolStrip 族(状态条/菜单条/工具栏)不吃 Form.Font 继承(ToolStripManager.DefaultFont
+		// 体系)——各自钉 pt 并归位条带高度;保留各自字形(汇总条 Tahoma、其余系统菜单字体)。
+		PinToolStripFontSize(fileSummaryStatusStrip);
+		PinToolStripFontSize(fileFilterStatusStrip);
+		PinToolStripFontSize(mainMenuStrip);
+		PinToolStripFontSize(mainToolStrip);
+		ApplyFileListVisualStyle();
+
+		mainSplitContainer.Panel1MinSize = ImageUtilities.ScaleByDpi(320f, this);
+		if (previousDpi > 0)
+		{
+			foreach (DataGridViewColumn column in fileListView.Columns)
+			{
+				// 下限贴 MinimumWidth(默认 5):更高的人为下限会把窄列(如 11px 的序号列)在
+				// 缩小方向顶起,放大方向再 ×1.5,往返一圈列宽净膨胀。
+				column.Width = Math.Max(column.MinimumWidth, (int)Math.Round((float)column.Width * targetDpi / previousDpi));
+			}
+		}
+		fileListView.ColumnHeadersHeight = ImageUtilities.ScaleByDpi(24f, this);
+
 		ApplyToolbarItemSizesForDpi();
 		RefreshTagEditorButtonImages();
 		filterTypeDropDownButton.Width = ImageUtilities.ScaleByDpi(100f, this);
 		selectedFilesStatusLabel.Width = ImageUtilities.ScaleByDpi(190f, this);
+		// 两条 StatusStrip 在中途字体放大(BEFOREPARENT ×ratio)时被撑高后自锁:拉伸布局把
+		// items 顶到行高(item.Height 写入无效),GetPreferredSize 又按 items 现高计算,字体
+		// 钉回后条带高度回不去(实测 31→42→63 渐增)。翻转 AutoSize 打破自锁,条带回到按
+		// 9pt 内容重算的自然高(31px,比启动态的 Designer 项高 +padding 低 5px,两屏恒定)。
+		ResetStatusStripHeight(fileFilterStatusStrip);
+		ResetStatusStripHeight(fileSummaryStatusStrip);
+
+		// no_cover 占位图按名字键缓存(尺寸实参命中时被忽略),作废后按新屏刻度重建;当前
+		// 正显示占位图(CenterImage 原像素绘制)时立即换新实例,旧实例经 SetCoverPreviewImage
+		// 的引用比对释放(缓存已不含它,无悬挂引用)。
+		ImageUtilities.EvictCachedResourceBitmap("no_cover");
+		if (coverPictureBox.SizeMode == PictureBoxSizeMode.CenterImage)
+		{
+			SetCoverPreviewImage(GetNoCoverPreviewImage());
+		}
+
+		ApplyTagPanelLayout();
+		FilterBar_SizeChanged(fileFilterStatusStrip, EventArgs.Empty);
+	}
+
+	// 跨屏后把 ToolStrip 族条带的字体 pt 归回 9(设计基准):框架 WM_DPICHANGED 把字号按
+	// DPI 比率缩(9→6@96),但 pt 是 DPI 无关单位,缩 pt = 物理尺寸漂移。保留原字形只改字号;
+	// 已是 9pt 时无操作(幂等,不产生新 Font 对象)。
+	private static void PinToolStripFontSize(ToolStrip strip)
+	{
+		Font currentFont = strip.Font;
+		if (Math.Abs(currentFont.SizeInPoints - 9f) > 0.1f)
+		{
+			strip.Font = new Font(currentFont.FontFamily, 9f, currentFont.Style);
+		}
+	}
+
+	// 见 RescaleCustomAssetsForDpi 内注释:打破 StatusStrip"items 被行高拉伸 ↔ preferred 按
+	// items 现高计算"的自锁,字体归位后条带高度才能回到内容自然高。
+	private static void ResetStatusStripHeight(StatusStrip strip)
+	{
+		strip.AutoSize = false;
+		strip.Height = 0;
+		strip.AutoSize = true;
 	}
 
 	protected override void OnShown(EventArgs e)
 	{
 		base.OnShown(e);
+		DpiTrace("OnShown.begin");
 		notifyIcon.Visible = Settings.Default.AlwaysShowIconInNofiArea;
 		hasShownMainForm = true;
 		if (tagEditorPanel.Height < tagEditorBottomSpacerPanel.Location.Y + tagEditorBottomSpacerPanel.Height)
@@ -6909,6 +7056,7 @@ internal partial class StateFieldInstance : Form
 	private void FilterBar_SizeChanged(object sender, EventArgs e)
 	{
 		filterTextBox.Width = fileFilterStatusStrip.Width - filterStatusLabel.Width - filterTypeDropDownButton.Width - ImageUtilities.ScaleByDpi(4f, this);
+		DpiTrace("FilterBar_SizeChanged");
 	}
 
 	private void FilterInput_TextChanged(object sender, EventArgs e)

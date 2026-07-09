@@ -235,6 +235,13 @@ internal static class ImageUtilities
 			return resourceImageCache[resourceName] = LoadResourceBitmap(resourceName, size);
 	}
 
+	// 跨屏 DPI 变更后作废缓存位图,下次按新刻度尺寸重建。只移除、不 Dispose:旧实例可能仍被
+	// 控件显示(如 coverPictureBox 的 no_cover 占位图),由调用方的换图路径按引用判断释放。
+	public static void EvictCachedResourceBitmap(string resourceName)
+	{
+		resourceImageCache.Remove(resourceName);
+	}
+
 	public static int ScaleByDpi(float value, bool roundUp = false)
 	{
 			float scaledValue = value * GetDpiScale();
