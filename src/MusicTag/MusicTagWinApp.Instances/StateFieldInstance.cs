@@ -2988,7 +2988,16 @@ internal partial class StateFieldInstance : Form
 		batchFilenameRelatedMenuItem.Image = image;
 		image = (optionsToolStripButton.Image = ImageUtilities.LoadResourceBitmap("optionsToolStripMenuItem_Image", scaleSmallIconForDpi: true));
 		optionsMenuItem.Image = image;
-		Size scaledImageSize = new Size(ImageUtilities.ScaleByDpi(16f), ImageUtilities.ScaleByDpi(16f));
+		ApplyToolbarItemSizesForDpi();
+	}
+
+	// PMv2(实验分支):工具栏/菜单的 ImageScalingSize 与各项固定尺寸按窗体当前所在屏刻度设置;
+	// 构造期(上方,高 DPI 启动时)与 WM_DPICHANGED 后各调一次 —— ToolStripItem 不是 Control,
+	// 框架跨屏缩放不覆盖其固定 Size。图像本身不重建(ImageScaling=SizeToFit 按 ImageScalingSize
+	// 绘制,仅位图分辨率与目标不完全匹配时略降清晰度)。
+	private void ApplyToolbarItemSizesForDpi()
+	{
+		Size scaledImageSize = new Size(ImageUtilities.ScaleByDpi(16f, this), ImageUtilities.ScaleByDpi(16f, this));
 		coverContextMenu.ImageScalingSize = scaledImageSize;
 		fileListItemContextMenu.ImageScalingSize = scaledImageSize;
 		mainToolStrip.ImageScalingSize = scaledImageSize;
@@ -2998,16 +3007,16 @@ internal partial class StateFieldInstance : Form
 			toolStripItem.AutoSize = false;
 			if (toolStripItem is ToolStripSplitButton toolStripSplitButton)
 			{
-				toolStripSplitButton.Size = new Size(ImageUtilities.ScaleByDpi(32f), ImageUtilities.ScaleByDpi(22f));
-				toolStripSplitButton.DropDownButtonWidth = ImageUtilities.ScaleByDpi(11f);
+				toolStripSplitButton.Size = new Size(ImageUtilities.ScaleByDpi(32f, this), ImageUtilities.ScaleByDpi(22f, this));
+				toolStripSplitButton.DropDownButtonWidth = ImageUtilities.ScaleByDpi(11f, this);
 			}
 			else if (toolStripItem is ToolStripButton toolStripButton)
 			{
-				toolStripButton.Size = new Size(ImageUtilities.ScaleByDpi(23f), ImageUtilities.ScaleByDpi(22f));
+				toolStripButton.Size = new Size(ImageUtilities.ScaleByDpi(23f, this), ImageUtilities.ScaleByDpi(22f, this));
 			}
 			else if (toolStripItem is ToolStripSeparator toolStripSeparator)
 			{
-				toolStripSeparator.Size = new Size(ImageUtilities.ScaleByDpi(6f), ImageUtilities.ScaleByDpi(25f));
+				toolStripSeparator.Size = new Size(ImageUtilities.ScaleByDpi(6f, this), ImageUtilities.ScaleByDpi(25f, this));
 			}
 		}
 	}
@@ -3020,10 +3029,11 @@ internal partial class StateFieldInstance : Form
 		};
 		mainSplitContainer.Panel1MinSize = ImageUtilities.ScaleByDpi(320f);
 		FontAwesome.SetFontFileDirectory(PathFileUtilities.GetApplicationDirectory() + "font");
+		// 进程级默认保留(对话框构造期取启动刻度);主窗体自身的按钮图标改用局部 Properties
+		// 按当前屏刻度生成,见 RefreshTagEditorButtonImages(PMv2 实验分支)。
 		FontAwesome.DefaultProperties.Size = ImageUtilities.ScaleByDpi(18f);
 		FontAwesome.DefaultProperties.ShowBorder = false;
 
-		Image editEncodingImage = FontAwesome.Type.Wrench.AsImage();
 		layoutContext.TagRows = new FlowLayoutPanel[11]
 		{
 				titleRowPanel, artistRowPanel, albumRowPanel, yearRowPanel, trackRowPanel, discRowPanel, genreRowPanel, albumArtistRowPanel, composerRowPanel, lyricistRowPanel,
@@ -3047,7 +3057,6 @@ internal partial class StateFieldInstance : Form
 			{
 				comboBoxEnumerator.MoveNext();
 				ComboBox comboBox = comboBoxEnumerator.Current;
-				button.Image = editEncodingImage;
 				button.Text = "";
 				button.Tag = tagComboBoxes.First(tagField => tagField.Value == comboBox).Key;
 				button.Click += EditSingleFieldEncoding_Click;
@@ -3063,15 +3072,43 @@ internal partial class StateFieldInstance : Form
 			layoutContext.TagRows[rowIndex].SizeChanged += widthUpdater.UpdateComboBoxWidth;
 		}
 		lyricsRowPanel.SizeChanged += layoutContext.UpdateLyricsComboWidth;
-		previousCoverButton.Image = FontAwesome.Type.AngleLeft.AsImage();
-		nextCoverButton.Image = FontAwesome.Type.AngleRight.AsImage();
-		editLyricsButton.Image = FontAwesome.Type.Edit.AsImage();
+		RefreshTagEditorButtonImages();
 		previousCoverButton.Text = "";
 		nextCoverButton.Text = "";
 		editLyricsButton.Text = "";
 		coverPictureBox.Image = ImageUtilities.LoadCachedResourceBitmap("no_cover", new Size(ImageUtilities.ScaleByDpi(96f), ImageUtilities.ScaleByDpi(96f)));
 		coverPictureBox.SizeMode = PictureBoxSizeMode.CenterImage;
 		overwriteCoverCheckBox.Checked = Settings.Default.OverwritePictureboxPicture;
+	}
+
+	// PMv2(实验分支):标签面板按钮的 FontAwesome 图标按窗体当前所在屏刻度生成;构造期与
+	// WM_DPICHANGED 后各调一次(框架跨屏只缩按钮 bounds,不缩已生成的位图 → 图标显大/溢出)。
+	// 用局部 Properties 而非改 FontAwesome.DefaultProperties —— 后者是进程级默认,别处构造期
+	// 仍应取启动刻度(局部 Properties 的先例见 SourceOrderControl.ConfigureButtonImages)。
+	private void RefreshTagEditorButtonImages()
+	{
+		FontAwesome.Properties iconProperties = new FontAwesome.Properties
+		{
+			Size = ImageUtilities.ScaleByDpi(18f, this),
+			ShowBorder = false
+		};
+		Image oldEncodingImage = tagEncodingButtons[0].Image;
+		Image editEncodingImage = FontAwesome.Type.Wrench.AsImage(iconProperties);
+		foreach (Button button in tagEncodingButtons)
+		{
+			button.Image = editEncodingImage;
+		}
+		oldEncodingImage?.Dispose();
+		ReplaceButtonImage(previousCoverButton, FontAwesome.Type.AngleLeft.AsImage(iconProperties));
+		ReplaceButtonImage(nextCoverButton, FontAwesome.Type.AngleRight.AsImage(iconProperties));
+		ReplaceButtonImage(editLyricsButton, FontAwesome.Type.Edit.AsImage(iconProperties));
+	}
+
+	private static void ReplaceButtonImage(Button button, Image newImage)
+	{
+		Image oldImage = button.Image;
+		button.Image = newImage;
+		oldImage?.Dispose();
 	}
 
 	private void InitializeFileListFilterMenu()
@@ -6494,9 +6531,69 @@ internal partial class StateFieldInstance : Form
 		}
 	}
 
+	// PMv2(实验分支):OnLoad 把主窗位置恢复到与启动屏 DPI 不同的显示器时,窗口尚不可见,
+	// Windows/WinForms 不会为不可见窗口执行 DPI 切换缩放 → 首次显示保持启动屏刻度(用户所报
+	// "副屏 100% 首开却按主屏 150% 尺寸显示")。此处窗口已可见:若所在显示器有效 DPI 与控件树
+	// 刻度(DeviceDpi)不一致,把窗口往主屏工作区打一个来回,诱发真实 WM_DPICHANGED 让框架完成
+	// 整树缩放,再钉回恢复的位置与尺寸(第二次赋值:框架处理中会按 suggested rect 调整,需重钉;
+	// 值相同则为 no-op)。shcore API 仅 Win8.1+,更低系统捕获后维持旧行为。
+	private void EnsureInitialDpiScaling()
+	{
+		if (base.WindowState != FormWindowState.Normal)
+		{
+			return;
+		}
+		try
+		{
+			IntPtr monitorHandle = NativeMethods.MonitorFromWindow(base.Handle, 2u);
+			if (NativeMethods.GetDpiForMonitor(monitorHandle, 0, out uint monitorDpiX, out _) != 0 || (int)monitorDpiX == DeviceDpi)
+			{
+				return;
+			}
+			Rectangle restoredBounds = Bounds;
+			Location = Screen.PrimaryScreen.WorkingArea.Location;
+			Bounds = restoredBounds;
+			Bounds = restoredBounds;
+		}
+		catch (DllNotFoundException)
+		{
+		}
+		catch (EntryPointNotFoundException)
+		{
+		}
+	}
+
+	protected override void OnDpiChanged(DpiChangedEventArgs e)
+	{
+		base.OnDpiChanged(e);
+		RescaleCustomAssetsAfterDpiChange((float)e.DeviceDpiNew / e.DeviceDpiOld);
+	}
+
+	// PMv2(实验分支):框架对 WM_DPICHANGED 只缩控件 bounds 与 Form.Font 继承链;以下自定义
+	// 资产停在旧刻度,逐项补缩 —— 文件列表列宽(DGV 列宽框架不管,用户所见"表头间距不缩放")、
+	// 工具栏/菜单项固定尺寸与 ImageScalingSize(用户所见"工具栏按钮放大")、标签面板 FontAwesome
+	// 按钮图标(用户所见"左侧面板按钮图标放大")、显式设置的汇总状态条字体(显式 Font 不随
+	// Form.Font 缩放,用户所见"底部大小/时长字符不随屏缩")、过滤条两处固定宽度。
+	// 已知仍停启动刻度(后续阶段):文件类型图标 ImageList 与行高(重设 ImageSize 会清空图像,
+	// 需图标重建管线)、封面占位图缓存(引用同一性 dispose 语义,勿轻动)、文件列表字体 fileListFont。
+	private void RescaleCustomAssetsAfterDpiChange(float ratio)
+	{
+		foreach (DataGridViewColumn column in fileListView.Columns)
+		{
+			column.Width = Math.Max(2, (int)Math.Round(column.Width * ratio));
+		}
+		ApplyToolbarItemSizesForDpi();
+		RefreshTagEditorButtonImages();
+		Font summaryFont = fileSummaryStatusStrip.Font;
+		fileSummaryStatusStrip.Font = new Font(summaryFont.FontFamily, summaryFont.Size * ratio, summaryFont.Style, summaryFont.Unit, summaryFont.GdiCharSet);
+		filterTypeDropDownButton.Width = ImageUtilities.ScaleByDpi(100f, this);
+		selectedFilesStatusLabel.Width = ImageUtilities.ScaleByDpi(190f, this);
+	}
+
 	protected override void OnShown(EventArgs e)
 	{
 		base.OnShown(e);
+		EnsureInitialDpiScaling();
 		notifyIcon.Visible = Settings.Default.AlwaysShowIconInNofiArea;
 		hasShownMainForm = true;
 		if (tagEditorPanel.Height < tagEditorBottomSpacerPanel.Location.Y + tagEditorBottomSpacerPanel.Height)
