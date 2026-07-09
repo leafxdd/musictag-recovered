@@ -91,14 +91,6 @@ internal static class NativeMethods
 
 	public const int ShowWindowDefault = 10;
 
-	// PMv2(实验分支):取某坐标点所在显示器的有效 DPI(MDT_EFFECTIVE_DPI=0;MONITOR_DEFAULTTONEAREST=2)。
-	// shcore 仅 Win8.1+,调用方需捕获 DllNotFound/EntryPointNotFound 以在更低系统维持旧行为。
-	[DllImport("user32.dll", EntryPoint = "MonitorFromPoint")]
-	public static extern IntPtr MonitorFromPoint(Point point, uint flags);
-
-	[DllImport("shcore.dll", EntryPoint = "GetDpiForMonitor")]
-	public static extern int GetDpiForMonitor(IntPtr monitorHandle, int dpiType, out uint dpiX, out uint dpiY);
-
 	// net8 迁移:.NET Core+ 上 Encoding.Default 恒为 UTF-8,还原 netfx"系统 ANSI 代码页"
 	// 语义需查 GetACP(SystemAnsiEncoding 使用)。
 	[DllImport("kernel32.dll", EntryPoint = "GetACP")]
