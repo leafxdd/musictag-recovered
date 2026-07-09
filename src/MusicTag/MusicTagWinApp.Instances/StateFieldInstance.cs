@@ -6485,20 +6485,15 @@ internal partial class StateFieldInstance : Form
 			{
 				base.WindowState = FormWindowState.Maximized;
 			}
+			else if (RestoredLocationNeedsDpiMigration())
+			{
+				// 恢复位置在另一块 DPI 不同的屏:此刻窗口尚不可见,Windows/WinForms 不为不可见窗口
+				// 执行 DPI 切换缩放 → 推迟到 OnShown(可见后)恢复,单次跨屏移动让框架完成整树缩放。
+				restorePosSizeOnShown = true;
+			}
 			else
 			{
-				if (MainFormPosSizeInfo.Size.HasValue)
-				{
-					base.Size = MainFormPosSizeInfo.Size.Value;
-				}
-				if (MainFormPosSizeInfo.Location.HasValue)
-				{
-					base.Location = MainFormPosSizeInfo.Location.Value;
-				}
-
-				Rectangle workingArea = SystemInformation.WorkingArea;
-				base.Size = new Size(Math.Min(base.Size.Width, workingArea.Width), Math.Min(base.Size.Height, workingArea.Height));
-				base.Location = ClampWindowToWorkingArea(base.Location, base.Size, workingArea);
+				ApplyRestoredPosSize();
 			}
 		}
 		catch (System.Exception ex)
@@ -6532,60 +6527,110 @@ internal partial class StateFieldInstance : Form
 	}
 
 	// PMv2(实验分支):OnLoad 把主窗位置恢复到与启动屏 DPI 不同的显示器时,窗口尚不可见,
-	// Windows/WinForms 不会为不可见窗口执行 DPI 切换缩放 → 首次显示保持启动屏刻度(用户所报
-	// "副屏 100% 首开却按主屏 150% 尺寸显示")。此处窗口已可见:若所在显示器有效 DPI 与控件树
-	// 刻度(DeviceDpi)不一致,把窗口往主屏工作区打一个来回,诱发真实 WM_DPICHANGED 让框架完成
-	// 整树缩放,再钉回恢复的位置与尺寸(第二次赋值:框架处理中会按 suggested rect 调整,需重钉;
-	// 值相同则为 no-op)。shcore API 仅 Win8.1+,更低系统捕获后维持旧行为。
-	private void EnsureInitialDpiScaling()
+	// Windows/WinForms 不会为不可见窗口执行 DPI 切换缩放 → 首次显示保持启动屏刻度(副屏 100%
+	// 首开却按主屏 150% 尺寸)。曾试过"OnShown 后往主屏打一个来回诱发 WM_DPICHANGED",但来回
+	// 两次相反的框架缩放不是无损往返(列宽取整/最小尺寸/锚定布局非线性),实测把列宽压挤进窗口、
+	// 输入框变短。现改为:仅当恢复位置所在屏的有效 DPI 与启动 DPI 不同时,把位置恢复推迟到
+	// OnShown(已可见)执行 —— 单次真实跨屏移动,框架一次性完成整树缩放;同屏/单屏仍走 OnLoad
+	// 原路径,窗口不跳动。
+	private bool restorePosSizeOnShown;
+
+	private bool RestoredLocationNeedsDpiMigration()
 	{
-		if (base.WindowState != FormWindowState.Normal)
+		if (!MainFormPosSizeInfo.Location.HasValue)
 		{
-			return;
+			return false;
 		}
 		try
 		{
-			IntPtr monitorHandle = NativeMethods.MonitorFromWindow(base.Handle, 2u);
-			if (NativeMethods.GetDpiForMonitor(monitorHandle, 0, out uint monitorDpiX, out _) != 0 || (int)monitorDpiX == DeviceDpi)
+			IntPtr monitorHandle = NativeMethods.MonitorFromPoint(MainFormPosSizeInfo.Location.Value, 2u);
+			if (NativeMethods.GetDpiForMonitor(monitorHandle, 0, out uint monitorDpiX, out _) != 0)
 			{
-				return;
+				return false;
 			}
-			Rectangle restoredBounds = Bounds;
-			Location = Screen.PrimaryScreen.WorkingArea.Location;
-			Bounds = restoredBounds;
-			Bounds = restoredBounds;
+			return (int)monitorDpiX != DeviceDpi;
 		}
 		catch (DllNotFoundException)
 		{
+			return false;
 		}
 		catch (EntryPointNotFoundException)
 		{
+			return false;
 		}
 	}
+
+	// OnLoad 原地恢复与 OnShown 推迟恢复共用:设保存的位置/尺寸并钳制到工作区。位置先行 ——
+	// 可见状态下跨 DPI 屏移动会触发框架整树缩放并按比例调整窗口尺寸,随后再钉保存的尺寸
+	//(保存值本就是上次关闭所在屏的刻度)。
+	private void ApplyRestoredPosSize()
+	{
+		if (MainFormPosSizeInfo.Location.HasValue)
+		{
+			base.Location = MainFormPosSizeInfo.Location.Value;
+		}
+		if (MainFormPosSizeInfo.Size.HasValue)
+		{
+			base.Size = MainFormPosSizeInfo.Size.Value;
+		}
+		Rectangle workingArea = SystemInformation.WorkingArea;
+		base.Size = new Size(Math.Min(base.Size.Width, workingArea.Width), Math.Min(base.Size.Height, workingArea.Height));
+		base.Location = ClampWindowToWorkingArea(base.Location, base.Size, workingArea);
+	}
+
+	// 自定义资产(列宽/分割条/状态条字体)的当前刻度台账:以 DPI 记账,重复或往返的
+	// WM_DPICHANGED 天然幂等(目标刻度一致则整段跳过),避免相对缩放的累积漂移。
+	private int customAssetsDpi;
 
 	protected override void OnDpiChanged(DpiChangedEventArgs e)
 	{
 		base.OnDpiChanged(e);
-		RescaleCustomAssetsAfterDpiChange((float)e.DeviceDpiNew / e.DeviceDpiOld);
+		RescaleCustomAssetsForDpi(e.DeviceDpiNew);
 	}
 
 	// PMv2(实验分支):框架对 WM_DPICHANGED 只缩控件 bounds 与 Form.Font 继承链;以下自定义
-	// 资产停在旧刻度,逐项补缩 —— 文件列表列宽(DGV 列宽框架不管,用户所见"表头间距不缩放")、
-	// 工具栏/菜单项固定尺寸与 ImageScalingSize(用户所见"工具栏按钮放大")、标签面板 FontAwesome
-	// 按钮图标(用户所见"左侧面板按钮图标放大")、显式设置的汇总状态条字体(显式 Font 不随
-	// Form.Font 缩放,用户所见"底部大小/时长字符不随屏缩")、过滤条两处固定宽度。
+	// 资产停在旧刻度,逐项补缩 —— 文件列表列宽(DGV 列宽框架不管,"表头间距不缩放")、主分割条
+	// 位置与左栏最小宽(SplitContainer 框架不缩 → 左侧信息栏跨屏显宽/窄)、工具栏/菜单项固定
+	// 尺寸与 ImageScalingSize、标签面板 FontAwesome 按钮图标、显式设置的汇总状态条字体(显式
+	// Font 不随 Form.Font 缩放,"底部大小/时长字符不随屏缩")、过滤条两处固定宽度。
 	// 已知仍停启动刻度(后续阶段):文件类型图标 ImageList 与行高(重设 ImageSize 会清空图像,
 	// 需图标重建管线)、封面占位图缓存(引用同一性 dispose 语义,勿轻动)、文件列表字体 fileListFont。
-	private void RescaleCustomAssetsAfterDpiChange(float ratio)
+	private void RescaleCustomAssetsForDpi(int targetDpi)
 	{
+		int startupDpi = (int)Math.Round(ImageUtilities.GetDpiScale() * 96f);
+		if (customAssetsDpi == 0)
+		{
+			customAssetsDpi = startupDpi;
+		}
+		if (targetDpi == customAssetsDpi)
+		{
+			return;
+		}
+		float ratio = (float)targetDpi / customAssetsDpi;
+		customAssetsDpi = targetDpi;
+
 		foreach (DataGridViewColumn column in fileListView.Columns)
 		{
 			column.Width = Math.Max(2, (int)Math.Round(column.Width * ratio));
 		}
+
+		try
+		{
+			int scaledSplitterDistance = (int)Math.Round(mainSplitContainer.SplitterDistance * ratio);
+			int maxSplitterDistance = mainSplitContainer.Width - mainSplitContainer.Panel2MinSize - mainSplitContainer.SplitterWidth;
+			mainSplitContainer.Panel1MinSize = ImageUtilities.ScaleByDpi(320f, this);
+			mainSplitContainer.SplitterDistance = Math.Max(mainSplitContainer.Panel1MinSize, Math.Min(scaledSplitterDistance, maxSplitterDistance));
+		}
+		catch (InvalidOperationException)
+		{
+			// 窗口极窄等布局约束冲突时放弃本次分割条调整(不影响其余项;下次 DPI 变化按台账重算)。
+		}
+
 		ApplyToolbarItemSizesForDpi();
 		RefreshTagEditorButtonImages();
+		// 9f = Designer 里 fileSummaryStatusStrip 的显式字号;按启动基准绝对计算,不做相对累积。
 		Font summaryFont = fileSummaryStatusStrip.Font;
-		fileSummaryStatusStrip.Font = new Font(summaryFont.FontFamily, summaryFont.Size * ratio, summaryFont.Style, summaryFont.Unit, summaryFont.GdiCharSet);
+		fileSummaryStatusStrip.Font = new Font(summaryFont.FontFamily, 9f * targetDpi / startupDpi, summaryFont.Style, summaryFont.Unit, summaryFont.GdiCharSet);
 		filterTypeDropDownButton.Width = ImageUtilities.ScaleByDpi(100f, this);
 		selectedFilesStatusLabel.Width = ImageUtilities.ScaleByDpi(190f, this);
 	}
@@ -6593,7 +6638,11 @@ internal partial class StateFieldInstance : Form
 	protected override void OnShown(EventArgs e)
 	{
 		base.OnShown(e);
-		EnsureInitialDpiScaling();
+		if (restorePosSizeOnShown)
+		{
+			restorePosSizeOnShown = false;
+			ApplyRestoredPosSize();
+		}
 		notifyIcon.Visible = Settings.Default.AlwaysShowIconInNofiArea;
 		hasShownMainForm = true;
 		if (tagEditorPanel.Height < tagEditorBottomSpacerPanel.Location.Y + tagEditorBottomSpacerPanel.Height)
