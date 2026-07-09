@@ -2890,11 +2890,24 @@ internal partial class StateFieldInstance : Form
 		};
 		lastFileListFilterText = "";
 		startupFileArgs = args;
+		// 实验插桩(env 门控,零默认影响):在句柄创建前钉初始位置,复现"从副屏启动 →
+		// shell 把窗口直接建在异刻度屏"的用户路径(句柄屏 96 与进程静态刻度 144 分叉,
+		// 且无任何 WM_DPICHANGED 事件到来)。
+		string testStartPos = Environment.GetEnvironmentVariable("MUSICTAG_DPI_TEST_STARTPOS");
+		if (!string.IsNullOrEmpty(testStartPos))
+		{
+			string[] posParts = testStartPos.Split(',');
+			StartPosition = FormStartPosition.Manual;
+			Location = new Point(int.Parse(posParts[0]), int.Parse(posParts[1]));
+		}
 		taskbarProgress = new TaskbarProgressController(this);
 		InitializeComponent();
-		// 构造期 DeviceDpi = 启动屏刻度,与下方各 Initialize* 使用的静态 ScaleByDpi 同基准。
+		// 构造期 DeviceDpi = 句柄屏刻度(从副屏启动时 shell 可把句柄直接建在副屏,≠ 主屏)。
+		// 静态 ScaleByDpi 基线(桌面 DC = 恒主屏)先与句柄屏钉齐,后续 Initialize* 生成的静态
+		// 刻度资产(图标/最小宽/过滤条控件宽)才与 Designer/框架布局(句柄屏自洽)同刻度。
 		// startupDpi 供列宽持久化归一(见 SaveCurrentFileListColumnWidths);customAssetsDpi
 		// 台账有初值后,首次跨屏 WM_DPICHANGED 才能按 previous→target 比率补缩 DGV 列宽。
+		ImageUtilities.RefreshDpiScaleCache(this);
 		startupDpi = DeviceDpi;
 		customAssetsDpi = DeviceDpi;
 		// ToolStrip 族条带字体显式化(固化 9pt,家族取各自当前值):未显式设置时它们走
@@ -2916,6 +2929,11 @@ internal partial class StateFieldInstance : Form
 		ApplyLanguageResources();
 		InitializeSourceMenus();
 		ApplyTagPanelLayout();
+		// 句柄建在与进程初始 DPI 不同的屏时,框架在句柄创建阶段会把字体按比率错缩
+		// (9pt→6pt@96,pt 是 DPI 无关单位;与跨屏 WM_DPICHANGED 的错误接管同源)。
+		// 台账此时已与句柄屏一致(门关),走无条件绝对量段把字体/几何钉回设计值;
+		// 主屏启动时全部同值 no-op。
+		RescaleCustomAssetsForDpi(DeviceDpi);
 		DpiTrace("ctor.done");
 	}
 
@@ -3405,14 +3423,20 @@ internal partial class StateFieldInstance : Form
 		filterTypeDropDownButton.Text = Resources.ResourceManager.GetString(filterTypeDropDownButton.Tag as string);
 	}
 
-	// 存储/默认列宽的刻度语义是"启动屏像素"(SaveCurrentFileListColumnWidths 归一化、
-	// CustomColumnsDialog 默认表为静态 ScaleByDpi);窗口跨屏后上屏前换算为当前屏刻度。
-	// 启动屏上恒等返回(customAssetsDpi == startupDpi),行为与历史版本一致。
+	// 存储/默认列宽的刻度语义是"存盘时的启动屏像素",基准记录在 FileListColumnWidthsDpi
+	// 戳里(SaveCurrentFileListColumnWidths 归一化时同步写戳;CustomColumnsDialog 默认表为
+	// 静态 ScaleByDpi)。恢复/上屏前按 当前刻度/戳 换算;无戳(旧存量,0)按本次启动屏
+	// 刻度恒等读入,行为与历史版本一致。
 	private int ScaleStoredColumnWidthToCurrentDpi(int storedWidth)
 	{
-		if (customAssetsDpi > 0 && startupDpi > 0 && customAssetsDpi != startupDpi)
+		int storedDpi = Settings.Default.FileListColumnWidthsDpi;
+		if (storedDpi <= 0)
 		{
-			return Math.Max(5, (int)Math.Round((float)storedWidth * customAssetsDpi / startupDpi));
+			storedDpi = startupDpi;
+		}
+		if (customAssetsDpi > 0 && storedDpi > 0 && customAssetsDpi != storedDpi)
+		{
+			return Math.Max(5, (int)Math.Round((float)storedWidth * customAssetsDpi / storedDpi));
 		}
 		return storedWidth;
 	}
@@ -5448,9 +5472,10 @@ internal partial class StateFieldInstance : Form
 			CustomColumnsDialog.ColumnHeaderInfo columnHeaderInfo = columnHeader.Tag as CustomColumnsDialog.ColumnHeaderInfo;
 			if (columnHeader.Width > 0)
 			{
-				// 持久化语义 = 启动屏刻度(恢复端 InitializeFileListColumnsAndIcons 在启动屏
-				// 原样使用)。窗口当前在其他 DPI 屏时,列宽已被 RescaleCustomAssetsForDpi 按屏
-				// 缩放,换算回启动刻度再存,避免在低 DPI 屏退出→下次启动列宽整体缩水。
+				// 持久化语义 = 启动屏刻度,基准记入 FileListColumnWidthsDpi 戳(恢复端
+				// ScaleStoredColumnWidthToCurrentDpi 按戳换算,跨启动屏不再恒等误读)。
+				// 窗口当前在其他 DPI 屏时,列宽已被 RescaleCustomAssetsForDpi 按屏缩放,
+				// 换算回启动刻度再存,避免在低 DPI 屏退出→下次启动列宽整体缩水。
 				int width = columnHeader.Width;
 				if (customAssetsDpi > 0 && customAssetsDpi != startupDpi)
 				{
@@ -5462,6 +5487,10 @@ internal partial class StateFieldInstance : Form
 			{
 				columnHeaderInfo.width = ImageUtilities.ScaleByDpi(100f);
 			}
+		}
+		if (startupDpi > 0)
+		{
+			Settings.Default.FileListColumnWidthsDpi = startupDpi;
 		}
 	}
 
@@ -6494,24 +6523,25 @@ internal partial class StateFieldInstance : Form
 		DialogService.TrySaveApplicationSettings();
 	}
 
-	// 从 OnLoad 提取:窗口位置 clamp 到工作区纯几何(顺序依赖——先右/下越界回拉,再整体出界归零)。
-	// 无 LocationChanged/Move handler 订阅或 override(已核实),故 BEFORE 的 0~3 次中间 base.Location 写与 AFTER
-	// 单次写(局部 Point 模拟顺序读写)用户态等价:WinForms Control.Location setter 对相同值 no-op(SetBounds 内部
-	// 值比较,无观察者观测中间态)。maximumVisibleLocation:宽留 20px 余量(至少 20)、高取满工作区。
+	// 从 OnLoad 提取:窗口位置 clamp 到工作区纯几何(顺序依赖——先右/下越界回拉,再整体出界归位)。
+	// 多屏语义:按传入工作区的**边界**(Left/Top/Right/Bottom)钳制,workingArea 应传目标位置所在屏
+	// 的工作区(Screen.GetWorkingArea);单屏/主屏矩形(原点 0,0)时与旧的宽高公式逐值等价,
+	// characterization 断言不变。旧版恒用 SystemInformation.WorkingArea(主屏),恢复到副屏的
+	// 坐标(X≥主屏宽)总被拉回主屏右缘 20px 内 = "恢复位置横跨两屏交界"的来源。
 	internal static Point ClampWindowToWorkingArea(Point location, Size size, Rectangle workingArea)
 	{
-		Size maximumVisibleLocation = new Size(Math.Min(Math.Max(workingArea.Width - 20, 20), workingArea.Width), workingArea.Height);
-		if (location.X > maximumVisibleLocation.Width)
+		int maximumVisibleX = Math.Min(Math.Max(workingArea.Right - 20, workingArea.Left + 20), workingArea.Right);
+		if (location.X > maximumVisibleX)
 		{
-			location = new Point(maximumVisibleLocation.Width, location.Y);
+			location = new Point(maximumVisibleX, location.Y);
 		}
-		if (location.Y > maximumVisibleLocation.Height)
+		if (location.Y > workingArea.Bottom)
 		{
-			location = new Point(location.X, maximumVisibleLocation.Height);
+			location = new Point(location.X, workingArea.Bottom);
 		}
-		if (location.X + size.Width < 20 || location.Y + size.Height < 20)
+		if (location.X + size.Width < workingArea.Left + 20 || location.Y + size.Height < workingArea.Top + 20)
 		{
-			location = new Point(0, 0);
+			location = workingArea.Location;
 		}
 		return location;
 	}
@@ -6567,6 +6597,8 @@ internal partial class StateFieldInstance : Form
 
 	// OnLoad 恢复:设保存的位置/尺寸并钳制到工作区。位置先行 —— 跨 DPI 屏移动触发框架整树
 	// 缩放并按比例调整窗口尺寸,随后再钉保存的尺寸(保存值本就是上次关闭所在屏的刻度)。
+	// 工作区取**目标位置所在屏**(多屏):恢复到副屏时按副屏边界钳制/收缩,不再被主屏
+	// 工作区拉回两屏交界。
 	private void ApplyRestoredPosSize()
 	{
 		if (MainFormPosSizeInfo.Location.HasValue)
@@ -6577,7 +6609,7 @@ internal partial class StateFieldInstance : Form
 		{
 			base.Size = MainFormPosSizeInfo.Size.Value;
 		}
-		Rectangle workingArea = SystemInformation.WorkingArea;
+		Rectangle workingArea = Screen.GetWorkingArea(new Rectangle(base.Location, base.Size));
 		base.Size = new Size(Math.Min(base.Size.Width, workingArea.Width), Math.Min(base.Size.Height, workingArea.Height));
 		base.Location = ClampWindowToWorkingArea(base.Location, base.Size, workingArea);
 	}
@@ -6645,7 +6677,7 @@ internal partial class StateFieldInstance : Form
 				fileSummaryStatusStrip.Font.Size,
 				mainMenuStrip.Font.Size,
 				mainToolStrip.ImageScalingSize)
-				+ string.Format(" ftbH={0} fddH={1} flabH={2} prefH={3} autoSize={4} titleRowW={5} trackRowW={6} trackComboW={7} trackColH={8} titleComboFont={9:0.##} labelFont={10:0.##}",
+				+ string.Format(" ftbH={0} fddH={1} flabH={2} prefH={3} autoSize={4} titleRowW={5} trackRowW={6} trackComboW={7} trackColH={8} titleComboFont={9:0.##} labelFont={10:0.##} encImgH={11} encBtnH={12} scrW={13}",
 				filterTextBox.Height, filterTypeDropDownButton.Height, filterStatusLabel.Height,
 				fileFilterStatusStrip.GetPreferredSize(Size.Empty).Height, fileFilterStatusStrip.AutoSize,
 				titleRowPanel != null ? titleRowPanel.Width : -1,
@@ -6653,7 +6685,10 @@ internal partial class StateFieldInstance : Form
 				trackComboBox != null ? trackComboBox.Width : -1,
 				trackColumnPanel != null ? trackColumnPanel.Height : -1,
 				titleComboBox != null ? titleComboBox.Font.Size : -1f,
-				trackLabel != null ? trackLabel.Font.Size : -1f);
+				trackLabel != null ? trackLabel.Font.Size : -1f,
+				(tagEncodingButtons != null && tagEncodingButtons[0].Image != null) ? tagEncodingButtons[0].Image.Height : -1,
+				tagEncodingButtons != null ? tagEncodingButtons[0].Height : -1,
+				Screen.FromControl(this).Bounds.Width);
 			File.AppendAllText(Path.Combine(PathFileUtilities.GetApplicationDirectory(), "dpi-trace.log"), line + Environment.NewLine);
 		}
 		catch (System.Exception)
@@ -6823,6 +6858,11 @@ internal partial class StateFieldInstance : Form
 	{
 		base.OnShown(e);
 		DpiTrace("OnShown.begin");
+		// 首显兜底:句柄建在与进程初始 DPI 不同的屏时,构造尾的钉回之后(OnLoad 恢复
+		// 尺寸/位置期间)框架仍可能给条带写入迟到的缩放字体(实测 filter/summary 条 9→6)。
+		// 首显消息尘埃落定后按实况把字体/布局统一对齐(与 OnDpiChanged 的队尾兜底同型;
+		// 已同步时全程同值 no-op)。
+		BeginInvoke(new Action(EnsureDpiAssetsSynced));
 		notifyIcon.Visible = Settings.Default.AlwaysShowIconInNofiArea;
 		hasShownMainForm = true;
 		if (tagEditorPanel.Height < tagEditorBottomSpacerPanel.Location.Y + tagEditorBottomSpacerPanel.Height)

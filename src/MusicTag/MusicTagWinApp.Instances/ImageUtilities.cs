@@ -30,6 +30,18 @@ internal static class ImageUtilities
 		return dpiScale = GetSystemDpi().Width / 96f;
 	}
 
+	// 把静态启动基线对齐到指定控件句柄所在屏(PMv2 实验分支):从副屏启动时,shell 可以把
+	// 主窗体句柄直接建在副屏——Designer/框架布局按句柄屏自洽,而 GetSystemDpi()(桌面 DC)
+	// 恒返回主屏刻度,静态 ScaleByDpi 生成的资产(图标、最小宽)会按主屏刻度塞进副屏刻度的
+	// 控件树(图标截断/左栏被顶宽)。主窗体构造期调用一次,把静态基线与句柄屏钉齐。
+	public static void RefreshDpiScaleCache(Control control)
+	{
+		if (control != null)
+		{
+			dpiScale = (float)control.DeviceDpi / 96f;
+		}
+	}
+
 	// Per-Monitor V2(实验分支):取控件当前所在显示器的缩放(DeviceDpi 随 WM_DPICHANGED 更新)。
 	// 构造期布局仍用无参 GetDpiScale()(启动基线;跨屏时框架把整棵控件树按比例重缩放,基线即正确)。
 	// 只有"构造后反复执行"的重排/绘制代码(SizeChanged/Paint)必须按当前显示器取值,否则会把启动

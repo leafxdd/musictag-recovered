@@ -423,6 +423,27 @@ internal sealed class Settings : ApplicationSettingsBase
 		}
 	}
 
+	// 持久化列宽的 DPI 戳(PMv2 实验分支):记录 ColumnHeader 里 width 值的刻度基准
+	// (= 存盘时的 startupDpi)。0 = 旧版存量(无戳),恢复端按"本次启动屏刻度"恒等
+	// 读入(与历史行为一致)。有戳时恢复端按 本次DPI/戳 换算,跨启动屏(上次主屏
+	// 150% 存、这次副屏 100% 启)列宽不再整体偏大/缩水。
+	[UserScopedSetting]
+	[DebuggerNonUserCode]
+	[SettingsProvider(typeof(XmlSettingsProvider))]
+	[SettingsManageability(SettingsManageability.Roaming)]
+	[DefaultSettingValue("0")]
+	public int FileListColumnWidthsDpi
+	{
+		get
+		{
+			return (int)this["FileListColumnWidthsDpi"];
+		}
+		set
+		{
+			this["FileListColumnWidthsDpi"] = value;
+		}
+	}
+
 	[SettingsProvider(typeof(XmlSettingsProvider))]
 	[UserScopedSetting]
 	[DebuggerNonUserCode]
