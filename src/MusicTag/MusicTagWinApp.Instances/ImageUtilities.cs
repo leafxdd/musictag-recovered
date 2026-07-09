@@ -30,6 +30,19 @@ internal static class ImageUtilities
 		return dpiScale = GetSystemDpi().Width / 96f;
 	}
 
+	// Per-Monitor V2(实验分支):取控件当前所在显示器的缩放(DeviceDpi 随 WM_DPICHANGED 更新)。
+	// 构造期布局仍用无参 GetDpiScale()(启动基线;跨屏时框架把整棵控件树按比例重缩放,基线即正确)。
+	// 只有"构造后反复执行"的重排/绘制代码(SizeChanged/Paint)必须按当前显示器取值,否则会把启动
+	// 基线的像素值重新套回已被框架缩放过的窗体——正是"跨屏拖动后越变越大/错位"的来源。
+	public static float GetDpiScale(Control control)
+	{
+		if (control != null)
+		{
+			return (float)control.DeviceDpi / 96f;
+		}
+		return GetDpiScale();
+	}
+
 	public static Bitmap ScaleImage(Image image, float scale)
 	{
 		try
@@ -225,6 +238,17 @@ internal static class ImageUtilities
 	public static int ScaleByDpi(float value, bool roundUp = false)
 	{
 			float scaledValue = value * GetDpiScale();
+		if (!roundUp)
+		{
+			return (int)scaledValue;
+		}
+		return (int)Math.Ceiling(scaledValue);
+	}
+
+	// 见 GetDpiScale(Control):构造后重复执行的重排/绘制用此重载,按控件当前显示器缩放。
+	public static int ScaleByDpi(float value, Control control, bool roundUp = false)
+	{
+		float scaledValue = value * GetDpiScale(control);
 		if (!roundUp)
 		{
 			return (int)scaledValue;

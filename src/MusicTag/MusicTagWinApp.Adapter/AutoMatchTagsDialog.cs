@@ -1647,8 +1647,8 @@ internal class AutoMatchTagsDialog : Form
 		args.DrawDefault = false;
 		args.DrawBackground();
 		bool isChecked = args.Header.Tag is bool value && value;
-		CheckBoxRenderer.DrawCheckBox(args.Graphics, new Point(args.Bounds.Left + 4, args.Bounds.Top + ImageUtilities.ScaleByDpi(4f)), isChecked ? CheckBoxState.CheckedNormal : CheckBoxState.UncheckedNormal);
-		int textX = args.Bounds.Left + ImageUtilities.ScaleByDpi(16f) + 4;
+		CheckBoxRenderer.DrawCheckBox(args.Graphics, new Point(args.Bounds.Left + 4, args.Bounds.Top + ImageUtilities.ScaleByDpi(4f, this)), isChecked ? CheckBoxState.CheckedNormal : CheckBoxState.UncheckedNormal);
+		int textX = args.Bounds.Left + ImageUtilities.ScaleByDpi(16f, this) + 4;
 		int textWidth = args.Bounds.Right - textX;
 		if (textWidth <= 0)
 		{

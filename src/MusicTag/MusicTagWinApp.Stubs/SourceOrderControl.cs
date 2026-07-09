@@ -116,7 +116,7 @@ internal class SourceOrderControl : UserControl
 		sourceListView.Width = mainPanel.Width - buttonPanel.Width - buttonPanel.Margin.Left - buttonPanel.Margin.Right;
 		sourceListView.Height = mainPanel.Height;
 		buttonPanel.Height = mainPanel.Height;
-		moveUpButton.Margin = new Padding(0, buttonPanel.Height - moveUpButton.Height - moveDownButton.Height - ImageUtilities.ScaleByDpi(10f), 0, 0);
+		moveUpButton.Margin = new Padding(0, buttonPanel.Height - moveUpButton.Height - moveDownButton.Height - ImageUtilities.ScaleByDpi(10f, this), 0, 0);
 	}
 
 	private void MoveUpButton_Click(object sender, EventArgs e)

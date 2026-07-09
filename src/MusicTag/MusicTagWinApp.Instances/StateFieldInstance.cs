@@ -3660,17 +3660,17 @@ internal partial class StateFieldInstance : Form
 		artistRowPanel.Width = tagPanelWidth;
 		titleRowPanel.Width = tagPanelWidth;
 
-		trackDiscGroupPanel.Width = titleRowPanel.Width - titleEncodingButton.Width - ImageUtilities.ScaleByDpi(5f);
-		int tagPairHeight = trackLabel.Height + trackRowPanel.Height + ImageUtilities.ScaleByDpi(6f, roundUp: true);
+		trackDiscGroupPanel.Width = titleRowPanel.Width - titleEncodingButton.Width - ImageUtilities.ScaleByDpi(5f, this);
+		int tagPairHeight = trackLabel.Height + trackRowPanel.Height + ImageUtilities.ScaleByDpi(6f, this, roundUp: true);
 		discColumnPanel.Height = tagPairHeight;
 		trackColumnPanel.Height = tagPairHeight;
 		trackDiscGroupPanel.Height = tagPairHeight;
 		trackRowPanel.Width = trackDiscGroupPanel.Width / 2;
 		trackColumnPanel.Width = trackRowPanel.Width;
-		discRowPanel.Width = trackDiscGroupPanel.Width / 2 - ImageUtilities.ScaleByDpi(5f);
+		discRowPanel.Width = trackDiscGroupPanel.Width / 2 - ImageUtilities.ScaleByDpi(5f, this);
 		discColumnPanel.Width = discRowPanel.Width;
-		discColumnPanel.Margin = new Padding(ImageUtilities.ScaleByDpi(5f), 0, 0, 0);
-		overwriteCoverCheckBox.Margin = new Padding((statusLabelsPanel.Width - overwriteCoverCheckBox.Width) / 2, ImageUtilities.ScaleByDpi(50f), 0, 0);
+		discColumnPanel.Margin = new Padding(ImageUtilities.ScaleByDpi(5f, this), 0, 0, 0);
+		overwriteCoverCheckBox.Margin = new Padding((statusLabelsPanel.Width - overwriteCoverCheckBox.Width) / 2, ImageUtilities.ScaleByDpi(50f, this), 0, 0);
 
 		int coverPanelSize = coverPanel.Width - statusLabelsPanel.Width;
 		int availableHeight = tagEditorPanel.Height;
@@ -3688,9 +3688,9 @@ internal partial class StateFieldInstance : Form
 			}
 		}
 
-		if (coverPanelSize > ImageUtilities.ScaleByDpi(500f))
+		if (coverPanelSize > ImageUtilities.ScaleByDpi(500f, this))
 		{
-			coverPanelSize = ImageUtilities.ScaleByDpi(500f);
+			coverPanelSize = ImageUtilities.ScaleByDpi(500f, this);
 		}
 		coverPictureBox.Height = coverPanelSize;
 		coverPictureBox.Width = coverPanelSize;
@@ -6835,7 +6835,7 @@ internal partial class StateFieldInstance : Form
 
 	private void FilterBar_SizeChanged(object sender, EventArgs e)
 	{
-		filterTextBox.Width = fileFilterStatusStrip.Width - filterStatusLabel.Width - filterTypeDropDownButton.Width - ImageUtilities.ScaleByDpi(4f);
+		filterTextBox.Width = fileFilterStatusStrip.Width - filterStatusLabel.Width - filterTypeDropDownButton.Width - ImageUtilities.ScaleByDpi(4f, this);
 	}
 
 	private void FilterInput_TextChanged(object sender, EventArgs e)
@@ -6934,7 +6934,7 @@ internal partial class StateFieldInstance : Form
 
 	private void ResizeStatusLabels()
 	{
-		Size statusLabelSize = new Size(statusLabelsPanel.Width - statusLabelsPanel.Padding.Left - statusLabelsPanel.Padding.Right, ImageUtilities.ScaleByDpi(20f));
+		Size statusLabelSize = new Size(statusLabelsPanel.Width - statusLabelsPanel.Padding.Left - statusLabelsPanel.Padding.Right, ImageUtilities.ScaleByDpi(20f, this));
 		coverPictureTypeLabel.Size = statusLabelSize;
 		coverFileSizeLabel.Size = statusLabelSize;
 		coverDimensionsLabel.Size = statusLabelSize;

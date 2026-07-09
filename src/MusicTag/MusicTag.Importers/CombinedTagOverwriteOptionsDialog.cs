@@ -125,9 +125,9 @@ internal class CombinedTagOverwriteOptionsDialog : Form
 		e.DrawDefault = false;
 		e.DrawBackground();
 		bool isChecked = itemColumn.Tag is bool checkedValue && checkedValue;
-		Point checkBoxLocation = new Point(e.Bounds.Left + 4, e.Bounds.Top + ImageUtilities.ScaleByDpi(4f));
+		Point checkBoxLocation = new Point(e.Bounds.Left + 4, e.Bounds.Top + ImageUtilities.ScaleByDpi(4f, this));
 		CheckBoxRenderer.DrawCheckBox(e.Graphics, checkBoxLocation, isChecked ? CheckBoxState.CheckedNormal : CheckBoxState.UncheckedNormal);
-		int textX = e.Bounds.Left + ImageUtilities.ScaleByDpi(16f) + 4;
+		int textX = e.Bounds.Left + ImageUtilities.ScaleByDpi(16f, this) + 4;
 		int textWidth = e.Bounds.Right - textX;
 		if (textWidth <= 0)
 		{

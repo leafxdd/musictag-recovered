@@ -11,7 +11,9 @@ public class SplitButton : Button
 {
 	private PushButtonState buttonState;
 
-	private static readonly int SplitSectionWidth = ImageUtilities.ScaleByDpi(18f);
+	// Per-Monitor V2(实验分支):原为 static readonly(进程启动缩放一次定死),跨屏后分割区宽度
+	// 停在启动 DPI。改为实例属性按控件当前显示器取值(布局与绘制处处新鲜求值)。
+	private int SplitSectionWidth => ImageUtilities.ScaleByDpi(18f, this);
 
 	private static int borderInset;
 
@@ -370,9 +372,9 @@ public class SplitButton : Button
 		point.X += arrowBounds.Width % 2;
 		Point[] array = new Point[3]
 		{
-			new Point(point.X - ImageUtilities.ScaleByDpi(2f), point.Y - ImageUtilities.ScaleByDpi(1f)),
-			new Point(point.X + ImageUtilities.ScaleByDpi(3f, roundUp: true), point.Y - ImageUtilities.ScaleByDpi(1f)),
-			new Point(point.X, point.Y + ImageUtilities.ScaleByDpi(2f, roundUp: true))
+			new Point(point.X - ImageUtilities.ScaleByDpi(2f, this), point.Y - ImageUtilities.ScaleByDpi(1f, this)),
+			new Point(point.X + ImageUtilities.ScaleByDpi(3f, this, roundUp: true), point.Y - ImageUtilities.ScaleByDpi(1f, this)),
+			new Point(point.X, point.Y + ImageUtilities.ScaleByDpi(2f, this, roundUp: true))
 		};
 		if (!base.Enabled)
 		{

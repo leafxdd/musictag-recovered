@@ -686,7 +686,7 @@ internal class OptionsDialog : Form
 		coverSourceLimitTrackBar.Width = availableWebSearchLimitWidth;
 		lyricSourceLimitTrackBar.Width = availableWebSearchLimitWidth;
 		tagSourceLimitTrackBar.Width = availableWebSearchLimitWidth;
-		webSearchLimitGroupBox.Height = tagSourceLimitTrackBar.Location.Y + tagSourceLimitTrackBar.Height + ImageUtilities.ScaleByDpi(20f);
+		webSearchLimitGroupBox.Height = tagSourceLimitTrackBar.Location.Y + tagSourceLimitTrackBar.Height + ImageUtilities.ScaleByDpi(20f, this);
 	}
 
 	private void SaveOptionsAndClose(object sender, EventArgs e)

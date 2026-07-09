@@ -363,7 +363,7 @@ internal class CustomColumnsDialog : Form
 
 	private void UpdateLayout(object sender, EventArgs e)
 	{
-		columnListView.Size = new Size(ImageUtilities.ScaleByDpi(180f), ClientSize.Height);
+		columnListView.Size = new Size(ImageUtilities.ScaleByDpi(180f, this), ClientSize.Height);
 		columnListView.Columns[0].Width = columnListView.ClientSize.Width;
 	}
 

@@ -1010,7 +1010,7 @@ internal class FilenameRelatedBatchDialog : Form
 	{
 		int patternButtonLeftMargin = (patternCommandRowPanel.Width - patternButtonPanel.Width) / 2;
 		patternButtonPanel.Margin = new Padding(patternButtonLeftMargin, patternButtonPanel.Margin.Top, 0, patternButtonPanel.Margin.Bottom);
-		customPatternTextBox.Width = patternOptionsPanel.Width - customPatternRadioButton.Width - customPatternRadioButton.Margin.Left - customPatternRadioButton.Margin.Right - customPatternTextBox.Margin.Left - customPatternTextBox.Margin.Right - ImageUtilities.ScaleByDpi(20f);
+		customPatternTextBox.Width = patternOptionsPanel.Width - customPatternRadioButton.Width - customPatternRadioButton.Margin.Left - customPatternRadioButton.Margin.Right - customPatternTextBox.Margin.Left - customPatternTextBox.Margin.Right - ImageUtilities.ScaleByDpi(20f, this);
 		int regexButtonLeftMargin = (regexCommandRowPanel.Width - regexButtonPanel.Width) / 2;
 		regexButtonPanel.Margin = new Padding(regexButtonLeftMargin, regexButtonPanel.Margin.Top, 0, regexButtonPanel.Margin.Bottom);
 
@@ -1044,10 +1044,10 @@ internal class FilenameRelatedBatchDialog : Form
 		}
 		regexPatternTextBox.Width = regexPatternGroupBox.Width - regexPatternGroupBox.Padding.Left * 2 - regexPatternTextBox.Margin.Left * 2;
 		captureGroupListView.Width = captureGroupPanel.Width;
-		captureGroupListView.Height = captureGroupPanel.Height - clearCaptureGroupsButton.Height - ImageUtilities.ScaleByDpi(3f);
+		captureGroupListView.Height = captureGroupPanel.Height - clearCaptureGroupsButton.Height - ImageUtilities.ScaleByDpi(3f, this);
 		clearCaptureGroupsButton.Margin = new Padding(captureGroupPanel.Width - clearCaptureGroupsButton.Width, clearCaptureGroupsButton.Margin.Top, 0, 0);
 		regexExampleTextBox.Width = regexExampleGroupBox.Width - regexExampleGroupBox.Padding.Left * 2 - regexExampleTextBox.Margin.Left * 2;
-		regexExampleTextBox.Height = regexExampleGroupBox.Height - regexExampleGroupBox.Padding.Top * 2 - regexExampleTextBox.Margin.Top * 2 - ImageUtilities.ScaleByDpi(5f);
+		regexExampleTextBox.Height = regexExampleGroupBox.Height - regexExampleGroupBox.Padding.Top * 2 - regexExampleTextBox.Margin.Top * 2 - ImageUtilities.ScaleByDpi(5f, this);
 	}
 
 	private void ConfirmPatternSettings(object sender, EventArgs e)
