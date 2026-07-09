@@ -2897,6 +2897,17 @@ internal partial class StateFieldInstance : Form
 		// 台账有初值后,首次跨屏 WM_DPICHANGED 才能按 previous→target 比率补缩 DGV 列宽。
 		startupDpi = DeviceDpi;
 		customAssetsDpi = DeviceDpi;
+		// ToolStrip 族条带字体显式化(固化 9pt,家族取各自当前值):未显式设置时它们走
+		// ToolStripManager.DefaultFont = GetMenuFontForDpi(CurrentDpi),而 CurrentDpi 是随
+		// 最后一次任意窗口 DPI 事件漂移的全局静态(net8 已知脏点)——副屏窗口可能取到主屏
+		// 刻度的菜单字体(9pt→13.5pt,"过滤/任意文字变大")。显式化后仅剩跨屏 ×ratio 缩放
+		// 一种漂移,由 RescaleCustomAssetsForDpi 的 PinToolStripFontSize 纠正。
+		// 有意决策:全窗设计基准即 9pt 物理恒定(Form.Font=fileListFont 从原版起就钉 9pt),
+		// 条带钉 9 与之一致;代价是单 96 屏且自定义过系统菜单字号的场景不再跟随系统字号,
+		// 与主窗体其余部分(一直 9pt)统一,可接受。
+		mainMenuStrip.Font = new Font(mainMenuStrip.Font.FontFamily, 9f, mainMenuStrip.Font.Style);
+		mainToolStrip.Font = new Font(mainToolStrip.Font.FontFamily, 9f, mainToolStrip.Font.Style);
+		fileFilterStatusStrip.Font = new Font(fileFilterStatusStrip.Font.FontFamily, 9f, fileFilterStatusStrip.Font.Style);
 		RegisterEditableTagFields();
 		ApplyToolbarImagesAndScaling();
 		InitializeTagEditorControls();
@@ -3050,6 +3061,10 @@ internal partial class StateFieldInstance : Form
 				titleComboBox, artistComboBox, albumComboBox, yearComboBox, trackComboBox, discComboBox, genreComboBox, albumArtistComboBox, composerComboBox, lyricistComboBox,
 			commentComboBox
 		};
+		// 同一组数组存字段,供 RecalcTagComboWidths 跨屏后显式重算(SizeChanged 联动在行宽
+		// 恰好写入同值时不触发,combo 会残留 DPI 缩放中途的错值——不能依赖事件链)。
+		tagRowPanels = layoutContext.TagRows;
+		tagRowComboBoxes = layoutContext.TagComboBoxes;
 		IEnumerable<ComboBox> editableTagComboBoxes = layoutContext.TagComboBoxes.Union(new ComboBox[1] { lyricsComboBox });
 		tagEncodingButtons = new Button[12]
 		{
@@ -6575,6 +6590,30 @@ internal partial class StateFieldInstance : Form
 	// 刻度)。跨屏台账缩放后列宽变为"当前屏刻度",保存时须换算回启动刻度,下次启动才不缩水。
 	private int startupDpi;
 
+	// 11 个标签行面板与对应 ComboBox(与 InitializeTagEditorControls 里 layoutContext 的数组
+	// 同一实例),供跨屏后显式重算 combo 宽度。
+	private FlowLayoutPanel[] tagRowPanels;
+
+	private ComboBox[] tagRowComboBoxes;
+
+	// 跨屏后显式重算 12 个标签输入框宽度(11 行 + 歌词行),计算式与 SizeChanged 联动处理器
+	// (TagComboBoxWidthUpdater/UpdateLyricsComboWidth)完全一致。之所以不能只靠联动:框架
+	// DPI 缩放期间联动按混合刻度算出错值,而事后 ApplyTagPanelLayout 写入的行宽若与框架缩放
+	// 结果恰好同值,SizeChanged 不触发,错值残留(实测=输入框拉长挤出按钮/输入框缩短)。
+	private void RecalcTagComboWidths()
+	{
+		if (tagRowPanels == null)
+		{
+			return;
+		}
+		for (int rowIndex = 0; rowIndex < tagRowPanels.Length; rowIndex++)
+		{
+			Button button = tagEncodingButtons[rowIndex];
+			tagRowComboBoxes[rowIndex].Width = tagRowPanels[rowIndex].Width - button.Width - button.Margin.Left - button.Margin.Right;
+		}
+		lyricsComboBox.Width = lyricsRowPanel.Width - editLyricsButton.Width - editLyricsButton.Margin.Left - editLyricsButton.Margin.Right - lyricsEncodingButton.Width - lyricsEncodingButton.Margin.Left - lyricsEncodingButton.Margin.Right;
+	}
+
 	// 诊断插桩(实验分支):MUSICTAG_DPI_TRACE=1 时把 DPI 相关几何/字体度量追加写 exe 旁
 	// dpi-trace.log,配合外部移屏驱动脚本定位跨屏缩放问题。未开启时零行为影响。
 	private static readonly bool dpiTraceEnabled = Environment.GetEnvironmentVariable("MUSICTAG_DPI_TRACE") == "1";
@@ -6606,9 +6645,15 @@ internal partial class StateFieldInstance : Form
 				fileSummaryStatusStrip.Font.Size,
 				mainMenuStrip.Font.Size,
 				mainToolStrip.ImageScalingSize)
-				+ string.Format(" ftbH={0} fddH={1} flabH={2} prefH={3} autoSize={4}",
+				+ string.Format(" ftbH={0} fddH={1} flabH={2} prefH={3} autoSize={4} titleRowW={5} trackRowW={6} trackComboW={7} trackColH={8} titleComboFont={9:0.##} labelFont={10:0.##}",
 				filterTextBox.Height, filterTypeDropDownButton.Height, filterStatusLabel.Height,
-				fileFilterStatusStrip.GetPreferredSize(Size.Empty).Height, fileFilterStatusStrip.AutoSize);
+				fileFilterStatusStrip.GetPreferredSize(Size.Empty).Height, fileFilterStatusStrip.AutoSize,
+				titleRowPanel != null ? titleRowPanel.Width : -1,
+				trackRowPanel != null ? trackRowPanel.Width : -1,
+				trackComboBox != null ? trackComboBox.Width : -1,
+				trackColumnPanel != null ? trackColumnPanel.Height : -1,
+				titleComboBox != null ? titleComboBox.Font.Size : -1f,
+				trackLabel != null ? trackLabel.Font.Size : -1f);
 			File.AppendAllText(Path.Combine(PathFileUtilities.GetApplicationDirectory(), "dpi-trace.log"), line + Environment.NewLine);
 		}
 		catch (System.Exception)
@@ -6623,6 +6668,29 @@ internal partial class StateFieldInstance : Form
 		DpiTrace("OnDpiChanged.afterBase");
 		RescaleCustomAssetsForDpi(e.DeviceDpiNew);
 		DpiTrace("OnDpiChanged.afterCustom");
+		// WM_DPICHANGED 可能重入/成批到达(框架 ScaleContainerForDpi 内的 SetWindowPos 会
+		// 递归触发下一条,dotnet/winforms #9004;鼠标拖动跨界抖动也会连发)。事件参数序与
+		// 实况终态可能分叉——排一个队尾兜底,消息尘埃落定后按 DeviceDpi 实况把台账、字体、
+		// 布局全部对齐(全幂等,已同步时近似零开销)。
+		BeginInvoke(new Action(EnsureDpiAssetsSynced));
+	}
+
+	// 拖动/调整结束(WM_EXITSIZEMOVE)兜底:拖动过程中的 DPI 抖动(跨界又拖回)可能让
+	// BEFOREPARENT 阶段的字体/布局中途值残留而最终 DPI 未变(无 DPICHANGED 收尾)。
+	protected override void OnResizeEnd(EventArgs e)
+	{
+		base.OnResizeEnd(e);
+		EnsureDpiAssetsSynced();
+	}
+
+	// 按窗口当前实况刻度对齐所有自定义资产与布局。RescaleCustomAssetsForDpi 内部分流:
+	// 相对量(列宽比率缩)由台账门控只跑一次,绝对量(字体钉回/几何重设)无条件重钉——
+	// 兜底恰恰要覆盖"净 DPI 差为零但中途残留"的形态(拖动跨界又拖回、#9004 嵌套重入),
+	// 此时台账与 DeviceDpi 相等,门内代码不跑,残留只能靠无条件段修正。
+	private void EnsureDpiAssetsSynced()
+	{
+		RescaleCustomAssetsForDpi(DeviceDpi);
+		DpiTrace("EnsureDpiAssetsSynced");
 	}
 
 	// net8(实测标定,见 dpi-trace 插桩):框架接管 WM_DPICHANGED 的整树 bounds 缩放(窗口、
@@ -6640,68 +6708,86 @@ internal partial class StateFieldInstance : Form
 	//    一致后统一重算覆盖。
 	private void RescaleCustomAssetsForDpi(int targetDpi)
 	{
-		if (targetDpi == customAssetsDpi)
-		{
-			return;
-		}
 		int previousDpi = customAssetsDpi;
-		customAssetsDpi = targetDpi;
+		bool dpiChanged = targetDpi != previousDpi;
+		// ── 相对量与一次性资产:只在真实 DPI 变化时跑(重复执行会复利/空耗)──
+		if (dpiChanged)
+		{
+			customAssetsDpi = targetDpi;
+			if (previousDpi > 0)
+			{
+				foreach (DataGridViewColumn column in fileListView.Columns)
+				{
+					// 下限贴 MinimumWidth(默认 5):更高的人为下限会把窄列(如 11px 的序号列)在
+					// 缩小方向顶起,放大方向再 ×1.5,往返一圈列宽净膨胀。
+					column.Width = Math.Max(column.MinimumWidth, (int)Math.Round((float)column.Width * targetDpi / previousDpi));
+				}
+			}
+			RefreshTagEditorButtonImages();
+			// no_cover 占位图按名字键缓存(尺寸实参命中时被忽略),作废后按新屏刻度重建;当前
+			// 正显示占位图(CenterImage 原像素绘制)时立即换新实例,旧实例经 SetCoverPreviewImage
+			// 的引用比对释放(缓存已不含它,无悬挂引用)。
+			ImageUtilities.EvictCachedResourceBitmap("no_cover");
+			if (coverPictureBox.SizeMode == PictureBoxSizeMode.CenterImage)
+			{
+				SetCoverPreviewImage(GetNoCoverPreviewImage());
+			}
+		}
 
+		// ── 绝对幂等量:无条件跑。兜底路径(EnsureDpiAssetsSynced)专为"净 DPI 差为零但
+		// 中途残留"的形态而设——拖动跨界又拖回(BEFOREPARENT 写了子控件字体却无 DPICHANGED
+		// 收尾)、#9004 嵌套重入(嵌套先把台账写掉,外层框架缩放随后又改字体)。这些形态下
+		// targetDpi == 台账,门内代码不跑,字体/条高只能在这里修。全部按 DeviceDpi 实况算
+		// 绝对值,已达标时写同值(setter no-op),不会自成 ping-pong 源。──
 		Font = fileListFont;
 		// ToolStrip 族(状态条/菜单条/工具栏)不吃 Form.Font 继承(ToolStripManager.DefaultFont
-		// 体系)——各自钉 pt 并归位条带高度;保留各自字形(汇总条 Tahoma、其余系统菜单字体)。
-		PinToolStripFontSize(fileSummaryStatusStrip);
-		PinToolStripFontSize(fileFilterStatusStrip);
-		PinToolStripFontSize(mainMenuStrip);
-		PinToolStripFontSize(mainToolStrip);
+		// 体系)——各自钉 pt;保留各自字形(汇总条 Tahoma、其余系统菜单字体)。
+		bool fontsChanged = PinToolStripFontSize(fileSummaryStatusStrip);
+		fontsChanged |= PinToolStripFontSize(fileFilterStatusStrip);
+		fontsChanged |= PinToolStripFontSize(mainMenuStrip);
+		fontsChanged |= PinToolStripFontSize(mainToolStrip);
+		// 子控件的 pt 漂移单独纠正:框架 WM_DPICHANGED_BEFOREPARENT 给每个子控件写入按 DPI
+		// 比率缩过的 ScaledControlFont(9→6@96),它在 Font getter 里优先于父继承——钉回
+		// Form.Font 对它们无效(实测 96 屏 titleComboBox/trackLabel 仍 6pt,左栏整体小字)。
+		// 显式重赋一次 Font 可清除该缓存;只动 pt 漂移的控件,已是 9pt 的保持继承关系不变。
+		// 主窗体树内所有字体设计值均为 9pt(Designer 仅 Form/汇总条两处 + fileListFont 字段)。
+		fontsChanged |= PinChildFontSizes(this);
 		ApplyFileListVisualStyle();
 
 		mainSplitContainer.Panel1MinSize = ImageUtilities.ScaleByDpi(320f, this);
-		if (previousDpi > 0)
-		{
-			foreach (DataGridViewColumn column in fileListView.Columns)
-			{
-				// 下限贴 MinimumWidth(默认 5):更高的人为下限会把窄列(如 11px 的序号列)在
-				// 缩小方向顶起,放大方向再 ×1.5,往返一圈列宽净膨胀。
-				column.Width = Math.Max(column.MinimumWidth, (int)Math.Round((float)column.Width * targetDpi / previousDpi));
-			}
-		}
 		fileListView.ColumnHeadersHeight = ImageUtilities.ScaleByDpi(24f, this);
-
 		ApplyToolbarItemSizesForDpi();
-		RefreshTagEditorButtonImages();
 		filterTypeDropDownButton.Width = ImageUtilities.ScaleByDpi(100f, this);
 		selectedFilesStatusLabel.Width = ImageUtilities.ScaleByDpi(190f, this);
 		// 两条 StatusStrip 在中途字体放大(BEFOREPARENT ×ratio)时被撑高后自锁:拉伸布局把
 		// items 顶到行高(item.Height 写入无效),GetPreferredSize 又按 items 现高计算,字体
 		// 钉回后条带高度回不去(实测 31→42→63 渐增)。翻转 AutoSize 打破自锁,条带回到按
 		// 9pt 内容重算的自然高(31px,比启动态的 Designer 项高 +padding 低 5px,两屏恒定)。
-		ResetStatusStripHeight(fileFilterStatusStrip);
-		ResetStatusStripHeight(fileSummaryStatusStrip);
-
-		// no_cover 占位图按名字键缓存(尺寸实参命中时被忽略),作废后按新屏刻度重建;当前
-		// 正显示占位图(CenterImage 原像素绘制)时立即换新实例,旧实例经 SetCoverPreviewImage
-		// 的引用比对释放(缓存已不含它,无悬挂引用)。
-		ImageUtilities.EvictCachedResourceBitmap("no_cover");
-		if (coverPictureBox.SizeMode == PictureBoxSizeMode.CenterImage)
+		// 只在刻度真变或字体刚被钉回时翻转:自锁必伴随字体漂移(items 被放大字体撑高),
+		// 无漂移时翻转是纯扰动(同屏拖动结束会闪一下)。
+		if (dpiChanged || fontsChanged)
 		{
-			SetCoverPreviewImage(GetNoCoverPreviewImage());
+			ResetStatusStripHeight(fileFilterStatusStrip);
+			ResetStatusStripHeight(fileSummaryStatusStrip);
 		}
 
 		ApplyTagPanelLayout();
+		RecalcTagComboWidths();
 		FilterBar_SizeChanged(fileFilterStatusStrip, EventArgs.Empty);
 	}
 
 	// 跨屏后把 ToolStrip 族条带的字体 pt 归回 9(设计基准):框架 WM_DPICHANGED 把字号按
 	// DPI 比率缩(9→6@96),但 pt 是 DPI 无关单位,缩 pt = 物理尺寸漂移。保留原字形只改字号;
-	// 已是 9pt 时无操作(幂等,不产生新 Font 对象)。
-	private static void PinToolStripFontSize(ToolStrip strip)
+	// 已是 9pt 时无操作(幂等,不产生新 Font 对象)。返回是否发生了钉回(驱动条带高度归位)。
+	private static bool PinToolStripFontSize(ToolStrip strip)
 	{
 		Font currentFont = strip.Font;
-		if (Math.Abs(currentFont.SizeInPoints - 9f) > 0.1f)
+		if (Math.Abs(currentFont.SizeInPoints - 9f) <= 0.1f)
 		{
-			strip.Font = new Font(currentFont.FontFamily, 9f, currentFont.Style);
+			return false;
 		}
+		strip.Font = new Font(currentFont.FontFamily, 9f, currentFont.Style);
+		return true;
 	}
 
 	// 见 RescaleCustomAssetsForDpi 内注释:打破 StatusStrip"items 被行高拉伸 ↔ preferred 按
@@ -6711,6 +6797,26 @@ internal partial class StateFieldInstance : Form
 		strip.AutoSize = false;
 		strip.Height = 0;
 		strip.AutoSize = true;
+	}
+
+	// 递归钉回整棵控件树的字体 pt(设计值恒 9pt):显式重赋 Font 清除框架跨屏写入的
+	// ScaledControlFont 缓存;pt 已正确的控件不动(保持 ambient 继承,不额外显式化)。
+	// 也会经 ToolStripControlHost 触达 ToolStripTextBox/ComboBox 的内部控件(它们构造期
+	// 从 ToolStripManager 全局静态固化字体,是另一处漂移源)。返回是否有任何控件被钉回。
+	private static bool PinChildFontSizes(Control root)
+	{
+		bool changed = false;
+		foreach (Control child in root.Controls)
+		{
+			changed |= PinChildFontSizes(child);
+		}
+		Font currentFont = root.Font;
+		if (Math.Abs(currentFont.SizeInPoints - 9f) > 0.1f)
+		{
+			root.Font = new Font(currentFont.FontFamily, 9f, currentFont.Style);
+			changed = true;
+		}
+		return changed;
 	}
 
 	protected override void OnShown(EventArgs e)
