@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using MusicTag.Serialization;
 using Newtonsoft.Json.Linq;
@@ -81,6 +82,36 @@ internal static class RemoteTagProviderBaseCharacterization
 			HttpResult r = RemoteTagProviderBase.ClassifyException(new TimeoutException(), true);
 			Check.True(r.Error == RemoteErrorKind.None, "None on cancel");
 			Check.Null(r.ErrorCode, "no ErrorCode on cancel");
+		});
+
+		yield return ("ClassifyException: oversized response -> response_too_large", delegate
+		{
+			HttpResult r = RemoteTagProviderBase.ClassifyException(new ResponseSizeLimitExceededException(10), false);
+			Check.True(r.Error == RemoteErrorKind.Network, "Network kind");
+			Check.Equal("response_too_large", r.ErrorCode, "size code");
+		});
+
+		yield return ("CopyStreamWithLimit: exact limit succeeds", delegate
+		{
+			using MemoryStream source = new MemoryStream(new byte[10]);
+			using MemoryStream destination = new MemoryStream();
+			Check.Equal(10L, RemoteTagProviderBase.CopyStreamWithLimit(source, destination, 10L, CancellationToken.None), "copied");
+		});
+
+		yield return ("CopyStreamWithLimit: over limit throws before writing excess block", delegate
+		{
+			using MemoryStream source = new MemoryStream(new byte[11]);
+			using MemoryStream destination = new MemoryStream();
+			bool threw = false;
+			try
+			{
+				RemoteTagProviderBase.CopyStreamWithLimit(source, destination, 10L, CancellationToken.None);
+			}
+			catch (ResponseSizeLimitExceededException)
+			{
+				threw = true;
+			}
+			Check.True(threw, "over limit");
 		});
 
 		// ===== GetFirstField:别名回退 + JSON-null 跳过 + 非 Object 守卫 =====

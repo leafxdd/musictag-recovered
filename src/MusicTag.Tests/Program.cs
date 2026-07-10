@@ -80,6 +80,7 @@ internal static class Program
 			tests.AddRange(ChineseTextConverterCharacterization.All());
 			tests.AddRange(DialogConstructionSmoke.All());
 			tests.AddRange(OptionsDialogInitialVisibilityCharacterization.All());
+			tests.AddRange(UndoTempCleanupCharacterization.All());
 		// Characterization 基线:歌词时间轴精度现由 LyricDownload_ReformatTimetag 控制(见
 		// LyricTextProcessor.FormatTimestamp 的两位/三位分支)。统一 pin 为 true(格式化开 → 2 位
 		// 百分秒、四舍五入),使既有断言确定;验证"关 → 保留 3 位"的用例在其内部局部置 false 并在

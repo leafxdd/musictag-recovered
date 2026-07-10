@@ -179,5 +179,46 @@ internal static class ConfigDescriptorStateRoundTripCharacterization
 				File.Delete(path);
 			}
 		});
+
+		yield return ("RoundTrip: ClearTagFields removes text, lyrics and pictures from disk", delegate
+		{
+			string path = WriteFixture();
+			try
+			{
+				using (var seeded = new ConfigDescriptorState(path))
+				{
+					seeded.LoadBasicTagFields();
+					seeded.LoadLyrics();
+					seeded["title"] = "ToBeCleared";
+					seeded["artist"] = "Artist";
+					seeded["lyrics"] = "lyrics";
+					seeded["allpicturedata"] = new List<ConfigDescriptorState.PictureData>
+					{
+						new ConfigDescriptorState.PictureData
+						{
+							ImageBytes = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="),
+							PictureType = "Front Cover"
+						}
+					};
+					Check.True(seeded.SaveTagFields(), "seeded");
+				}
+				using (var state = new ConfigDescriptorState(path))
+				{
+					Check.True(state.ClearTagFields(), "cleared");
+				}
+				using (TagLib.File verify = TagLib.File.Create(path))
+				{
+					Check.True(string.IsNullOrEmpty(verify.Tag.Title), "title removed");
+					Check.True(verify.Tag.Performers.Length == 0, "artist removed");
+					Check.True(string.IsNullOrEmpty(verify.Tag.Lyrics), "lyrics removed");
+					Check.True(verify.Tag.Pictures.Length == 0, "pictures removed");
+					Check.Equal(TagLib.TagTypes.None, verify.TagTypesOnDisk, "no tags remain on disk");
+				}
+			}
+			finally
+			{
+				File.Delete(path);
+			}
+		});
 	}
 }

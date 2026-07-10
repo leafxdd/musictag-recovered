@@ -552,11 +552,18 @@ internal class TagHistoryRepository : IDisposable
 		lock (syncRoot)
 		{
 			bool shouldCollectGarbage = undoTags.Any() || renameUndoOperations.Any();
-			undoTags.Clear();
-			if (Directory.Exists(PathFileUtilities.GetUndoTempDirectoryPath()))
+			try
 			{
-				Directory.GetFiles(PathFileUtilities.GetUndoTempDirectoryPath()).ForEachItem(DeleteUndoTempFile);
+				if (Directory.Exists(PathFileUtilities.GetUndoTempDirectoryPath()))
+				{
+					Directory.GetFiles(PathFileUtilities.GetUndoTempDirectoryPath()).ForEachItem(filePath => TryDeleteUndoTempFile(filePath));
+				}
 			}
+			catch (Exception ex)
+			{
+				Console.WriteLine("EnumerateUndoTempFiles fail:" + ex.Message);
+			}
+			undoTags.Clear();
 			renameUndoOperations.Clear();
 			undoPayloadByteCount = 0L;
 			if (shouldCollectGarbage)
@@ -566,9 +573,18 @@ internal class TagHistoryRepository : IDisposable
 		}
 	}
 
-	private static void DeleteUndoTempFile(string filePath)
+	internal static bool TryDeleteUndoTempFile(string filePath)
 	{
-		File.Delete(filePath);
+		try
+		{
+			File.Delete(filePath);
+			return true;
+		}
+		catch (Exception ex)
+		{
+			Console.WriteLine("DeleteUndoTempFile fail:" + ex.Message);
+			return false;
+		}
 	}
 
 	public static bool HasPendingUndoActions()

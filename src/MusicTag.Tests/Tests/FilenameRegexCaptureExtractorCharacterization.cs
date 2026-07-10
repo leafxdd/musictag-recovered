@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using MusicTag.Schemes;
 
 namespace MusicTag.Tests;
@@ -31,6 +32,12 @@ internal static class FilenameRegexCaptureExtractorCharacterization
 
 	public static IEnumerable<(string, Action)> All()
 	{
+		yield return ("Extractor: user regex carries a finite two-second timeout", delegate
+		{
+			Regex regex = FilenameRelatedBatchDialog.CreateFilenameRegex("^(.+)$");
+			Check.Equal(TimeSpan.FromSeconds(2.0), regex.MatchTimeout, "timeout");
+		});
+
 		yield return ("Extractor: no protected segment, non-greedy two-group split", delegate
 		{
 			List<string> captures = Extract("Artist - Title", "^(.+?) - (.+)$");

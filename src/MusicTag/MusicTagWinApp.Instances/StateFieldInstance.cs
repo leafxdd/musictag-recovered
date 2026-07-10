@@ -1728,7 +1728,7 @@ internal partial class StateFieldInstance : Form
 							failureReporter.TagFile.LoadLyrics();
 							failureReporter.TagFile.LoadAllPictures();
 							ConfigDescriptorState configDescriptorState = TagHistoryRepository.CreateTagSnapshot(failureReporter.TagFile, includePictures: true);
-							if (failureReporter.TagFile.SaveCurrentTagFile())
+							if (failureReporter.TagFile.ClearTagFields())
 							{
 								var (historyMessage, selection) = TagHistoryRepository.AddHistoryRecordIfChanged(failureReporter.FileContext.FilePath, configDescriptorState, null, tagHistoryRepository);
 								if (historyMessage != null)

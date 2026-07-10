@@ -88,5 +88,20 @@ internal static class AutoMatchDialogCharacterization
 			};
 			Check.True(!AutoMatchTagsDialog.IsOnlyWriteFileModeSelected(single), "single non-SaveToFile -> false");
 		});
+
+		yield return ("AutoMatch cancellation: never spawn replacement worker after cancellation", delegate
+		{
+			Check.True(AutoMatchTagsDialog.ShouldSpawnNextParallelWorker(true, false, true), "normal queued parallel result continues pipeline");
+			Check.True(!AutoMatchTagsDialog.ShouldSpawnNextParallelWorker(true, true, true), "cancelled pipeline stops");
+			Check.True(!AutoMatchTagsDialog.ShouldSpawnNextParallelWorker(true, false, false), "unqueued result does not spawn");
+			Check.True(!AutoMatchTagsDialog.ShouldSpawnNextParallelWorker(false, false, true), "sequential worker does not spawn");
+		});
+
+		yield return ("AutoMatch cancellation: wait until active search workers become idle", delegate
+		{
+			Check.True(AutoMatchTagsDialog.ShouldWaitForActiveWorkersAfterCancellation(true, false), "cancelled with active workers -> wait");
+			Check.True(!AutoMatchTagsDialog.ShouldWaitForActiveWorkersAfterCancellation(true, true), "cancelled and idle -> close");
+			Check.True(!AutoMatchTagsDialog.ShouldWaitForActiveWorkersAfterCancellation(false, false), "normal path uses queue processing");
+		});
 	}
 }

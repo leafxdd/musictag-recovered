@@ -19,6 +19,10 @@ namespace MusicTag.Serialization;
 
 internal abstract class RemoteTagProviderBase : IDisposable
 {
+	internal const int MaxApiResponseBytes = 8 * 1024 * 1024;
+
+	internal const long MaxCoverDownloadBytes = 32L * 1024L * 1024L;
+
 	public enum DownloadStatus
 	{
 		Success,
@@ -133,6 +137,10 @@ internal abstract class RemoteTagProviderBase : IDisposable
 			return new HttpResult { Error = RemoteErrorKind.None };
 		}
 		Exception rootException = (exception is AggregateException aggregate) ? aggregate.GetBaseException() : exception;
+		if (rootException is ResponseSizeLimitExceededException)
+		{
+			return new HttpResult { Error = RemoteErrorKind.Network, ErrorCode = "response_too_large" };
+		}
 		if (rootException is TaskCanceledException || rootException is TimeoutException)
 		{
 			return new HttpResult { Error = RemoteErrorKind.Timeout, ErrorCode = "timeout" };
@@ -148,6 +156,8 @@ internal abstract class RemoteTagProviderBase : IDisposable
 		}
 		try
 		{
+			using CancellationTokenSource requestCancellation = CreateRequestCancellation(client, cancellationSource.Token);
+			CancellationToken requestToken = requestCancellation.Token;
 			HttpContent requestContent;
 			if (postJson)
 			{
@@ -160,11 +170,12 @@ internal abstract class RemoteTagProviderBase : IDisposable
 			}
 
 			using (requestContent)
-			using (HttpResponseMessage response = client.PostAsync(url, requestContent, cancellationSource.Token).Result)
+			using (HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Post, url) { Content = requestContent })
+			using (HttpResponseMessage response = client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, requestToken).Result)
 			{
 				if (response.StatusCode == HttpStatusCode.OK)
 				{
-					return RecordResult(new HttpResult { Body = response.Content.ReadAsStringAsync().Result });
+					return RecordResult(new HttpResult { Body = Encoding.UTF8.GetString(ReadResponseBody(response.Content, MaxApiResponseBytes, requestToken)) });
 				}
 				return RecordResult(HttpResult.FromHttpStatus((int)response.StatusCode));
 			}
@@ -185,22 +196,13 @@ internal abstract class RemoteTagProviderBase : IDisposable
 	{
 		try
 		{
-			using HttpResponseMessage response = GetHttpClient().GetAsync(url, cancellationSource.Token).Result;
+			HttpClient client = GetHttpClient();
+			using CancellationTokenSource requestCancellation = CreateRequestCancellation(client, cancellationSource.Token);
+			CancellationToken requestToken = requestCancellation.Token;
+			using HttpResponseMessage response = client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, requestToken).Result;
 			if (response.IsSuccessStatusCode)
 			{
-				using MemoryStream memoryStream = new MemoryStream();
-				using Stream responseStream = response.Content.ReadAsStreamAsync().Result;
-				byte[] buffer = new byte[8192];
-				while (!cancellationSource.IsCancellationRequested)
-				{
-					int bytesRead = responseStream.Read(buffer, 0, buffer.Length);
-					if (bytesRead <= 0)
-					{
-						break;
-					}
-					memoryStream.Write(buffer, 0, bytesRead);
-				}
-				return RecordResult(new HttpResult { Bytes = memoryStream.ToArray() });
+				return RecordResult(new HttpResult { Bytes = ReadResponseBody(response.Content, MaxApiResponseBytes, requestToken) });
 			}
 			return RecordResult(HttpResult.FromHttpStatus((int)response.StatusCode));
 		}
@@ -235,7 +237,6 @@ internal abstract class RemoteTagProviderBase : IDisposable
 	{
 		try
 		{
-			int bytesReadTotal = 0;
 			// net8 迁移:WebRequestHandler → HttpClientHandler(同 NetEaseMusicTagProvider)。丢失
 			// ReadWriteTimeout=30000 流级超时,由 downloadClient.Timeout(requestTimeout)+ 取消令牌兜底。
 			using HttpClient downloadClient = new HttpClient(new HttpClientHandler
@@ -249,23 +250,14 @@ internal abstract class RemoteTagProviderBase : IDisposable
 			{
 				downloadClient.DefaultRequestHeaders.Add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3");
 			}
-			using HttpResponseMessage response = downloadClient.GetAsync(url, cancellationSource.Token).Result;
+			using CancellationTokenSource requestCancellation = CreateRequestCancellation(downloadClient, cancellationSource.Token);
+			CancellationToken requestToken = requestCancellation.Token;
+			using HttpResponseMessage response = downloadClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, requestToken).Result;
 			if (response.IsSuccessStatusCode)
 			{
-				using (Stream responseStream = response.Content.ReadAsStreamAsync().Result)
-				{
-					byte[] buffer = new byte[4096];
-					while (!cancellationSource.IsCancellationRequested)
-					{
-						int bytesRead = responseStream.Read(buffer, 0, buffer.Length);
-						if (bytesRead <= 0)
-						{
-							break;
-						}
-						destination.Write(buffer, 0, bytesRead);
-						bytesReadTotal += bytesRead;
-					}
-				}
+				ValidateContentLength(response.Content, MaxCoverDownloadBytes);
+				using Stream responseStream = response.Content.ReadAsStreamAsync(requestToken).Result;
+				long bytesReadTotal = CopyStreamWithLimit(responseStream, destination, MaxCoverDownloadBytes, requestToken);
 				return (cancellationSource.IsCancellationRequested || bytesReadTotal <= 0) ? DownloadStatus.Error : DownloadStatus.Success;
 			}
 			return (response.StatusCode == HttpStatusCode.NotFound) ? DownloadStatus.NotFound : DownloadStatus.Error;
@@ -275,6 +267,54 @@ internal abstract class RemoteTagProviderBase : IDisposable
 			Console.WriteLine("GetHttpStream error:" + exception.GetMessageChain());
 		}
 		return DownloadStatus.Error;
+	}
+
+	private static CancellationTokenSource CreateRequestCancellation(HttpClient client, CancellationToken cancellationToken)
+	{
+		CancellationTokenSource linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+		if (client.Timeout != Timeout.InfiniteTimeSpan)
+		{
+			linkedCancellation.CancelAfter(client.Timeout);
+		}
+		return linkedCancellation;
+	}
+
+	private static byte[] ReadResponseBody(HttpContent content, int maximumBytes, CancellationToken cancellationToken)
+	{
+		ValidateContentLength(content, maximumBytes);
+		using Stream responseStream = content.ReadAsStreamAsync(cancellationToken).Result;
+		using MemoryStream memoryStream = new MemoryStream();
+		CopyStreamWithLimit(responseStream, memoryStream, maximumBytes, cancellationToken);
+		return memoryStream.ToArray();
+	}
+
+	private static void ValidateContentLength(HttpContent content, long maximumBytes)
+	{
+		if (content.Headers.ContentLength is long contentLength && contentLength > maximumBytes)
+		{
+			throw new ResponseSizeLimitExceededException(maximumBytes);
+		}
+	}
+
+	internal static long CopyStreamWithLimit(Stream source, Stream destination, long maximumBytes, CancellationToken cancellationToken)
+	{
+		byte[] buffer = new byte[8192];
+		long bytesReadTotal = 0L;
+		while (true)
+		{
+			int bytesRead = source.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken).AsTask().GetAwaiter().GetResult();
+			if (bytesRead <= 0)
+			{
+				break;
+			}
+			if (bytesReadTotal > maximumBytes - bytesRead)
+			{
+				throw new ResponseSizeLimitExceededException(maximumBytes);
+			}
+			destination.Write(buffer, 0, bytesRead);
+			bytesReadTotal += bytesRead;
+		}
+		return bytesReadTotal;
 	}
 
 	protected Func<CancellationTokenSource, string, int, (DownloadStatus, long)> CreateCoverDownloader<T>(string url) where T : RemoteTagProviderBase, new()
@@ -451,6 +491,14 @@ internal abstract class RemoteTagProviderBase : IDisposable
 
 		long longValue;
 		return long.TryParse(fieldValue.ToString(), out longValue) ? longValue : (long?)null;
+	}
+}
+
+internal sealed class ResponseSizeLimitExceededException : IOException
+{
+	public ResponseSizeLimitExceededException(long maximumBytes)
+		: base("Remote response exceeded the maximum allowed size of " + maximumBytes + " bytes.")
+	{
 	}
 }
 

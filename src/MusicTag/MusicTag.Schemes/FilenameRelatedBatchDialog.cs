@@ -26,6 +26,13 @@ namespace MusicTag.Schemes;
 
 internal class FilenameRelatedBatchDialog : Form
 {
+	private static readonly TimeSpan FilenameRegexTimeout = TimeSpan.FromSeconds(2.0);
+
+	internal static Regex CreateFilenameRegex(string pattern)
+	{
+		return new Regex(pattern, RegexOptions.None, FilenameRegexTimeout);
+	}
+
 		internal sealed class FilenameRegexCaptureExtractor
 		{
 		private sealed class MaskedFilenameVariant
@@ -61,7 +68,7 @@ internal class FilenameRelatedBatchDialog : Form
 				});
 				}
 				maskedVariants.Reverse();
-				Regex regex = RegexCache.GetOrAdd(regexPattern, pattern => new Regex(pattern));
+				Regex regex = RegexCache.GetOrAdd(regexPattern, CreateFilenameRegex);
 				Match match = null;
 			int matchedVariantIndex = -1;
 			for (int index = 0; index < maskedVariants.Count; index++)
@@ -505,7 +512,7 @@ internal class FilenameRelatedBatchDialog : Form
 							{
 								string pattern = Regex.Replace(Owner.filenameRegexPattern, "\\s", " ");
 								Match match;
-								if ((match = Regex.Match(fileNameWithoutExtension, pattern)) != null && match.Success)
+								if ((match = CreateFilenameRegex(pattern).Match(fileNameWithoutExtension)) != null && match.Success)
 								{
 									for (int groupIndex = 1; groupIndex < match.Groups.Count; groupIndex++)
 									{
@@ -1125,7 +1132,7 @@ internal class FilenameRelatedBatchDialog : Form
 		{
 			try
 			{
-				_ = new Regex(regexPatternTextBox.Text);
+				_ = CreateFilenameRegex(regexPatternTextBox.Text);
 			}
 			catch (ArgumentException ex)
 			{

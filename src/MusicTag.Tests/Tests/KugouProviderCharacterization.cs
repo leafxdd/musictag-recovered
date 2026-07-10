@@ -60,6 +60,19 @@ internal static class KugouProviderCharacterization
 			Check.Null(tracks[0].Cover, "[0].Cover");
 		});
 
+		yield return ("Kugou.SearchTracks parses HTTPS song_search_v2 field names", delegate
+		{
+			string response = "{\"data\":{\"lists\":[{\"Audioid\":580125405,\"SongName\":\"SongV2\",\"SingerName\":\"ArtistV2\",\"AlbumName\":\"AlbumV2\",\"FileHash\":\"HASHV2\",\"Duration\":116}]}}";
+			List<TrackSearchResult> tracks = SearchTracks(response);
+			Check.Equal(1, tracks.Count, "count");
+			Check.Equal("580125405", tracks[0].SourceTrackId, "Audioid");
+			Check.Equal("SongV2", tracks[0].Title, "SongName");
+			Check.Equal("ArtistV2", tracks[0].Artist, "SingerName");
+			Check.Equal("AlbumV2", tracks[0].Album, "AlbumName");
+			Check.Equal("HASHV2", tracks[0].KugouHash, "FileHash");
+			Check.Equal(116000, tracks[0].KugouDurationMs, "Duration");
+		});
+
 		yield return ("Kugou.SearchTracks filters song missing audio_id", delegate
 		{
 			string response =

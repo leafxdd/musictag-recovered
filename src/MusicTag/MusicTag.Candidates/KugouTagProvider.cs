@@ -30,7 +30,7 @@ internal class KugouTagProvider : RemoteTagProviderBase, ITrackSearchProvider, I
 		return SearchLyrics(query, resultLimit, sourceOrder);
 	}
 
-	private const string songSearchUrlTemplate = "http://mobilecdn.kugou.com/api/v3/search/song?format=json&keyword={0}&page=1&pagesize={1}&showtype=1";
+	private const string songSearchUrlTemplate = "https://songsearch.kugou.com/song_search_v2?keyword={0}&page=1&pagesize={1}";
 
 	private const string lyricUrlTemplate = "https://m3ws.kugou.com/api/v1/krc/get_krc?keyword={0}&hash={1}&timelength={2}";
 
@@ -135,7 +135,8 @@ internal class KugouTagProvider : RemoteTagProviderBase, ITrackSearchProvider, I
 		List<KugouSongInfo> songs = new List<KugouSongInfo>();
 		try
 		{
-			JToken songListJson = JObject.Parse(responseBody)["data"]?["info"];
+			JToken data = JObject.Parse(responseBody)["data"];
+			JToken songListJson = data?["info"] ?? data?["lists"];
 			if (!(songListJson is JArray songList))
 			{
 				return songs;
@@ -179,23 +180,18 @@ internal class KugouTagProvider : RemoteTagProviderBase, ITrackSearchProvider, I
 	{
 		return new KugouSongInfo
 		{
-			AudioId = GetStringField(songJson, "audio_id"),
-			Title = GetStringField(songJson, "songname"),
-			Artist = GetStringField(songJson, "singername"),
-			Album = GetStringField(songJson, "album_name"),
-			Hash = GetStringField(songJson, "hash"),
-			DurationMs = GetIntField(songJson, "duration") * 1000
+			AudioId = GetStringOrEmpty(GetFirstField(songJson, "audio_id", "Audioid", "ID")),
+			Title = GetStringOrEmpty(GetFirstField(songJson, "songname", "SongName")),
+			Artist = GetStringOrEmpty(GetFirstField(songJson, "singername", "SingerName")),
+			Album = GetStringOrEmpty(GetFirstField(songJson, "album_name", "AlbumName")),
+			Hash = GetStringOrEmpty(GetFirstField(songJson, "hash", "FileHash")),
+			DurationMs = GetIntField(songJson, "duration", "Duration") * 1000
 		};
 	}
 
-	private static int GetIntField(JToken token, string fieldName)
+	private static int GetIntField(JToken token, params string[] fieldNames)
 	{
-		if (token?.Type != JTokenType.Object)
-		{
-			return 0;
-		}
-
-		JToken fieldValue = token[fieldName];
+		JToken fieldValue = GetFirstField(token, fieldNames);
 		if (fieldValue == null)
 		{
 			return 0;

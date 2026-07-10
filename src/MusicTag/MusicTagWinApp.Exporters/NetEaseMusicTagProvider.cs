@@ -22,15 +22,15 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase, ITrackSearchProv
 {
 	// 网易云 concrete 的 SearchTracks / SearchLyrics / SearchCovers / LoadLyricsForTrack 签名即各能力接口的超集,
 	// 故四个接口全部隐式实现,无需转发器。LastTransportResult / IDisposable 由 RemoteTagProviderBase 提供。
-	private const string songSearchEndpoint = "http://music.163.com/weapi/cloudsearch/pc";
+	private const string songSearchEndpoint = "https://music.163.com/weapi/cloudsearch/pc";
 
 	private const string encryptedPostDataFormat = "params={0}&encSecKey={1}";
 
-	private const string lyricEndpointFormat = "http://music.163.com/api/song/lyric?os=pc&id={0}&lv=-1&kv=-1&tv=-1";
+	private const string lyricEndpointFormat = "https://music.163.com/api/song/lyric?os=pc&id={0}&lv=-1&kv=-1&tv=-1";
 
-	private const string songDetailsEndpoint = "http://music.163.com/weapi/v3/song/detail";
+	private const string songDetailsEndpoint = "https://music.163.com/weapi/v3/song/detail";
 
-	private const string albumDetailsEndpointFormat = "http://music.163.com/weapi/v1/album/{0}";
+	private const string albumDetailsEndpointFormat = "https://music.163.com/weapi/v1/album/{0}";
 
 	private const string clientHeaderName = "X-Real-IP";
 

@@ -106,7 +106,15 @@ internal static class CoverDownloadCore
 	{
 		try
 		{
+			if (new FileInfo(coverPath).Length > RemoteTagProviderBase.MaxCoverDownloadBytes)
+			{
+				throw new InvalidDataException("Cover file exceeds the maximum allowed size.");
+			}
 			using Bitmap bitmap = new Bitmap(coverPath);
+			if ((long)bitmap.Width * bitmap.Height > 64L * 1024L * 1024L)
+			{
+				throw new InvalidDataException("Cover image dimensions exceed the maximum allowed pixel count.");
+			}
 			outcome.OriginalSize = bitmap.Size;
 			return ImageUtilities.ResizeImageToFit(bitmap, targetSize, centerOnCanvas: true);
 		}

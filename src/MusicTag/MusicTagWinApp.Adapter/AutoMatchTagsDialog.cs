@@ -215,6 +215,16 @@ internal class AutoMatchTagsDialog : Form
 		return fieldName == "year";
 	}
 
+	internal static bool ShouldSpawnNextParallelWorker(bool isParallelWorker, bool cancellationRequested, bool resultQueued)
+	{
+		return isParallelWorker && !cancellationRequested && resultQueued;
+	}
+
+	internal static bool ShouldWaitForActiveWorkersAfterCancellation(bool cancellationRequested, bool activeWorkersIdle)
+	{
+		return cancellationRequested && !activeWorkersIdle;
+	}
+
 	private class AutoMatchWorker
 	{
 		private sealed class AutoMatchFileSearchTask
@@ -225,18 +235,17 @@ internal class AutoMatchTagsDialog : Form
 
 			internal void RunSearch()
 			{
-				if (worker.GetCancellationSource().IsCancellationRequested)
-				{
-					return;
-				}
-
 				LoadedTagContext loadedTagContext = new LoadedTagContext
 				{
 					searchTask = this
 				};
-				worker.GetActiveFilePathMap().TryAdd(filePath, value: true);
 				try
 				{
+					if (worker.GetCancellationSource().IsCancellationRequested)
+					{
+						return;
+					}
+					worker.GetActiveFilePathMap().TryAdd(filePath, value: true);
 					loadedTagContext.tagFile = worker.LoadCurrentTagFile();
 					if (!loadedTagContext.tagFile.IsLoadedSuccessfully())
 					{
@@ -357,15 +366,24 @@ internal class AutoMatchTagsDialog : Form
 			private void FinishSearch()
 			{
 				worker.GetActiveFilePathMap().TryRemove(filePath, out var _);
-				if (worker.IsParallelWorker())
+				bool cancellationRequested = worker.GetCancellationSource().IsCancellationRequested;
+				bool resultQueued = false;
+				if (cancellationRequested)
 				{
-					WaitForProcessorQueueSlot();
+					worker.ReleasePendingResources();
+				}
+				else if (worker.IsParallelWorker())
+				{
+					resultQueued = WaitForProcessorQueueSlot();
+				}
+				if (ShouldSpawnNextParallelWorker(worker.IsParallelWorker(), cancellationRequested, resultQueued))
+				{
 					new AutoMatchWorker(worker.GetOwnerDialog(), isParallelWorker: true, worker.GetCancellationSource(), worker.CanCancelReadonlyFile());
 				}
 				worker.activeWorkerCounter.ReleaseAndIsIdle();
 			}
 
-			private void WaitForProcessorQueueSlot()
+			private bool WaitForProcessorQueueSlot()
 			{
 				while (!worker.GetCancellationSource().IsCancellationRequested)
 				{
@@ -375,7 +393,7 @@ internal class AutoMatchTagsDialog : Form
 						{
 							worker.GetProcessorQueue().Enqueue(worker);
 							Monitor.Pulse(worker.GetProcessorQueue());
-							return;
+							return true;
 						}
 					}
 					object processorQueueSignal = worker.GetProcessorQueueSignal();
@@ -393,6 +411,7 @@ internal class AutoMatchTagsDialog : Form
 						}
 					}
 				}
+				return false;
 			}
 		}
 
@@ -742,6 +761,7 @@ internal class AutoMatchTagsDialog : Form
 			}
 
 			Thread searchThread = new Thread(runSearch);
+			searchThread.IsBackground = true;
 			searchThread.Priority = GetOwnerDialog().hasStartedParallelWorker ? ThreadPriority.BelowNormal : ThreadPriority.Normal;
 			searchThread.Start();
 			GetOwnerDialog().hasStartedParallelWorker = true;
@@ -785,6 +805,7 @@ internal class AutoMatchTagsDialog : Form
 		{
 			if (GetCancellationSource().IsCancellationRequested)
 			{
+				ReleasePendingResources();
 				return;
 			}
 			if (loadErrorMessage == null)
@@ -842,6 +863,12 @@ internal class AutoMatchTagsDialog : Form
 				GetOwnerDialog().failedCount++;
 			}
 			GetOwnerDialog().processedCount++;
+		}
+
+		public void ReleasePendingResources()
+		{
+			coverTempFileCache.Release(tempCoverFilePath);
+			tempCoverFilePath = null;
 		}
 
 		private IEnumerable<string> GetTextTagMatchKeys()
@@ -1325,7 +1352,7 @@ internal class AutoMatchTagsDialog : Form
 		}
 	}
 
-	private sealed class AutoMatchTagsWorker
+	private sealed class AutoMatchTagsWorker : IDisposable
 	{
 		private readonly AutoMatchTagsDialog owner;
 
@@ -1359,6 +1386,13 @@ internal class AutoMatchTagsDialog : Form
 		{
 			progressDialog.CancelRequested += Cancel;
 			progressDialog.ProgressUpdate += UpdateProgress;
+		}
+
+		public void Dispose()
+		{
+			progressDialog.CancelRequested -= Cancel;
+			progressDialog.ProgressUpdate -= UpdateProgress;
+			cancellationTokenSource.Dispose();
 		}
 
 		internal void Run()
@@ -1429,8 +1463,26 @@ internal class AutoMatchTagsDialog : Form
 
 		private void ProcessParallelQueue()
 		{
-			while (!cancellationTokenSource.IsCancellationRequested)
+			while (true)
 			{
+				if (cancellationTokenSource.IsCancellationRequested)
+				{
+					while (owner.parallelProcessorQueue.TryDequeue(out var cancelledProcessor))
+					{
+						cancelledProcessor.ReleasePendingResources();
+					}
+					bool activeWorkersIdle = owner.activeWorkerCounter.IsIdle();
+					if (!ShouldWaitForActiveWorkersAfterCancellation(cancellationRequested: true, activeWorkersIdle: activeWorkersIdle))
+					{
+						while (owner.parallelProcessorQueue.TryDequeue(out var finalCancelledProcessor))
+						{
+							finalCancelledProcessor.ReleasePendingResources();
+						}
+						break;
+					}
+					WaitForQueuedProcessor();
+					continue;
+				}
 				if (!owner.activeWorkerCounter.IsIdle())
 				{
 					if (owner.parallelProcessorQueue.IsEmpty)
@@ -1735,7 +1787,7 @@ internal class AutoMatchTagsDialog : Form
 
 	internal async void StartAutoMatchTags(string[] paths, ProgressDialog progressDialog, bool canCancelReadonlyFile, Action<(string msg, bool isErr)> finallyCallback)
 	{
-		AutoMatchTagsWorker worker = new AutoMatchTagsWorker(this, paths, progressDialog, canCancelReadonlyFile);
+		using AutoMatchTagsWorker worker = new AutoMatchTagsWorker(this, paths, progressDialog, canCancelReadonlyFile);
 		worker.RegisterProgressCallbacks();
 		(string msg, bool isErr) result = default((string, bool));
 		try

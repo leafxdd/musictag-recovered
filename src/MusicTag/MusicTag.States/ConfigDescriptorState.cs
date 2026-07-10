@@ -504,6 +504,14 @@ internal class ConfigDescriptorState : IDisposable
 		});
 	}
 
+	public bool ClearTagFields()
+	{
+		return SaveWithId3v2Version(delegate
+		{
+			tagFile.RemoveTags(TagLib.TagTypes.AllTags);
+		});
+	}
+
 	public bool TryGetRawValue(string key, out object value)
 	{
 		bool found = TagValues.TryGetValue(key, out object rawValue);

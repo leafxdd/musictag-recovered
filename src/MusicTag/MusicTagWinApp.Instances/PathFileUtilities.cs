@@ -171,7 +171,7 @@ internal static class PathFileUtilities
 		{
 			if (tagState["title"] is string title && !string.IsNullOrWhiteSpace(title) && tagState["artist"] is string artist && !string.IsNullOrWhiteSpace(artist))
 			{
-				return title + " - " + artist + ".lrc";
+				return BuildMetadataLyricFileName(title, artist);
 			}
 			return null;
 		}
@@ -179,11 +179,40 @@ internal static class PathFileUtilities
 		{
 			if (tagState["title"] is string title && !string.IsNullOrWhiteSpace(title) && tagState["artist"] is string artist && !string.IsNullOrWhiteSpace(artist))
 			{
-				return artist + " - " + title + ".lrc";
+				return BuildMetadataLyricFileName(artist, title);
 			}
 			return null;
 		}
 		return Path.GetFileNameWithoutExtension(audioFilePath) + ".lrc";
+	}
+
+	private static string BuildMetadataLyricFileName(string firstValue, string secondValue)
+	{
+		string first = SanitizeFileNameComponent(firstValue);
+		string second = SanitizeFileNameComponent(secondValue);
+		if (string.IsNullOrWhiteSpace(first) || string.IsNullOrWhiteSpace(second))
+		{
+			return null;
+		}
+		return first + " - " + second + ".lrc";
+	}
+
+	internal static string SanitizeFileNameComponent(string value)
+	{
+		if (value == null)
+		{
+			return null;
+		}
+		char[] invalidCharacters = Path.GetInvalidFileNameChars();
+		char[] sanitized = value.ToCharArray();
+		for (int index = 0; index < sanitized.Length; index++)
+		{
+			if (Array.IndexOf(invalidCharacters, sanitized[index]) >= 0 || char.IsControl(sanitized[index]))
+			{
+				sanitized[index] = '_';
+			}
+		}
+		return new string(sanitized).Trim().TrimEnd('.');
 	}
 
 	public static string BuildLyricSavePath(string audioFilePath, ConfigDescriptorState tagState)
@@ -193,7 +222,19 @@ internal static class PathFileUtilities
 		{
 			return null;
 		}
-			return GetLyricSaveDirectory(audioFilePath) + "\\" + text;
+		string lyricDirectory = GetLyricSaveDirectory(audioFilePath);
+		if (string.IsNullOrWhiteSpace(lyricDirectory))
+		{
+			lyricDirectory = Path.GetDirectoryName(Path.GetFullPath(audioFilePath));
+		}
+		string fullDirectoryPath = Path.GetFullPath(lyricDirectory);
+		string lyricPath = Path.GetFullPath(Path.Combine(fullDirectoryPath, text));
+		string directoryPrefix = fullDirectoryPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+		if (!lyricPath.StartsWith(directoryPrefix, StringComparison.OrdinalIgnoreCase))
+		{
+			throw new InvalidOperationException("Lyric save path must remain inside the configured directory.");
+		}
+		return lyricPath;
 	}
 
 	public static string BuildLyricSavePath(string audioFilePath, string title, string artist)
