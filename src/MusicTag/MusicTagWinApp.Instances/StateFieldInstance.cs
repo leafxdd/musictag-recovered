@@ -3762,12 +3762,10 @@ internal partial class StateFieldInstance : Form
 		discRowPanel.Width = trackDiscGroupPanel.Width / 2 - ImageUtilities.ScaleByDpi(5f, this);
 		discColumnPanel.Width = discRowPanel.Width;
 		discColumnPanel.Margin = new Padding(ImageUtilities.ScaleByDpi(5f, this), 0, 0, 0);
-		// 上边距设计值 50(96 基准),但容器(statusLabelsPanel,高度随封面方块)不够高时
-		// 钳到"贴底留 4px",避免复选框文字下缘被容器裁掉(封面较小/左栏较窄时)。
-		int overwriteTopMargin = Math.Min(
-			ImageUtilities.ScaleByDpi(50f, this),
-			Math.Max(0, statusLabelsPanel.Height - overwriteCoverCheckBox.Height - 4));
-		overwriteCoverCheckBox.Margin = new Padding((statusLabelsPanel.Width - overwriteCoverCheckBox.Width) / 2, overwriteTopMargin, 0, 0);
+		// 上边距设计值 50(96 基准)。复选框在 statusLabelsPanel(TopDown 流)里堆叠于
+		// 4 个状态标签之下,可用空间必须从末标签底缘起算(而非面板顶),否则小封面/
+		// 副屏字体加高时复选框溢出面板底缘被裁,且面板裁剪使滚动也不可达。钳到"贴底留 4px"。
+		ApplyOverwriteCheckBoxLayout();
 
 		int coverPanelSize = coverPanel.Width - statusLabelsPanel.Width;
 		int availableHeight = tagEditorPanel.Height;
@@ -3792,6 +3790,9 @@ internal partial class StateFieldInstance : Form
 		coverPictureBox.Height = coverPanelSize;
 		coverPictureBox.Width = coverPanelSize;
 		coverPanel.Height = coverPictureBox.Height;
+		// coverPanel.Height 改变会同步改 statusLabelsPanel(Dock=Fill)高度——上面那次
+		// 钳制用的是旧高度,按新高度再算一次(同值时 Margin setter no-op,无扰动)。
+		ApplyOverwriteCheckBoxLayout();
 		lastTagPanelSplitterDistance = mainSplitContainer.SplitterDistance;
 		lastCoverPreviewSize = coverPanelSize;
 		lastTagEditorAvailableHeight = availableHeight;
@@ -6684,6 +6685,19 @@ internal partial class StateFieldInstance : Form
 		trackDiscGroupPanel.Height = tagPairHeight;
 	}
 
+	// "覆盖"复选框上边距:设计值 50(96 基准),但复选框在 statusLabelsPanel(TopDown 流,
+	// 高度随封面方块)里堆叠于 4 个状态标签之下,可用余量 = 面板内容区底缘 - 末标签底缘
+	// - 复选框高,不足时钳到"贴底留 4px"。若面板矮到标签+复选框都放不下,margin 归 0(尽力)。
+	private void ApplyOverwriteCheckBoxLayout()
+	{
+		int labelsBottom = coverPictureTypeLabel.Bottom + coverPictureTypeLabel.Margin.Bottom;
+		int availableBottom = statusLabelsPanel.ClientSize.Height - statusLabelsPanel.Padding.Bottom;
+		int overwriteTopMargin = Math.Min(
+			ImageUtilities.ScaleByDpi(50f, this),
+			Math.Max(0, availableBottom - labelsBottom - overwriteCoverCheckBox.Height - 4));
+		overwriteCoverCheckBox.Margin = new Padding((statusLabelsPanel.Width - overwriteCoverCheckBox.Width) / 2, overwriteTopMargin, 0, 0);
+	}
+
 	// 诊断插桩(实验分支):MUSICTAG_DPI_TRACE=1 时把 DPI 相关几何/字体度量追加写 exe 旁
 	// dpi-trace.log,配合外部移屏驱动脚本定位跨屏缩放问题。未开启时零行为影响。
 	private static readonly bool dpiTraceEnabled = Environment.GetEnvironmentVariable("MUSICTAG_DPI_TRACE") == "1";
@@ -7372,6 +7386,9 @@ internal partial class StateFieldInstance : Form
 		coverFileSizeLabel.Size = statusLabelSize;
 		coverDimensionsLabel.Size = statusLabelSize;
 		coverMimeTypeLabel.Size = statusLabelSize;
+		// 标签改高即改末标签底缘、面板高度变化(Dock=Fill 随封面方块)也经此事件到达,
+		// 复选框上边距按新几何重钳,防止底部溢出面板被裁。
+		ApplyOverwriteCheckBoxLayout();
 	}
 
 	private void ClearTagFieldSelectionState(KeyValuePair<string, ComboBox> reference)
