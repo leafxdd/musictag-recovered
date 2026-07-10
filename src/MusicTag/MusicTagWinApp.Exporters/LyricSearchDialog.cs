@@ -304,9 +304,9 @@ internal class LyricSearchDialog : Form
 
 	protected override void OnClosed(EventArgs e)
 	{
-		base.OnClosed(e);
 		searchStatusIndicator.StopCountdown();
 		cancellationSource.Cancel();
+		base.OnClosed(e);
 	}
 
 	private void HandleMainPanelSizeChanged(object sender, EventArgs e)
@@ -417,12 +417,20 @@ internal class LyricSearchDialog : Form
 		{
 			candidateLyrics = null;
 			knownIdLyrics = await Task.Run(searchSession.SearchLyricsByKnownMusicId, cancellationToken);
+			if (IsDisposed || cancellationToken.IsCancellationRequested)
+			{
+				return;
+			}
 			if (knownIdLyrics != null)
 			{
 				AddLyricsToList(knownIdLyrics);
 			}
 			searchSession.ResetSourceOrder();
 			candidateLyrics = await Task.Run(searchSession.SearchLyricsByCandidateTracks, cancellationToken);
+			if (IsDisposed || cancellationToken.IsCancellationRequested)
+			{
+				return;
+			}
 			if (candidateLyrics != null)
 			{
 				AddLyricsToList(candidateLyrics);
@@ -437,7 +445,8 @@ internal class LyricSearchDialog : Form
 		}
 		catch (Exception ex)
 		{
-			Console.WriteLine("StartLyricSearch error:" + ex.GetMessageChain());
+			LogService.WriteExceptionDetails(ex, "LyricSearchDialog.StartLyricSearch");
+			searchStatusIndicator.ReportUnexpectedError();
 		}
 		finally
 		{
@@ -633,6 +642,7 @@ internal class LyricSearchDialog : Form
 		cancelButton.UseVisualStyleBackColor = true;
 		cancelButton.Click += CancelSelection;
 		CancelButton = cancelButton;
+		AcceptButton = okButton;
 		searchStatusLabel.AutoSize = false;
 		searchStatusLabel.AutoEllipsis = true;
 		searchStatusLabel.Name = "searchStatusLabel";

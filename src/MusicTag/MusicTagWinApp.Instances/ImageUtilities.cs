@@ -224,6 +224,36 @@ internal static class ImageUtilities
 		return scaledBitmap;
 	}
 
+	// ToolStrip/MenuItem 会长期持有传入的 Image,且不会替调用方管理共享资源对象的生命周期。
+	// 返回始终由调用方独占的副本,便于跨屏重载时安全释放旧位图而不污染 ResourceManager 缓存。
+	public static Bitmap LoadOwnedResourceBitmap(string resourceName, bool scaleSmallIconForDpi = false, Control dpiControl = null)
+	{
+		float currentDpiScale = GetDpiScale(dpiControl);
+		Bitmap sourceBitmap = Resources.ResourceManager.GetObject(resourceName + GetResourceScaleSuffix(currentDpiScale)) as Bitmap;
+		if (sourceBitmap == null)
+		{
+			return null;
+		}
+		if (!scaleSmallIconForDpi || currentDpiScale <= 1f || currentDpiScale >= 1.5f)
+		{
+			return new Bitmap(sourceBitmap);
+		}
+		int scaledIconSize = (int)Math.Round(16f * currentDpiScale);
+		Size size = new Size(scaledIconSize, scaledIconSize);
+		Bitmap scaledBitmap = new Bitmap(size.Width, size.Height, PixelFormat.Format32bppArgb);
+		using Graphics graphics = Graphics.FromImage(scaledBitmap);
+		graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+		graphics.CompositingQuality = CompositingQuality.HighQuality;
+		graphics.SmoothingMode = SmoothingMode.AntiAlias;
+		graphics.DrawImage(sourceBitmap, new Rectangle(Point.Empty, size));
+		return scaledBitmap;
+	}
+
+	internal static string GetResourceScaleSuffix(float dpiScale)
+	{
+		return dpiScale >= 1.5f ? "2X" : "";
+	}
+
 	public static Bitmap ResizeBitmapIfNeeded(Bitmap bitmap, Size size)
 	{
 		if (bitmap.Width == size.Width && bitmap.Height == size.Height)

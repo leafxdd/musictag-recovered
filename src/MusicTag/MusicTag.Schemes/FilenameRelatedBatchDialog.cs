@@ -860,6 +860,7 @@ internal class FilenameRelatedBatchDialog : Form
 		InitializeCaptureGroupList();
 		ApplyLocalizedText();
 		customPatternTextBox.Text = Settings.Default.FilenameCustomPattern;
+		UpdateDefaultButtonsForSelectedTab();
 	}
 
 	protected override void OnLoad(EventArgs e)
@@ -936,6 +937,14 @@ internal class FilenameRelatedBatchDialog : Form
 	private void OnSelectedTabChanged(object sender, EventArgs e)
 	{
 		UpdateResponsiveLayout();
+		UpdateDefaultButtonsForSelectedTab();
+	}
+
+	private void UpdateDefaultButtonsForSelectedTab()
+	{
+		bool regexTabSelected = tabControl.SelectedTab == regexTabPage;
+		AcceptButton = regexTabSelected ? regexOkButton : patternOkButton;
+		CancelButton = regexTabSelected ? regexCancelButton : patternCancelButton;
 	}
 
 	private void InitializeCaptureGroupList()

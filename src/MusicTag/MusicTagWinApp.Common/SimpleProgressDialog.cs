@@ -90,6 +90,10 @@ internal class SimpleProgressDialog : Form
 		{
 			Console.WriteLine(ex.Message);
 		}
+		finally
+		{
+			Dispose();
+		}
 	}
 
 	private void CloseIfNotDisposed()

@@ -1938,6 +1938,7 @@ internal class AutoMatchTagsDialog : Form
 		cancelButton.UseVisualStyleBackColor = true;
 		cancelButton.Click += CancelButtonClick;
 		base.CancelButton = cancelButton;
+		base.AcceptButton = okButton;
 		base.AutoScaleDimensions = new SizeF(96f, 96f);
 		base.AutoScaleMode = AutoScaleMode.Dpi;
 		base.ClientSize = new Size(484, 581);

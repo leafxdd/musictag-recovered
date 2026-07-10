@@ -14,6 +14,19 @@ internal static class UtilityMappingCharacterization
 {
 	public static IEnumerable<(string, Action)> All()
 	{
+		// ===== GetResourceScaleSuffix:工具栏资源按当前屏 DPI 在 150% 切换 2X =====
+
+		yield return ("GetResourceScaleSuffix: below 150 percent -> base resource", delegate
+		{
+			Check.Equal("", ImageUtilities.GetResourceScaleSuffix(1.49f), "below threshold");
+		});
+
+		yield return ("GetResourceScaleSuffix: 150 percent and above -> 2X resource", delegate
+		{
+			Check.Equal("2X", ImageUtilities.GetResourceScaleSuffix(1.5f), "at threshold");
+			Check.Equal("2X", ImageUtilities.GetResourceScaleSuffix(2f), "above threshold");
+		});
+
 		// ===== DecodeBasicHtmlEntities =====
 
 		yield return ("DecodeBasicHtmlEntities: &amp; -> &", delegate

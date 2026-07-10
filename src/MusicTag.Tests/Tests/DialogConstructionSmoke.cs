@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Reflection;
 using System.Threading;
+using System.Windows.Forms;
 
 namespace MusicTag.Tests;
 
@@ -16,9 +18,30 @@ internal static class DialogConstructionSmoke
 		{
 			RunWithAppUiCulture(delegate
 			{
-				object dialog = ConstructNonPublic(typeof(MusicTag.Schemes.FilenameRelatedBatchDialog));
-				Check.True(dialog != null, "constructed");
-				((IDisposable)dialog).Dispose();
+				Form dialog = (Form)ConstructNonPublic(typeof(MusicTag.Schemes.FilenameRelatedBatchDialog));
+				try
+				{
+					Check.True(dialog != null, "constructed");
+					TabControl tabs = (TabControl)GetField(dialog, "tabControl");
+					Button patternOk = (Button)GetField(dialog, "patternOkButton");
+					Button patternCancel = (Button)GetField(dialog, "patternCancelButton");
+					Button regexOk = (Button)GetField(dialog, "regexOkButton");
+					Button regexCancel = (Button)GetField(dialog, "regexCancelButton");
+					dialog.Show();
+					Application.DoEvents();
+					tabs.SelectedIndex = 0;
+					Application.DoEvents();
+					Check.True(ReferenceEquals(dialog.AcceptButton, patternOk), "pattern tab Enter button");
+					Check.True(ReferenceEquals(dialog.CancelButton, patternCancel), "pattern tab Escape button");
+					tabs.SelectedIndex = 1;
+					Application.DoEvents();
+					Check.True(ReferenceEquals(dialog.AcceptButton, regexOk), "regex tab Enter button");
+					Check.True(ReferenceEquals(dialog.CancelButton, regexCancel), "regex tab Escape button");
+				}
+				finally
+				{
+					dialog.Dispose();
+				}
 			});
 		});
 
@@ -26,11 +49,42 @@ internal static class DialogConstructionSmoke
 		{
 			RunWithAppUiCulture(delegate
 			{
-				object dialog = ConstructNonPublic(typeof(MusicTag.Importers.OptionsDialog));
-				Check.True(dialog != null, "constructed");
-				((IDisposable)dialog).Dispose();
+				Form dialog = (Form)ConstructNonPublic(typeof(MusicTag.Importers.OptionsDialog));
+				try
+				{
+					Check.True(dialog != null, "constructed");
+					Check.True(ReferenceEquals(dialog.AcceptButton, GetField(dialog, "okButton")), "Enter invokes OK");
+					CheckTranslatedLyricConnectorState(dialog);
+				}
+				finally
+				{
+					dialog.Dispose();
+				}
 			});
 		});
+	}
+
+	private static void CheckTranslatedLyricConnectorState(Form dialog)
+	{
+		CheckBox downloadTranslatedLyrics = (CheckBox)GetField(dialog, "downloadTranslatedLyricsCheckBox");
+		RadioButton sameLineFormat = (RadioButton)GetField(dialog, "translatedLyricFormat1RadioButton");
+		RadioButton separateLineFormat = (RadioButton)GetField(dialog, "translatedLyricFormat2RadioButton");
+		ComboBox separator = (ComboBox)GetField(dialog, "lyricTranslationSeparatorComboBox");
+
+		downloadTranslatedLyrics.Checked = true;
+		separateLineFormat.Checked = true;
+		Check.True(!separator.Enabled, "separator disabled for separate-line format");
+
+		// 用户复现路径：取消“下载翻译”后重新勾选。通用控件启用逻辑不得覆盖格式限制。
+		downloadTranslatedLyrics.Checked = false;
+		downloadTranslatedLyrics.Checked = true;
+		Check.True(!separator.Enabled, "separator stays disabled after translation toggle in separate-line format");
+
+		sameLineFormat.Checked = true;
+		Check.True(separator.Enabled, "separator enabled for same-line format while translation is enabled");
+
+		downloadTranslatedLyrics.Checked = false;
+		Check.True(!separator.Enabled, "separator disabled when translated lyric download is disabled");
 	}
 
 	// app 启动即显式设 CurrentUICulture ∈ {zh-CHS, zh-CHT, en}(StateFieldInstance 语言初始化),
@@ -63,5 +117,15 @@ internal static class DialogConstructionSmoke
 			// 冒烟诊断:剥掉反射包装,直接暴露构造器内的真实异常(类型+消息+栈)。
 			throw new Exception(type.Name + " ctor threw: " + ex.InnerException.GetType().Name + ": " + ex.InnerException.Message + Environment.NewLine + ex.InnerException.StackTrace, ex.InnerException);
 		}
+	}
+
+	private static object GetField(object instance, string fieldName)
+	{
+		FieldInfo field = instance.GetType().GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance);
+		if (field == null)
+		{
+			throw new Exception("field not found: " + fieldName);
+		}
+		return field.GetValue(instance);
 	}
 }

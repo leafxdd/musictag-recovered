@@ -193,8 +193,8 @@ internal class LyricEditorDialog : Form
 
 	protected override void OnClosed(EventArgs e)
 	{
-		base.OnClosed(e);
 		GetDownloadCancellationSource().Cancel();
+		base.OnClosed(e);
 	}
 
 	private void MainLayout_SizeChanged(object sender, EventArgs e)
@@ -282,18 +282,28 @@ internal class LyricEditorDialog : Form
 			ShowDownloadProgress();
 			CancellationTokenSource cancellationSource = GetDownloadCancellationSource();
 			string lyricText = await Task.Run(() => LoadDeferredLyricText(lyricInfo), cancellationSource.Token);
-			SetLyricText(lastLoadedLyricText = lyricText);
+			if (!IsDisposed && !cancellationSource.IsCancellationRequested)
+			{
+				SetLyricText(lastLoadedLyricText = lyricText);
+			}
 		}
-		catch (OperationCanceledException)
+		catch (OperationCanceledException) when (GetDownloadCancellationSource().IsCancellationRequested)
 		{
 		}
 		catch (System.Exception ex)
 		{
-			DialogService.ShowErrorMessage(ex.Message);
+			LogService.WriteExceptionDetails(ex, "LyricEditorDialog.DownloadDeferredLyricAsync");
+			if (!IsDisposed)
+			{
+				DialogService.ShowErrorMessage(ex.Message);
+			}
 		}
 		finally
 		{
-			HideDownloadProgress();
+			if (!IsDisposed)
+			{
+				HideDownloadProgress();
+			}
 		}
 	}
 
@@ -449,7 +459,6 @@ internal class LyricEditorDialog : Form
 			searchButton.Image = null;
 			saveAsLrcButton.Image?.Dispose();
 			saveAsLrcButton.Image = null;
-			downloadCancellation?.Dispose();
 			components.Dispose();
 		}
 
@@ -647,6 +656,7 @@ internal class LyricEditorDialog : Form
 		cancelButton.UseVisualStyleBackColor = true;
 		cancelButton.Click += CancelButton_Click;
 		CancelButton = cancelButton;
+		AcceptButton = okButton;
 
 		downloadProgressPanel.Controls.Add(progressPictureBox);
 		downloadProgressPanel.Controls.Add(downloadingLabel);

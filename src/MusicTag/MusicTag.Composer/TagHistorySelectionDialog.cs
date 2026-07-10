@@ -253,6 +253,7 @@ internal class TagHistorySelectionDialog : Form
 		cancelButton.UseVisualStyleBackColor = true;
 		cancelButton.Click += CancelButton_Click;
 		CancelButton = cancelButton;
+		AcceptButton = okButton;
 
 		AutoScaleDimensions = new SizeF(96f, 96f);
 		AutoScaleMode = AutoScaleMode.Dpi;

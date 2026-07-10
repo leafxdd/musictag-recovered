@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using MusicTag.Importers;
 using MusicTagWinApp.Web;
@@ -18,6 +19,23 @@ internal static class OptionsDialogCharacterization
 
 	public static IEnumerable<(string, Action)> All()
 	{
+		// ===== FitSizeToWorkingArea:保留期望尺寸,仅在超出工作区时按 margin 收缩 =====
+
+		yield return ("FitSizeToWorkingArea: desired size fits -> unchanged", delegate
+		{
+			Check.Equal(new Size(720, 660), OptionsDialog.FitSizeToWorkingArea(new Size(720, 660), new Rectangle(0, 0, 1920, 1080), 12), "fits");
+		});
+
+		yield return ("FitSizeToWorkingArea: small working area -> clamps both dimensions", delegate
+		{
+			Check.Equal(new Size(628, 468), OptionsDialog.FitSizeToWorkingArea(new Size(720, 660), new Rectangle(100, 50, 640, 480), 12), "small screen");
+		});
+
+		yield return ("FitSizeToWorkingArea: margin exhausts working area -> minimum one pixel", delegate
+		{
+			Check.Equal(new Size(1, 1), OptionsDialog.FitSizeToWorkingArea(new Size(720, 660), new Rectangle(0, 0, 10, 10), 20), "exhausted");
+		});
+
 		// ===== GetResourceText:IsNullOrEmpty(resourceText) ? fallback : resourceText =====
 		// 注意是 IsNullOrEmpty(非 IsNullOrWhiteSpace):纯空白【不】算空,原样返回。
 

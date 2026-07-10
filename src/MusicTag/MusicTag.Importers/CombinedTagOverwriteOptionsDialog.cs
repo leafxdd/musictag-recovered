@@ -258,6 +258,7 @@ internal class CombinedTagOverwriteOptionsDialog : Form
 		cancelButton.UseVisualStyleBackColor = true;
 		cancelButton.Click += CancelButtonClick;
 		CancelButton = cancelButton;
+		AcceptButton = okButton;
 		AutoScaleDimensions = new SizeF(96f, 96f);
 		AutoScaleMode = AutoScaleMode.Dpi;
 		ClientSize = new Size(284, 411);

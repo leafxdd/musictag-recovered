@@ -45,9 +45,17 @@ internal class ProgressDialog : Form
 
 	public void ShowDialogIfNotDisposed()
 	{
-		if (!IsDisposed)
+		if (IsDisposed)
+		{
+			return;
+		}
+		try
 		{
 			ShowDialog();
+		}
+		finally
+		{
+			Dispose();
 		}
 	}
 

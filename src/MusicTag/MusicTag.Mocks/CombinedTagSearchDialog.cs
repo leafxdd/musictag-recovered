@@ -42,8 +42,15 @@ internal class CombinedTagSearchDialog : Form
 
 		internal void SelectResult()
 		{
+			if (Owner.IsDisposed || Owner.cancellationSource.IsCancellationRequested)
+			{
+				return;
+			}
 			ListItem.Selected = true;
-			Owner.BeginInvoke(new Action(Owner.FocusResultList));
+			if (Owner.IsHandleCreated)
+			{
+				Owner.BeginInvoke(new Action(Owner.FocusResultList));
+			}
 		}
 
 	}
@@ -478,10 +485,10 @@ internal class CombinedTagSearchDialog : Form
 
 	protected override void OnClosed(EventArgs spec)
 	{
-		base.OnClosed(spec);
 		cachedResultsTimer.Stop();
 		searchStatusIndicator.StopCountdown();
 		cancellationSource.Cancel();
+		base.OnClosed(spec);
 		string selectedCoverPath = null;
 		if (base.DialogResult == DialogResult.OK)
 		{
@@ -568,6 +575,11 @@ internal class CombinedTagSearchDialog : Form
 		try
 		{
 			LyricSearchResult result = await Task.Run((Func<LyricSearchResult>)lyricDownloadContext.LoadLyric, cancellationSource.Token);
+			if (IsDisposed || cancellationSource.IsCancellationRequested)
+			{
+				activeMediaDownloadCount--;
+				return;
+			}
 			if (result != null && result.HasDownloadableLyric())
 			{
 				lyricDownloadContext.LyricResult.Lyric = result.Lyric;
@@ -590,9 +602,12 @@ internal class CombinedTagSearchDialog : Form
 				return;
 			}
 		}
+		catch (OperationCanceledException) when (cancellationSource.IsCancellationRequested)
+		{
+		}
 		catch (System.Exception v)
 		{
-			Console.WriteLine("DownloadLyric error:" + v.GetMessageChain());
+			LogService.WriteExceptionDetails(v, "CombinedTagSearchDialog.DownloadLyricAsync");
 		}
 		activeMediaDownloadCount--;
 	}
@@ -609,6 +624,12 @@ internal class CombinedTagSearchDialog : Form
 			coverLoadTask.Request = coverDownloadRequest;
 			coverLoadTask.OriginalImageSize = null;
 			Image result = await Task.Run((Func<Image>)coverLoadTask.LoadOrDownloadImage, cancellationSource.Token);
+			if (IsDisposed || cancellationSource.IsCancellationRequested)
+			{
+				result?.Dispose();
+				activeMediaDownloadCount--;
+				return;
+			}
 			searchResultsListView.BeginUpdate();
 			listUpdateStarted = true;
 			CoverImageListViewItem coverImageListViewItem = searchResultsListView.Items[coverLoadTask.Request.CoverResult.ListViewIndex] as CoverImageListViewItem;
@@ -680,9 +701,13 @@ internal class CombinedTagSearchDialog : Form
 				activeMediaDownloadCount--;
 			}
 		}
+		catch (OperationCanceledException) when (cancellationSource.IsCancellationRequested)
+		{
+			activeMediaDownloadCount--;
+		}
 		catch (System.Exception v)
 		{
-			Console.WriteLine("DownloadPicture error:" + v.GetMessageChain());
+			LogService.WriteExceptionDetails(v, "CombinedTagSearchDialog.DownloadCoverAsync");
 			activeMediaDownloadCount--;
 		}
 		finally
@@ -751,7 +776,8 @@ internal class CombinedTagSearchDialog : Form
 		}
 		catch (System.Exception ex) when (!(ex is OperationCanceledException && cancellationSource.IsCancellationRequested))
 		{
-			Console.WriteLine("SearchCombinedTags error:" + ex.GetMessageChain());
+			LogService.WriteExceptionDetails(ex, "CombinedTagSearchDialog.SearchCombinedTagsAsync");
+			searchStatusIndicator.ReportUnexpectedError();
 		}
 		finally
 		{
@@ -887,7 +913,16 @@ internal class CombinedTagSearchDialog : Form
 
 	private void DialogActivated(object sender, EventArgs args)
 	{
-		BeginInvoke(new Action(() => searchResultsListView.SelectedItems.Cast<ListViewItem>().ForEachItem((ListViewItem item) => UpdateSelectionHighlight(item, searchResultsListView.Focused))));
+		if (!IsDisposed && IsHandleCreated)
+		{
+			BeginInvoke(new Action(() =>
+			{
+				if (!IsDisposed)
+				{
+					searchResultsListView.SelectedItems.Cast<ListViewItem>().ForEachItem((ListViewItem item) => UpdateSelectionHighlight(item, searchResultsListView.Focused));
+				}
+			}));
+		}
 	}
 
 	public static string FetchMissingNetEaseReleaseYear(TrackSearchResult searchResult, CancellationTokenSource cancellationSource)
@@ -929,7 +964,8 @@ internal class CombinedTagSearchDialog : Form
 
 	private void OverwriteOptionsMenuClick(object sender, EventArgs args)
 	{
-		new CombinedTagOverwriteOptionsDialog().ShowDialog();
+		using CombinedTagOverwriteOptionsDialog optionsDialog = new CombinedTagOverwriteOptionsDialog();
+		optionsDialog.ShowDialog();
 	}
 
 	private void SearchResultListMouseUp(object sender, MouseEventArgs args)
@@ -1114,6 +1150,7 @@ internal class CombinedTagSearchDialog : Form
 		cancelButton.UseVisualStyleBackColor = true;
 		cancelButton.Click += CancelButtonClick;
 		CancelButton = cancelButton;
+		AcceptButton = okSplitButton;
 		searchStatusLabel.AutoSize = false;
 		searchStatusLabel.AutoEllipsis = true;
 		searchStatusLabel.Margin = new Padding(0, 10, 0, 0);

@@ -123,8 +123,8 @@ internal class PictureFromTagsDialog : Form
 
 	protected override void OnClosed(EventArgs e)
 	{
-		base.OnClosed(e);
 		GetSearchCancellation().Cancel();
+		base.OnClosed(e);
 	}
 
 	private void UpdateLayout()
@@ -184,18 +184,25 @@ internal class PictureFromTagsDialog : Form
 		}
 		catch (Exception ex)
 		{
-			Console.WriteLine("PictureSearch error:" + ex.GetMessageChain());
+			LogService.WriteExceptionDetails(ex, "PictureFromTagsDialog.StartPictureSearchAsync");
+			if (!IsDisposed && Visible)
+			{
+				DialogService.ShowErrorMessage(UiText.Get("Picture search failed", "图片搜索失败", "圖片搜尋失敗") + ": " + ex.Message);
+			}
 		}
 		finally
 		{
-			progressPictureBox.Hide();
-			GetTaskbarProgress().SetProgressState(TaskbarProgressBarStatus.NoProgress);
+			if (!IsDisposed)
+			{
+				progressPictureBox.Hide();
+				GetTaskbarProgress().SetProgressState(TaskbarProgressBarStatus.NoProgress);
+			}
 		}
 	}
 
 	private void AddPictureCandidatesIfSearchActive(List<(string, Image, string, int)> candidates)
 	{
-		if (!GetSearchCancellation().IsCancellationRequested)
+		if (!IsDisposed && !GetSearchCancellation().IsCancellationRequested)
 		{
 			AddPictureCandidates(candidates);
 			return;
@@ -447,6 +454,7 @@ internal class PictureFromTagsDialog : Form
 		cancelButton.UseVisualStyleBackColor = true;
 		cancelButton.Click += CancelButton_Click;
 		CancelButton = cancelButton;
+		AcceptButton = okButton;
 
 		progressPictureBox.Image = Resources.img_wait;
 		progressPictureBox.Location = new Point(220, 13);

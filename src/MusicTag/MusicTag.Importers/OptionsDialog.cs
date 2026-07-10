@@ -282,8 +282,8 @@ internal class OptionsDialog : Form
 		SuspendLayout();
 		rootLayoutPanel.SuspendLayout();
 		optionsTreeView.ExpandAll();
-		base.Width = MinimumSize.Width;
-		base.Height = MinimumSize.Height;
+		base.Width = ImageUtilities.ScaleByDpi(720f);
+		base.Height = ImageUtilities.ScaleByDpi(660f);
 		sourceOrderPanel.WrapContents = false;
 		mainSplitContainer.SplitterDistance = ImageUtilities.ScaleByDpi(120f);
 		AddSourceTreeNodes();
@@ -330,7 +330,7 @@ internal class OptionsDialog : Form
 			AutoSize = true,
 			Margin = new Padding(ImageUtilities.ScaleByDpi(3f), ImageUtilities.ScaleByDpi(8f), ImageUtilities.ScaleByDpi(3f), 0),
 			Name = "lblQQMusicCookie",
-			Text = GetDialogText("lblQQMusicCookie", "QQ 音乐 Cookie（可留空；登录后填入有助于降低被限流的概率）:")
+			Text = GetDialogText("lblQQMusicCookie", UiText.Get("QQ Music cookie (optional; signing in can reduce rate limiting):", "QQ 音乐 Cookie（可留空；登录后填入有助于降低被限流的概率）:", "QQ 音樂 Cookie（可留空；登入後填入有助於降低限流機率）:"))
 		};
 		qqCookieTextBox = new TextBox
 		{
@@ -348,7 +348,7 @@ internal class OptionsDialog : Form
 			AutoSize = true,
 			Margin = new Padding(ImageUtilities.ScaleByDpi(3f), ImageUtilities.ScaleByDpi(10f), ImageUtilities.ScaleByDpi(3f), 0),
 			Name = "lblCustomUserAgent",
-			Text = GetDialogText("lblCustomUserAgent", "自定义 User-Agent（可留空；留空时使用内置默认 UA）:")
+			Text = GetDialogText("lblCustomUserAgent", UiText.Get("Custom User-Agent (optional; leave blank to use the built-in default):", "自定义 User-Agent（可留空；留空时使用内置默认 UA）:", "自訂 User-Agent（可留空；留空時使用內建預設值）:"))
 		};
 		customUserAgentTextBox = new TextBox
 		{
@@ -369,7 +369,7 @@ internal class OptionsDialog : Form
 			Margin = new Padding(0, ImageUtilities.ScaleByDpi(10f), 0, 0),
 			Padding = new Padding(ImageUtilities.ScaleByDpi(5f)),
 			Name = "gbNetworkOptions",
-			Text = GetDialogText("gbNetworkOptions", "联网请求设置")
+			Text = GetDialogText("gbNetworkOptions", UiText.Get("Network request settings", "联网请求设置", "網路請求設定"))
 		};
 		networkOptionsGroupBox.Controls.Add(networkOptionsPanel);
 		networkOptionsGroupBox.Hide();
@@ -378,7 +378,7 @@ internal class OptionsDialog : Form
 		TreeNode networkTreeNode = new TreeNode
 		{
 			Name = "Network",
-			Text = GetDialogText("Network", "联网请求")
+			Text = GetDialogText("Network", UiText.Get("Network requests", "联网请求", "網路請求"))
 		};
 		optionsTreeView.Nodes.Add(networkTreeNode);
 	}
@@ -594,16 +594,33 @@ internal class OptionsDialog : Form
 	protected override void OnShown(EventArgs e)
 	{
 		base.OnShown(e);
+		FitDialogToWorkingArea();
 		// 构造期的 SplitterDistance 用静态 ScaleByDpi(启动主屏刻度);对话框打开在其他 DPI 屏
 		// 时按实际屏刻度重设(FixedPanel=Panel1 使其不随框架 bounds 缩放联动)。同屏打开时与
 		// 构造期同值,幂等无操作。
 		mainSplitContainer.SplitterDistance = ImageUtilities.ScaleByDpi(120f, this);
-		int requiredHeightIncrease = sourceLimitPanel.Location.Y + sourceLimitPanel.Height - sourceOrderPanel.Height;
-		if (requiredHeightIncrease > 0)
-		{
-			base.Height += requiredHeightIncrease;
-		}
 		UpdateTranslatedLyricConnectorEnabled();
+	}
+
+	private void FitDialogToWorkingArea()
+	{
+		Rectangle workingArea = Screen.FromControl(this).WorkingArea;
+		int margin = ImageUtilities.ScaleByDpi(12f, this);
+		Size scaledMinimum = new Size(ImageUtilities.ScaleByDpi(520f, this), ImageUtilities.ScaleByDpi(420f, this));
+		MinimumSize = FitSizeToWorkingArea(scaledMinimum, workingArea, margin);
+		Size desiredSize = new Size(ImageUtilities.ScaleByDpi(720f, this), ImageUtilities.ScaleByDpi(660f, this));
+		Size = FitSizeToWorkingArea(desiredSize, workingArea, margin);
+		if (Owner != null)
+		{
+			CenterToParent();
+		}
+	}
+
+	internal static Size FitSizeToWorkingArea(Size desiredSize, Rectangle workingArea, int margin)
+	{
+		return new Size(
+			Math.Min(desiredSize.Width, Math.Max(1, workingArea.Width - margin)),
+			Math.Min(desiredSize.Height, Math.Max(1, workingArea.Height - margin)));
 	}
 
 	private void OptionsTreeSelectionChanged(object sender, TreeViewEventArgs e)
@@ -889,6 +906,10 @@ internal class OptionsDialog : Form
 				control.Enabled = downloadTranslatedLyricsCheckBox.Checked;
 			}
 		}
+		// 连接符只对“原词和译词位于同一时间戳、同一行”的第一种格式有意义。
+		// 上面的通用组启用逻辑会在重新勾选“下载翻译”时把所有子控件一并启用，
+		// 因此必须在最后重新应用格式专用条件，避免分行格式下下拉框错误变为可选。
+		UpdateTranslatedLyricConnectorEnabled();
 	}
 
 	private void UpdatePictureSizeLimitLabel(object sender, EventArgs e)
@@ -1223,6 +1244,7 @@ internal class OptionsDialog : Form
 		sourceOrderPanel.Controls.Add(sourceLimitPanel);
 		sourceOrderPanel.Controls.Add(webSearchLimitGroupBox);
 		sourceOrderPanel.Controls.Add(saveAndNotificationOptionsPanel);
+		sourceOrderPanel.AutoScroll = true;
 		sourceOrderPanel.Dock = DockStyle.Fill;
 		sourceOrderPanel.FlowDirection = FlowDirection.TopDown;
 		sourceOrderPanel.Location = new Point(0, 0);
@@ -1575,7 +1597,7 @@ internal class OptionsDialog : Form
 		artistConnectorPadSpacesCheckBox.Margin = new Padding(6, 6, 3, 0);
 		artistConnectorPadSpacesCheckBox.Name = "cbConnectorsArtistsPadSpaces";
 		artistConnectorPadSpacesCheckBox.TabIndex = 19;
-		artistConnectorPadSpacesCheckBox.Text = "在分隔符前后添加空格";
+		artistConnectorPadSpacesCheckBox.Text = UiText.Get("Add spaces around the separator", "在分隔符前后添加空格", "在分隔符前後加入空格");
 		artistConnectorPadSpacesCheckBox.UseVisualStyleBackColor = true;
 		id3v2VersionPanel.Controls.Add(id3v2VersionLabel);
 		id3v2VersionPanel.Controls.Add(id3v24RadioButton);
@@ -1614,19 +1636,19 @@ internal class OptionsDialog : Form
 		removeMisplacedId3CheckBox.Margin = new Padding(6, 8, 0, 0);
 		removeMisplacedId3CheckBox.Name = "cbRemoveMisplacedId3";
 		removeMisplacedId3CheckBox.TabIndex = 25;
-		removeMisplacedId3CheckBox.Text = "保存时移除 FLAC 中错误的 ID3 标签";
+		removeMisplacedId3CheckBox.Text = UiText.Get("Remove misplaced ID3 tags from FLAC on save", "保存时移除 FLAC 中错误的 ID3 标签", "儲存時移除 FLAC 中錯誤的 ID3 標籤");
 		removeMisplacedId3CheckBox.UseVisualStyleBackColor = true;
 		removeId3v1CheckBox.AutoSize = true;
 		removeId3v1CheckBox.Margin = new Padding(6, 4, 0, 0);
 		removeId3v1CheckBox.Name = "cbRemoveId3v1";
 		removeId3v1CheckBox.TabIndex = 26;
-		removeId3v1CheckBox.Text = "保存时不写入 ID3v1 标签(移除已有)";
+		removeId3v1CheckBox.Text = UiText.Get("Do not write ID3v1 tags on save (remove existing)", "保存时不写入 ID3v1 标签(移除已有)", "儲存時不寫入 ID3v1 標籤（移除既有標籤）");
 		removeId3v1CheckBox.UseVisualStyleBackColor = true;
 		keepId3v2VersionCheckBox.AutoSize = true;
 		keepId3v2VersionCheckBox.Margin = new Padding(6, 4, 0, 0);
 		keepId3v2VersionCheckBox.Name = "cbKeepId3v2Version";
 		keepId3v2VersionCheckBox.TabIndex = 27;
-		keepId3v2VersionCheckBox.Text = "保留已有标签的 ID3v2 版本(不强制转换,新标签仍用所选版本)";
+		keepId3v2VersionCheckBox.Text = UiText.Get("Keep the existing ID3v2 version (new tags use the selected version)", "保留已有标签的 ID3v2 版本(不强制转换,新标签仍用所选版本)", "保留既有標籤的 ID3v2 版本（新標籤仍使用所選版本）");
 		keepId3v2VersionCheckBox.UseVisualStyleBackColor = true;
 		fileFilterLabel.AutoSize = true;
 		fileFilterLabel.Location = new Point(3, 307);
@@ -2031,6 +2053,7 @@ internal class OptionsDialog : Form
 		cancelButton.UseVisualStyleBackColor = true;
 		cancelButton.Click += CancelOptionsDialog;
 		CancelButton = cancelButton;
+		AcceptButton = okButton;
 		coverSourceOrderControl.Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 		coverSourceOrderControl.Location = new Point(6, 0);
 		coverSourceOrderControl.Margin = new Padding(0);
@@ -2060,10 +2083,8 @@ internal class OptionsDialog : Form
 		ClientSize = new Size(1584, 1161);
 		base.Controls.Add(rootLayoutPanel);
 		Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
-		// 550 -> 660:杂项1 页单列内容高 544(net8 行高膨胀 + 新增 3 行 ID3 写入策略,见
-		// searchAndTagOptionsPanel.Size 注释);页容器高 = 窗口客户区 - 10(顶边距) - 60(底部
-		// 按钮区),窗口非客户区 39,反推最小高 544+10+60+39=653,取 660。
-		MinimumSize = new Size(720, 660);
+		// 内容区可滚动,小屏/高缩放时允许窗口缩到工作区内;常规屏幕仍在 OnShown 使用 720x660 设计尺寸。
+		MinimumSize = new Size(520, 420);
 		base.Name = "FormOptions";
 		base.ShowIcon = false;
 		base.StartPosition = FormStartPosition.CenterParent;

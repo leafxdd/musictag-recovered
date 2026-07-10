@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
+using System.Globalization;
 using System.Windows.Forms;
+using MusicTagWinApp.Properties;
 
 namespace MusicTagWinApp.Web;
 
@@ -34,6 +36,8 @@ internal sealed class SearchStatusIndicator
 
 	private bool searchHasRun;
 
+	private string unexpectedErrorMessage;
+
 	public SearchStatusIndicator(Label label, Func<bool> hasResultsProvider, IContainer components)
 	{
 		this.label = label;
@@ -49,6 +53,7 @@ internal sealed class SearchStatusIndicator
 		statuses.Clear();
 		searchInProgress = true;
 		searchHasRun = true;
+		unexpectedErrorMessage = null;
 		retryCountdownTimer.Stop();
 		Refresh();
 	}
@@ -86,6 +91,7 @@ internal sealed class SearchStatusIndicator
 		statuses.Clear();
 		searchInProgress = false;
 		searchHasRun = false;
+		unexpectedErrorMessage = null;
 		retryCountdownTimer.Stop();
 		Refresh();
 	}
@@ -93,6 +99,16 @@ internal sealed class SearchStatusIndicator
 	public void StopCountdown()
 	{
 		retryCountdownTimer.Stop();
+	}
+
+	public void ReportUnexpectedError()
+	{
+		if (label.IsDisposed)
+		{
+			return;
+		}
+		unexpectedErrorMessage = UiText.Get("Search failed", "搜索失败", "搜尋失敗");
+		Refresh();
 	}
 
 	// 后台搜索线程经 Progress<T> 编组到 UI 线程后回调。
@@ -143,7 +159,7 @@ internal sealed class SearchStatusIndicator
 			return;
 		}
 		string searchingLine = BuildSearchingLine();
-		string errorLine = BuildErrorOrRetryLine();
+		string errorLine = unexpectedErrorMessage ?? BuildErrorOrRetryLine();
 		string text;
 		if (searchingLine != null && errorLine != null)
 		{
@@ -159,7 +175,7 @@ internal sealed class SearchStatusIndicator
 		}
 		else if (!searchInProgress && searchHasRun && !hasResultsProvider())
 		{
-			text = "未找到匹配结果";
+			text = UiText.Get("No matching results", "未找到匹配结果", "未找到符合結果");
 		}
 		else
 		{
@@ -178,19 +194,24 @@ internal sealed class SearchStatusIndicator
 	// 从已按显示序枚举的源状态构造"正在搜索"行(纯逻辑,提取供 characterization;实例方法委托)。
 	internal static string BuildSearchingLine(IEnumerable<SourceSearchStatus> statusesInDisplayOrder)
 	{
+		return BuildSearchingLine(statusesInDisplayOrder, CultureInfo.CurrentUICulture);
+	}
+
+	internal static string BuildSearchingLine(IEnumerable<SourceSearchStatus> statusesInDisplayOrder, CultureInfo culture)
+	{
 		List<string> sourceNames = new List<string>();
 		foreach (SourceSearchStatus status in statusesInDisplayOrder)
 		{
 			if (status.Phase == SourceSearchPhase.Searching || status.Phase == SourceSearchPhase.Pending)
 			{
-				sourceNames.Add(GetSourceDisplayName(status.Source));
+				sourceNames.Add(GetSourceDisplayName(status.Source, culture));
 			}
 		}
 		if (sourceNames.Count == 0)
 		{
 			return null;
 		}
-		return "正在搜索: " + string.Join("/", sourceNames);
+		return UiText.Get("Searching: ", "正在搜索: ", "正在搜尋: ", culture) + string.Join("/", sourceNames);
 	}
 
 	// 错误 / 重试行:重试中优先;多个普通错误时合并源名(最多一行)。
@@ -204,11 +225,22 @@ internal sealed class SearchStatusIndicator
 	// 与原实例方法两次独立枚举 statuses 字典的结果等价。
 	internal static string BuildErrorOrRetryLine(IEnumerable<SourceSearchStatus> statusesInDisplayOrder)
 	{
+		return BuildErrorOrRetryLine(statusesInDisplayOrder, CultureInfo.CurrentUICulture);
+	}
+
+	internal static string BuildErrorOrRetryLine(IEnumerable<SourceSearchStatus> statusesInDisplayOrder, CultureInfo culture)
+	{
 		foreach (SourceSearchStatus status in statusesInDisplayOrder)
 		{
 			if (status.Phase == SourceSearchPhase.Retrying)
 			{
-				return GetSourceDisplayName(status.Source) + " API错误(" + FormatErrorCode(status.ErrorCode) + "), " + Math.Max(0, status.RetrySecondsLeft) + " 秒后重试 (" + status.RetryAttempt + "/" + status.RetryTotal + ")";
+				string sourceName = GetSourceDisplayName(status.Source, culture);
+				string errorCode = FormatErrorCode(status.ErrorCode, culture);
+				return UiText.Get(
+					sourceName + " API error (" + errorCode + "), retrying in " + Math.Max(0, status.RetrySecondsLeft) + " seconds (" + status.RetryAttempt + "/" + status.RetryTotal + ")",
+					sourceName + " API错误(" + errorCode + "), " + Math.Max(0, status.RetrySecondsLeft) + " 秒后重试 (" + status.RetryAttempt + "/" + status.RetryTotal + ")",
+					sourceName + " API錯誤(" + errorCode + "), " + Math.Max(0, status.RetrySecondsLeft) + " 秒後重試 (" + status.RetryAttempt + "/" + status.RetryTotal + ")",
+					culture);
 			}
 		}
 		List<SourceSearchStatus> erroredSources = new List<SourceSearchStatus>();
@@ -225,14 +257,17 @@ internal sealed class SearchStatusIndicator
 		}
 		if (erroredSources.Count == 1)
 		{
-			return GetSourceDisplayName(erroredSources[0].Source) + " API错误(" + FormatErrorCode(erroredSources[0].ErrorCode) + ")";
+			string sourceName = GetSourceDisplayName(erroredSources[0].Source, culture);
+			string errorCode = FormatErrorCode(erroredSources[0].ErrorCode, culture);
+			return UiText.Get(sourceName + " API error (" + errorCode + ")", sourceName + " API错误(" + errorCode + ")", sourceName + " API錯誤(" + errorCode + ")", culture);
 		}
 		List<string> erroredNames = new List<string>();
 		foreach (SourceSearchStatus status in erroredSources)
 		{
-			erroredNames.Add(GetSourceDisplayName(status.Source));
+			erroredNames.Add(GetSourceDisplayName(status.Source, culture));
 		}
-		return string.Join("/", erroredNames) + " API错误";
+		string joinedNames = string.Join("/", erroredNames);
+		return UiText.Get(joinedNames + " API error", joinedNames + " API错误", joinedNames + " API錯誤", culture);
 	}
 
 	// 按固定显示顺序(网易云/QQ/酷狗/酷我)枚举已上报状态,保证渲染稳定。
@@ -247,9 +282,9 @@ internal sealed class SearchStatusIndicator
 		}
 	}
 
-	private static string FormatErrorCode(string errorCode)
+	private static string FormatErrorCode(string errorCode, CultureInfo culture)
 	{
-		return string.IsNullOrEmpty(errorCode) ? "未知" : errorCode;
+		return string.IsNullOrEmpty(errorCode) ? UiText.Get("unknown", "未知", "未知", culture) : errorCode;
 	}
 
 	// footerPanel 为普通 Panel,子控件绝对定位:按钮恒定居中(与状态标签显隐无关),
@@ -268,16 +303,21 @@ internal sealed class SearchStatusIndicator
 
 	public static string GetSourceDisplayName(SearchSource source)
 	{
+		return GetSourceDisplayName(source, CultureInfo.CurrentUICulture);
+	}
+
+	internal static string GetSourceDisplayName(SearchSource source, CultureInfo culture)
+	{
 		switch (source)
 		{
 			case SearchSource.Music163:
-				return "网易云";
+				return UiText.Get("NetEase", "网易云", "網易雲", culture);
 			case SearchSource.QQ:
 				return "QQ";
 			case SearchSource.Kugou:
-				return "酷狗";
+				return UiText.Get("Kugou", "酷狗", "酷狗", culture);
 			case SearchSource.Kuwo:
-				return "酷我";
+				return UiText.Get("Kuwo", "酷我", "酷我", culture);
 			default:
 				return source.ToString();
 		}

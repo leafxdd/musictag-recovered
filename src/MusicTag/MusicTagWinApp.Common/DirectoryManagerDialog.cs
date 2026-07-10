@@ -260,6 +260,7 @@ internal class DirectoryManagerDialog : Form
 		cancelButton.UseVisualStyleBackColor = true;
 		cancelButton.Click += CancelButtonClick;
 		CancelButton = cancelButton;
+		AcceptButton = okButton;
 		directoryContextMenu.Items.AddRange(new ToolStripItem[1] { deleteMenuItem });
 		directoryContextMenu.Name = "contextMenuStrip1";
 		directoryContextMenu.Size = new Size(114, 26);

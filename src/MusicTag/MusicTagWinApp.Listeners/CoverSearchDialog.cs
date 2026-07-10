@@ -214,7 +214,7 @@ internal class CoverSearchDialog : Form
 
 	private void OnSearchCandidatesFound(List<CoverSearchResult> candidates)
 	{
-		if (!GetSearchCancellation().IsCancellationRequested)
+		if (!IsDisposed && !GetSearchCancellation().IsCancellationRequested)
 		{
 			GetCachedCandidates().AddRange(candidates);
 			AddCandidatesToList(candidates);
@@ -411,10 +411,10 @@ internal class CoverSearchDialog : Form
 	protected override void OnClosed(EventArgs e)
 	{
 		string preservedCoverPath = default(string);
-		base.OnClosed(e);
 		cachedCandidateReplayTimer.Stop();
 		searchStatusIndicator.StopCountdown();
 		GetSearchCancellation().Cancel();
+		base.OnClosed(e);
 		if (base.DialogResult == DialogResult.OK)
 		{
 			preservedCoverPath = GetSelectedCandidate().LocalCoverPath;
@@ -469,7 +469,8 @@ internal class CoverSearchDialog : Form
 		catch (System.Exception ex)
 		{
 			lastCandidateSearchSucceeded = false;
-			Console.WriteLine("Tag search error: " + ex.GetMessageChain());
+			LogService.WriteExceptionDetails(ex, "CoverSearchDialog.StartCandidateSearch");
+			searchStatusIndicator.ReportUnexpectedError();
 		}
 		finally
 		{
@@ -488,12 +489,20 @@ internal class CoverSearchDialog : Form
 		try
 		{
 			Image image = await Task.Run(coverImageLoader.Load, GetSearchCancellation().Token);
+			if (IsDisposed || GetSearchCancellation().IsCancellationRequested)
+			{
+				image?.Dispose();
+				return;
+			}
 			ApplyCoverDownloadResult(candidate, image, coverImageLoader.OriginalSize);
 			queuedNextDownload = StartNextCoverDownload(taskNo, taskSubNo);
 		}
+		catch (OperationCanceledException) when (GetSearchCancellation().IsCancellationRequested)
+		{
+		}
 		catch (System.Exception ex)
 		{
-			Console.WriteLine("DownloadPicture error:" + ex.GetMessageChain());
+			LogService.WriteExceptionDetails(ex, "CoverSearchDialog.StartCoverDownload");
 		}
 		finally
 		{
@@ -753,6 +762,7 @@ internal class CoverSearchDialog : Form
 		cancelButton.UseVisualStyleBackColor = true;
 		cancelButton.Click += CancelSelection;
 		CancelButton = cancelButton;
+		AcceptButton = okButton;
 
 		searchStatusLabel.AutoSize = false;
 		searchStatusLabel.AutoEllipsis = true;

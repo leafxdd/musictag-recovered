@@ -2274,6 +2274,8 @@ internal partial class StateFieldInstance : Form
 
 	private readonly Dictionary<string, Image> fileTypeIconCache;
 
+	private readonly List<Image> ownedToolbarImages;
+
 	private readonly object fileTypeIconCacheLock = new object();
 
 	// 文件列表字体 —— 由字段持有,避免 ApplyFileListVisualStyle 每次 new 出的 Font 句柄无人释放。
@@ -2879,6 +2881,7 @@ internal partial class StateFieldInstance : Form
 		localizedResources = new ComponentResourceManager(typeof(StateFieldInstance));
 		fileTypeImageList = new ImageList();
 		fileTypeIconCache = new Dictionary<string, Image>();
+		ownedToolbarImages = new List<Image>();
 		tagComboBoxes = new Dictionary<string, ComboBox>();
 		tagFieldTextHandlers = new Dictionary<string, (Label, EventHandler)>();
 		selectedFilterValueStates = new Dictionary<string, (Dictionary<string, int> valueCounts, List<(string value, bool wasRemoved)> changedValues)>();
@@ -2974,56 +2977,70 @@ internal partial class StateFieldInstance : Form
 
 	private void ApplyToolbarImagesAndScaling()
 	{
-		if (ImageUtilities.GetDpiScale() == 1f)
-		{
-			return;
-		}
-		Image image = (changeDirectoryToolStripButton.Image = ImageUtilities.LoadResourceBitmap("chgDirToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		List<Image> previousImages = new List<Image>(ownedToolbarImages);
+		ownedToolbarImages.Clear();
+		Image image = (changeDirectoryToolStripButton.Image = LoadOwnedToolbarImage("chgDirToolStripMenuItem_Image"));
 		changeDirectoryMenuItem.Image = image;
-		addDirectoriesToolStripButton.Image = image = ImageUtilities.LoadResourceBitmap("addDirsToolStripMenuItem_Image", scaleSmallIconForDpi: true);
+		addDirectoriesToolStripButton.Image = image = LoadOwnedToolbarImage("addDirsToolStripMenuItem_Image");
 		addDirectoryMenuItem.Image = image;
-		image = (manageDirectoriesToolStripButton.Image = ImageUtilities.LoadResourceBitmap("manageDirsToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		image = (manageDirectoriesToolStripButton.Image = LoadOwnedToolbarImage("manageDirsToolStripMenuItem_Image"));
 		manageDirectoriesMenuItem.Image = image;
-		image = (saveTagsToolStripButton.Image = ImageUtilities.LoadResourceBitmap("saveToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		image = (saveTagsToolStripButton.Image = LoadOwnedToolbarImage("saveToolStripMenuItem_Image"));
 		saveTagsMenuItem.Image = image;
-		removeTagsToolStripButton.Image = image = ImageUtilities.LoadResourceBitmap("removeTagToolStripMenuItem_Image", scaleSmallIconForDpi: true);
+		removeTagsToolStripButton.Image = image = LoadOwnedToolbarImage("removeTagToolStripMenuItem_Image");
 		removeTagsMenuItem.Image = image;
-		image = (undoToolStripButton.Image = ImageUtilities.LoadResourceBitmap("undoToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		image = (undoToolStripButton.Image = LoadOwnedToolbarImage("undoToolStripMenuItem_Image"));
 		undoMenuItem.Image = image;
-		readTagsToolStripButton.Image = image = ImageUtilities.LoadResourceBitmap("readTagsToolStripMenuItem_Image", scaleSmallIconForDpi: true);
+		readTagsToolStripButton.Image = image = LoadOwnedToolbarImage("readTagsToolStripMenuItem_Image");
 		readTagsMenuItem.Image = image;
-		image = (characterSetToolStripButton.Image = ImageUtilities.LoadResourceBitmap("characterSetToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		image = (characterSetToolStripButton.Image = LoadOwnedToolbarImage("characterSetToolStripMenuItem_Image"));
 		characterSetMenuItem.Image = image;
-		image = (chineseConversionToolStripDropDownButton.Image = ImageUtilities.LoadResourceBitmap("chschtToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		image = (chineseConversionToolStripDropDownButton.Image = LoadOwnedToolbarImage("chschtToolStripMenuItem_Image"));
 		chineseConversionMenuItem.Image = image;
-		image = (tagHistoryToolStripButton.Image = ImageUtilities.LoadResourceBitmap("tagsHistoryToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		image = (tagHistoryToolStripButton.Image = LoadOwnedToolbarImage("tagsHistoryToolStripMenuItem_Image"));
 		tagHistoryMenuItem.Image = image;
-		exitMenuItem.Image = ImageUtilities.LoadResourceBitmap("exitToolStripMenuItem_Image", scaleSmallIconForDpi: true);
-		image = (selectAllFilesToolStripButton.Image = ImageUtilities.LoadResourceBitmap("selallfilesToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		exitMenuItem.Image = LoadOwnedToolbarImage("exitToolStripMenuItem_Image");
+		image = (selectAllFilesToolStripButton.Image = LoadOwnedToolbarImage("selallfilesToolStripMenuItem_Image"));
 		selectAllFilesMenuItem.Image = image;
-		image = (unselectAllFilesToolStripButton.Image = ImageUtilities.LoadResourceBitmap("unselectAllToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		image = (unselectAllFilesToolStripButton.Image = LoadOwnedToolbarImage("unselectAllToolStripMenuItem_Image"));
 		unselectAllFilesMenuItem.Image = image;
-		refreshToolStripButton.Image = image = ImageUtilities.LoadResourceBitmap("refreshToolStripMenuItem_Image", scaleSmallIconForDpi: true);
+		refreshToolStripButton.Image = image = LoadOwnedToolbarImage("refreshToolStripMenuItem_Image");
 		refreshMenuItem.Image = image;
-		image = (coverSourceToolStripSplitButton.Image = ImageUtilities.LoadResourceBitmap("picSrcToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		image = (coverSourceToolStripSplitButton.Image = LoadOwnedToolbarImage("picSrcToolStripMenuItem_Image"));
 		coverSourceMenuItem.Image = image;
-		image = (lyricSourceToolStripSplitButton.Image = ImageUtilities.LoadResourceBitmap("lyricSrcToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		image = (lyricSourceToolStripSplitButton.Image = LoadOwnedToolbarImage("lyricSrcToolStripMenuItem_Image"));
 		lyricSourceMenuItem.Image = image;
-		image = (combinedTagSourceToolStripSplitButton.Image = ImageUtilities.LoadResourceBitmap("combTagsSrcToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		image = (combinedTagSourceToolStripSplitButton.Image = LoadOwnedToolbarImage("combTagsSrcToolStripMenuItem_Image"));
 		combinedTagSourceMenuItem.Image = image;
-		image = (batchAutoMatchTagsToolStripButton.Image = ImageUtilities.LoadResourceBitmap("batchAutoMatchTagsToolStripButton_Image", scaleSmallIconForDpi: true));
+		image = (batchAutoMatchTagsToolStripButton.Image = LoadOwnedToolbarImage("batchAutoMatchTagsToolStripButton_Image"));
 		batchAutoMatchTagsMenuItem.Image = image;
-		image = (batchExtractCoverToolStripButton.Image = ImageUtilities.LoadResourceBitmap("batchExtractCoverToolStripButton_Image", scaleSmallIconForDpi: true));
+		image = (batchExtractCoverToolStripButton.Image = LoadOwnedToolbarImage("batchExtractCoverToolStripButton_Image"));
 		batchExtractCoverMenuItem.Image = image;
-		image = (batchSaveAsLrcToolStripSplitButton.Image = ImageUtilities.LoadResourceBitmap("batchSaveAsLrcFileToolStripSplitButton_Image", scaleSmallIconForDpi: true));
+		image = (batchSaveAsLrcToolStripSplitButton.Image = LoadOwnedToolbarImage("batchSaveAsLrcFileToolStripSplitButton_Image"));
 		saveLyricsMenuItem.Image = image;
-		image = (batchChineseConversionToolStripDropDownButton.Image = ImageUtilities.LoadResourceBitmap("chschtToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		image = (batchChineseConversionToolStripDropDownButton.Image = LoadOwnedToolbarImage("chschtToolStripMenuItem_Image"));
 		batchChineseConversionMenuItem.Image = image;
-		image = (batchFilenameRelatedToolStripButton.Image = ImageUtilities.LoadResourceBitmap("batchFilenameRelToolStripButton_Image", scaleSmallIconForDpi: true));
+		image = (batchFilenameRelatedToolStripButton.Image = LoadOwnedToolbarImage("batchFilenameRelToolStripButton_Image"));
 		batchFilenameRelatedMenuItem.Image = image;
-		image = (optionsToolStripButton.Image = ImageUtilities.LoadResourceBitmap("optionsToolStripMenuItem_Image", scaleSmallIconForDpi: true));
+		image = (optionsToolStripButton.Image = LoadOwnedToolbarImage("optionsToolStripMenuItem_Image"));
 		optionsMenuItem.Image = image;
+		saveTagsContextMenuItem.Image = saveTagsMenuItem.Image;
+		removeTagsContextMenuItem.Image = removeTagsMenuItem.Image;
+		readTagsContextMenuItem.Image = readTagsMenuItem.Image;
+		characterSetContextMenuItem.Image = characterSetMenuItem.Image;
+		tagHistoryContextMenuItem.Image = tagHistoryMenuItem.Image;
 		ApplyToolbarItemSizesForDpi();
+		previousImages.ForEach(oldImage => oldImage?.Dispose());
+	}
+
+	private Image LoadOwnedToolbarImage(string resourceName)
+	{
+		Image image = ImageUtilities.LoadOwnedResourceBitmap(resourceName, scaleSmallIconForDpi: true, this);
+		if (image != null)
+		{
+			ownedToolbarImages.Add(image);
+		}
+		return image;
 	}
 
 	// PMv2(实验分支):工具栏/菜单的 ImageScalingSize 与各项固定尺寸按窗体当前所在屏刻度设置;
@@ -3869,7 +3886,7 @@ internal partial class StateFieldInstance : Form
 
 	private void ManageDirectoriesButton_Click(object sender, EventArgs e)
 	{
-		DirectoryManagerDialog directoryManagerDialog = new DirectoryManagerDialog();
+		using DirectoryManagerDialog directoryManagerDialog = new DirectoryManagerDialog();
 		directoryManagerDialog.SetFileSetting(FileSettings);
 		if (directoryManagerDialog.ShowDialog() != DialogResult.OK)
 		{
@@ -4735,7 +4752,7 @@ internal partial class StateFieldInstance : Form
 		{
 			return;
 		}
-		LyricEditorDialog lyricEditor = new LyricEditorDialog();
+		using LyricEditorDialog lyricEditor = new LyricEditorDialog();
 		lyricEditor.SetSearchContext(BuildTrackSearchContext());
 		lyricEditor.SetLyricText(lyricsComboBox.Text);
 		if (lyricEditor.ShowDialog() != DialogResult.OK)
@@ -4755,7 +4772,7 @@ internal partial class StateFieldInstance : Form
 		{
 			return;
 		}
-		LyricSearchDialog lyricSearchDialog = new LyricSearchDialog();
+		using LyricSearchDialog lyricSearchDialog = new LyricSearchDialog();
 		lyricSearchDialog.SetTrackInfo(BuildTrackSearchContext());
 		lyricSearchDialog.SetSelectedSource(source);
 		if (lyricSearchDialog.ShowDialog() == DialogResult.OK)
@@ -5261,7 +5278,7 @@ internal partial class StateFieldInstance : Form
 		{
 			list.Add(fileRow.FilePath);
 		}
-		PictureFromTagsDialog pictureFromTagsDialog = new PictureFromTagsDialog();
+		using PictureFromTagsDialog pictureFromTagsDialog = new PictureFromTagsDialog();
 		pictureFromTagsDialog.SetAudioFilePaths(list);
 		if (pictureFromTagsDialog.ShowDialog() == DialogResult.OK && pictureFromTagsDialog.GetSelectedPicture() != null)
 		{
@@ -5274,7 +5291,7 @@ internal partial class StateFieldInstance : Form
 	{
 		if (selectedTagState != null)
 		{
-			CoverSearchDialog coverSearchDialog = new CoverSearchDialog();
+			using CoverSearchDialog coverSearchDialog = new CoverSearchDialog();
 			coverSearchDialog.SetCurrentTrack(BuildTrackSearchContext());
 			coverSearchDialog.SetPreferredSource(source);
 			if (coverSearchDialog.ShowDialog() == DialogResult.OK && File.Exists(coverSearchDialog.GetSelectedCandidate().LocalCoverPath))
@@ -5290,7 +5307,7 @@ internal partial class StateFieldInstance : Form
 		{
 			return;
 		}
-		CombinedTagSearchDialog combinedCoverSearchDialog = new CombinedTagSearchDialog();
+		using CombinedTagSearchDialog combinedCoverSearchDialog = new CombinedTagSearchDialog();
 		combinedCoverSearchDialog.SetSearchContext(BuildTrackSearchContext());
 		combinedCoverSearchDialog.SetPreferredSource(source);
 		if (combinedCoverSearchDialog.ShowDialog() == DialogResult.OK)
@@ -5501,7 +5518,7 @@ internal partial class StateFieldInstance : Form
 	private void ConfigureFileListColumns_Click(object sender, EventArgs e)
 	{
 		SaveCurrentFileListColumnWidths();
-		CustomColumnsDialog customColumnsDialog = new CustomColumnsDialog();
+		using CustomColumnsDialog customColumnsDialog = new CustomColumnsDialog();
 		if (customColumnsDialog.ShowDialog() != DialogResult.OK)
 		{
 			return;
@@ -6269,7 +6286,7 @@ internal partial class StateFieldInstance : Form
 			return;
 		}
 
-		TagHistorySelectionDialog tagHistoryDialog = new TagHistorySelectionDialog();
+		using TagHistorySelectionDialog tagHistoryDialog = new TagHistorySelectionDialog();
 		tagHistoryDialog.SetHistoryFilePath(selectedTagState.GetFilePath());
 		if (tagHistoryDialog.ShowDialog() != DialogResult.OK)
 		{
@@ -6404,7 +6421,7 @@ internal partial class StateFieldInstance : Form
 
 	private void BatchAutoMatchTags_Click(object sender, EventArgs e)
 	{
-		AutoMatchTagsDialog autoMatchDialog = new AutoMatchTagsDialog();
+		using AutoMatchTagsDialog autoMatchDialog = new AutoMatchTagsDialog();
 		if (autoMatchDialog.ShowDialog() != DialogResult.OK)
 		{
 			return;
@@ -6427,7 +6444,7 @@ internal partial class StateFieldInstance : Form
 
 	private void BatchFilenameOrTagsFromPattern_Click(object sender, EventArgs e)
 	{
-		FilenameRelatedBatchDialog filenameRelatedBatchDialog = new FilenameRelatedBatchDialog();
+		using FilenameRelatedBatchDialog filenameRelatedBatchDialog = new FilenameRelatedBatchDialog();
 		if (filenameRelatedBatchDialog.ShowDialog() != DialogResult.OK)
 		{
 			return;
@@ -6489,7 +6506,7 @@ internal partial class StateFieldInstance : Form
 
 	private void OpenOptions_Click(object sender, EventArgs e)
 	{
-		OptionsDialog optionsDialog = new OptionsDialog();
+		using OptionsDialog optionsDialog = new OptionsDialog();
 		if (optionsDialog.ShowDialog() != DialogResult.OK)
 		{
 			return;
@@ -6518,7 +6535,8 @@ internal partial class StateFieldInstance : Form
 
 	private void ShowAboutDialog_Click(object sender, EventArgs e)
 	{
-		new AboutDialog().ShowDialog();
+		using AboutDialog aboutDialog = new AboutDialog();
+		aboutDialog.ShowDialog();
 	}
 
 	private void SaveOverwriteCoverSetting_Click(object sender, EventArgs e)
@@ -6839,6 +6857,7 @@ internal partial class StateFieldInstance : Form
 				}
 			}
 			RefreshTagEditorButtonImages();
+			ApplyToolbarImagesAndScaling();
 			// no_cover 占位图按名字键缓存(尺寸实参命中时被忽略),作废后按新屏刻度重建;当前
 			// 正显示占位图(CenterImage 原像素绘制)时立即换新实例,旧实例经 SetCoverPreviewImage
 			// 的引用比对释放(缓存已不含它,无悬挂引用)。
@@ -7367,9 +7386,18 @@ internal partial class StateFieldInstance : Form
 
 	protected override void Dispose(bool disposing)
 	{
-		if (disposing && components != null)
+		if (disposing)
 		{
-			components.Dispose();
+			components?.Dispose();
+			ownedToolbarImages.ForEach(image => image?.Dispose());
+			ownedToolbarImages.Clear();
+			fileTypeImageList.Dispose();
+			lock (fileTypeIconCacheLock)
+			{
+				fileTypeIconCache.Values.Distinct().ForEachItem(image => image?.Dispose());
+				fileTypeIconCache.Clear();
+			}
+			fileListFont.Dispose();
 		}
 		base.Dispose(disposing);
 	}

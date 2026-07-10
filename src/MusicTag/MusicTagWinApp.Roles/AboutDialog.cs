@@ -55,12 +55,14 @@ internal class AboutDialog : Form
 
 	private void AlipayDonateButtonClick(object sender, EventArgs args)
 	{
-		new DonateDialog(Resources.Alipay).ShowDialog();
+		using DonateDialog donateDialog = new DonateDialog(Resources.Alipay);
+		donateDialog.ShowDialog();
 	}
 
 	private void WechatDonateButtonClick(object sender, EventArgs args)
 	{
-		new DonateDialog(Resources.WechatPay).ShowDialog();
+		using DonateDialog donateDialog = new DonateDialog(Resources.WechatPay);
+		donateDialog.ShowDialog();
 	}
 
 	protected override void Dispose(bool disposing)
@@ -165,6 +167,7 @@ internal class AboutDialog : Form
 		closeButton.UseVisualStyleBackColor = true;
 		closeButton.Click += CloseButtonClick;
 		base.CancelButton = closeButton;
+		base.AcceptButton = closeButton;
 		base.AutoScaleDimensions = new SizeF(96f, 96f);
 		base.AutoScaleMode = AutoScaleMode.Dpi;
 		base.ClientSize = new Size(406, 256);
