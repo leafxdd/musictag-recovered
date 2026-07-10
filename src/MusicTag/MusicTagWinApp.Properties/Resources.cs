@@ -63,7 +63,13 @@ internal class Resources
 
 	internal static string any => ResourceManager.GetString("any", resourceCulture);
 
-	internal static Icon AppIcon => (Icon)ResourceManager.GetObject("AppIcon", resourceCulture);
+	private static Icon appIcon;
+
+	// 应用图标改为直接读嵌入的 app.ico(csproj EmbeddedResource,与 exe 内嵌图标同一文件):
+	// 原 resx 里是 BinaryFormatter 序列化的 Icon 副本(340KB 冗余,且小尺寸帧为低质量重采
+	// 样)。单一来源后重制 ico 只改一个文件。缓存单例——消费方(主窗体/托盘常驻,About
+	// 对话框按尺寸另建副本释放)均不释放此实例。
+	internal static Icon AppIcon => appIcon ??= new Icon(typeof(Resources).Assembly.GetManifestResourceStream("MusicTag.AppIcon.ico"));
 
 	internal static string AppName => ResourceManager.GetString("AppName", resourceCulture);
 

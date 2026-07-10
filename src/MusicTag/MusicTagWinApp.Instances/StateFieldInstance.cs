@@ -3755,16 +3755,19 @@ internal partial class StateFieldInstance : Form
 		titleRowPanel.Width = tagPanelWidth;
 
 		trackDiscGroupPanel.Width = titleRowPanel.Width - titleEncodingButton.Width - ImageUtilities.ScaleByDpi(5f, this);
-		int tagPairHeight = trackLabel.Height + trackRowPanel.Height + ImageUtilities.ScaleByDpi(6f, this, roundUp: true);
-		discColumnPanel.Height = tagPairHeight;
-		trackColumnPanel.Height = tagPairHeight;
-		trackDiscGroupPanel.Height = tagPairHeight;
+		ApplyTrackDiscPairHeight();
+		trackRowPanel.Width = trackDiscGroupPanel.Width / 2;
 		trackRowPanel.Width = trackDiscGroupPanel.Width / 2;
 		trackColumnPanel.Width = trackRowPanel.Width;
 		discRowPanel.Width = trackDiscGroupPanel.Width / 2 - ImageUtilities.ScaleByDpi(5f, this);
 		discColumnPanel.Width = discRowPanel.Width;
 		discColumnPanel.Margin = new Padding(ImageUtilities.ScaleByDpi(5f, this), 0, 0, 0);
-		overwriteCoverCheckBox.Margin = new Padding((statusLabelsPanel.Width - overwriteCoverCheckBox.Width) / 2, ImageUtilities.ScaleByDpi(50f, this), 0, 0);
+		// 上边距设计值 50(96 基准),但容器(statusLabelsPanel,高度随封面方块)不够高时
+		// 钳到"贴底留 4px",避免复选框文字下缘被容器裁掉(封面较小/左栏较窄时)。
+		int overwriteTopMargin = Math.Min(
+			ImageUtilities.ScaleByDpi(50f, this),
+			Math.Max(0, statusLabelsPanel.Height - overwriteCoverCheckBox.Height - 4));
+		overwriteCoverCheckBox.Margin = new Padding((statusLabelsPanel.Width - overwriteCoverCheckBox.Width) / 2, overwriteTopMargin, 0, 0);
 
 		int coverPanelSize = coverPanel.Width - statusLabelsPanel.Width;
 		int availableHeight = tagEditorPanel.Height;
@@ -6641,14 +6644,76 @@ internal partial class StateFieldInstance : Form
 		for (int rowIndex = 0; rowIndex < tagRowPanels.Length; rowIndex++)
 		{
 			Button button = tagEncodingButtons[rowIndex];
-			tagRowComboBoxes[rowIndex].Width = tagRowPanels[rowIndex].Width - button.Width - button.Margin.Left - button.Margin.Right;
+			ComboBox combo = tagRowComboBoxes[rowIndex];
+			FlowLayoutPanel rowPanel = tagRowPanels[rowIndex];
+			// ComboBox 自身高度由字体的 FontHeight 派生,而 FontHeight 按**进程主屏**度量
+			// (net8 PMv2 分叉:96 副屏上 combo 仍是 144 刻度的 30px,写 ItemHeight/Height
+			// 均被框架按 preferred 顶回)。行面板是 Designer 的 96 设计高 23px,combo 底部
+			// 连同描边线溢出被裁(用户 pic10)。改为行面板高度适配内容实际高度——外层
+			// tagEditorPanel 是 TopDown FlowLayoutPanel,行面板加高自动下推后续行。
+			int rowHeight = Math.Max(
+				combo.Height + combo.Margin.Top + combo.Margin.Bottom,
+				button.Height + button.Margin.Top + button.Margin.Bottom);
+			if (rowPanel.Height != rowHeight)
+			{
+				rowPanel.Height = rowHeight;
+			}
+			combo.Width = rowPanel.Width - button.Width - button.Margin.Left - button.Margin.Right;
+		}
+		int lyricsRowHeight = Math.Max(
+			lyricsComboBox.Height + lyricsComboBox.Margin.Top + lyricsComboBox.Margin.Bottom,
+			Math.Max(
+				editLyricsButton.Height + editLyricsButton.Margin.Top + editLyricsButton.Margin.Bottom,
+				lyricsEncodingButton.Height + lyricsEncodingButton.Margin.Top + lyricsEncodingButton.Margin.Bottom));
+		if (lyricsRowPanel.Height != lyricsRowHeight)
+		{
+			lyricsRowPanel.Height = lyricsRowHeight;
 		}
 		lyricsComboBox.Width = lyricsRowPanel.Width - editLyricsButton.Width - editLyricsButton.Margin.Left - editLyricsButton.Margin.Right - lyricsEncodingButton.Width - lyricsEncodingButton.Margin.Left - lyricsEncodingButton.Margin.Right;
+		// 行面板高度变化会改变 音轨/碟号 双列的组合高度,按现值重钉(公式幂等)。
+		ApplyTrackDiscPairHeight();
+	}
+
+	// 音轨/碟号双列(label 在上、行面板在下)的组合高度;ApplyTagPanelLayout 与行高
+	// 适配(RecalcTagComboWidths)共用,输入相同时写相同值。
+	private void ApplyTrackDiscPairHeight()
+	{
+		int tagPairHeight = trackLabel.Height + trackRowPanel.Height + ImageUtilities.ScaleByDpi(6f, this, roundUp: true);
+		discColumnPanel.Height = tagPairHeight;
+		trackColumnPanel.Height = tagPairHeight;
+		trackDiscGroupPanel.Height = tagPairHeight;
 	}
 
 	// 诊断插桩(实验分支):MUSICTAG_DPI_TRACE=1 时把 DPI 相关几何/字体度量追加写 exe 旁
 	// dpi-trace.log,配合外部移屏驱动脚本定位跨屏缩放问题。未开启时零行为影响。
 	private static readonly bool dpiTraceEnabled = Environment.GetEnvironmentVariable("MUSICTAG_DPI_TRACE") == "1";
+
+	// 布局细节诊断(同 env 门控):行面板/combo/覆盖复选框的逐像素几何,定位描边裁剪。
+	private void DpiTraceLayout(string eventName)
+	{
+		if (!dpiTraceEnabled)
+		{
+			return;
+		}
+		try
+		{
+			string line = string.Format(
+				"[{0:HH:mm:ss.fff}] LAYOUT {1,-19} rowPanelH={2} comboH={3} comboTop={4} comboBottom={5} comboMarginTB={6}/{7} ovckBounds={8} ovckPref={9} ovckFont={10:0.##} statusPanelH={11} coverPanelBounds={12} spacerBottom={13} tagEdClientH={14} tagEdScrollMin={15} tagEdAutoScroll={16}",
+				DateTime.Now, eventName,
+				titleRowPanel.Height, titleComboBox.Height, titleComboBox.Top, titleComboBox.Bottom,
+				titleComboBox.Margin.Top, titleComboBox.Margin.Bottom,
+				overwriteCoverCheckBox.Bounds, overwriteCoverCheckBox.GetPreferredSize(Size.Empty),
+				overwriteCoverCheckBox.Font.Size,
+				statusLabelsPanel.Height, coverPanel.Bounds,
+				tagEditorBottomSpacerPanel.Location.Y + tagEditorBottomSpacerPanel.Height,
+				tagEditorPanel.ClientSize.Height, tagEditorPanel.AutoScrollMinSize,
+				tagEditorPanel.AutoScroll);
+			File.AppendAllText(Path.Combine(PathFileUtilities.GetApplicationDirectory(), "dpi-trace.log"), line + Environment.NewLine);
+		}
+		catch (System.Exception)
+		{
+		}
+	}
 
 	private void DpiTrace(string eventName)
 	{
@@ -6726,6 +6791,7 @@ internal partial class StateFieldInstance : Form
 	{
 		RescaleCustomAssetsForDpi(DeviceDpi);
 		DpiTrace("EnsureDpiAssetsSynced");
+		DpiTraceLayout("EnsureDpiAssetsSynced");
 	}
 
 	// net8(实测标定,见 dpi-trace 插桩):框架接管 WM_DPICHANGED 的整树 bounds 缩放(窗口、

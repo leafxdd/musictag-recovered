@@ -34,6 +34,11 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <RootNamespace />
   </PropertyGroup>
+  <ItemGroup>
+    <!-- 应用图标单一来源:exe 内嵌图标与运行时 Resources.AppIcon 共用此文件
+         (原 resx 里的 BinaryFormatter Icon 副本已移除)。 -->
+    <EmbeddedResource Include="app.ico" LogicalName="MusicTag.AppIcon.ico" />
+  </ItemGroup>
   <ItemGroup />
   <ItemGroup>
     <!-- net8:Fkosoft.FontAwesome4(netfx 程序集,原样引用)在构造时加载
