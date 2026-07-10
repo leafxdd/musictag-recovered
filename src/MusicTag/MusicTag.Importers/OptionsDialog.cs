@@ -142,6 +142,12 @@ internal class OptionsDialog : Form
 
 	private RadioButton id3v23RadioButton;
 
+	private CheckBox removeMisplacedId3CheckBox;
+
+	private CheckBox removeId3v1CheckBox;
+
+	private CheckBox keepId3v2VersionCheckBox;
+
 	private Label fileFilterLabel;
 
 	private FlowLayoutPanel fileFilterPanel;
@@ -417,6 +423,9 @@ internal class OptionsDialog : Form
 		pictureFormatLimitLabel.Text = GetDialogText("lblPictureFormatLimits", pictureFormatLimitLabel.Text);
 		artistConnectorLabel.Text = GetDialogText("lblConnectorsArtists", artistConnectorLabel.Text);
 		artistConnectorPadSpacesCheckBox.Text = GetDialogText("cbConnectorsArtistsPadSpaces", artistConnectorPadSpacesCheckBox.Text);
+		removeMisplacedId3CheckBox.Text = GetDialogText("cbRemoveMisplacedId3", removeMisplacedId3CheckBox.Text);
+		removeId3v1CheckBox.Text = GetDialogText("cbRemoveId3v1", removeId3v1CheckBox.Text);
+		keepId3v2VersionCheckBox.Text = GetDialogText("cbKeepId3v2Version", keepId3v2VersionCheckBox.Text);
 		fileFilterLabel.Text = GetDialogText("lblFileFilter", fileFilterLabel.Text);
 		durationFilterLabel.Text = GetDialogText("lblFileFilterByDuration", durationFilterLabel.Text);
 		ignoreVideoFilesCheckBox.Text = GetDialogText("cbFileFilterIgnoreVideoFile", ignoreVideoFilesCheckBox.Text);
@@ -551,6 +560,9 @@ internal class OptionsDialog : Form
 		{
 			id3v24RadioButton.Checked = true;
 		}
+		removeMisplacedId3CheckBox.Checked = Settings.Default.RemoveMisplacedId3OnSave;
+		removeId3v1CheckBox.Checked = Settings.Default.RemoveId3v1OnSave;
+		keepId3v2VersionCheckBox.Checked = Settings.Default.KeepExistingId3v2Version;
 
 		foreach (string durationFilterEntry in Resources.FileFilterByDurationList.Split(';'))
 		{
@@ -769,6 +781,9 @@ internal class OptionsDialog : Form
 		Settings.Default.SaveLrcFilenameFormat = GetResourceText(Resources.LrcFilenameFormat, DefaultLrcFilenameFormatValues).Split('|')[lrcFilenameFormatComboBox.SelectedIndex];
 		Settings.Default.SaveLrcDirectory = lrcDirectoryTextBox.Text;
 		Settings.Default.ID3v2Version = (id3v23RadioButton.Checked ? 3 : 4);
+		Settings.Default.RemoveMisplacedId3OnSave = removeMisplacedId3CheckBox.Checked;
+		Settings.Default.RemoveId3v1OnSave = removeId3v1CheckBox.Checked;
+		Settings.Default.KeepExistingId3v2Version = keepId3v2VersionCheckBox.Checked;
 		Settings.Default.FileFilterByDuration = durationFilterOptions[durationFilterComboBox.SelectedIndex];
 		Settings.Default.FileFilterIgnoreVideoFile = ignoreVideoFilesCheckBox.Checked;
 		Settings.Default.CommentTagWrite163Key = writeNetEaseCommentKeyCheckBox.Checked;
@@ -1059,6 +1074,9 @@ internal class OptionsDialog : Form
 		id3v2VersionLabel = new Label();
 		id3v24RadioButton = new RadioButton();
 		id3v23RadioButton = new RadioButton();
+		removeMisplacedId3CheckBox = new CheckBox();
+		removeId3v1CheckBox = new CheckBox();
+		keepId3v2VersionCheckBox = new CheckBox();
 		fileFilterLabel = new Label();
 		fileFilterPanel = new FlowLayoutPanel();
 		durationFilterLabel = new Label();
@@ -1424,6 +1442,9 @@ internal class OptionsDialog : Form
 		searchAndTagOptionsPanel.Controls.Add(artistConnectorComboBox);
 		searchAndTagOptionsPanel.Controls.Add(artistConnectorPadSpacesCheckBox);
 		searchAndTagOptionsPanel.Controls.Add(id3v2VersionPanel);
+		searchAndTagOptionsPanel.Controls.Add(removeMisplacedId3CheckBox);
+		searchAndTagOptionsPanel.Controls.Add(removeId3v1CheckBox);
+		searchAndTagOptionsPanel.Controls.Add(keepId3v2VersionCheckBox);
 		searchAndTagOptionsPanel.Controls.Add(fileFilterLabel);
 		searchAndTagOptionsPanel.Controls.Add(fileFilterPanel);
 		searchAndTagOptionsPanel.Controls.Add(commentTagLabel);
@@ -1432,7 +1453,11 @@ internal class OptionsDialog : Form
 		searchAndTagOptionsPanel.Location = new Point(420, 0);
 		searchAndTagOptionsPanel.Margin = new Padding(0);
 		searchAndTagOptionsPanel.Name = "panelOthers";
-		searchAndTagOptionsPanel.Size = new Size(467, 400);
+		// 400 -> 544:net8 下 Tahoma 9pt 的 AutoSize 行高比 net481 设计值高(label 14->19px、
+		// checkbox 18->20px),原 400 在迁移后已容不下单列内容("过滤:"起绕排到右侧第二列);
+		// 加上新增 3 行 ID3 写入策略后实测单列内容高 534(cbCommentTagWrite163Key 底缘),取 544。
+		// TopDown+WrapContents 下高度不足即绕排,必须随内容加高。
+		searchAndTagOptionsPanel.Size = new Size(467, 544);
 		searchAndTagOptionsPanel.TabIndex = 6;
 		webSearchCriteriaLabel.AutoSize = true;
 		webSearchCriteriaLabel.Location = new Point(3, 0);
@@ -1585,6 +1610,24 @@ internal class OptionsDialog : Form
 		id3v23RadioButton.TabStop = true;
 		id3v23RadioButton.Text = "ID3v2.3 UTF-16";
 		id3v23RadioButton.UseVisualStyleBackColor = true;
+		removeMisplacedId3CheckBox.AutoSize = true;
+		removeMisplacedId3CheckBox.Margin = new Padding(6, 8, 0, 0);
+		removeMisplacedId3CheckBox.Name = "cbRemoveMisplacedId3";
+		removeMisplacedId3CheckBox.TabIndex = 25;
+		removeMisplacedId3CheckBox.Text = "保存时移除 FLAC 中错误的 ID3 标签";
+		removeMisplacedId3CheckBox.UseVisualStyleBackColor = true;
+		removeId3v1CheckBox.AutoSize = true;
+		removeId3v1CheckBox.Margin = new Padding(6, 4, 0, 0);
+		removeId3v1CheckBox.Name = "cbRemoveId3v1";
+		removeId3v1CheckBox.TabIndex = 26;
+		removeId3v1CheckBox.Text = "保存时不写入 ID3v1 标签(移除已有)";
+		removeId3v1CheckBox.UseVisualStyleBackColor = true;
+		keepId3v2VersionCheckBox.AutoSize = true;
+		keepId3v2VersionCheckBox.Margin = new Padding(6, 4, 0, 0);
+		keepId3v2VersionCheckBox.Name = "cbKeepId3v2Version";
+		keepId3v2VersionCheckBox.TabIndex = 27;
+		keepId3v2VersionCheckBox.Text = "保留已有标签的 ID3v2 版本(不强制转换,新标签仍用所选版本)";
+		keepId3v2VersionCheckBox.UseVisualStyleBackColor = true;
 		fileFilterLabel.AutoSize = true;
 		fileFilterLabel.Location = new Point(3, 307);
 		fileFilterLabel.Margin = new Padding(3, 10, 3, 0);
@@ -2017,7 +2060,10 @@ internal class OptionsDialog : Form
 		ClientSize = new Size(1584, 1161);
 		base.Controls.Add(rootLayoutPanel);
 		Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
-		MinimumSize = new Size(720, 550);
+		// 550 -> 660:杂项1 页单列内容高 544(net8 行高膨胀 + 新增 3 行 ID3 写入策略,见
+		// searchAndTagOptionsPanel.Size 注释);页容器高 = 窗口客户区 - 10(顶边距) - 60(底部
+		// 按钮区),窗口非客户区 39,反推最小高 544+10+60+39=653,取 660。
+		MinimumSize = new Size(720, 660);
 		base.Name = "FormOptions";
 		base.ShowIcon = false;
 		base.StartPosition = FormStartPosition.CenterParent;

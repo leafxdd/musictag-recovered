@@ -427,6 +427,7 @@ internal class ConfigDescriptorState : IDisposable
 			{
 				loadError = null;
 				writeBody();
+				ApplyTagWritePolicy();
 				SetId3v2Version();
 				tagFile.Save();
 				return true;
@@ -1024,7 +1025,28 @@ internal class ConfigDescriptorState : IDisposable
 		if (version == 3 || version == 4)
 		{
 			TagLib.Id3v2.Tag.DefaultVersion = (byte)version;
-			TagLib.Id3v2.Tag.ForceDefaultVersion = true;
+			// ForceDefaultVersion=true 把文件里已有的 ID3v2(如 v2.4)在保存时统一转成所选版本;
+			// "保留已有版本"开启时改 false——已有标签保持原版本,新建标签仍按 DefaultVersion
+			// 落盘(TagLib 新建 tag 的 header 版本字段为 0,MajorVersion 读取时回落 DefaultVersion)。
+			TagLib.Id3v2.Tag.ForceDefaultVersion = !Settings.Default.KeepExistingId3v2Version;
+		}
+	}
+
+	// 保存前的标签写入策略(设置-杂项1)。TagLib 的 RemoveTags 只改内存模型,随后的
+	// Save() 才把字节从文件里物理移除;对不存在的标签类型是 no-op。
+	// - FLAC 上的 ID3v2/ID3v1 是其它工具留下的错误标签(FLAC 标准容器是 Vorbis Comment,
+	//   TagLib 以文件头/尾附加标签形式读到它们),开启时借本次保存移除。
+	// - "不写 ID3v1":TagLib 的 Mpeg.AudioFile 加载时自动在内存补建 ID3v1+ID3v2,保存必写出
+	//   128 字节 ID3v1;开启时保存前移除,文件上已有的一并清除(每次加载都会重建,故每次保存前都删)。
+	private void ApplyTagWritePolicy()
+	{
+		if (Settings.Default.RemoveMisplacedId3OnSave && tagFile is TagLib.Flac.File)
+		{
+			tagFile.RemoveTags(TagLib.TagTypes.Id3v2 | TagLib.TagTypes.Id3v1);
+		}
+		if (Settings.Default.RemoveId3v1OnSave)
+		{
+			tagFile.RemoveTags(TagLib.TagTypes.Id3v1);
 		}
 	}
 

@@ -33,6 +33,7 @@ internal static class Program
 		tests.AddRange(SplitCombinedDiscTrackCaptureCharacterization.All());
 		tests.AddRange(ConfigDescriptorStateDisplayCharacterization.All());
 		tests.AddRange(ConfigDescriptorStateRoundTripCharacterization.All());
+		tests.AddRange(Id3WritePolicyCharacterization.All());
 		tests.AddRange(ValidateFilenamePatternCoreCharacterization.All());
 		tests.AddRange(PendingTagUpdateTextTagCharacterization.All());
 		tests.AddRange(SetRegexCaptureTagCharacterization.All());

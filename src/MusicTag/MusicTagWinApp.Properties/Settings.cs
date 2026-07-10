@@ -270,6 +270,63 @@ internal sealed class Settings : ApplicationSettingsBase
 		}
 	}
 
+	// 保存时移除 FLAC 文件上的 ID3v2/ID3v1 标签(FLAC 的标准标签容器是 Vorbis Comment,
+	// 这些 ID3 是其它工具留下的错误标签)。默认开启=借保存自动修正。
+	[UserScopedSetting]
+	[DebuggerNonUserCode]
+	[SettingsProvider(typeof(XmlSettingsProvider))]
+	[DefaultSettingValue("True")]
+	[SettingsManageability(SettingsManageability.Roaming)]
+	public bool RemoveMisplacedId3OnSave
+	{
+		get
+		{
+			return (bool)this["RemoveMisplacedId3OnSave"];
+		}
+		set
+		{
+			this["RemoveMisplacedId3OnSave"] = value;
+		}
+	}
+
+	// 保存时不写入 ID3v1 标签(TagLib 对 mp3 默认自动补建 ID3v1+ID3v2,保存即写出;
+	// 开启后保存前移除,文件上已有的 ID3v1 一并物理清除)。
+	[UserScopedSetting]
+	[DebuggerNonUserCode]
+	[SettingsProvider(typeof(XmlSettingsProvider))]
+	[DefaultSettingValue("False")]
+	[SettingsManageability(SettingsManageability.Roaming)]
+	public bool RemoveId3v1OnSave
+	{
+		get
+		{
+			return (bool)this["RemoveId3v1OnSave"];
+		}
+		set
+		{
+			this["RemoveId3v1OnSave"] = value;
+		}
+	}
+
+	// 保留文件已有 ID3v2 标签的原版本(TagLib ForceDefaultVersion=false):v2.4 文件保存后
+	// 仍是 v2.4;新建标签仍按 ID3v2Version 所选版本落盘(TagLib header 版本 0 时回落 DefaultVersion)。
+	[UserScopedSetting]
+	[DebuggerNonUserCode]
+	[SettingsProvider(typeof(XmlSettingsProvider))]
+	[DefaultSettingValue("False")]
+	[SettingsManageability(SettingsManageability.Roaming)]
+	public bool KeepExistingId3v2Version
+	{
+		get
+		{
+			return (bool)this["KeepExistingId3v2Version"];
+		}
+		set
+		{
+			this["KeepExistingId3v2Version"] = value;
+		}
+	}
+
 	[DebuggerNonUserCode]
 	[SettingsProvider(typeof(XmlSettingsProvider))]
 	[UserScopedSetting]
