@@ -153,13 +153,15 @@ internal class CombinedTagSearchDialog : Form
 	{
 		public CombinedTagSearchDialog Owner;
 
+		public CancellationTokenSource Cancellation;
+
 		public IProgress<List<TrackSearchResult>> ProgressReporter;
 
 		public Predicate<SourceItem> preferredSourcePredicate;
 
 		internal void OnSearchResultsReported(List<TrackSearchResult> searchResults)
 		{
-			if (!Owner.cancellationSource.IsCancellationRequested)
+			if (!Cancellation.IsCancellationRequested)
 			{
 				Owner.AddSearchResultsToList(searchResults, cacheNewResults: true);
 			}
@@ -183,17 +185,17 @@ internal class CombinedTagSearchDialog : Form
 				SourceItem preferredSourceItem = TrackSearchResult.GetTagSourceSettings().Find(preferredSourcePredicate ?? (preferredSourcePredicate = IsPreferredSource));
 				searchLimits.RemainingResultsBySource[preferredSource.Value] = preferredSourceItem.GetEffectiveSearchResultLimit();
 				ReportSearching(preferredSource.Value);
-				if (!Owner.cancellationSource.IsCancellationRequested && searchLimits.RemainingGlobalResults > 0 && Owner.currentSearchContext.LinkedMusicMetadata.musicId > 0L && preferredSource.Value == SearchSource.Music163)
+				if (!Cancellation.IsCancellationRequested && searchLimits.RemainingGlobalResults > 0 && Owner.currentSearchContext.LinkedMusicMetadata.musicId > 0L && preferredSource.Value == SearchSource.Music163)
 				{
-					searchLimits.CurrentBatch = Owner.SearchCurrentContextTracks(preferredSource.Value, useLinkedNetEaseId: true, searchLimits.AccumulatedResults, 0);
+					searchLimits.CurrentBatch = Owner.SearchCurrentContextTracks(preferredSource.Value, useLinkedNetEaseId: true, searchLimits.AccumulatedResults, 0, Cancellation);
 					searchLimits.RankLimitAndReportCurrentBatch(useProviderRanking: true);
 				}
-				if (!Owner.cancellationSource.IsCancellationRequested && searchLimits.RemainingGlobalResults > 0 && searchLimits.RemainingResultsBySource[preferredSource.Value] > 0)
+				if (!Cancellation.IsCancellationRequested && searchLimits.RemainingGlobalResults > 0 && searchLimits.RemainingResultsBySource[preferredSource.Value] > 0)
 				{
-					searchLimits.CurrentBatch = Owner.SearchCurrentContextTracks(preferredSource.Value, useLinkedNetEaseId: false, searchLimits.AccumulatedResults, 0);
+					searchLimits.CurrentBatch = Owner.SearchCurrentContextTracks(preferredSource.Value, useLinkedNetEaseId: false, searchLimits.AccumulatedResults, 0, Cancellation);
 					searchLimits.RankLimitAndReportCurrentBatch(useProviderRanking: true);
 				}
-				return !Owner.cancellationSource.IsCancellationRequested;
+				return !Cancellation.IsCancellationRequested;
 			}
 			List<SourceItem> tagSources = TrackSearchResult.GetSortedTagSourceSettings();
 			tagSources.ForEach(searchLimits.InitializeSourceLimit);
@@ -206,27 +208,27 @@ internal class CombinedTagSearchDialog : Form
 			}
 			int searchPass = 0;
 			SourceItem netEaseSource;
-			if (!Owner.cancellationSource.IsCancellationRequested && searchLimits.RemainingGlobalResults > 0 && Owner.currentSearchContext.LinkedMusicMetadata.musicId > 0L && (netEaseSource = tagSources.Find(searchLimits.IsPrimaryNetEaseSourceAvailable)) != null)
+			if (!Cancellation.IsCancellationRequested && searchLimits.RemainingGlobalResults > 0 && Owner.currentSearchContext.LinkedMusicMetadata.musicId > 0L && (netEaseSource = tagSources.Find(searchLimits.IsPrimaryNetEaseSourceAvailable)) != null)
 			{
 				searchLimits.CurrentBatch = new List<TrackSearchResult>();
-				searchLimits.CurrentBatch.AddRange(Owner.SearchCurrentContextTracks(netEaseSource.SearchSource, useLinkedNetEaseId: true, searchLimits.AccumulatedResults, searchPass++));
+				searchLimits.CurrentBatch.AddRange(Owner.SearchCurrentContextTracks(netEaseSource.SearchSource, useLinkedNetEaseId: true, searchLimits.AccumulatedResults, searchPass++, Cancellation));
 				searchLimits.RankLimitAndReportCurrentBatch(useProviderRanking: true);
 			}
-			if (!Owner.cancellationSource.IsCancellationRequested && searchLimits.RemainingGlobalResults > 0)
+			if (!Cancellation.IsCancellationRequested && searchLimits.RemainingGlobalResults > 0)
 			{
 				List<SourceItem> primarySources = tagSources.FindAll((SourceItem source) => source.Enabled && !source.IsSecondarySource && searchLimits.RemainingResultsBySource[source.SearchSource] > 0);
 				searchLimits.CurrentBatch = SearchSourcesInParallel(primarySources, searchLimits.AccumulatedResults, useLinkedNetEaseId: false, searchPass);
 				searchPass += primarySources.Count;
 				searchLimits.RankLimitAndReportCurrentBatch(useProviderRanking: true);
 			}
-			if (!Owner.cancellationSource.IsCancellationRequested && searchLimits.RemainingGlobalResults > 0)
+			if (!Cancellation.IsCancellationRequested && searchLimits.RemainingGlobalResults > 0)
 			{
 				List<SourceItem> secondarySources = tagSources.FindAll((SourceItem source) => source.Enabled && source.IsSecondarySource && searchLimits.RemainingResultsBySource[source.SearchSource] > 0);
 				searchLimits.CurrentBatch = SearchSourcesInParallel(secondarySources, searchLimits.AccumulatedResults, useLinkedNetEaseId: false, searchPass);
 				searchPass += secondarySources.Count;
 				searchLimits.RankLimitAndReportCurrentBatch(useProviderRanking: false);
 			}
-			return !Owner.cancellationSource.IsCancellationRequested;
+			return !Cancellation.IsCancellationRequested;
 		}
 
 		internal bool IsPreferredSource(SourceItem sourceItem)
@@ -266,13 +268,13 @@ internal class CombinedTagSearchDialog : Form
 			{
 				return combinedResults;
 			}
-			CancellationToken cancellationToken = Owner.cancellationSource.Token;
+			CancellationToken cancellationToken = Cancellation.Token;
 			Task<List<TrackSearchResult>>[] sourceTasks = new Task<List<TrackSearchResult>>[sources.Count];
 			for (int taskIndex = 0; taskIndex < sources.Count; taskIndex++)
 			{
 				SearchSource source = sources[taskIndex].SearchSource;
 				int searchPassForSource = baseSearchPass + taskIndex;
-				sourceTasks[taskIndex] = Task.Run(() => Owner.SearchCurrentContextTracks(source, useLinkedNetEaseId, existingResults, searchPassForSource), cancellationToken);
+				sourceTasks[taskIndex] = Task.Run(() => Owner.SearchCurrentContextTracks(source, useLinkedNetEaseId, existingResults, searchPassForSource, Cancellation), cancellationToken);
 			}
 			try
 			{
@@ -383,6 +385,8 @@ internal class CombinedTagSearchDialog : Form
 	private SearchStatusIndicator searchStatusIndicator;
 
 	private readonly CancellationTokenSource cancellationSource;
+
+	private CancellationTokenSource automaticSearchCancellationSource;
 
 	private static List<TrackSearchResult> cachedSearchResults;
 
@@ -683,6 +687,7 @@ internal class CombinedTagSearchDialog : Form
 	{
 		cachedResultsTimer.Stop();
 		searchStatusIndicator.StopCountdown();
+		automaticSearchCancellationSource?.Cancel();
 		cancellationSource.Cancel();
 		base.OnClosed(spec);
 		string selectedCoverPath = null;
@@ -752,6 +757,8 @@ internal class CombinedTagSearchDialog : Form
 		{
 			return;
 		}
+		CancelAutomaticSearchForManualLookup(automaticSearchCancellationSource);
+		cachedSearchCompleted = false;
 		trackIdLookupInProgress = true;
 		SetTrackIdLookupControlsEnabled(enabled: false);
 		ShowTrackIdLookupStatus(UiText.Get("Looking up...", "正在查询...", "正在查詢..."), isError: false);
@@ -1120,9 +1127,9 @@ internal class CombinedTagSearchDialog : Form
 		}
 	}
 
-	private List<TrackSearchResult> SearchCurrentContextTracks(SearchSource source, bool useLinkedNetEaseId, List<TrackSearchResult> existingResults, int searchPass)
+	private List<TrackSearchResult> SearchCurrentContextTracks(SearchSource source, bool useLinkedNetEaseId, List<TrackSearchResult> existingResults, int searchPass, CancellationTokenSource searchCancellation)
 	{
-		return SearchTracksFromSource(source, useLinkedNetEaseId, existingResults, searchPass, currentSearchContext, cancellationSource, searchStatusReporter);
+		return SearchTracksFromSource(source, useLinkedNetEaseId, existingResults, searchPass, currentSearchContext, searchCancellation, searchStatusReporter);
 	}
 
 	public static List<TrackSearchResult> SearchTracksFromSource(SearchSource source, bool useLinkedNetEaseId, List<TrackSearchResult> existingResults, int searchPass, TrackSearchContext searchContext, CancellationTokenSource cancellationSource, Action<SourceSearchStatus> statusReporter = null)
@@ -1163,8 +1170,11 @@ internal class CombinedTagSearchDialog : Form
 
 	private async void SearchCombinedTagsAsync()
 	{
+		CancellationTokenSource searchCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationSource.Token);
+		automaticSearchCancellationSource = searchCancellation;
 		TrackSearchCoordinator trackSearchCoordinator = new TrackSearchCoordinator();
 		trackSearchCoordinator.Owner = this;
+		trackSearchCoordinator.Cancellation = searchCancellation;
 		cachedSearchResults = new List<TrackSearchResult>();
 		trackSearchCoordinator.ProgressReporter = new Progress<List<TrackSearchResult>>(trackSearchCoordinator.OnSearchResultsReported);
 		// 状态通道:Progress<T> 在 UI 线程构造,Report 自动编组回 UI 线程;
@@ -1173,21 +1183,31 @@ internal class CombinedTagSearchDialog : Form
 		taskbarProgress.SetProgressState(TaskbarProgressBarStatus.Indeterminate);
 		try
 		{
-			cachedSearchCompleted = await Task.Run((Func<bool>)trackSearchCoordinator.SearchAllSources, cancellationSource.Token);
+			cachedSearchCompleted = await Task.Run((Func<bool>)trackSearchCoordinator.SearchAllSources, searchCancellation.Token);
 		}
-		catch (System.Exception ex) when (!(ex is OperationCanceledException && cancellationSource.IsCancellationRequested))
+		catch (System.Exception ex) when (!(ex is OperationCanceledException && searchCancellation.IsCancellationRequested))
 		{
 			LogService.WriteExceptionDetails(ex, "CombinedTagSearchDialog.SearchCombinedTagsAsync");
 			searchStatusIndicator.ReportUnexpectedError();
 		}
 		finally
 		{
+			if (ReferenceEquals(automaticSearchCancellationSource, searchCancellation))
+			{
+				automaticSearchCancellationSource = null;
+			}
+			searchCancellation.Dispose();
 			if (!IsDisposed)
 			{
 				taskbarProgress.SetProgressState(TaskbarProgressBarStatus.NoProgress);
 				searchStatusIndicator.End();
 			}
 		}
+	}
+
+	internal static void CancelAutomaticSearchForManualLookup(CancellationTokenSource automaticSearchCancellation)
+	{
+		automaticSearchCancellation?.Cancel();
 	}
 
 	private void SortCurrentSearchResults(List<TrackSearchResult> results)

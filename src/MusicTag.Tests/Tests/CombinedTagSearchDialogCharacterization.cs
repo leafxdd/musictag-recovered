@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Threading;
 using MusicTag.Mocks;
 using MusicTag.Serialization;
 using MusicTagWinApp.Roles;
@@ -63,6 +64,15 @@ internal static class CombinedTagSearchDialogCharacterization
 
 	public static IEnumerable<(string, Action)> All()
 	{
+		yield return ("Manual track ID lookup cancels automatic search only", delegate
+		{
+			using CancellationTokenSource dialogLifetime = new CancellationTokenSource();
+			using CancellationTokenSource automaticSearch = CancellationTokenSource.CreateLinkedTokenSource(dialogLifetime.Token);
+			CombinedTagSearchDialog.CancelAutomaticSearchForManualLookup(automaticSearch);
+			Check.True(automaticSearch.IsCancellationRequested, "automatic search cancelled");
+			Check.True(!dialogLifetime.IsCancellationRequested, "dialog lifetime remains active for manual lookup");
+		});
+
 		yield return ("TrackIdLookup UI text is localized per provider", delegate
 		{
 			CultureInfo english = CultureInfo.GetCultureInfo("en-US");
