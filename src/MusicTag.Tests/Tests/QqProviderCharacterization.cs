@@ -3,6 +3,9 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Threading;
 using MusicTag.Serialization;
+using MusicTag.States;
+using MusicTagWinApp.Containers;
+using MusicTagWinApp.Properties;
 using MusicTagWinApp.Roles;
 using MusicTagWinApp.Web;
 using MusicTagWinApp.Writers;
@@ -31,10 +34,56 @@ internal static class QqProviderCharacterization
 		}
 	}
 
+	private sealed class StubTrackSearchProvider : ITrackSearchProvider
+	{
+		private readonly Queue<HttpResult> transportResults;
+
+		public List<(string query, int resultLimit, long knownSongId, int queryPass, int sourceOrder)> Calls { get; } = new List<(string, int, long, int, int)>();
+
+		public HttpResult LastTransportResult { get; private set; }
+
+		public StubTrackSearchProvider(params HttpResult[] transportResults)
+		{
+			this.transportResults = new Queue<HttpResult>(transportResults);
+		}
+
+		public List<TrackSearchResult> SearchTracks(string query, int resultLimit, long knownSongId, int searchPass, int sourceOrder, List<TrackSearchResult> existingTracks, List<TrackSearchResult> previousResults)
+		{
+			Calls.Add((query, resultLimit, knownSongId, searchPass, sourceOrder));
+			LastTransportResult = transportResults.Count > 0 ? transportResults.Dequeue() : new HttpResult();
+			return new List<TrackSearchResult>();
+		}
+
+		public void Dispose()
+		{
+		}
+	}
+
 	private static List<TrackSearchResult> SearchTracks(string response)
 	{
 		StubQqProvider provider = new StubQqProvider(response);
 		return provider.SearchTracks("query", 10, 0, 0, new List<TrackSearchResult>(), new List<TrackSearchResult>());
+	}
+
+	private static void WithFullSearchContext(Action<TrackSearchContext> test)
+	{
+		bool useOnlyFilename = Settings.Default.SearchCondition_UseOnlyFilename;
+		bool useArtist = Settings.Default.SearchCondition_UseArtist;
+		bool useAlbum = Settings.Default.SearchCondition_UseAlbum;
+		try
+		{
+			Settings.Default.SearchCondition_UseOnlyFilename = false;
+			Settings.Default.SearchCondition_UseArtist = true;
+			Settings.Default.SearchCondition_UseAlbum = true;
+			using ConfigDescriptorState tagState = new ConfigDescriptorState();
+			test(new TrackSearchContext(tagState, "Title", "Artist", "Album"));
+		}
+		finally
+		{
+			Settings.Default.SearchCondition_UseOnlyFilename = useOnlyFilename;
+			Settings.Default.SearchCondition_UseArtist = useArtist;
+			Settings.Default.SearchCondition_UseAlbum = useAlbum;
+		}
 	}
 
 	// 一首完整 album 的歌（通过 guard）。
@@ -95,7 +144,7 @@ internal static class QqProviderCharacterization
 			CancellationTokenSource cts = new CancellationTokenSource();
 			List<SourceSearchStatus> statuses = new List<SourceSearchStatus>();
 			StubQqProvider provider = new StubQqProvider("{\"req_0\":{\"code\":2001}}", cts);
-			// 首次 Retrying 上报即取消：WaitOne 立即返回、下轮循环开头取消短路，避免真实指数退避等待（2/4/8… 秒）。
+			// 首次 Retrying 上报即取消：WaitOne 立即返回、下轮循环开头取消短路，避免真实退避等待。
 			provider.StatusReporter = delegate(SourceSearchStatus status)
 			{
 				statuses.Add(status);
@@ -106,6 +155,63 @@ internal static class QqProviderCharacterization
 			Check.True(statuses.Count >= 1, "received status");
 			Check.Equal(SourceSearchPhase.Retrying, statuses[0].Phase, "phase");
 			Check.Equal("2001", statuses[0].ErrorCode, "errorCode");
+		});
+
+		yield return ("QQ combined search preserves all three fallback queries after empty success", delegate
+		{
+			WithFullSearchContext(delegate(TrackSearchContext context)
+			{
+				using CancellationTokenSource cts = new CancellationTokenSource();
+				StubTrackSearchProvider provider = new StubTrackSearchProvider(new HttpResult(), new HttpResult(), new HttpResult());
+				using QqCombinedTrackSearch search = new QqCombinedTrackSearch(cts, provider);
+
+				search.SearchTracks(false, new List<TrackSearchResult>(), 7, context);
+
+				Check.Equal(3, provider.Calls.Count, "call count");
+				Check.Equal("Title Artist", provider.Calls[0].query, "query 1");
+				Check.Equal("Title", provider.Calls[1].query, "query 2");
+				Check.Equal("Album Artist", provider.Calls[2].query, "query 3");
+				Check.Equal(15, provider.Calls[0].resultLimit, "result limit 1");
+				Check.Equal(10, provider.Calls[1].resultLimit, "result limit 2");
+				Check.Equal(8, provider.Calls[2].resultLimit, "result limit 3");
+				Check.Equal(0L, provider.Calls[0].knownSongId, "known song id");
+				Check.Equal(0, provider.Calls[0].queryPass, "query pass 1");
+				Check.Equal(1, provider.Calls[1].queryPass, "query pass 2");
+				Check.Equal(2, provider.Calls[2].queryPass, "query pass 3");
+				Check.Equal(7, provider.Calls[0].sourceOrder, "source order");
+			});
+		});
+
+		yield return ("QQ combined search stops fallback queries after first rate limit", delegate
+		{
+			WithFullSearchContext(delegate(TrackSearchContext context)
+			{
+				using CancellationTokenSource cts = new CancellationTokenSource();
+				StubTrackSearchProvider provider = new StubTrackSearchProvider(new HttpResult { Error = RemoteErrorKind.RateLimited, ErrorCode = "2001" });
+				using QqCombinedTrackSearch search = new QqCombinedTrackSearch(cts, provider);
+
+				search.SearchTracks(false, new List<TrackSearchResult>(), 0, context);
+
+				Check.Equal(1, provider.Calls.Count, "call count");
+				Check.Equal(RemoteErrorKind.RateLimited, search.LastTransportResult.Error, "final error");
+			});
+		});
+
+		yield return ("QQ combined search stops third query after second-query rate limit", delegate
+		{
+			WithFullSearchContext(delegate(TrackSearchContext context)
+			{
+				using CancellationTokenSource cts = new CancellationTokenSource();
+				StubTrackSearchProvider provider = new StubTrackSearchProvider(
+					new HttpResult(),
+					new HttpResult { Error = RemoteErrorKind.RateLimited, ErrorCode = "2001" });
+				using QqCombinedTrackSearch search = new QqCombinedTrackSearch(cts, provider);
+
+				search.SearchTracks(false, new List<TrackSearchResult>(), 0, context);
+
+				Check.Equal(2, provider.Calls.Count, "call count");
+				Check.Equal(RemoteErrorKind.RateLimited, search.LastTransportResult.Error, "final error");
+			});
 		});
 	}
 }
