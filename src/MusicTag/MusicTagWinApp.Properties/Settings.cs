@@ -236,6 +236,28 @@ internal sealed class Settings : ApplicationSettingsBase
 		}
 	}
 
+	[UserScopedSetting]
+	[DebuggerNonUserCode]
+	[SettingsProvider(typeof(XmlSettingsProvider))]
+	[SettingsManageability(SettingsManageability.Roaming)]
+	[DefaultSettingValue("85")]
+	public int PictureJpegQuality
+	{
+		get => (int)this["PictureJpegQuality"];
+		set => this["PictureJpegQuality"] = value;
+	}
+
+	[UserScopedSetting]
+	[DebuggerNonUserCode]
+	[SettingsProvider(typeof(XmlSettingsProvider))]
+	[SettingsManageability(SettingsManageability.Roaming)]
+	[DefaultSettingValue("6")]
+	public int PicturePngCompressionLevel
+	{
+		get => (int)this["PicturePngCompressionLevel"];
+		set => this["PicturePngCompressionLevel"] = value;
+	}
+
 	[DebuggerNonUserCode]
 	[UserScopedSetting]
 	[SettingsProvider(typeof(XmlSettingsProvider))]

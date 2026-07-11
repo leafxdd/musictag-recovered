@@ -45,6 +45,8 @@
          System.Runtime.Caching 4.0.0.0(netfx BCL,net8 共享框架无)。此兼容包的程序集版本
          特意保持 4.0.0.0,netfx 引用可直接绑定;缺它则启动即崩(FileNotFoundException)。 -->
     <PackageReference Include="System.Runtime.Caching" Version="8.0.1" />
+    <!-- JPEG/PNG 统一解码、缩放与编码；AUTO 无需处理时仍保留 provider 原始字节。 -->
+    <PackageReference Include="SixLabors.ImageSharp" Version="2.1.12" />
   </ItemGroup>
   <ItemGroup>
     <!-- net8:framework References(System.Xml/Configuration/Core/Numerics/Net.Http/Data)由

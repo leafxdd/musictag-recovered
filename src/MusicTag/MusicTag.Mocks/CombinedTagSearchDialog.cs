@@ -752,18 +752,38 @@ internal class CombinedTagSearchDialog : Form
 		{
 			return;
 		}
-		SearchSource source = GetSelectedTrackIdSource();
-		if (!TrackIdInput.TryNormalize(source, trackIdTextBox.Text, out string normalizedId))
-		{
-			ShowTrackIdLookupStatus(UiText.Get("Invalid ID format", "歌曲 ID 格式不正确", "歌曲 ID 格式不正確"), isError: true);
-			return;
-		}
-
 		trackIdLookupInProgress = true;
 		SetTrackIdLookupControlsEnabled(enabled: false);
 		ShowTrackIdLookupStatus(UiText.Get("Looking up...", "正在查询...", "正在查詢..."), isError: false);
 		try
 		{
+			SearchSource source = GetSelectedTrackIdSource();
+			string input = trackIdTextBox.Text?.Trim();
+			if (Uri.TryCreate(input, UriKind.Absolute, out _) && !TrackLinkClassifier.TryDetect(input, out source, out Uri detectedUri))
+			{
+				ShowTrackIdLookupStatus(UiText.Get("Unsupported music link", "不支持的音乐链接", "不支援的音樂連結"), isError: true);
+				return;
+			}
+			if (TrackLinkClassifier.TryDetect(input, out source, out detectedUri))
+			{
+				SetPreferredSource(source);
+				if (TrackLinkClassifier.IsQqShortLink(detectedUri))
+				{
+					using QqShortLinkResolver resolver = QqShortLinkResolver.CreateDefault();
+					detectedUri = await resolver.ResolveAsync(detectedUri, cancellationSource.Token);
+					if (detectedUri == null)
+					{
+						ShowTrackIdLookupStatus(UiText.Get("QQ short link could not be resolved", "QQ 短链接解析失败", "QQ 短連結解析失敗"), isError: true);
+						return;
+					}
+					input = detectedUri.AbsoluteUri;
+				}
+			}
+			if (!TrackIdInput.TryNormalize(source, input, out string normalizedId))
+			{
+				ShowTrackIdLookupStatus(UiText.Get("Invalid ID format", "歌曲 ID 格式不正确", "歌曲 ID 格式不正確"), isError: true);
+				return;
+			}
 			TrackIdLookupRequest request = new TrackIdLookupRequest
 			{
 				Cancellation = cancellationSource,

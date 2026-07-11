@@ -77,8 +77,10 @@ internal static class Program
 			tests.AddRange(TrackResultLimitCharacterization.All());
 			tests.AddRange(TagFieldTemplateCharacterization.All());
 			tests.AddRange(BuildTextTagCandidatesCharacterization.All());
-			tests.AddRange(CoverDownloadCoreCharacterization.All());
-			tests.AddRange(ChineseTextConverterCharacterization.All());
+		tests.AddRange(CoverDownloadCoreCharacterization.All());
+		tests.AddRange(CoverImageProcessorCharacterization.All());
+		tests.AddRange(TrackLinkInputCharacterization.All());
+		tests.AddRange(ChineseTextConverterCharacterization.All());
 			tests.AddRange(DialogConstructionSmoke.All());
 			tests.AddRange(OptionsDialogInitialVisibilityCharacterization.All());
 			tests.AddRange(UndoTempCleanupCharacterization.All());

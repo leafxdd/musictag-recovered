@@ -38,9 +38,9 @@ internal class OptionsDialog : Form
 
 	private const string DefaultLrcFilenameFormatValues = "SameAsSongFileName|Artist_Title|Title_Artist";
 
-	private const string DefaultPictureFormatLimitEntries = "Auto|Fixed to jpg format";
+	private const string DefaultPictureFormatLimitEntries = "Auto|Fixed to jpg format|Fixed to png format";
 
-	private const string DefaultPictureFormatLimitValues = "AUTO|JPG";
+	private const string DefaultPictureFormatLimitValues = "AUTO|JPG|PNG";
 
 	public bool FileFilterSettingsChanged { get; private set; }
 
@@ -189,6 +189,18 @@ internal class OptionsDialog : Form
 	private Label pictureFormatLimitLabel;
 
 	private ComboBox pictureFormatLimitComboBox;
+
+	private FlowLayoutPanel pictureEncodingOptionsPanel;
+
+	private Label pictureEncodingQualityLabel;
+
+	private NumericUpDown pictureEncodingQualityNumericUpDown;
+
+	private int pendingPictureJpegQuality;
+
+	private int pendingPicturePngCompressionLevel;
+
+	private bool updatingPictureEncodingOptions;
 
 	private Label artistConnectorLabel;
 
@@ -590,8 +602,11 @@ internal class OptionsDialog : Form
 		minimizeToNotifyAreaCheckBox.Checked = Settings.Default.MinimizeToNotiArea;
 		restrictedExtensionsTextBox.Text = Settings.Default.RestrictFileExts;
 
+		pendingPictureJpegQuality = Settings.Default.PictureJpegQuality;
+		pendingPicturePngCompressionLevel = Settings.Default.PicturePngCompressionLevel;
 		pictureFormatLimitComboBox.Items.AddRange(GetResourceText(Resources.PictureFormatLimitsEntries, DefaultPictureFormatLimitEntries).Split('|'));
 		pictureFormatLimitComboBox.SelectedIndex = ResolveIndexOrDefault(GetResourceText(Resources.PictureFormatLimitsKeys, DefaultPictureFormatLimitValues).Split('|').ToList(), Settings.Default.PictureFormatLimits);
+		UpdatePictureEncodingOptions(null, null);
 
 		qqCookieTextBox.Text = Settings.Default.QQMusic_Cookie;
 		customUserAgentTextBox.Text = Settings.Default.WebSearch_CustomUserAgent;
@@ -851,6 +866,8 @@ internal class OptionsDialog : Form
 		Settings.Default.CheckForUpdatesOnStartup = checkForUpdatesOnStartupCheckBox.Checked;
 		Settings.Default.RestrictFileExts = string.Join(";", StateFieldInstance.EnabledTagTypesByExtension.Keys) + ";";
 		Settings.Default.PictureFormatLimits = GetResourceText(Resources.PictureFormatLimitsKeys, DefaultPictureFormatLimitValues).Split('|')[pictureFormatLimitComboBox.SelectedIndex];
+		Settings.Default.PictureJpegQuality = pendingPictureJpegQuality;
+		Settings.Default.PicturePngCompressionLevel = pendingPicturePngCompressionLevel;
 		Settings.Default.ConnectorsArtists = artistConnectorComboBox.Text;
 		Settings.Default.ConnectorsArtists_PadSpaces = artistConnectorPadSpacesCheckBox.Checked;
 		Settings.Default.QQMusic_Cookie = qqCookieTextBox.Text.Trim();
@@ -911,6 +928,7 @@ internal class OptionsDialog : Form
 	// 纯序列规则(从 LoadSavedOptions 内联 for 提取为可测 iterator);选中索引与控件填充仍在调用点按原逻辑处理。
 	internal static IEnumerable<int> EnumeratePictureSizeOptions()
 	{
+		yield return 0;
 		for (int sizeLimit = 20; sizeLimit <= 10000; sizeLimit = (sizeLimit >= 100) ? (sizeLimit + 100) : (sizeLimit + 20))
 		{
 			yield return sizeLimit;
@@ -954,14 +972,38 @@ internal class OptionsDialog : Form
 
 	private void UpdatePictureSizeLimitLabel(object sender, EventArgs e)
 	{
-		pictureSizeLimitLabel.Text = string.Concat(GetDialogText("lblPictureSizeLimits", "Picture size limits: "), pictureSizeLimitOptions[pictureSizeLimitTrackBar.Value], "KB");
+		int sizeLimit = pictureSizeLimitOptions[pictureSizeLimitTrackBar.Value];
+		string valueText = sizeLimit == 0 ? UiText.Get("Unlimited", "无限制", "無限制") : sizeLimit + "KB";
+		pictureSizeLimitLabel.Text = GetDialogText("lblPictureSizeLimits", "Picture size limits: ") + valueText;
 	}
 
 	private void UpdatePictureResolutionLimitLabel(object sender, EventArgs e)
 	{
 		int resolution = pictureResolutionLimitOptions[pictureResolutionLimitTrackBar.Value];
-		string resolutionText = (pictureResolutionLimitTrackBar.Value == pictureResolutionLimitTrackBar.Minimum) ? Resources.Auto : $"{resolution}x{resolution}";
+		string resolutionText = resolution == 0 ? UiText.Get("Unlimited", "无限制", "無限制") : $"{resolution}x{resolution}";
 		pictureResolutionLimitLabel.Text = GetDialogText("lblPictureResolution", "Picture resolution: ") + resolutionText;
+	}
+
+	private void UpdatePictureEncodingOptions(object sender, EventArgs e)
+	{
+		string format = GetResourceText(Resources.PictureFormatLimitsKeys, DefaultPictureFormatLimitValues).Split('|')[Math.Max(0, pictureFormatLimitComboBox.SelectedIndex)];
+		bool png = format == "PNG";
+		pictureEncodingQualityLabel.Text = png
+			? UiText.Get("PNG compression level:", "PNG 压缩级别：", "PNG 壓縮級別：")
+			: UiText.Get(format == "AUTO" ? "JPEG quality when compression is required:" : "JPEG quality:", format == "AUTO" ? "需要压缩时的 JPEG 质量：" : "JPEG 质量：", format == "AUTO" ? "需要壓縮時的 JPEG 品質：" : "JPEG 品質：");
+		updatingPictureEncodingOptions = true;
+		pictureEncodingQualityNumericUpDown.Minimum = png ? 0 : 1;
+		pictureEncodingQualityNumericUpDown.Maximum = png ? 9 : 100;
+		pictureEncodingQualityNumericUpDown.Value = png ? pendingPicturePngCompressionLevel : pendingPictureJpegQuality;
+		updatingPictureEncodingOptions = false;
+	}
+
+	private void PictureEncodingQualityValueChanged(object sender, EventArgs e)
+	{
+		if (updatingPictureEncodingOptions) return;
+		string format = GetResourceText(Resources.PictureFormatLimitsKeys, DefaultPictureFormatLimitValues).Split('|')[Math.Max(0, pictureFormatLimitComboBox.SelectedIndex)];
+		if (format == "PNG") pendingPicturePngCompressionLevel = (int)pictureEncodingQualityNumericUpDown.Value;
+		else pendingPictureJpegQuality = (int)pictureEncodingQualityNumericUpDown.Value;
 	}
 
 	private void UpdateWebSearchLimitLabel(object sender, EventArgs e)
@@ -1128,6 +1170,9 @@ internal class OptionsDialog : Form
 		pictureResolutionLimitTrackBar = new TrackBar();
 		pictureFormatLimitLabel = new Label();
 		pictureFormatLimitComboBox = new ComboBox();
+		pictureEncodingOptionsPanel = new FlowLayoutPanel();
+		pictureEncodingQualityLabel = new Label();
+		pictureEncodingQualityNumericUpDown = new NumericUpDown();
 		artistConnectorLabel = new Label();
 		artistConnectorComboBox = new ComboBox();
 		artistConnectorPadSpacesCheckBox = new CheckBox();
@@ -1208,6 +1253,7 @@ internal class OptionsDialog : Form
 		webSearchCriteriaPanel.SuspendLayout();
 		((ISupportInitialize)pictureSizeLimitTrackBar).BeginInit();
 		((ISupportInitialize)pictureResolutionLimitTrackBar).BeginInit();
+		((ISupportInitialize)pictureEncodingQualityNumericUpDown).BeginInit();
 		id3v2VersionPanel.SuspendLayout();
 		fileFilterPanel.SuspendLayout();
 		sourceLimitPanel.SuspendLayout();
@@ -1499,7 +1545,7 @@ internal class OptionsDialog : Form
 		searchAndTagOptionsPanel.Controls.Add(pictureResolutionLimitLabel);
 		searchAndTagOptionsPanel.Controls.Add(pictureResolutionLimitTrackBar);
 		searchAndTagOptionsPanel.Controls.Add(pictureFormatLimitLabel);
-		searchAndTagOptionsPanel.Controls.Add(pictureFormatLimitComboBox);
+		searchAndTagOptionsPanel.Controls.Add(pictureEncodingOptionsPanel);
 		searchAndTagOptionsPanel.Controls.Add(artistConnectorLabel);
 		searchAndTagOptionsPanel.Controls.Add(artistConnectorComboBox);
 		searchAndTagOptionsPanel.Controls.Add(artistConnectorPadSpacesCheckBox);
@@ -1619,6 +1665,22 @@ internal class OptionsDialog : Form
 		pictureFormatLimitComboBox.Name = "cbPictureFormatLimits";
 		pictureFormatLimitComboBox.Size = new Size(155, 22);
 		pictureFormatLimitComboBox.TabIndex = 16;
+		pictureFormatLimitComboBox.SelectedIndexChanged += UpdatePictureEncodingOptions;
+		pictureEncodingOptionsPanel.AutoSize = true;
+		pictureEncodingOptionsPanel.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+		pictureEncodingOptionsPanel.Controls.Add(pictureFormatLimitComboBox);
+		pictureEncodingOptionsPanel.Controls.Add(pictureEncodingQualityLabel);
+		pictureEncodingOptionsPanel.Controls.Add(pictureEncodingQualityNumericUpDown);
+		pictureEncodingOptionsPanel.Margin = new Padding(0);
+		pictureEncodingOptionsPanel.Name = "panelPictureEncodingOptions";
+		pictureEncodingOptionsPanel.WrapContents = false;
+		pictureEncodingQualityLabel.AutoSize = true;
+		pictureEncodingQualityLabel.Margin = new Padding(12, 8, 3, 0);
+		pictureEncodingQualityLabel.Name = "lblPictureEncodingQuality";
+		pictureEncodingQualityNumericUpDown.Margin = new Padding(3, 4, 0, 0);
+		pictureEncodingQualityNumericUpDown.Name = "nudPictureEncodingQuality";
+		pictureEncodingQualityNumericUpDown.Size = new Size(55, 22);
+		pictureEncodingQualityNumericUpDown.ValueChanged += PictureEncodingQualityValueChanged;
 		artistConnectorLabel.AutoSize = true;
 		artistConnectorLabel.Location = new Point(3, 228);
 		artistConnectorLabel.Margin = new Padding(3, 10, 3, 0);
@@ -2151,6 +2213,7 @@ internal class OptionsDialog : Form
 		webSearchCriteriaPanel.PerformLayout();
 		((ISupportInitialize)pictureSizeLimitTrackBar).EndInit();
 		((ISupportInitialize)pictureResolutionLimitTrackBar).EndInit();
+		((ISupportInitialize)pictureEncodingQualityNumericUpDown).EndInit();
 		id3v2VersionPanel.ResumeLayout(performLayout: false);
 		id3v2VersionPanel.PerformLayout();
 		fileFilterPanel.ResumeLayout(false);

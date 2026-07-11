@@ -767,11 +767,11 @@ internal class AutoMatchTagsDialog : Form
 			GetOwnerDialog().hasStartedParallelWorker = true;
 		}
 
-		private bool SaveSidecarFiles(ConfigDescriptorState.PictureData downloadedCoverPicture)
+		private bool SaveSidecarFiles(ConfigDescriptorState.PictureData originalCoverPicture)
 		{
 			bool allFileSavesSucceeded = true;
 			string coverSaveError;
-			if (shouldSaveCoverToFile && (coverSaveError = SaveCoverToFile(downloadedCoverPicture)) != null)
+			if (shouldSaveCoverToFile && (coverSaveError = SaveCoverToFile(originalCoverPicture)) != null)
 			{
 				allFileSavesSucceeded = false;
 				RecordAutoMatchError(coverSaveError);
@@ -810,12 +810,13 @@ internal class AutoMatchTagsDialog : Form
 			}
 			if (loadErrorMessage == null)
 			{
-				ConfigDescriptorState.PictureData downloadedCoverPicture = null;
+				ConfigDescriptorState.PictureData originalCoverPicture = null;
+				ConfigDescriptorState.PictureData embeddedCoverPicture = null;
 				if (downloadedCoverFilePath != null)
 				{
-					downloadedCoverPicture = LoadDownloadedCoverPicture();
+					(originalCoverPicture, embeddedCoverPicture) = LoadDownloadedCoverPictures();
 				}
-				if (downloadedCoverPicture == null)
+				if (originalCoverPicture == null || (shouldSaveCoverToTag && embeddedCoverPicture == null))
 				{
 					shouldSaveCoverToTag = false;
 					shouldSaveCoverToFile = false;
@@ -829,7 +830,7 @@ internal class AutoMatchTagsDialog : Form
 					}
 					else
 					{
-						bool allFileSavesSucceeded = SaveSidecarFiles(downloadedCoverPicture);
+						bool allFileSavesSucceeded = SaveSidecarFiles(originalCoverPicture);
 						if (allFileSavesSucceeded)
 						{
 							GetOwnerDialog().successCount++;
@@ -843,7 +844,7 @@ internal class AutoMatchTagsDialog : Form
 				else
 				{
 					string tagSaveError;
-					if ((tagSaveError = SaveTagsToFile(shouldSaveCoverToTag ? downloadedCoverPicture : null)) != null)
+					if ((tagSaveError = SaveTagsToFile(shouldSaveCoverToTag ? embeddedCoverPicture : null)) != null)
 					{
 						RecordAutoMatchError(tagSaveError);
 						GetOwnerDialog().failedCount++;
@@ -852,7 +853,7 @@ internal class AutoMatchTagsDialog : Form
 					{
 						GetOwnerDialog().successCount++;
 					}
-					SaveSidecarFiles(downloadedCoverPicture);
+					SaveSidecarFiles(originalCoverPicture);
 				}
 			}
 			else
@@ -1043,30 +1044,38 @@ internal class AutoMatchTagsDialog : Form
 			}
 		}
 
-		private ConfigDescriptorState.PictureData LoadDownloadedCoverPicture()
+		private (ConfigDescriptorState.PictureData Original, ConfigDescriptorState.PictureData Embedded) LoadDownloadedCoverPictures()
 		{
 			try
 			{
 				byte[] imageBytes = File.ReadAllBytes(downloadedCoverFilePath);
-				List<ConfigDescriptorState.PictureData> pictures = new List<ConfigDescriptorState.PictureData>
+				ConfigDescriptorState.PictureData original = new ConfigDescriptorState.PictureData
 				{
-					new ConfigDescriptorState.PictureData
-					{
-						ImageBytes = imageBytes,
-						PictureType = "Front Cover"
-					}
+					ImageBytes = imageBytes,
+					PictureType = "Front Cover"
 				};
+				if (!CoverImageProcessor.Process(original, new CoverImageProcessingOptions()))
+				{
+					return (null, null);
+				}
+				ConfigDescriptorState.PictureData embedded = new ConfigDescriptorState.PictureData
+				{
+					ImageBytes = (byte[])original.ImageBytes.Clone(),
+					MimeType = original.MimeType,
+					PictureType = original.PictureType
+				};
+				List<ConfigDescriptorState.PictureData> pictures = new List<ConfigDescriptorState.PictureData> { embedded };
 				StateFieldInstance.CompressPictures(pictures, useRestoreLimits: false);
 				if (!pictures.Exists(HasProcessingFailed))
 				{
-					return pictures[0];
+					return (original, pictures[0]);
 				}
 			}
 			catch (Exception ex)
 			{
 				Console.WriteLine("CompressCover error:" + ex.Message);
 			}
-			return null;
+			return (null, null);
 		}
 
 		private Dictionary<string, object> SearchAutoMatchMetadata(ConfigDescriptorState tagFile, bool shouldSearchLyrics, bool shouldSearchCover, bool shouldSearchTextTags)

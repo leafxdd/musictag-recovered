@@ -5582,57 +5582,31 @@ internal partial class StateFieldInstance : Form
 		return (maxByteLength, maxResolution, formatMode);
 	}
 
-	public static void CompressPictures(List<ConfigDescriptorState.PictureData> pictures, bool useRestoreLimits)
-	{
-		var compressionLimits = ResolvePictureCompressionLimits(useRestoreLimits, Settings.Default.PictureSizeLimitsKB, Settings.Default.PictureResolutionLimits, Settings.Default.PictureFormatLimits);
-		PictureCompressionOptions pictureCompressionOptions = new PictureCompressionOptions();
-		pictureCompressionOptions.maxByteLength = compressionLimits.MaxByteLength;
-		pictureCompressionOptions.maxResolution = compressionLimits.MaxResolution;
-		pictureCompressionOptions.formatMode = compressionLimits.FormatMode;
-		using List<ConfigDescriptorState.PictureData>.Enumerator enumerator = pictures.GetEnumerator();
-		while (enumerator.MoveNext())
+		public static void CompressPictures(List<ConfigDescriptorState.PictureData> pictures, bool useRestoreLimits)
 		{
-			PictureCompressionItem pictureCompressionItem = new PictureCompressionItem();
-			pictureCompressionItem.options = pictureCompressionOptions;
-			pictureCompressionItem.pictureData = enumerator.Current;
-			PictureCompressionWorker pictureCompressionWorker = new PictureCompressionWorker();
-			pictureCompressionWorker.compressionItem = pictureCompressionItem;
-			pictureCompressionWorker.compressionItem.pictureData.ProcessingFailed = false;
-			pictureCompressionWorker.isAlreadyWithinLimits = pictureCompressionWorker.compressionItem.pictureData.ImageBytes.Length <= pictureCompressionWorker.compressionItem.options.maxByteLength && ConfigDescriptorState.SupportedPictureMimeTypes().Contains(pictureCompressionWorker.compressionItem.pictureData.MimeType) && (pictureCompressionWorker.compressionItem.options.formatMode == "AUTO" || pictureCompressionWorker.compressionItem.pictureData.MimeType == "image/jpeg");
-			if (pictureCompressionWorker.isAlreadyWithinLimits && pictureCompressionWorker.compressionItem.options.maxResolution == 0)
+			var compressionLimits = ResolvePictureCompressionLimits(useRestoreLimits, Settings.Default.PictureSizeLimitsKB, Settings.Default.PictureResolutionLimits, Settings.Default.PictureFormatLimits);
+			CoverImageProcessingOptions options = new CoverImageProcessingOptions
 			{
-				continue;
-			}
-			pictureCompressionWorker.workingImage = null;
-			pictureCompressionWorker.encodeWorkingImageAsJpeg = pictureCompressionWorker.EncodeCurrentImageAsJpeg;
-			pictureCompressionWorker.scaleDownWorkingImageAndEncode = pictureCompressionWorker.ScaleCurrentImageAndEncode;
-			pictureCompressionWorker.resizeWorkingImageAndEncode = pictureCompressionWorker.ResizeCurrentImageAndEncode;
-			if (pictureCompressionWorker.compressionItem.options.maxResolution == 0)
+				MaxByteLength = compressionLimits.MaxByteLength,
+				MaxResolution = compressionLimits.MaxResolution,
+				FormatMode = compressionLimits.FormatMode,
+				JpegQuality = Settings.Default.PictureJpegQuality,
+				PngCompressionLevel = Settings.Default.PicturePngCompressionLevel
+			};
+			foreach (ConfigDescriptorState.PictureData picture in pictures)
 			{
-				pictureCompressionWorker.compressionRetrySteps = Array.ConvertAll(PictureCompressionWorker.fixedResolutionRetrySteps,
-					step => (Func<bool>)(() => pictureCompressionWorker.resizeWorkingImageAndEncode(step.Resolution, step.Quality)));
-			}
-			else
-			{
-				pictureCompressionWorker.compressionRetrySteps = Array.ConvertAll(PictureCompressionWorker.configuredLimitRetryQualities,
-					quality => (Func<bool>)(() => pictureCompressionWorker.resizeWorkingImageAndEncode(pictureCompressionWorker.compressionItem.options.maxResolution, quality)));
-			}
-			try
-			{
-				Func<bool> compressPicture = pictureCompressionWorker.CompressPicture;
-				pictureCompressionWorker.compressionItem.pictureData.ProcessingFailed = !compressPicture();
-			}
-			catch (System.Exception ex)
-			{
-				pictureCompressionWorker.compressionItem.pictureData.ProcessingFailed = true;
-				Console.WriteLine("compress picture fail: " + ex.Message);
-			}
-			finally
-			{
-				pictureCompressionWorker.workingImage?.Dispose();
+				picture.ProcessingFailed = false;
+				try
+				{
+					picture.ProcessingFailed = !CoverImageProcessor.Process(picture, options);
+				}
+				catch (System.Exception ex)
+				{
+					picture.ProcessingFailed = true;
+					Console.WriteLine("compress picture fail: " + ex.Message);
+				}
 			}
 		}
-	}
 
 	private static bool HasPictureProcessingFailure(ConfigDescriptorState.PictureData pictureInfo)
 	{

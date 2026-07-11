@@ -191,22 +191,23 @@ internal static class OptionsDialogCharacterization
 			Check.Equal(3, OptionsDialog.ClampToRange(5, 3, 3), "min==max");
 		});
 
-		// ===== EnumeratePictureSizeOptions:20 起,<100 段步进 20、>=100 段步进 100,至 10000(从 LoadSavedOptions 内联 for 提取的纯序列 iterator) =====
+		// ===== EnumeratePictureSizeOptions:0 表示无限制,随后 20 起至 10000 =====
 
-		yield return ("EnumeratePictureSizeOptions: first=20, last=10000, count=104", delegate
+		yield return ("EnumeratePictureSizeOptions: unlimited first, last=10000, count=105", delegate
 		{
 			List<int> options = OptionsDialog.EnumeratePictureSizeOptions().ToList();
-			Check.Equal(20, options[0], "first 20");
+			Check.Equal(0, options[0], "first unlimited");
+			Check.Equal(20, options[1], "second 20");
 			Check.Equal(10000, options[options.Count - 1], "last 10000");
-			Check.Equal(104, options.Count, "104 entries");
+			Check.Equal(105, options.Count, "105 entries");
 		});
 
 		// 步进切换点:索引4=100(20/40/60/80/100 步进20段末),索引5=200(步进100段始)
 		yield return ("EnumeratePictureSizeOptions: step switches 20->100 at value 100", delegate
 		{
 			List<int> options = OptionsDialog.EnumeratePictureSizeOptions().ToList();
-			Check.Equal(100, options[4], "index4=100");
-			Check.Equal(200, options[5], "index5=200 (step jumps to 100)");
+			Check.Equal(100, options[5], "index5=100");
+			Check.Equal(200, options[6], "index6=200 (step jumps to 100)");
 		});
 
 		// 步进跳过的值不在序列(150 被 100->200 跨过;50 被 40->60 跨过)
