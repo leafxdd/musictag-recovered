@@ -268,6 +268,12 @@ internal class OptionsDialog : Form
 
 	private TextBox customUserAgentTextBox;
 
+	private FlowLayoutPanel networkOptionsPanel;
+
+	private Label qqCookieLabel;
+
+	private Label customUserAgentLabel;
+
 	public OptionsDialog()
 	{
 		dialogResources = new ResourceManager("MusicTag.Importers.WorkerComparatorImporter", typeof(OptionsDialog).Assembly);
@@ -282,10 +288,10 @@ internal class OptionsDialog : Form
 		SuspendLayout();
 		rootLayoutPanel.SuspendLayout();
 		optionsTreeView.ExpandAll();
-		base.Width = ImageUtilities.ScaleByDpi(720f);
-		base.Height = ImageUtilities.ScaleByDpi(660f);
+		base.Width = ImageUtilities.ScaleLogicalPixels(720f, 96);
+		base.Height = ImageUtilities.ScaleLogicalPixels(660f, 96);
 		sourceOrderPanel.WrapContents = false;
-		mainSplitContainer.SplitterDistance = ImageUtilities.ScaleByDpi(120f);
+		mainSplitContainer.SplitterDistance = ImageUtilities.ScaleLogicalPixels(120f, 96);
 		AddSourceTreeNodes();
 		InitializeNetworkOptionControls();
 		ApplyLocalizedText();
@@ -315,7 +321,7 @@ internal class OptionsDialog : Form
 
 	private void InitializeNetworkOptionControls()
 	{
-		FlowLayoutPanel networkOptionsPanel = new FlowLayoutPanel
+		networkOptionsPanel = new FlowLayoutPanel
 		{
 			FlowDirection = FlowDirection.TopDown,
 			AutoSize = true,
@@ -325,10 +331,10 @@ internal class OptionsDialog : Form
 			Name = "panelNetworkOptions"
 		};
 
-		Label qqCookieLabel = new Label
+		qqCookieLabel = new Label
 		{
 			AutoSize = true,
-			Margin = new Padding(ImageUtilities.ScaleByDpi(3f), ImageUtilities.ScaleByDpi(8f), ImageUtilities.ScaleByDpi(3f), 0),
+			Margin = new Padding(3, 8, 3, 0),
 			Name = "lblQQMusicCookie",
 			Text = GetDialogText("lblQQMusicCookie", UiText.Get("QQ Music cookie (optional; signing in can reduce rate limiting):", "QQ 音乐 Cookie（可留空；登录后填入有助于降低被限流的概率）:", "QQ 音樂 Cookie（可留空；登入後填入有助於降低限流機率）:"))
 		};
@@ -337,23 +343,23 @@ internal class OptionsDialog : Form
 			Multiline = true,
 			ScrollBars = ScrollBars.Vertical,
 			WordWrap = true,
-			Width = ImageUtilities.ScaleByDpi(390f),
-			Height = ImageUtilities.ScaleByDpi(54f),
-			Margin = new Padding(ImageUtilities.ScaleByDpi(6f), ImageUtilities.ScaleByDpi(4f), 0, ImageUtilities.ScaleByDpi(4f)),
+			Width = 390,
+			Height = 54,
+			Margin = new Padding(6, 4, 0, 4),
 			Name = "tbQQMusicCookie"
 		};
 
-		Label customUserAgentLabel = new Label
+		customUserAgentLabel = new Label
 		{
 			AutoSize = true,
-			Margin = new Padding(ImageUtilities.ScaleByDpi(3f), ImageUtilities.ScaleByDpi(10f), ImageUtilities.ScaleByDpi(3f), 0),
+			Margin = new Padding(3, 10, 3, 0),
 			Name = "lblCustomUserAgent",
 			Text = GetDialogText("lblCustomUserAgent", UiText.Get("Custom User-Agent (optional; leave blank to use the built-in default):", "自定义 User-Agent（可留空；留空时使用内置默认 UA）:", "自訂 User-Agent（可留空；留空時使用內建預設值）:"))
 		};
 		customUserAgentTextBox = new TextBox
 		{
-			Width = ImageUtilities.ScaleByDpi(390f),
-			Margin = new Padding(ImageUtilities.ScaleByDpi(6f), ImageUtilities.ScaleByDpi(4f), 0, 0),
+			Width = 390,
+			Margin = new Padding(6, 4, 0, 0),
 			Name = "tbCustomUserAgent"
 		};
 
@@ -366,8 +372,8 @@ internal class OptionsDialog : Form
 		{
 			AutoSize = true,
 			AutoSizeMode = AutoSizeMode.GrowAndShrink,
-			Margin = new Padding(0, ImageUtilities.ScaleByDpi(10f), 0, 0),
-			Padding = new Padding(ImageUtilities.ScaleByDpi(5f)),
+			Margin = new Padding(0, 10, 0, 0),
+			Padding = new Padding(5),
 			Name = "gbNetworkOptions",
 			Text = GetDialogText("gbNetworkOptions", UiText.Get("Network request settings", "联网请求设置", "網路請求設定"))
 		};
@@ -595,11 +601,45 @@ internal class OptionsDialog : Form
 	{
 		base.OnShown(e);
 		FitDialogToWorkingArea();
-		// 构造期的 SplitterDistance 用静态 ScaleByDpi(启动主屏刻度);对话框打开在其他 DPI 屏
-		// 时按实际屏刻度重设(FixedPanel=Panel1 使其不随框架 bounds 缩放联动)。同屏打开时与
-		// 构造期同值,幂等无操作。
-		mainSplitContainer.SplitterDistance = ImageUtilities.ScaleByDpi(120f, this);
+		ApplyDpiMetrics(DeviceDpi);
 		UpdateTranslatedLyricConnectorEnabled();
+	}
+
+	protected override void OnDpiChanged(DpiChangedEventArgs e)
+	{
+		base.OnDpiChanged(e);
+		ApplyDpiMetrics(e.DeviceDpiNew);
+	}
+
+	private void ApplyDpiMetrics(int dpi)
+	{
+		mainSplitContainer.SplitterDistance = ImageUtilities.ScaleLogicalPixels(120f, dpi);
+		if (networkOptionsPanel == null)
+		{
+			return;
+		}
+		qqCookieLabel.Margin = new Padding(
+			ImageUtilities.ScaleLogicalPixels(3f, dpi),
+			ImageUtilities.ScaleLogicalPixels(8f, dpi),
+			ImageUtilities.ScaleLogicalPixels(3f, dpi), 0);
+		qqCookieTextBox.Size = new Size(
+			ImageUtilities.ScaleLogicalPixels(390f, dpi),
+			ImageUtilities.ScaleLogicalPixels(54f, dpi));
+		qqCookieTextBox.Margin = new Padding(
+			ImageUtilities.ScaleLogicalPixels(6f, dpi),
+			ImageUtilities.ScaleLogicalPixels(4f, dpi), 0,
+			ImageUtilities.ScaleLogicalPixels(4f, dpi));
+		customUserAgentLabel.Margin = new Padding(
+			ImageUtilities.ScaleLogicalPixels(3f, dpi),
+			ImageUtilities.ScaleLogicalPixels(10f, dpi),
+			ImageUtilities.ScaleLogicalPixels(3f, dpi), 0);
+		customUserAgentTextBox.Width = ImageUtilities.ScaleLogicalPixels(390f, dpi);
+		customUserAgentTextBox.Margin = new Padding(
+			ImageUtilities.ScaleLogicalPixels(6f, dpi),
+			ImageUtilities.ScaleLogicalPixels(4f, dpi), 0, 0);
+		networkOptionsGroupBox.Margin = new Padding(0, ImageUtilities.ScaleLogicalPixels(10f, dpi), 0, 0);
+		networkOptionsGroupBox.Padding = new Padding(ImageUtilities.ScaleLogicalPixels(5f, dpi));
+		UpdateResponsiveLayout();
 	}
 
 	private void FitDialogToWorkingArea()

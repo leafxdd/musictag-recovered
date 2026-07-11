@@ -390,6 +390,8 @@ internal class CombinedTagSearchDialog : Form
 
 	private readonly Dictionary<string, Image> coverImageCache;
 
+	private int columnWidthsDpi = 96;
+
 	private readonly TaskbarProgressController taskbarProgress;
 
 	private bool trackIdLookupInProgress;
@@ -499,19 +501,90 @@ internal class CombinedTagSearchDialog : Form
 
 	private void InitializeResultListImagesAndScaling()
 	{
-		ImageUtilities.PrepareScaledImageList(coverImageList);
-		coverImageList.Images.Add("download_failed", ImageUtilities.LoadResourceBitmap("download_failed", coverImageList.ImageSize));
-		coverImageList.Images.Add("image_not_found", ImageUtilities.LoadResourceBitmap("imagenotfound", coverImageList.ImageSize));
-		coverImageList.Images.Add("loading", ImageUtilities.LoadResourceBitmap("downloading", coverImageList.ImageSize));
-		ImageUtilities.ScaleColumnWidthsForDpi(searchResultsListView);
+		ApplyDpiMetrics(DeviceDpi);
+	}
+
+	private void RebuildCoverImagesForDpi(int dpi)
+	{
+		Size targetSize = new Size(Math.Min(256, ImageUtilities.ScaleLogicalPixels(128f, dpi)), Math.Min(256, ImageUtilities.ScaleLogicalPixels(128f, dpi)));
+		if (coverImageList.Images.Count > 0 && coverImageList.ImageSize == targetSize)
+		{
+			return;
+		}
+
+		coverImageList.Images.Clear();
+		coverImageList.ImageSize = targetSize;
+		coverImageList.ColorDepth = ColorDepth.Depth32Bit;
+		coverImageList.TransparentColor = Color.Transparent;
+		using (Bitmap failed = ImageUtilities.LoadResourceBitmap("download_failed", targetSize))
+		using (Bitmap missing = ImageUtilities.LoadResourceBitmap("imagenotfound", targetSize))
+		using (Bitmap loading = ImageUtilities.LoadResourceBitmap("downloading", targetSize))
+		{
+			coverImageList.Images.Add("download_failed", failed);
+			coverImageList.Images.Add("image_not_found", missing);
+			coverImageList.Images.Add("loading", loading);
+			_ = coverImageList.Handle;
+		}
+
+		foreach (string coverPath in coverImageCache.Keys.ToList())
+		{
+			Image previousImage = coverImageCache[coverPath];
+			Image replacement = CoverDownloadCore.LoadCachedCoverThumbnail(coverPath, targetSize);
+			if (replacement == null)
+			{
+				continue;
+			}
+			replacement.Tag = previousImage.Tag;
+			coverImageCache[coverPath] = replacement;
+			previousImage.Dispose();
+		}
+
+		foreach (CoverImageListViewItem item in searchResultsListView.Items)
+		{
+			string imageKey = item.AssociatedValue as string;
+			if (!string.IsNullOrWhiteSpace(imageKey) && coverImageCache.TryGetValue(imageKey, out Image cachedCover))
+			{
+				item.CoverImage = cachedCover;
+			}
+			else if (imageKey == "download_failed" || imageKey == "image_not_found")
+			{
+				item.CoverImage = coverImageList.Images[imageKey];
+			}
+			else
+			{
+				item.CoverImage = coverImageList.Images["loading"];
+			}
+		}
+		searchResultsListView.Invalidate();
+	}
+
+	private void ApplyDpiMetrics(int dpi)
+	{
+		dpi = Math.Max(dpi, 96);
+		RebuildCoverImagesForDpi(dpi);
+		if (columnWidthsDpi != dpi)
+		{
+			foreach (ColumnHeader column in searchResultsListView.Columns)
+			{
+				column.Width = Math.Max(1, (int)Math.Round(column.Width * (double)dpi / columnWidthsDpi));
+			}
+			columnWidthsDpi = dpi;
+		}
+
 		okSplitButton.AutoSize = false;
 		FontAwesome.Properties fontProperties = new FontAwesome.Properties
 		{
-			Size = ImageUtilities.ScaleByDpi(24f),
+			Size = ImageUtilities.ScaleLogicalPixels(24f, dpi),
 			ShowBorder = false
 		};
-		okSplitButton.Size = new Size(ImageUtilities.ScaleByDpi(100f), ImageUtilities.ScaleByDpi(35f));
+		okSplitButton.Size = new Size(ImageUtilities.ScaleLogicalPixels(100f, dpi), ImageUtilities.ScaleLogicalPixels(35f, dpi));
+		Image oldOkImage = okSplitButton.Image;
 		okSplitButton.Image = FontAwesome.Type.Check.AsImage(fontProperties);
+		oldOkImage?.Dispose();
+		trackIdLookupButton.MinimumSize = new Size(ImageUtilities.ScaleLogicalPixels(36f, dpi), ImageUtilities.ScaleLogicalPixels(28f, dpi));
+		trackIdLookupButton.Size = trackIdLookupButton.MinimumSize;
+		UpdateTrackIdLookupIconForDpi(dpi);
+		UpdateSearchDialogLayout();
 	}
 
 	private void InitializeTrackIdLookup()
@@ -560,7 +633,7 @@ internal class CombinedTagSearchDialog : Form
 	protected override void OnHandleCreated(EventArgs e)
 	{
 		base.OnHandleCreated(e);
-		UpdateTrackIdLookupIconForDpi(DeviceDpi);
+		ApplyDpiMetrics(DeviceDpi);
 	}
 
 	protected override void OnShown(EventArgs param)
@@ -599,10 +672,10 @@ internal class CombinedTagSearchDialog : Form
 	protected override void OnDpiChanged(DpiChangedEventArgs e)
 	{
 		base.OnDpiChanged(e);
-		UpdateTrackIdLookupIconForDpi(e.DeviceDpiNew);
+		ApplyDpiMetrics(e.DeviceDpiNew);
 		if (IsHandleCreated && !IsDisposed)
 		{
-			BeginInvoke(new Action(() => UpdateTrackIdLookupIconForDpi(DeviceDpi)));
+			BeginInvoke(new Action(() => ApplyDpiMetrics(DeviceDpi)));
 		}
 	}
 

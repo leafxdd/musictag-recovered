@@ -45,6 +45,8 @@ internal class TagHistorySelectionDialog : Form
 
 	private ColumnHeader recordTimeColumn;
 
+	private int dpiMetricsDpi = 96;
+
 	public void SetHistoryFilePath(string filePath)
 	{
 		historyFilePath = filePath;
@@ -58,15 +60,36 @@ internal class TagHistorySelectionDialog : Form
 	public TagHistorySelectionDialog()
 	{
 		InitializeComponent();
-		ScaleControlsForDpi();
+		ApplyDpiMetrics(DeviceDpi);
 		UpdateLayout();
 		ApplyLocalizedText();
 	}
 
-	private void ScaleControlsForDpi()
+	private void ApplyDpiMetrics(int targetDpi)
 	{
-		rowHeightImageList.ImageSize = new Size(1, ImageUtilities.ScaleByDpi(40f));
-		ImageUtilities.ScaleColumnWidthsForDpi(historyListView);
+		targetDpi = Math.Max(targetDpi, 1);
+		rowHeightImageList.ImageSize = new Size(1, ImageUtilities.ScaleLogicalPixels(40f, targetDpi));
+		if (targetDpi != dpiMetricsDpi)
+		{
+			foreach (ColumnHeader column in historyListView.Columns)
+			{
+				column.Width = Math.Max(1, (int)Math.Round((double)column.Width * targetDpi / dpiMetricsDpi));
+			}
+			dpiMetricsDpi = targetDpi;
+		}
+		UpdateLayout();
+	}
+
+	protected override void OnHandleCreated(EventArgs e)
+	{
+		base.OnHandleCreated(e);
+		ApplyDpiMetrics(DeviceDpi);
+	}
+
+	protected override void OnDpiChanged(DpiChangedEventArgs e)
+	{
+		base.OnDpiChanged(e);
+		ApplyDpiMetrics(e.DeviceDpiNew);
 	}
 
 	private void UpdateLayout()

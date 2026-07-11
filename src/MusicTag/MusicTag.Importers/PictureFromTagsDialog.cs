@@ -23,6 +23,8 @@ internal class PictureFromTagsDialog : Form
 
 	private readonly HashSet<string> loadedImageHashes;
 
+	private readonly Dictionary<string, Bitmap> pictureThumbnailSources;
+
 	private readonly CancellationTokenSource searchCancellation;
 
 	private readonly TaskbarProgressController taskbarProgress;
@@ -52,6 +54,8 @@ internal class PictureFromTagsDialog : Form
 	private ToolStripMenuItem extractCoverMenuItem;
 
 	private PictureBox progressPictureBox;
+
+	private bool ownsProgressImage;
 
 	public void SetAudioFilePaths(List<string> filePaths)
 	{
@@ -91,6 +95,7 @@ internal class PictureFromTagsDialog : Form
 	public PictureFromTagsDialog()
 	{
 		loadedImageHashes = new HashSet<string>();
+		pictureThumbnailSources = new Dictionary<string, Bitmap>();
 		searchCancellation = new CancellationTokenSource();
 		InitializeComponent();
 		InitializeImageList();
@@ -109,10 +114,163 @@ internal class PictureFromTagsDialog : Form
 
 	private void InitializeImageList()
 	{
-		ImageUtilities.PrepareScaledImageList(pictureImageList);
-		pictureImageList.Images.Add("loading", ImageUtilities.LoadResourceBitmap("loading", pictureImageList.ImageSize));
-		pictureImageList.Images.Add("download_failed", ImageUtilities.LoadResourceBitmap("download_failed", pictureImageList.ImageSize));
-		progressPictureBox.Image = ImageUtilities.LoadResourceBitmap("img_wait");
+		ApplyDpiMetrics(DeviceDpi);
+	}
+
+	private void ApplyDpiMetrics(int targetDpi)
+	{
+		targetDpi = Math.Max(targetDpi, 1);
+		int thumbnailExtent = Math.Min(256, ImageUtilities.ScaleLogicalPixels(128f, targetDpi));
+		Size thumbnailSize = new Size(thumbnailExtent, thumbnailExtent);
+		pictureImageList.Images.Clear();
+		pictureImageList.ImageSize = thumbnailSize;
+		pictureImageList.ColorDepth = ColorDepth.Depth32Bit;
+		pictureImageList.TransparentColor = Color.Transparent;
+		AddPlaceholderImage("loading", "loading", targetDpi);
+		AddPlaceholderImage("download_failed", "download_failed", targetDpi);
+
+		Size progressImageSize = new Size(
+			ImageUtilities.ScaleLogicalPixels(32f, targetDpi),
+			ImageUtilities.ScaleLogicalPixels(32f, targetDpi));
+		ReplaceProgressImage(ImageUtilities.LoadResourceBitmapForDpi("img_wait", progressImageSize, targetDpi));
+		ReloadPictureThumbnails();
+		UpdateLayout();
+	}
+
+	private void AddPlaceholderImage(string imageKey, string resourceName, int targetDpi)
+	{
+		using Bitmap image = ImageUtilities.LoadResourceBitmapForDpi(resourceName, pictureImageList.ImageSize, targetDpi);
+		if (image != null)
+		{
+			pictureImageList.Images.Add(imageKey, image);
+			_ = pictureImageList.Handle;
+		}
+	}
+
+	private void ReplaceProgressImage(Image newImage)
+	{
+		Image oldImage = progressPictureBox.Image;
+		progressPictureBox.Image = newImage;
+		if (ownsProgressImage)
+		{
+			oldImage?.Dispose();
+		}
+		ownsProgressImage = true;
+	}
+
+	private void AddPictureThumbnail(string imageKey, Image sourceImage)
+	{
+		Bitmap thumbnailSource = ImageUtilities.ResizeImageToFit(sourceImage, new Size(256, 256), centerOnCanvas: true);
+		if (thumbnailSource == null)
+		{
+			return;
+		}
+		if (pictureThumbnailSources.TryGetValue(imageKey, out Bitmap oldSource))
+		{
+			oldSource.Dispose();
+		}
+		pictureThumbnailSources[imageKey] = thumbnailSource;
+		RenderPictureThumbnail(imageKey, thumbnailSource);
+	}
+
+	private void RenderPictureThumbnail(string imageKey, Image sourceImage)
+	{
+		using Bitmap thumbnail = ImageUtilities.ResizeImageToFit(sourceImage, pictureImageList.ImageSize, centerOnCanvas: true);
+		if (thumbnail == null)
+		{
+			return;
+		}
+		int existingIndex = pictureImageList.Images.IndexOfKey(imageKey);
+		if (existingIndex >= 0)
+		{
+			pictureImageList.Images.RemoveAt(existingIndex);
+		}
+		pictureImageList.Images.Add(imageKey, thumbnail);
+		_ = pictureImageList.Handle;
+	}
+
+	private void AddPictureFallback(string imageKey)
+	{
+		using Image fallback = pictureImageList.Images["download_failed"];
+		if (fallback != null)
+		{
+			pictureImageList.Images.Add(imageKey, fallback);
+			_ = pictureImageList.Handle;
+		}
+	}
+
+	private void ReloadPictureThumbnails()
+	{
+		Dictionary<string, Dictionary<int, ListViewItem>> itemsByFile = new Dictionary<string, Dictionary<int, ListViewItem>>();
+		HashSet<ListViewItem> reloadedItems = new HashSet<ListViewItem>();
+		foreach (ListViewItem item in pictureListView.Items)
+		{
+			if (pictureThumbnailSources.TryGetValue(item.ImageKey, out Bitmap thumbnailSource))
+			{
+				RenderPictureThumbnail(item.ImageKey, thumbnailSource);
+				reloadedItems.Add(item);
+				continue;
+			}
+			if (item.Tag is not ValueTuple<string, int> source)
+			{
+				continue;
+			}
+			if (!itemsByFile.TryGetValue(source.Item1, out Dictionary<int, ListViewItem> itemsByIndex))
+			{
+				itemsByIndex = new Dictionary<int, ListViewItem>();
+				itemsByFile[source.Item1] = itemsByIndex;
+			}
+			itemsByIndex[source.Item2] = item;
+		}
+
+		foreach (KeyValuePair<string, Dictionary<int, ListViewItem>> fileItems in itemsByFile)
+		{
+			if (!File.Exists(fileItems.Key))
+			{
+				continue;
+			}
+			using ConfigDescriptorState state = new ConfigDescriptorState(fileItems.Key);
+			List<ConfigDescriptorState.PictureData> pictures = GetEmbeddedPictureData(state);
+			if (pictures == null)
+			{
+				continue;
+			}
+			int validPictureIndex = 0;
+			foreach (ConfigDescriptorState.PictureData picture in pictures)
+			{
+				using Image sourceImage = ConfigDescriptorState.LoadPictureImage(picture);
+				if (sourceImage == null)
+				{
+					continue;
+				}
+				if (fileItems.Value.TryGetValue(validPictureIndex, out ListViewItem item))
+				{
+					AddPictureThumbnail(item.ImageKey, sourceImage);
+					reloadedItems.Add(item);
+				}
+				validPictureIndex++;
+			}
+		}
+
+		foreach (ListViewItem item in pictureListView.Items)
+		{
+			if (!reloadedItems.Contains(item) && !string.IsNullOrWhiteSpace(item.ImageKey))
+			{
+				AddPictureFallback(item.ImageKey);
+			}
+		}
+	}
+
+	protected override void OnHandleCreated(EventArgs e)
+	{
+		base.OnHandleCreated(e);
+		ApplyDpiMetrics(DeviceDpi);
+	}
+
+	protected override void OnDpiChanged(DpiChangedEventArgs e)
+	{
+		base.OnDpiChanged(e);
+		ApplyDpiMetrics(e.DeviceDpiNew);
 	}
 
 	protected override void OnShown(EventArgs e)
@@ -151,7 +309,7 @@ internal class PictureFromTagsDialog : Form
 				if (!GetLoadedImageHashes().Contains(imageHash))
 				{
 					string imageKey = audioFilePath + "_" + pictureIndex;
-					pictureImageList.Images.Add(imageKey, image);
+					AddPictureThumbnail(imageKey, image);
 					ListViewItem listViewItem = new ListViewItem
 					{
 						Text = image.Width + "x" + image.Height,
@@ -356,9 +514,19 @@ internal class PictureFromTagsDialog : Form
 
 	protected override void Dispose(bool disposing)
 	{
-		if (disposing && components != null)
+		if (disposing)
 		{
-			components.Dispose();
+			foreach (Bitmap sourceImage in pictureThumbnailSources.Values)
+			{
+				sourceImage.Dispose();
+			}
+			pictureThumbnailSources.Clear();
+			if (ownsProgressImage)
+			{
+				progressPictureBox.Image?.Dispose();
+				progressPictureBox.Image = null;
+			}
+			components?.Dispose();
 		}
 
 		base.Dispose(disposing);

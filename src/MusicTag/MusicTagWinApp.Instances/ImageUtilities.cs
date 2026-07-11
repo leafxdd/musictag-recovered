@@ -254,6 +254,23 @@ internal static class ImageUtilities
 		return dpiScale >= 1.5f ? "2X" : "";
 	}
 
+	// Returns an owned bitmap rendered from the best source resource for the requested DPI.
+	// Callers may safely dispose it after ImageList.Images.Add has copied the pixels.
+	internal static Bitmap LoadResourceBitmapForDpi(string resourceName, Size size, int dpi)
+	{
+		float scale = Math.Max(dpi, 1) / 96f;
+		Bitmap sourceBitmap = Resources.ResourceManager.GetObject(resourceName + GetResourceScaleSuffix(scale)) as Bitmap;
+		if (sourceBitmap == null)
+		{
+			sourceBitmap = Resources.ResourceManager.GetObject(resourceName) as Bitmap;
+		}
+		if (sourceBitmap == null)
+		{
+			return null;
+		}
+		return new Bitmap(sourceBitmap, size);
+	}
+
 	public static Bitmap ResizeBitmapIfNeeded(Bitmap bitmap, Size size)
 	{
 		if (bitmap.Width == size.Width && bitmap.Height == size.Height)
@@ -298,6 +315,19 @@ internal static class ImageUtilities
 	public static int ScaleByDpi(float value, Control control, bool roundUp = false)
 	{
 		float scaledValue = value * GetDpiScale(control);
+		if (!roundUp)
+		{
+			return (int)scaledValue;
+		}
+		return (int)Math.Ceiling(scaledValue);
+	}
+
+	// Convert a 96-DPI design metric to an absolute device-pixel value. DPI-aware controls
+	// should prefer this method (or the Control overload above) over the process-wide startup
+	// cache so two windows can remain correct on monitors with different scaling factors.
+	internal static int ScaleLogicalPixels(float value, int dpi, bool roundUp = false)
+	{
+		float scaledValue = value * Math.Max(dpi, 1) / 96f;
 		if (!roundUp)
 		{
 			return (int)scaledValue;

@@ -63,14 +63,30 @@ internal class CombinedTagOverwriteOptionsDialog : Form
 		Text = Resources.OverwriteOptions;
 		okButton.Text = Resources.OK;
 		cancelButton.Text = Resources.Cancel;
-		optionListView.SmallImageList = new ImageList
-		{
-			ImageSize = new Size(1, ImageUtilities.ScaleByDpi(32f))
-		};
+		optionListView.SmallImageList = new ImageList(components);
+		ApplyDpiMetrics(DeviceDpi);
 		foreach (KeyValuePair<string, bool> option in GetOverwriteOptions())
 		{
 			AddOverwriteOption(option);
 		}
+	}
+
+	private void ApplyDpiMetrics(int targetDpi)
+	{
+		optionListView.SmallImageList.ImageSize = new Size(1, ImageUtilities.ScaleLogicalPixels(32f, targetDpi));
+		LayoutControls();
+	}
+
+	protected override void OnHandleCreated(EventArgs e)
+	{
+		base.OnHandleCreated(e);
+		ApplyDpiMetrics(DeviceDpi);
+	}
+
+	protected override void OnDpiChanged(DpiChangedEventArgs e)
+	{
+		base.OnDpiChanged(e);
+		ApplyDpiMetrics(e.DeviceDpiNew);
 	}
 
 	public static Dictionary<string, bool> GetOverwriteOptions()

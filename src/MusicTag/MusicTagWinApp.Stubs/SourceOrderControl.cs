@@ -34,8 +34,7 @@ internal class SourceOrderControl : UserControl
 	public SourceOrderControl()
 	{
 		InitializeComponent();
-		ConfigureButtonImages();
-		ScaleButtonSizes();
+		ApplyDpiMetrics(DeviceDpi);
 	}
 
 	public void SetSources(List<SourceItem> sourceItems)
@@ -67,28 +66,47 @@ internal class SourceOrderControl : UserControl
 		base.Dispose(disposing);
 	}
 
-	private void ConfigureButtonImages()
+	private void ApplyDpiMetrics(int dpi)
 	{
 		FontAwesome.Properties iconProperties = new FontAwesome.Properties
 		{
-			Size = ImageUtilities.ScaleByDpi(20f),
+			Size = ImageUtilities.ScaleLogicalPixels(20f, dpi),
 			ShowBorder = false
 		};
+		Image oldUpImage = moveUpButton.Image;
+		Image oldDownImage = moveDownButton.Image;
 		moveUpButton.Image = FontAwesome.Type.AngleUp.AsImage(iconProperties);
 		moveDownButton.Image = FontAwesome.Type.AngleDown.AsImage(iconProperties);
+		oldUpImage?.Dispose();
+		oldDownImage?.Dispose();
 		moveUpButton.Text = "";
 		moveDownButton.Text = "";
+		buttonPanel.Width = ImageUtilities.ScaleLogicalPixels(30f, dpi);
+		Size buttonSize = new Size(ImageUtilities.ScaleLogicalPixels(30f, dpi), ImageUtilities.ScaleLogicalPixels(23f, dpi));
+		moveUpButton.Size = buttonSize;
+		moveDownButton.Size = buttonSize;
+		MainPanel_SizeChanged(mainPanel, EventArgs.Empty);
 	}
 
-	private void ScaleButtonSizes()
+	protected override void OnParentChanged(EventArgs e)
 	{
-		buttonPanel.Width = ImageUtilities.ScaleByDpi(buttonPanel.Width);
-		moveUpButton.Size = new Size(ImageUtilities.ScaleByDpi(moveUpButton.Size.Width), ImageUtilities.ScaleByDpi(moveUpButton.Size.Height));
-		moveDownButton.Size = new Size(ImageUtilities.ScaleByDpi(moveDownButton.Size.Width), ImageUtilities.ScaleByDpi(moveDownButton.Size.Height));
+		base.OnParentChanged(e);
+		if (Disposing || IsDisposed)
+		{
+			return;
+		}
+		ApplyDpiMetrics(Parent?.DeviceDpi ?? DeviceDpi);
+	}
+
+	protected override void OnDpiChangedAfterParent(EventArgs e)
+	{
+		base.OnDpiChangedAfterParent(e);
+		ApplyDpiMetrics(DeviceDpi);
 	}
 
 	private void SourceOrderControl_Load(object sender, EventArgs e)
 	{
+		ApplyDpiMetrics(DeviceDpi);
 		sourceGroupBox.Text = Title ?? "Tag Sources";
 		sourceListView.Items.Clear();
 		if (sources != null)

@@ -57,7 +57,7 @@ internal class FindReplaceDialog : Form
 	{
 		InitializeComponent();
 		ApplyLocalizedText();
-		ApplyScaledLayout();
+		ApplyDpiMetrics(DeviceDpi);
 		Load += FindReplaceDialog_Load;
 	}
 
@@ -71,28 +71,29 @@ internal class FindReplaceDialog : Form
 		cancelButton.Text = Resources.Cancel;
 		matchCaseCheckBox.Text = "Match case";
 
-		FontAwesome.Properties fontProperties = new FontAwesome.Properties
-		{
-			Size = ImageUtilities.ScaleByDpi(20f),
-			ShowBorder = false
-		};
-		findPreviousButton.Image = FontAwesome.Type.AngleUp.AsImage(fontProperties);
-		findNextButton.Image = FontAwesome.Type.AngleDown.AsImage(fontProperties);
 		findPreviousButton.Text = "";
 		findNextButton.Text = "";
 		toolTip.SetToolTip(findPreviousButton, Resources.FindPrevious);
 		toolTip.SetToolTip(findNextButton, Resources.FindNext);
 	}
 
-	private void ApplyScaledLayout()
+	private void ApplyDpiMetrics(int dpi)
 	{
-		findWhatLabel.Width = ImageUtilities.ScaleByDpi(100f);
+		FontAwesome.Properties fontProperties = new FontAwesome.Properties
+		{
+			Size = ImageUtilities.ScaleLogicalPixels(20f, dpi),
+			ShowBorder = false
+		};
+		ReplaceButtonImage(findPreviousButton, FontAwesome.Type.AngleUp.AsImage(fontProperties));
+		ReplaceButtonImage(findNextButton, FontAwesome.Type.AngleDown.AsImage(fontProperties));
+
+		findWhatLabel.Width = ImageUtilities.ScaleLogicalPixels(100f, dpi);
 		replaceWithLabel.Width = findWhatLabel.Width;
-		findWhatTextBox.Width = ImageUtilities.ScaleByDpi(250f);
+		findWhatTextBox.Width = ImageUtilities.ScaleLogicalPixels(250f, dpi);
 		replaceWithTextBox.Width = findWhatTextBox.Width;
-		findPreviousButton.Width = ImageUtilities.ScaleByDpi(31f);
+		findPreviousButton.Width = ImageUtilities.ScaleLogicalPixels(31f, dpi);
 		findNextButton.Width = findPreviousButton.Width;
-		replaceButton.Width = ImageUtilities.ScaleByDpi(77f);
+		replaceButton.Width = ImageUtilities.ScaleLogicalPixels(77f, dpi);
 		replaceAllButton.Width = replaceButton.Width;
 		cancelButton.Width = replaceButton.Width;
 
@@ -104,8 +105,28 @@ internal class FindReplaceDialog : Form
 		replaceAllButton.Margin = new Padding(replaceButton.Location.X, 0, 0, 0);
 		cancelButton.Margin = new Padding(replaceButton.Location.X - matchCaseCheckBox.Width, 0, 0, 0);
 
-		Width = findNextButton.Location.X + findNextButton.Width + ImageUtilities.ScaleByDpi(50f);
-		Height = optionsRowPanel.Location.Y + optionsRowPanel.Height + ImageUtilities.ScaleByDpi(60f);
+		mainLayoutPanel.PerformLayout();
+		Width = findNextButton.Location.X + findNextButton.Width + ImageUtilities.ScaleLogicalPixels(50f, dpi);
+		Height = optionsRowPanel.Location.Y + optionsRowPanel.Height + ImageUtilities.ScaleLogicalPixels(60f, dpi);
+	}
+
+	private static void ReplaceButtonImage(Button button, Image newImage)
+	{
+		Image oldImage = button.Image;
+		button.Image = newImage;
+		oldImage?.Dispose();
+	}
+
+	protected override void OnHandleCreated(EventArgs e)
+	{
+		base.OnHandleCreated(e);
+		ApplyDpiMetrics(DeviceDpi);
+	}
+
+	protected override void OnDpiChanged(DpiChangedEventArgs e)
+	{
+		base.OnDpiChanged(e);
+		ApplyDpiMetrics(e.DeviceDpiNew);
 	}
 
 	private void FindReplaceDialog_Load(object sender, EventArgs e)
@@ -168,9 +189,13 @@ internal class FindReplaceDialog : Form
 
 	protected override void Dispose(bool disposing)
 	{
-		if (disposing && components != null)
+		if (disposing)
 		{
-			components.Dispose();
+			findPreviousButton.Image?.Dispose();
+			findPreviousButton.Image = null;
+			findNextButton.Image?.Dispose();
+			findNextButton.Image = null;
+			components?.Dispose();
 		}
 
 		base.Dispose(disposing);

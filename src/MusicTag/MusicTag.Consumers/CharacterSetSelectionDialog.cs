@@ -35,6 +35,8 @@ internal class CharacterSetSelectionDialog : Form
 
 	private ColumnHeader previewColumn;
 
+	private int dpiMetricsDpi = 96;
+
 	public CharacterSetSelectionDialog()
 	{
 		InitializeComponent();
@@ -43,14 +45,35 @@ internal class CharacterSetSelectionDialog : Form
 		previewColumn.Text = Resources.content;
 		okButton.Text = Resources.OK;
 		cancelButton.Text = Resources.Cancel;
-		encodingListView.SmallImageList = new ImageList(components)
+		encodingListView.SmallImageList = new ImageList(components);
+		ApplyDpiMetrics(DeviceDpi);
+	}
+
+	private void ApplyDpiMetrics(int targetDpi)
+	{
+		targetDpi = Math.Max(targetDpi, 1);
+		encodingListView.SmallImageList.ImageSize = new Size(1, ImageUtilities.ScaleLogicalPixels(32f, targetDpi));
+		if (targetDpi != dpiMetricsDpi)
 		{
-			ImageSize = new Size(1, ImageUtilities.ScaleByDpi(32f))
-		};
-		foreach (ColumnHeader columnHeader in encodingListView.Columns)
-		{
-			columnHeader.Width = ImageUtilities.ScaleByDpi(columnHeader.Width);
+			foreach (ColumnHeader column in encodingListView.Columns)
+			{
+				column.Width = Math.Max(1, (int)Math.Round((double)column.Width * targetDpi / dpiMetricsDpi));
+			}
+			dpiMetricsDpi = targetDpi;
 		}
+		UpdateLayoutForSize();
+	}
+
+	protected override void OnHandleCreated(EventArgs e)
+	{
+		base.OnHandleCreated(e);
+		ApplyDpiMetrics(DeviceDpi);
+	}
+
+	protected override void OnDpiChanged(DpiChangedEventArgs e)
+	{
+		base.OnDpiChanged(e);
+		ApplyDpiMetrics(e.DeviceDpiNew);
 	}
 
 	public void SetTagState(ConfigDescriptorState state)

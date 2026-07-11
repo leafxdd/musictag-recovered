@@ -129,22 +129,7 @@ internal class LyricEditorDialog : Form
 		lastLoadedLyricText = "";
 		InitializeComponent();
 		InitializeLocalizedText();
-		FontAwesome.Properties searchIconProperties = new FontAwesome.Properties
-		{
-			Size = ImageUtilities.ScaleByDpi(24f),
-			ShowBorder = false
-		};
-		FontAwesome.Properties saveIconProperties = new FontAwesome.Properties
-		{
-			Size = ImageUtilities.ScaleByDpi(21f),
-			ShowBorder = false
-		};
-		searchButton.Image = FontAwesome.Type.Search.AsImage(searchIconProperties);
-		searchButton.Size = new Size(ImageUtilities.ScaleByDpi(100f), ImageUtilities.ScaleByDpi(35f));
-		searchButton.AutoSize = false;
-		saveAsLrcButton.Image = FontAwesome.Type.FloppyO.AsImage(saveIconProperties);
-		saveAsLrcButton.Size = new Size(ImageUtilities.ScaleByDpi(120f), ImageUtilities.ScaleByDpi(35f));
-		saveAsLrcButton.AutoSize = false;
+		ApplyDpiMetrics(DeviceDpi);
 		foreach (SourceItem sourceItem in LyricSearchResult.GetLyricSourceSettings())
 		{
 			ToolStripItem menuItem = lyricSourceMenu.Items.Add(sourceItem.SearchSource.GetDisplayName());
@@ -154,6 +139,46 @@ internal class LyricEditorDialog : Form
 		progressPictureBox.Image = ImageUtilities.LoadResourceBitmap("img_wait");
 		UpdateEditorLayout();
 		findReplaceController = new TextBoxFindReplaceController(lyricTextBox);
+	}
+
+	private void ApplyDpiMetrics(int dpi)
+	{
+		FontAwesome.Properties searchIconProperties = new FontAwesome.Properties
+		{
+			Size = ImageUtilities.ScaleLogicalPixels(24f, dpi),
+			ShowBorder = false
+		};
+		FontAwesome.Properties saveIconProperties = new FontAwesome.Properties
+		{
+			Size = ImageUtilities.ScaleLogicalPixels(21f, dpi),
+			ShowBorder = false
+		};
+		ReplaceButtonImage(searchButton, FontAwesome.Type.Search.AsImage(searchIconProperties));
+		searchButton.Size = new Size(ImageUtilities.ScaleLogicalPixels(100f, dpi), ImageUtilities.ScaleLogicalPixels(35f, dpi));
+		searchButton.AutoSize = false;
+		ReplaceButtonImage(saveAsLrcButton, FontAwesome.Type.FloppyO.AsImage(saveIconProperties));
+		saveAsLrcButton.Size = new Size(ImageUtilities.ScaleLogicalPixels(120f, dpi), ImageUtilities.ScaleLogicalPixels(35f, dpi));
+		saveAsLrcButton.AutoSize = false;
+		UpdateEditorLayout();
+	}
+
+	private static void ReplaceButtonImage(Button button, Image newImage)
+	{
+		Image oldImage = button.Image;
+		button.Image = newImage;
+		oldImage?.Dispose();
+	}
+
+	protected override void OnHandleCreated(EventArgs e)
+	{
+		base.OnHandleCreated(e);
+		ApplyDpiMetrics(DeviceDpi);
+	}
+
+	protected override void OnDpiChanged(DpiChangedEventArgs e)
+	{
+		base.OnDpiChanged(e);
+		ApplyDpiMetrics(e.DeviceDpiNew);
 	}
 
 	private void InitializeLocalizedText()

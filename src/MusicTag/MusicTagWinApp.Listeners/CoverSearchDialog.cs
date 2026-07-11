@@ -227,17 +227,22 @@ internal class CoverSearchDialog : Form
 
 		private readonly CoverSearchResult candidate;
 
+		private readonly Size targetSize;
+
 		public Size? OriginalSize { get; private set; }
 
-		public CoverImageLoader(CoverSearchDialog dialog, CoverSearchResult candidate)
+		public string PlaceholderKey { get; private set; }
+
+		public CoverImageLoader(CoverSearchDialog dialog, CoverSearchResult candidate, Size targetSize)
 		{
 			this.dialog = dialog;
 			this.candidate = candidate;
+			this.targetSize = targetSize;
 		}
 
 		public Image Load()
 		{
-			CoverDownloadOutcome outcome = CoverDownloadCore.LoadOrDownloadCover(candidate, dialog.GetCoverDownloadPaths(), dialog.GetSearchCancellation(), dialog.candidateImageList.ImageSize);
+			CoverDownloadOutcome outcome = CoverDownloadCore.LoadOrDownloadCover(candidate, dialog.GetCoverDownloadPaths(), dialog.GetSearchCancellation(), targetSize);
 			if (!outcome.PathReserved)
 			{
 				return null;
@@ -249,9 +254,11 @@ internal class CoverSearchDialog : Form
 			}
 			if (outcome.Status == RemoteTagProviderBase.DownloadStatus.NotFound)
 			{
-				return dialog.candidateImageList.Images["image_not_found"];
+				PlaceholderKey = "image_not_found";
+				return null;
 			}
-			return dialog.candidateImageList.Images["download_failed"];
+			PlaceholderKey = "download_failed";
+			return null;
 		}
 	}
 
@@ -272,6 +279,10 @@ internal class CoverSearchDialog : Form
 	private static List<CoverSearchResult> cachedCandidates;
 
 	private readonly HashSet<string> coverDownloadPaths;
+
+	private readonly Dictionary<string, string> coverPlaceholderKeys;
+
+	private readonly Dictionary<string, Bitmap> coverThumbnailSources;
 
 	private readonly TaskbarProgressController taskbarProgress;
 
@@ -368,6 +379,8 @@ internal class CoverSearchDialog : Form
 	{
 		searchCancellation = new CancellationTokenSource();
 		coverDownloadPaths = new HashSet<string>();
+		coverPlaceholderKeys = new Dictionary<string, string>();
+		coverThumbnailSources = new Dictionary<string, Bitmap>();
 		InitializeComponent();
 		InitializeCandidateImages();
 		searchStatusIndicator = new SearchStatusIndicator(searchStatusLabel, () => candidateListView.Items.Count > 0, components);
@@ -379,10 +392,115 @@ internal class CoverSearchDialog : Form
 
 	private void InitializeCandidateImages()
 	{
-		ImageUtilities.PrepareScaledImageList(candidateImageList);
-		candidateImageList.Images.Add("loading", ImageUtilities.LoadResourceBitmap("loading", candidateImageList.ImageSize));
-		candidateImageList.Images.Add("download_failed", ImageUtilities.LoadResourceBitmap("download_failed", candidateImageList.ImageSize));
-		candidateImageList.Images.Add("image_not_found", ImageUtilities.LoadResourceBitmap("imagenotfound", candidateImageList.ImageSize));
+		ApplyDpiMetrics(DeviceDpi);
+	}
+
+	private void ApplyDpiMetrics(int targetDpi)
+	{
+		targetDpi = Math.Max(targetDpi, 1);
+		int thumbnailExtent = Math.Min(256, ImageUtilities.ScaleLogicalPixels(128f, targetDpi));
+		Size thumbnailSize = new Size(thumbnailExtent, thumbnailExtent);
+		Dictionary<string, string> displayedCoverPaths = new Dictionary<string, string>();
+		foreach (ListViewItem item in candidateListView.Items)
+		{
+			string imageKey = item.ImageKey;
+			if (string.IsNullOrWhiteSpace(imageKey) || imageKey == "loading" || imageKey == "download_failed" || imageKey == "image_not_found")
+			{
+				continue;
+			}
+			displayedCoverPaths[imageKey] = coverPlaceholderKeys.TryGetValue(imageKey, out string placeholderKey)
+				? placeholderKey
+				: "download_failed";
+		}
+
+		candidateImageList.Images.Clear();
+		candidateImageList.ImageSize = thumbnailSize;
+		candidateImageList.ColorDepth = ColorDepth.Depth32Bit;
+		candidateImageList.TransparentColor = Color.Transparent;
+		AddCandidatePlaceholder("loading", "loading", targetDpi);
+		AddCandidatePlaceholder("download_failed", "download_failed", targetDpi);
+		AddCandidatePlaceholder("image_not_found", "imagenotfound", targetDpi);
+
+		foreach (KeyValuePair<string, string> displayedCover in displayedCoverPaths)
+		{
+			if (!coverThumbnailSources.TryGetValue(displayedCover.Key, out Bitmap sourceImage))
+			{
+				sourceImage = CoverDownloadCore.LoadCachedCoverThumbnail(displayedCover.Key, new Size(256, 256));
+				if (sourceImage != null)
+				{
+					coverThumbnailSources[displayedCover.Key] = sourceImage;
+				}
+			}
+			if (sourceImage != null)
+			{
+				RenderCandidateThumbnail(displayedCover.Key, sourceImage);
+				coverPlaceholderKeys.Remove(displayedCover.Key);
+				continue;
+			}
+			AddCandidatePlaceholderCopy(displayedCover.Key, displayedCover.Value);
+		}
+		LayoutSearchDialog();
+	}
+
+	private void AddCandidatePlaceholder(string imageKey, string resourceName, int targetDpi)
+	{
+		using Bitmap image = ImageUtilities.LoadResourceBitmapForDpi(resourceName, candidateImageList.ImageSize, targetDpi);
+		if (image != null)
+		{
+			candidateImageList.Images.Add(imageKey, image);
+			_ = candidateImageList.Handle;
+		}
+	}
+
+	private void AddCandidatePlaceholderCopy(string imageKey, string placeholderKey)
+	{
+		using Image placeholder = candidateImageList.Images[placeholderKey];
+		if (placeholder != null)
+		{
+			candidateImageList.Images.Add(imageKey, placeholder);
+			_ = candidateImageList.Handle;
+		}
+	}
+
+	private void ReplaceCoverThumbnailSource(string imageKey, Bitmap sourceImage)
+	{
+		if (coverThumbnailSources.TryGetValue(imageKey, out Bitmap oldSource))
+		{
+			oldSource.Dispose();
+		}
+		coverThumbnailSources[imageKey] = sourceImage;
+	}
+
+	private void RenderCandidateThumbnail(string imageKey, Image sourceImage)
+	{
+		using Bitmap thumbnail = ImageUtilities.ResizeImageToFit(sourceImage, candidateImageList.ImageSize, centerOnCanvas: true);
+		if (thumbnail != null)
+		{
+			ReplaceCandidateImage(imageKey, thumbnail);
+		}
+	}
+
+	private void ReplaceCandidateImage(string imageKey, Image image)
+	{
+		int existingIndex = candidateImageList.Images.IndexOfKey(imageKey);
+		if (existingIndex >= 0)
+		{
+			candidateImageList.Images.RemoveAt(existingIndex);
+		}
+		candidateImageList.Images.Add(imageKey, image);
+		_ = candidateImageList.Handle;
+	}
+
+	protected override void OnHandleCreated(EventArgs e)
+	{
+		base.OnHandleCreated(e);
+		ApplyDpiMetrics(DeviceDpi);
+	}
+
+	protected override void OnDpiChanged(DpiChangedEventArgs e)
+	{
+		base.OnDpiChanged(e);
+		ApplyDpiMetrics(e.DeviceDpiNew);
 	}
 
 	protected override void OnShown(EventArgs i)
@@ -485,7 +603,7 @@ internal class CoverSearchDialog : Form
 	private async void StartCoverDownload(CoverSearchResult candidate, int taskNo, int taskSubNo)
 	{
 		bool queuedNextDownload = false;
-		CoverImageLoader coverImageLoader = new CoverImageLoader(this, candidate);
+		CoverImageLoader coverImageLoader = new CoverImageLoader(this, candidate, new Size(256, 256));
 		try
 		{
 			Image image = await Task.Run(coverImageLoader.Load, GetSearchCancellation().Token);
@@ -494,7 +612,7 @@ internal class CoverSearchDialog : Form
 				image?.Dispose();
 				return;
 			}
-			ApplyCoverDownloadResult(candidate, image, coverImageLoader.OriginalSize);
+			ApplyCoverDownloadResult(candidate, image, coverImageLoader.OriginalSize, coverImageLoader.PlaceholderKey);
 			queuedNextDownload = StartNextCoverDownload(taskNo, taskSubNo);
 		}
 		catch (OperationCanceledException) when (GetSearchCancellation().IsCancellationRequested)
@@ -513,33 +631,38 @@ internal class CoverSearchDialog : Form
 		}
 	}
 
-	private void ApplyCoverDownloadResult(CoverSearchResult candidate, Image image, Size? originalSize)
+	private void ApplyCoverDownloadResult(CoverSearchResult candidate, Image image, Size? originalSize, string placeholderKey)
 	{
 		ListViewItem candidateItem = candidateListView.Items[candidate.ListViewIndex];
 		candidateItem.ImageKey = candidate.LocalCoverPath;
+		if (image != null && string.IsNullOrWhiteSpace(placeholderKey))
+		{
+			Bitmap sourceImage = image as Bitmap;
+			if (sourceImage == null)
+			{
+				sourceImage = new Bitmap(image);
+				image.Dispose();
+			}
+			ReplaceCoverThumbnailSource(candidate.LocalCoverPath, sourceImage);
+			RenderCandidateThumbnail(candidate.LocalCoverPath, sourceImage);
+			coverPlaceholderKeys.Remove(candidate.LocalCoverPath);
+			UpdateCandidateDisplayText(candidate, candidateItem, originalSize);
+			return;
+		}
+		if (image == null && !string.IsNullOrWhiteSpace(placeholderKey))
+		{
+			coverPlaceholderKeys[candidate.LocalCoverPath] = placeholderKey;
+			image = candidateImageList.Images[placeholderKey];
+		}
 		if (image != null)
 		{
 			try
 			{
-				candidateImageList.Images.Add(candidate.LocalCoverPath, image);
-				foreach (ListViewItem listViewItem in candidateListView.Items)
-				{
-					if (listViewItem.ImageKey != candidateItem.ImageKey)
-					{
-						continue;
-					}
-					listViewItem.Text = candidate.SearchSource.GetDisplayName();
-					if (originalSize.HasValue)
-					{
-						listViewItem.Text = listViewItem.Text + "|" + originalSize.Value.Width + "x" + originalSize.Value.Height;
-					}
-				}
+				ReplaceCandidateImage(candidate.LocalCoverPath, image);
+				UpdateCandidateDisplayText(candidate, candidateItem, originalSize);
 			}
 			finally
 			{
-				// image 已被上面的 ImageList.Images.Add 复制进原生句柄,可无条件释放。
-				// 原先与 candidateImageList.Images["..."] 比较恒为 true(索引器每次返回新副本),
-				// 既是死逻辑又每次额外泄漏两张占位图副本。
 				image.Dispose();
 			}
 			return;
@@ -551,6 +674,22 @@ internal class CoverSearchDialog : Form
 			{
 				candidateItem.Text = listViewItem.Text;
 				break;
+			}
+		}
+	}
+
+	private static void UpdateCandidateDisplayText(CoverSearchResult candidate, ListViewItem candidateItem, Size? originalSize)
+	{
+		foreach (ListViewItem listViewItem in candidateItem.ListView.Items)
+		{
+			if (listViewItem.ImageKey != candidateItem.ImageKey)
+			{
+				continue;
+			}
+			listViewItem.Text = candidate.SearchSource.GetDisplayName();
+			if (originalSize.HasValue)
+			{
+				listViewItem.Text = listViewItem.Text + "|" + originalSize.Value.Width + "x" + originalSize.Value.Height;
 			}
 		}
 	}
@@ -667,9 +806,14 @@ internal class CoverSearchDialog : Form
 
 	protected override void Dispose(bool injectinit)
 	{
-		if (injectinit && components != null)
+		if (injectinit)
 		{
-			components.Dispose();
+			foreach (Bitmap sourceImage in coverThumbnailSources.Values)
+			{
+				sourceImage.Dispose();
+			}
+			coverThumbnailSources.Clear();
+			components?.Dispose();
 		}
 		base.Dispose(injectinit);
 	}

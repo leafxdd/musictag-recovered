@@ -43,10 +43,26 @@ internal class DirectoryManagerDialog : Form
 		okButton.Text = Resources.OK;
 		cancelButton.Text = Resources.Cancel;
 		deleteMenuItem.Text = Resources.DeleteItems;
-		directoryListView.SmallImageList = new ImageList(components)
-		{
-			ImageSize = new Size(1, ImageUtilities.ScaleByDpi(32f))
-		};
+		directoryListView.SmallImageList = new ImageList(components);
+		ApplyDpiMetrics(DeviceDpi);
+	}
+
+	private void ApplyDpiMetrics(int targetDpi)
+	{
+		directoryListView.SmallImageList.ImageSize = new Size(1, ImageUtilities.ScaleLogicalPixels(32f, targetDpi));
+		LayoutControls();
+	}
+
+	protected override void OnHandleCreated(EventArgs e)
+	{
+		base.OnHandleCreated(e);
+		ApplyDpiMetrics(DeviceDpi);
+	}
+
+	protected override void OnDpiChanged(DpiChangedEventArgs e)
+	{
+		base.OnDpiChanged(e);
+		ApplyDpiMetrics(e.DeviceDpiNew);
 	}
 
 	public void SetFileSetting(ListViewFileSetting setting)

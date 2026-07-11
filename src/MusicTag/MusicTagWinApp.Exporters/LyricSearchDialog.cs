@@ -219,6 +219,8 @@ internal class LyricSearchDialog : Form
 
 	private SearchStatusIndicator searchStatusIndicator;
 
+	private int dpiMetricsDpi = 96;
+
 	private Action<SourceSearchStatus> searchStatusReporter;
 
 	private HttpResult lastSourceTransportResult;
@@ -261,10 +263,54 @@ internal class LyricSearchDialog : Form
 
 	private void InitializeImagesAndColumns()
 	{
-		ImageUtilities.PrepareScaledImageList(lyricIconImages);
-		lyricIconImages.Images.Add("fileext_lrc.png", ImageUtilities.LoadResourceBitmap("fileext_lrc", lyricIconImages.ImageSize));
-		lyricIconImages.Images.Add("fileext_txt.png", ImageUtilities.LoadResourceBitmap("fileext_txt", lyricIconImages.ImageSize));
-		ImageUtilities.ScaleColumnWidthsForDpi(lyricListView);
+		ApplyDpiMetrics(DeviceDpi);
+	}
+
+	private void ApplyDpiMetrics(int targetDpi)
+	{
+		targetDpi = Math.Max(targetDpi, 1);
+		Size iconSize = new Size(ImageUtilities.ScaleLogicalPixels(32f, targetDpi), ImageUtilities.ScaleLogicalPixels(32f, targetDpi));
+		if (lyricIconImages.Images.Count == 0 || lyricIconImages.ImageSize != iconSize)
+		{
+			lyricIconImages.Images.Clear();
+			lyricIconImages.ImageSize = iconSize;
+			lyricIconImages.ColorDepth = ColorDepth.Depth24Bit;
+			lyricIconImages.TransparentColor = Color.Transparent;
+			using Bitmap lrcIcon = ImageUtilities.LoadResourceBitmapForDpi("fileext_lrc", iconSize, targetDpi);
+			using Bitmap textIcon = ImageUtilities.LoadResourceBitmapForDpi("fileext_txt", iconSize, targetDpi);
+			if (lrcIcon != null)
+			{
+				lyricIconImages.Images.Add("fileext_lrc.png", lrcIcon);
+			}
+				if (textIcon != null)
+				{
+					lyricIconImages.Images.Add("fileext_txt.png", textIcon);
+				}
+				// ImageList clones lazily until its native handle exists. Force that clone while
+				// the temporary resource bitmaps above are still alive.
+				_ = lyricIconImages.Handle;
+			}
+		if (targetDpi != dpiMetricsDpi)
+		{
+			foreach (ColumnHeader column in lyricListView.Columns)
+			{
+				column.Width = Math.Max(1, (int)Math.Round((double)column.Width * targetDpi / dpiMetricsDpi));
+			}
+			dpiMetricsDpi = targetDpi;
+		}
+		LayoutFooterControls();
+	}
+
+	protected override void OnHandleCreated(EventArgs e)
+	{
+		base.OnHandleCreated(e);
+		ApplyDpiMetrics(DeviceDpi);
+	}
+
+	protected override void OnDpiChanged(DpiChangedEventArgs e)
+	{
+		base.OnDpiChanged(e);
+		ApplyDpiMetrics(e.DeviceDpiNew);
 	}
 
 	private void ApplyLocalizedText()

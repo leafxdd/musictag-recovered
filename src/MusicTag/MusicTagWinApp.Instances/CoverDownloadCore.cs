@@ -72,6 +72,15 @@ internal static class CoverDownloadCore
 		return outcome;
 	}
 
+	internal static Bitmap LoadCachedCoverThumbnail(string coverPath, Size targetSize)
+	{
+		if (string.IsNullOrWhiteSpace(coverPath) || !File.Exists(coverPath))
+		{
+			return null;
+		}
+		return DecodeAndResize(coverPath, targetSize, new CoverDownloadOutcome());
+	}
+
 	private static RemoteTagProviderBase.DownloadStatus DownloadCoverFile(CoverSearchResult candidate, CancellationTokenSource cancellation, string coverPath, CoverDownloadOutcome outcome)
 	{
 		try
