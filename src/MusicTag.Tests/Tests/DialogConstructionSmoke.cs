@@ -134,6 +134,16 @@ internal static class DialogConstructionSmoke
 			}
 		});
 
+		yield return ("CustomColumnsDialog row metrics use window-local DPI", delegate
+		{
+			using Form dialog = (Form)ConstructNonPublic(typeof(MusicTagWinApp.Common.CustomColumnsDialog));
+			ListView columnList = (ListView)GetField(dialog, "columnListView");
+			InvokeMethod(dialog, "ApplyDpiMetrics", 144);
+			Check.Equal(48, columnList.SmallImageList.ImageSize.Height, "150 percent custom-column row height");
+			InvokeMethod(dialog, "ApplyDpiMetrics", 96);
+			Check.Equal(32, columnList.SmallImageList.ImageSize.Height, "custom-column row height round-trip");
+		});
+
 		yield return ("SourceOrderControl DPI assets use local absolute metrics", delegate
 		{
 			Control control = (Control)ConstructNonPublic(typeof(MusicTagWinApp.Stubs.SourceOrderControl));

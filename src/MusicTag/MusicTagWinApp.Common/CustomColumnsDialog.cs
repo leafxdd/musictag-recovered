@@ -93,8 +93,9 @@ internal class CustomColumnsDialog : Form
 		cancelButton.Text = Resources.Cancel;
 		columnListView.SmallImageList = new ImageList(components)
 		{
-			ImageSize = new Size(1, ImageUtilities.ScaleByDpi(32f))
+			ImageSize = new Size(1, 32)
 		};
+		ApplyDpiMetrics(DeviceDpi);
 
 		List<ColumnHeaderInfo> columns = new List<ColumnHeaderInfo>(GetColumnHeaderSettings());
 		columns.Sort(CompareColumnDisplayOrder);
@@ -109,6 +110,24 @@ internal class CustomColumnsDialog : Form
 			column.tempWidth = column.width;
 			columnListView.Items.Add(listViewItem);
 		}
+	}
+
+	private void ApplyDpiMetrics(int dpi)
+	{
+		columnListView.SmallImageList.ImageSize = new Size(1, ImageUtilities.ScaleLogicalPixels(32f, dpi));
+		UpdateLayout(null, EventArgs.Empty);
+	}
+
+	protected override void OnHandleCreated(EventArgs e)
+	{
+		base.OnHandleCreated(e);
+		ApplyDpiMetrics(DeviceDpi);
+	}
+
+	protected override void OnDpiChanged(DpiChangedEventArgs e)
+	{
+		base.OnDpiChanged(e);
+		ApplyDpiMetrics(e.DeviceDpiNew);
 	}
 
 	protected override void OnShown(EventArgs e)
