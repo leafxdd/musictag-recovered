@@ -58,12 +58,25 @@ internal static class DialogConstructionSmoke
 					Check.True(dialog != null, "constructed");
 					Check.True(ReferenceEquals(dialog.AcceptButton, GetField(dialog, "okButton")), "Enter invokes OK");
 					ComboBox pictureFormat = (ComboBox)GetField(dialog, "pictureFormatLimitComboBox");
-					NumericUpDown pictureQuality = (NumericUpDown)GetField(dialog, "pictureEncodingQualityNumericUpDown");
+					NumericUpDown jpegQuality = (NumericUpDown)GetField(dialog, "pictureEncodingQualityNumericUpDown");
+					NumericUpDown pngCompression = (NumericUpDown)GetField(dialog, "picturePngCompressionNumericUpDown");
 					Check.Equal(3, pictureFormat.Items.Count, "AUTO/JPG/PNG format options");
-					pictureFormat.SelectedIndex = 2;
-					Check.Equal(9m, pictureQuality.Maximum, "PNG compression maximum");
+					dialog.Show();
+					((TreeView)GetField(dialog, "optionsTreeView")).SelectedNode = ((TreeView)GetField(dialog, "optionsTreeView")).Nodes[2];
+					Application.DoEvents();
+					pictureFormat.SelectedIndex = 0;
+					Check.True(jpegQuality.Visible && pngCompression.Visible, "AUTO exposes both encoder settings");
+					jpegQuality.Value = 73m;
+					pngCompression.Value = 8m;
 					pictureFormat.SelectedIndex = 1;
-					Check.Equal(100m, pictureQuality.Maximum, "JPEG quality maximum");
+					Check.True(jpegQuality.Visible && !pngCompression.Visible, "JPG exposes JPEG quality only");
+					Check.Equal(100m, jpegQuality.Maximum, "JPEG quality maximum");
+					pictureFormat.SelectedIndex = 2;
+					Check.True(!jpegQuality.Visible && pngCompression.Visible, "PNG exposes PNG compression only");
+					Check.Equal(9m, pngCompression.Maximum, "PNG compression maximum");
+					pictureFormat.SelectedIndex = 0;
+					Check.Equal(73m, jpegQuality.Value, "AUTO retains JPEG quality");
+					Check.Equal(8m, pngCompression.Value, "AUTO retains PNG compression");
 					CheckTranslatedLyricConnectorState(dialog);
 				}
 				finally

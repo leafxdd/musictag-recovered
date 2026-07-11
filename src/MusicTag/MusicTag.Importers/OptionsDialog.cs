@@ -196,6 +196,10 @@ internal class OptionsDialog : Form
 
 	private NumericUpDown pictureEncodingQualityNumericUpDown;
 
+	private Label picturePngCompressionLabel;
+
+	private NumericUpDown picturePngCompressionNumericUpDown;
+
 	private int pendingPictureJpegQuality;
 
 	private int pendingPicturePngCompressionLevel;
@@ -987,26 +991,27 @@ internal class OptionsDialog : Form
 	private void UpdatePictureEncodingOptions(object sender, EventArgs e)
 	{
 		string format = GetPictureFormatValues()[Math.Max(0, pictureFormatLimitComboBox.SelectedIndex)];
-		bool png = format == "PNG";
-		pictureEncodingQualityLabel.Text = png
-			? UiText.Get("PNG compression:", "PNG 压缩级别：", "PNG 壓縮級別：")
-			: UiText.Get("JPEG quality:", "JPEG 质量：", "JPEG 品質：");
-		optionsToolTip.SetToolTip(pictureEncodingQualityNumericUpDown, format == "AUTO"
-			? UiText.Get("Used only when a JPEG must be resized or compressed.", "仅在 JPEG 需要缩放或压缩时使用。", "僅在 JPEG 需要縮放或壓縮時使用。")
-			: pictureEncodingQualityLabel.Text);
 		updatingPictureEncodingOptions = true;
-		pictureEncodingQualityNumericUpDown.Minimum = png ? 0 : 1;
-		pictureEncodingQualityNumericUpDown.Maximum = png ? 9 : 100;
-		pictureEncodingQualityNumericUpDown.Value = png ? pendingPicturePngCompressionLevel : pendingPictureJpegQuality;
+		pictureEncodingQualityNumericUpDown.Value = pendingPictureJpegQuality;
+		picturePngCompressionNumericUpDown.Value = pendingPicturePngCompressionLevel;
 		updatingPictureEncodingOptions = false;
+		pictureEncodingQualityLabel.Visible = format != "PNG";
+		pictureEncodingQualityNumericUpDown.Visible = format != "PNG";
+		picturePngCompressionLabel.Visible = format != "JPG";
+		picturePngCompressionNumericUpDown.Visible = format != "JPG";
 	}
 
 	private void PictureEncodingQualityValueChanged(object sender, EventArgs e)
 	{
 		if (updatingPictureEncodingOptions) return;
-		string format = GetPictureFormatValues()[Math.Max(0, pictureFormatLimitComboBox.SelectedIndex)];
-		if (format == "PNG") pendingPicturePngCompressionLevel = (int)pictureEncodingQualityNumericUpDown.Value;
-		else pendingPictureJpegQuality = (int)pictureEncodingQualityNumericUpDown.Value;
+		if (ReferenceEquals(sender, picturePngCompressionNumericUpDown))
+		{
+			pendingPicturePngCompressionLevel = (int)picturePngCompressionNumericUpDown.Value;
+		}
+		else
+		{
+			pendingPictureJpegQuality = (int)pictureEncodingQualityNumericUpDown.Value;
+		}
 	}
 
 	private static string[] GetPictureFormatValues()
@@ -1193,6 +1198,8 @@ internal class OptionsDialog : Form
 		pictureEncodingOptionsPanel = new FlowLayoutPanel();
 		pictureEncodingQualityLabel = new Label();
 		pictureEncodingQualityNumericUpDown = new NumericUpDown();
+		picturePngCompressionLabel = new Label();
+		picturePngCompressionNumericUpDown = new NumericUpDown();
 		artistConnectorLabel = new Label();
 		artistConnectorComboBox = new ComboBox();
 		artistConnectorPadSpacesCheckBox = new CheckBox();
@@ -1274,6 +1281,7 @@ internal class OptionsDialog : Form
 		((ISupportInitialize)pictureSizeLimitTrackBar).BeginInit();
 		((ISupportInitialize)pictureResolutionLimitTrackBar).BeginInit();
 		((ISupportInitialize)pictureEncodingQualityNumericUpDown).BeginInit();
+		((ISupportInitialize)picturePngCompressionNumericUpDown).BeginInit();
 		id3v2VersionPanel.SuspendLayout();
 		fileFilterPanel.SuspendLayout();
 		sourceLimitPanel.SuspendLayout();
@@ -1691,16 +1699,33 @@ internal class OptionsDialog : Form
 		pictureEncodingOptionsPanel.Controls.Add(pictureFormatLimitComboBox);
 		pictureEncodingOptionsPanel.Controls.Add(pictureEncodingQualityLabel);
 		pictureEncodingOptionsPanel.Controls.Add(pictureEncodingQualityNumericUpDown);
+		pictureEncodingOptionsPanel.Controls.Add(picturePngCompressionLabel);
+		pictureEncodingOptionsPanel.Controls.Add(picturePngCompressionNumericUpDown);
 		pictureEncodingOptionsPanel.Margin = new Padding(0);
 		pictureEncodingOptionsPanel.Name = "panelPictureEncodingOptions";
 		pictureEncodingOptionsPanel.WrapContents = false;
 		pictureEncodingQualityLabel.AutoSize = true;
 		pictureEncodingQualityLabel.Margin = new Padding(12, 8, 3, 0);
 		pictureEncodingQualityLabel.Name = "lblPictureEncodingQuality";
+		pictureEncodingQualityLabel.Text = UiText.Get("JPEG quality:", "JPEG 质量：", "JPEG 品質：");
 		pictureEncodingQualityNumericUpDown.Margin = new Padding(3, 4, 0, 0);
+		pictureEncodingQualityNumericUpDown.Minimum = 1;
+		pictureEncodingQualityNumericUpDown.Maximum = 100;
 		pictureEncodingQualityNumericUpDown.Name = "nudPictureEncodingQuality";
 		pictureEncodingQualityNumericUpDown.Size = new Size(55, 22);
 		pictureEncodingQualityNumericUpDown.ValueChanged += PictureEncodingQualityValueChanged;
+		picturePngCompressionLabel.AutoSize = true;
+		picturePngCompressionLabel.Margin = new Padding(12, 8, 3, 0);
+		picturePngCompressionLabel.Name = "lblPicturePngCompression";
+		picturePngCompressionLabel.Text = UiText.Get("PNG level:", "PNG 压缩：", "PNG 壓縮：");
+		picturePngCompressionNumericUpDown.Margin = new Padding(3, 4, 0, 0);
+		picturePngCompressionNumericUpDown.Minimum = 0;
+		picturePngCompressionNumericUpDown.Maximum = 9;
+		picturePngCompressionNumericUpDown.Name = "nudPicturePngCompression";
+		picturePngCompressionNumericUpDown.Size = new Size(55, 22);
+		picturePngCompressionNumericUpDown.ValueChanged += PictureEncodingQualityValueChanged;
+		optionsToolTip.SetToolTip(pictureEncodingQualityNumericUpDown, UiText.Get("JPEG quality used when JPEG data must be encoded.", "JPEG 需要编码时使用的质量。", "JPEG 需要編碼時使用的品質。"));
+		optionsToolTip.SetToolTip(picturePngCompressionNumericUpDown, UiText.Get("PNG compression level used when PNG data must be encoded (0-9).", "PNG 需要编码时使用的压缩级别（0-9）。", "PNG 需要編碼時使用的壓縮級別（0-9）。"));
 		artistConnectorLabel.AutoSize = true;
 		artistConnectorLabel.Location = new Point(3, 228);
 		artistConnectorLabel.Margin = new Padding(3, 10, 3, 0);
@@ -2234,6 +2259,7 @@ internal class OptionsDialog : Form
 		((ISupportInitialize)pictureSizeLimitTrackBar).EndInit();
 		((ISupportInitialize)pictureResolutionLimitTrackBar).EndInit();
 		((ISupportInitialize)pictureEncodingQualityNumericUpDown).EndInit();
+		((ISupportInitialize)picturePngCompressionNumericUpDown).EndInit();
 		id3v2VersionPanel.ResumeLayout(performLayout: false);
 		id3v2VersionPanel.PerformLayout();
 		fileFilterPanel.ResumeLayout(false);
