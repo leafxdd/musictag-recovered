@@ -74,18 +74,42 @@ internal class TagSearchCandidatePanel : UserControl
 	{
 		DoubleBuffered = true;
 		InitializeComponent();
-		ScaleChildHeights();
+		ApplyDpiMetrics(DeviceDpi);
 	}
 
-	private void ScaleChildHeights()
+	private void ApplyDpiMetrics(int dpi)
 	{
-		sourceLabel.Height = ImageUtilities.ScaleByDpi(sourceLabel.Height);
-		pictureSizeLabel.Height = ImageUtilities.ScaleByDpi(pictureSizeLabel.Height);
-		yearLabel.Height = ImageUtilities.ScaleByDpi(yearLabel.Height);
-		trackLabel.Height = ImageUtilities.ScaleByDpi(trackLabel.Height);
-		genreLabel.Height = ImageUtilities.ScaleByDpi(genreLabel.Height);
-		lyricPictureBox.Height = ImageUtilities.ScaleByDpi(lyricPictureBox.Height);
-		lyricPictureBox.Margin = new Padding(0, ImageUtilities.ScaleByDpi(lyricPictureBox.Margin.Top), 0, 0);
+		// Child controls are already framework-scaled. Reapply logical metrics absolutely so
+		// startup-on-secondary and 144->96->144 transitions cannot compound their heights.
+		int labelHeight = ScaleLogicalMetric(20, dpi);
+		sourceLabel.Height = labelHeight;
+		pictureSizeLabel.Height = labelHeight;
+		yearLabel.Height = labelHeight;
+		trackLabel.Height = labelHeight;
+		genreLabel.Height = labelHeight;
+		lyricPictureBox.Height = ScaleLogicalMetric(16, dpi);
+		lyricPictureBox.Margin = new Padding(0, ScaleLogicalMetric(2, dpi), 0, 0);
+		if (visibilityInitialized)
+		{
+			UpdateContentHeight();
+		}
+	}
+
+	private static int ScaleLogicalMetric(int logicalPixels, int dpi)
+	{
+		return Math.Max(1, (int)Math.Round((double)logicalPixels * Math.Max(dpi, 96) / 96d));
+	}
+
+	protected override void OnParentChanged(EventArgs e)
+	{
+		base.OnParentChanged(e);
+		ApplyDpiMetrics(Parent?.DeviceDpi ?? DeviceDpi);
+	}
+
+	protected override void OnDpiChangedAfterParent(EventArgs e)
+	{
+		base.OnDpiChangedAfterParent(e);
+		ApplyDpiMetrics(DeviceDpi);
 	}
 
 	private void SetLabelValue(Label label, string value)
@@ -97,6 +121,7 @@ internal class TagSearchCandidatePanel : UserControl
 
 	private void Panel_Load(object sender, EventArgs e)
 	{
+		ApplyDpiMetrics(DeviceDpi);
 		visibilityInitialized = true;
 		sourceLabel.Visible = HasText(sourceLabel.Text);
 		pictureSizeLabel.Visible = HasText(pictureSizeLabel.Text);

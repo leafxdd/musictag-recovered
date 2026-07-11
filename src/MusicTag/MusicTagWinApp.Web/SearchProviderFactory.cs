@@ -38,6 +38,11 @@ internal static class SearchProviderFactory
 		return (ITrackSearchProvider)CreateProvider(source, cancellation, statusReporter);
 	}
 
+	public static ITrackIdLookupProvider CreateTrackIdLookup(SearchSource source, CancellationTokenSource cancellation, Action<SourceSearchStatus> statusReporter = null)
+	{
+		return CreateProvider(source, cancellation, statusReporter) as ITrackIdLookupProvider;
+	}
+
 	public static ILyricSearchProvider CreateLyricSearch(SearchSource source, CancellationTokenSource cancellation, Action<SourceSearchStatus> statusReporter = null)
 	{
 		return (ILyricSearchProvider)CreateProvider(source, cancellation, statusReporter);

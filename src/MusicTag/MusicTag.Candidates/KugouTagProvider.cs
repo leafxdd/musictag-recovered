@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Numerics;
 using System.Text.RegularExpressions;
 using System.Threading;
 using MusicTag.Composer;
@@ -16,7 +18,7 @@ using Newtonsoft.Json.Linq;
 
 namespace MusicTag.Candidates;
 
-internal class KugouTagProvider : RemoteTagProviderBase, ITrackSearchProvider, ILyricSearchProvider, ITrackLyricLoader
+internal class KugouTagProvider : RemoteTagProviderBase, ITrackSearchProvider, ITrackIdLookupProvider, ILyricSearchProvider, ITrackLyricLoader
 {
 	// 显式接口实现:把能力接口的统一签名(网易云超集)转发到本类既有 concrete,丢弃酷狗不接收的 knownSongId / existingLyrics。
 	// concrete 方法体与签名一字未动;LoadLyricsForTrack 因签名匹配而隐式实现。酷狗无封面,故不实现 ICoverSearchProvider。
@@ -31,6 +33,16 @@ internal class KugouTagProvider : RemoteTagProviderBase, ITrackSearchProvider, I
 	}
 
 	private const string songSearchUrlTemplate = "https://songsearch.kugou.com/song_search_v2?keyword={0}&page=1&pagesize={1}";
+
+	private const string songInfoUrlTemplate = "https://m.kugou.com/app/i/getSongInfo.php?cmd=playInfo&hash={0}&from=mkugou";
+
+	private const string albumInfoUrlTemplate = "https://mobilecdn.kugou.com/api/v3/album/info?albumid={0}&version=9108&area_code=1";
+
+	private const string songEntityUrlTemplate = "https://gateway.kugou.com/kmr/v2/audio?appid=1005&clienttime={0}&clientver=20489&dfid=-&mid={1}&uuid=-&signature={2}";
+
+	private const string KugouAndroidSignatureSalt = "OIlwieks28dk2k092lksi2UIkp";
+
+	private const string KugouDeviceGuid = "550e8400-e29b-41d4-a716-446655440000";
 
 	private const string lyricUrlTemplate = "https://m3ws.kugou.com/api/v1/krc/get_krc?keyword={0}&hash={1}&timelength={2}";
 
@@ -62,6 +74,11 @@ internal class KugouTagProvider : RemoteTagProviderBase, ITrackSearchProvider, I
 
 	public KugouTagProvider(CancellationTokenSource cancellationSource)
 		: base(cancellationSource)
+	{
+	}
+
+	public KugouTagProvider()
+		: this(null)
 	{
 	}
 
@@ -106,6 +123,187 @@ internal class KugouTagProvider : RemoteTagProviderBase, ITrackSearchProvider, I
 	public List<TrackSearchResult> SearchTracks(string query, int resultLimit, int searchPass, int sourceOrder, List<TrackSearchResult> existingTracks, List<TrackSearchResult> previousResults)
 	{
 		return BuildOrderedTracks<KugouSongInfo>(SearchSongs(query, resultLimit).Take(resultLimit), BuildTrackResult, searchPass, sourceOrder, existingTracks, previousResults);
+	}
+
+	public TrackSearchResult LookupTrackById(string trackId, int sourceOrder)
+	{
+		string normalizedId = TrackIdInput.ExtractLastPathOrQueryValue(trackId, "hash", "album_audio_id", "mixsongid", "id");
+		if (long.TryParse(normalizedId, out long albumAudioId) && albumAudioId > 0L)
+		{
+			return LookupTrackByAlbumAudioId(albumAudioId, sourceOrder);
+		}
+		string hash = normalizedId.ToUpperInvariant();
+		if (!Regex.IsMatch(hash, "^[A-F0-9]{32}$"))
+		{
+			return null;
+		}
+		string responseBody = GetResponseString(string.Format(songInfoUrlTemplate, hash));
+		if (cancellationSource.IsCancellationRequested)
+		{
+			return null;
+		}
+		try
+		{
+			JObject songJson = JObject.Parse(responseBody);
+			int errorCode = GetIntField(songJson, "errcode");
+			if (errorCode != 0)
+			{
+				SetTransportError(errorCode == 1002 ? RemoteErrorKind.RateLimited : RemoteErrorKind.ParseFailed, errorCode.ToString(CultureInfo.InvariantCulture));
+				return null;
+			}
+			if (string.IsNullOrWhiteSpace(GetStringOrEmpty(GetFirstField(songJson, "songName", "fileName"))))
+			{
+				return null;
+			}
+			string title = GetStringOrEmpty(GetFirstField(songJson, "songName"));
+			string fileName = GetStringOrEmpty(GetFirstField(songJson, "fileName"));
+			int separatorIndex = fileName.IndexOf(" - ", StringComparison.Ordinal);
+			if (separatorIndex >= 0 && separatorIndex + 3 < fileName.Length)
+			{
+				title = fileName.Substring(separatorIndex + 3).Trim();
+			}
+			string albumId = GetStringOrEmpty(GetFirstField(songJson, "albumid", "req_albumid"));
+			KugouSongInfo song = new KugouSongInfo
+			{
+				AudioId = GetStringOrEmpty(GetFirstField(songJson, "audio_id", "album_audio_id")),
+				Title = title,
+				Artist = GetStringOrEmpty(GetFirstField(songJson, "author_name", "singerName")),
+				Album = LoadAlbumName(albumId),
+				Hash = hash,
+				DurationMs = GetIntField(songJson, "timeLength") * 1000
+			};
+			if (string.IsNullOrWhiteSpace(song.AudioId))
+			{
+				song.AudioId = hash;
+			}
+			TrackSearchResult track = BuildTrackResult(song);
+			string coverUrl = GetStringOrEmpty(GetFirstField(songJson, "album_img", "imgUrl")).Replace("{size}", "500");
+			SetKugouTrackCover(track, coverUrl);
+			track.ResultOrder = 0;
+			track.SearchPass = 0;
+			track.SourceOrder = sourceOrder;
+			return track;
+		}
+		catch (Exception parseError)
+		{
+			Console.WriteLine("Parse Kugou song detail error:" + parseError.GetMessageChain());
+			if (!string.IsNullOrWhiteSpace(responseBody))
+			{
+				SetTransportError(RemoteErrorKind.ParseFailed, "parse");
+			}
+			return null;
+		}
+	}
+
+	private TrackSearchResult LookupTrackByAlbumAudioId(long albumAudioId, int sourceOrder)
+	{
+		string responseBody = PostKugouSongEntity(albumAudioId);
+		if (cancellationSource.IsCancellationRequested)
+		{
+			return null;
+		}
+		try
+		{
+			JObject responseJson = JObject.Parse(responseBody);
+			JObject entity = responseJson["data"]?.First as JObject;
+			JObject baseInfo = entity?["base"] as JObject;
+			JObject audioInfo = entity?["audio_info"] as JObject;
+			JObject albumInfo = entity?["album_info"] as JObject;
+			if ((int?)responseJson["status"] != 1 || (int?)entity?["__status"] != 1 || baseInfo == null || audioInfo == null)
+			{
+				return null;
+			}
+			string hash = GetStringOrEmpty(audioInfo["hash"]).ToUpperInvariant();
+			if (!Regex.IsMatch(hash, "^[A-F0-9]{32}$"))
+			{
+				return null;
+			}
+			string audioId = GetStringOrEmpty(baseInfo["audio_id"]);
+			TrackSearchResult track = BuildTrackResult(new KugouSongInfo
+			{
+				AudioId = string.IsNullOrWhiteSpace(audioId) ? albumAudioId.ToString(CultureInfo.InvariantCulture) : audioId,
+				Title = GetStringOrEmpty(baseInfo["songname"]),
+				Artist = GetStringOrEmpty(baseInfo["author_name"]),
+				Album = GetStringOrEmpty(baseInfo["album_name"]),
+				Hash = hash,
+				DurationMs = GetIntField(audioInfo, "timelength")
+			});
+			string publishDate = GetStringOrEmpty(albumInfo?["publish_date"] ?? baseInfo["publish_date"]);
+			if (publishDate.Length >= 4)
+			{
+				track.Year = publishDate.Substring(0, 4);
+			}
+			string coverUrl = GetStringOrEmpty(albumInfo?["cover"]).Replace("{size}", "500");
+			SetKugouTrackCover(track, coverUrl);
+			track.ResultOrder = 0;
+			track.SearchPass = 0;
+			track.SourceOrder = sourceOrder;
+			return track;
+		}
+		catch (Exception parseError)
+		{
+			Console.WriteLine("Parse Kugou entity detail error:" + parseError.GetMessageChain());
+			if (!string.IsNullOrWhiteSpace(responseBody))
+			{
+				SetTransportError(RemoteErrorKind.ParseFailed, "parse");
+			}
+			return null;
+		}
+	}
+
+	private string PostKugouSongEntity(long albumAudioId)
+	{
+		// MakcRe/KuGouMusicApi 的公开 Android 客户端签名协议；只使用通用设备标识，不需要用户账号或 Cookie。
+		string clientTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
+		string midHex = TextUtilities.ComputeMd5HashString(KugouDeviceGuid).Replace("-", "");
+		string mid = BigInteger.Parse("0" + midHex, NumberStyles.HexNumber, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture);
+		string requestBody = "{\"data\":[{\"entity_id\":" + albumAudioId.ToString(CultureInfo.InvariantCulture) + "}],\"fields\":\"album_info,base,audio_info\"}";
+		string sortedParameters = "appid=1005clienttime=" + clientTime + "clientver=20489dfid=-mid=" + mid + "uuid=-";
+		string signature = TextUtilities.ComputeMd5HashString(KugouAndroidSignatureSalt + sortedParameters + requestBody + KugouAndroidSignatureSalt).Replace("-", "").ToLowerInvariant();
+		string url = string.Format(songEntityUrlTemplate, clientTime, mid, signature);
+		using HttpClient client = CreateKugouHttpClient();
+		client.DefaultRequestHeaders.TryAddWithoutValidation("dfid", "-");
+		client.DefaultRequestHeaders.TryAddWithoutValidation("clienttime", clientTime);
+		client.DefaultRequestHeaders.TryAddWithoutValidation("mid", mid);
+		client.DefaultRequestHeaders.TryAddWithoutValidation("kg-rc", "1");
+		client.DefaultRequestHeaders.TryAddWithoutValidation("kg-thash", "5d816a0");
+		client.DefaultRequestHeaders.TryAddWithoutValidation("kg-rec", "1");
+		client.DefaultRequestHeaders.TryAddWithoutValidation("kg-rf", "B9EDA08A64250DEFFBCADDEE00F8F25F");
+		client.DefaultRequestHeaders.TryAddWithoutValidation("x-router", "openapi.kugou.com");
+		client.DefaultRequestHeaders.TryAddWithoutValidation("KG-TID", "238");
+		return PostString(url, requestBody, client, postJson: true);
+	}
+
+	private void SetKugouTrackCover(TrackSearchResult track, string coverUrl)
+	{
+		if (string.IsNullOrWhiteSpace(coverUrl))
+		{
+			return;
+		}
+		track.Cover = new MusicTagWinApp.Listeners.CoverSearchResult
+		{
+			CoverUrl = coverUrl,
+			SearchSource = GetSource(),
+			CoverDownloader = CreateCoverDownloader<KugouTagProvider>(coverUrl)
+		};
+	}
+
+	private string LoadAlbumName(string albumId)
+	{
+		if (string.IsNullOrWhiteSpace(albumId) || albumId == "0")
+		{
+			return "";
+		}
+		try
+		{
+			JObject albumJson = JObject.Parse(GetResponseString(string.Format(albumInfoUrlTemplate, TextUtilities.UrlEncodeUtf8(albumId))));
+			return albumJson["data"]?["albumname"]?.ToString() ?? "";
+		}
+		catch (Exception albumParseError)
+		{
+			Console.WriteLine("Parse Kugou album detail error:" + albumParseError.GetMessageChain());
+			return "";
+		}
 	}
 
 	private TrackSearchResult BuildTrackResult(KugouSongInfo song)

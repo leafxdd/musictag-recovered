@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using MusicTag.Mocks;
 using MusicTag.Serialization;
 using MusicTagWinApp.Roles;
@@ -62,6 +63,17 @@ internal static class CombinedTagSearchDialogCharacterization
 
 	public static IEnumerable<(string, Action)> All()
 	{
+		yield return ("TrackIdLookup UI text is localized per provider", delegate
+		{
+			CultureInfo english = CultureInfo.GetCultureInfo("en-US");
+			CultureInfo simplifiedChinese = CultureInfo.GetCultureInfo("zh-CN");
+			Check.Equal("songmid, songid, or song link", CombinedTagSearchDialog.GetTrackIdInputHint(SearchSource.QQ, english), "QQ English hint");
+			Check.Equal("musicId 或歌曲链接", CombinedTagSearchDialog.GetTrackIdInputHint(SearchSource.Kuwo, simplifiedChinese), "Kuwo Chinese hint");
+			Check.Equal("MixSongID、hash 或歌曲链接", CombinedTagSearchDialog.GetTrackIdInputHint(SearchSource.Kugou, simplifiedChinese), "Kugou Chinese hint");
+			Check.Equal("Request rate limited (2001)", CombinedTagSearchDialog.GetTrackIdLookupFailureText(new HttpResult { Error = RemoteErrorKind.RateLimited, ErrorCode = "2001" }, english), "rate limit text");
+			Check.Equal("未找到该歌曲", CombinedTagSearchDialog.GetTrackIdLookupFailureText(null, simplifiedChinese), "not found text");
+		});
+
 		// ===== ① ShouldAcceptFilenameFallbackMatch:双阈值接受谓词 =====
 		// 谓词 = (CEW(标题) && titleScore>=0.5 && CEW(艺术家) && artistScore>=0.5)   // 通道一:宽松双确认
 		//      || (titleScore>=0.8 && artistScore>=0.8)                              // 通道二:强分数

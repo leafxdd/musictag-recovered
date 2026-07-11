@@ -20,7 +20,7 @@ using Newtonsoft.Json.Linq;
 
 namespace MusicTagWinApp.Adapter;
 
-internal class KuwoTagProvider : RemoteTagProviderBase, ITrackSearchProvider, ILyricSearchProvider, ICoverSearchProvider, ITrackLyricLoader
+internal class KuwoTagProvider : RemoteTagProviderBase, ITrackSearchProvider, ITrackIdLookupProvider, ILyricSearchProvider, ICoverSearchProvider, ITrackLyricLoader
 {
 	// 显式接口实现:把能力接口的统一签名(网易云超集)转发到本类既有 concrete,丢弃酷我不接收的 knownSongId / existingLyrics;
 	// LoadLyricsForTrack 转发到酷我单数名 concrete LoadLyricForTrack。concrete 方法体与签名一字未动;SearchCovers 隐式实现。
@@ -44,6 +44,8 @@ internal class KuwoTagProvider : RemoteTagProviderBase, ITrackSearchProvider, IL
 	private const string SearchUrlFormat = "https://search.kuwo.cn/r.s?all={0}&client=kt&pn=0&rn={1}&ver=kwplayer_ar_9.2.3.2&vipver=1&show_copyright_off=1&newver=1&correct=1&ft=music&cluster=0&strategy=2012&encoding=utf8&rformat=json&vermerge=1&mobi=1&issubtitle=1";
 
 	private const string SongDetailUrlFormat = "https://m.kuwo.cn/newh5/singles/songinfoandlrc?musicId={0}";
+
+	private const string SongIdLookupUrlFormat = "https://datacenter.kuwo.cn/d.c?ids={0}&fpay=1&isdownload=1&nation=1&cmkey=plist_pl2012&resenc=utf8&force=no&ft=music&cmd=query";
 
 	private const string AlbumCoverUrlPrefix = "https://img2.kuwo.cn/star/albumcover/";
 
@@ -90,6 +92,57 @@ internal class KuwoTagProvider : RemoteTagProviderBase, ITrackSearchProvider, IL
 	public List<TrackSearchResult> SearchTracks(string query, int maxResults, int searchPass, int sourceOrder, List<TrackSearchResult> previousResults, List<TrackSearchResult> currentResults)
 	{
 		return BuildOrderedTracks<KuwoSongInfo>(SearchSongs(query, maxResults), CreateTrackResult, searchPass, sourceOrder, previousResults, currentResults);
+	}
+
+	public TrackSearchResult LookupTrackById(string trackId, int sourceOrder)
+	{
+		string normalizedId = TrackIdInput.ExtractLastPathOrQueryValue(trackId, "id", "musicId", "rid");
+		if (!long.TryParse(normalizedId, out long musicId) || musicId <= 0L)
+		{
+			return null;
+		}
+		string responseBody = GetResponseString(string.Format(SongIdLookupUrlFormat, musicId));
+		if (cancellationSource.IsCancellationRequested)
+		{
+			return null;
+		}
+		try
+		{
+			JObject songJson = JArray.Parse(responseBody).First as JObject;
+			if (songJson == null || ReadJsonString(songJson, "id") != normalizedId)
+			{
+				return null;
+			}
+			string coverUrl = ReadJsonString(songJson, "albumpic");
+			KuwoSongInfo song = new KuwoSongInfo
+			{
+				TrackId = normalizedId,
+				Title = ReadJsonString(songJson, "name"),
+				OriginalTitle = ReadJsonString(songJson, "name"),
+				Artist = ReadJsonString(songJson, "artist"),
+				ArtistId = ReadJsonString(songJson, "artistid"),
+				Album = ReadJsonString(songJson, "album"),
+				SearchAlbumCoverUrl = Regex.Replace(coverUrl, "(?<=/albumcover/)\\d+/", "500/")
+			};
+			if (string.IsNullOrWhiteSpace(song.Title) || string.IsNullOrWhiteSpace(song.Artist))
+			{
+				return null;
+			}
+			TrackSearchResult track = CreateTrackResult(song);
+			track.ResultOrder = 0;
+			track.SearchPass = 0;
+			track.SourceOrder = sourceOrder;
+			return track;
+		}
+		catch (Exception parseError)
+		{
+			Console.WriteLine("Parse Kuwo song detail error:" + parseError.GetMessageChain());
+			if (!string.IsNullOrWhiteSpace(responseBody))
+			{
+				SetTransportError(RemoteErrorKind.ParseFailed, "parse");
+			}
+			return null;
+		}
 	}
 
 	public List<LyricSearchResult> SearchLyrics(string query, int maxResults, int sourceOrder)

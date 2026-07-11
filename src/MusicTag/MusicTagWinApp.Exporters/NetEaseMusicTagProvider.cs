@@ -18,7 +18,7 @@ using Newtonsoft.Json.Linq;
 
 namespace MusicTagWinApp.Exporters;
 
-internal class NetEaseMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider, ILyricSearchProvider, ICoverSearchProvider, ITrackLyricLoader
+internal class NetEaseMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider, ITrackIdLookupProvider, ILyricSearchProvider, ICoverSearchProvider, ITrackLyricLoader
 {
 	// 网易云 concrete 的 SearchTracks / SearchLyrics / SearchCovers / LoadLyricsForTrack 签名即各能力接口的超集,
 	// 故四个接口全部隐式实现,无需转发器。LastTransportResult / IDisposable 由 RemoteTagProviderBase 提供。
@@ -300,64 +300,7 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase, ITrackSearchProv
 		}
 		foreach (NetEaseSongInfo song in songs)
 		{
-			TrackSearchResult track = new TrackSearchResult();
-			track.SearchSource = GetSource();
-			track.SourceTrackId = song.Id.ToString();
-			track.Title = song.Title;
-			track.Artist = song.GetArtistDisplayText();
-			track.Album = song.Album.Name;
-			track.Comment = (Settings.Default.CommentTagWrite163Key ? song.CommentJson : song.GetAliasCommentText());
-			track.NetEaseAlbumId = song.Album.Id.ToString();
-			track.Year = FormatPublishYear(song.Album.PublishTime);
-			if (song.TrackNumber.HasValue && song.TrackNumber.Value > 0)
-			{
-				track.Track = song.TrackNumber.Value;
-				track.TrackLabel = "Track " + song.TrackNumber;
-				if (!string.IsNullOrWhiteSpace(song.DiscNumberText))
-				{
-					try
-					{
-						if (int.TryParse(song.DiscNumberText, out var discNumber))
-						{
-							if (discNumber > 1)
-							{
-								track.Disc = discNumber;
-								track.TrackLabel = track.TrackLabel + " of " + song.DiscNumberText;
-							}
-						}
-						else
-						{
-							Match discMatch = Regex.Match(song.DiscNumberText, "(\\d+)/\\d+");
-							string discText;
-							if (discMatch.Success && (discText = discMatch.Groups[1].Value) != null && int.TryParse(discText, out var parsedDiscNumber) && parsedDiscNumber > 1)
-							{
-								track.Disc = parsedDiscNumber;
-								track.TrackLabel = track.TrackLabel + " of " + song.DiscNumberText;
-							}
-						}
-					}
-					catch (Exception ex)
-					{
-						Console.WriteLine($"SearchCombTags parse int error:{ex.GetMessageChain()},{song.DiscNumberText},{song.Title},{song.TrackNumber.Value}");
-					}
-				}
-			}
-			if (!string.IsNullOrWhiteSpace(song.Album.CoverUrl))
-			{
-				CoverSearchResult cover = new CoverSearchResult();
-				cover.CoverUrl = song.Album.CoverUrl;
-				cover.CoverDownloader = CreateCoverDownloader<NetEaseMusicTagProvider>(song.Album.CoverUrl);
-				track.Cover = cover;
-			}
-			LyricSearchResult lyric = new LyricSearchResult();
-			lyric.LyricUrl = string.Format(lyricEndpointFormat, song.Id);
-			lyric.SearchSource = GetSource();
-			lyric.DeferredLyricLoader = cancellation =>
-			{
-				using NetEaseMusicTagProvider netEaseProvider = new NetEaseMusicTagProvider(cancellation);
-				return netEaseProvider.LoadLyrics(song);
-			};
-			track.LyricResult = lyric;
+			TrackSearchResult track = BuildTrackResult(song);
 			if (!seenTrackIds.Contains(track.SourceTrackId) && !knownTrackIds.Contains(track.SourceTrackId) && (knownSongId == 0L || track.Cover != null))
 			{
 				seenTrackIds.Add(track.SourceTrackId);
@@ -377,6 +320,92 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase, ITrackSearchProv
 			}
 			return tracks;
 		}
+
+	public TrackSearchResult LookupTrackById(string trackId, int sourceOrder)
+	{
+		if (!TrackIdInput.TryNormalize(GetSource(), trackId, out string normalizedId) || !long.TryParse(normalizedId, out long songId))
+		{
+			return null;
+		}
+		List<NetEaseSongInfo> songs = LoadSongDetails(songId);
+		if (songs.Count == 0)
+		{
+			return null;
+		}
+		NetEaseSongInfo song = songs[0];
+		TrackSearchResult track = BuildTrackResult(song);
+		if (Settings.Default.CommentTagWrite163Key && !string.IsNullOrWhiteSpace(track.Comment))
+		{
+			track.Comment = NetEaseCrypto.EncodeMusicComment(track.Comment);
+		}
+		track.ResultOrder = 0;
+		track.SearchPass = 0;
+		track.SourceOrder = sourceOrder;
+		return track;
+	}
+
+	private TrackSearchResult BuildTrackResult(NetEaseSongInfo song)
+	{
+		TrackSearchResult track = new TrackSearchResult();
+		track.SearchSource = GetSource();
+		track.SourceTrackId = song.Id.ToString();
+		track.Title = song.Title;
+		track.Artist = song.GetArtistDisplayText();
+		track.Album = song.Album.Name;
+		track.Comment = (Settings.Default.CommentTagWrite163Key ? song.CommentJson : song.GetAliasCommentText());
+		track.NetEaseAlbumId = song.Album.Id.ToString();
+		track.Year = FormatPublishYear(song.Album.PublishTime);
+		if (song.TrackNumber.HasValue && song.TrackNumber.Value > 0)
+		{
+			track.Track = song.TrackNumber.Value;
+			track.TrackLabel = "Track " + song.TrackNumber;
+			if (!string.IsNullOrWhiteSpace(song.DiscNumberText))
+			{
+				try
+				{
+					if (int.TryParse(song.DiscNumberText, out var discNumber))
+					{
+						if (discNumber > 1)
+						{
+							track.Disc = discNumber;
+							track.TrackLabel = track.TrackLabel + " of " + song.DiscNumberText;
+						}
+					}
+					else
+					{
+						Match discMatch = Regex.Match(song.DiscNumberText, "(\\d+)/\\d+");
+						string discText;
+						if (discMatch.Success && (discText = discMatch.Groups[1].Value) != null && int.TryParse(discText, out var parsedDiscNumber) && parsedDiscNumber > 1)
+						{
+							track.Disc = parsedDiscNumber;
+							track.TrackLabel = track.TrackLabel + " of " + song.DiscNumberText;
+						}
+					}
+				}
+				catch (Exception ex)
+				{
+					Console.WriteLine($"SearchCombTags parse int error:{ex.GetMessageChain()},{song.DiscNumberText},{song.Title},{song.TrackNumber.Value}");
+				}
+			}
+		}
+		if (!string.IsNullOrWhiteSpace(song.Album.CoverUrl))
+		{
+			CoverSearchResult cover = new CoverSearchResult();
+			cover.CoverUrl = song.Album.CoverUrl;
+			cover.CoverDownloader = CreateCoverDownloader<NetEaseMusicTagProvider>(song.Album.CoverUrl);
+			track.Cover = cover;
+		}
+		LyricSearchResult lyric = new LyricSearchResult();
+		lyric.LyricUrl = string.Format(lyricEndpointFormat, song.Id);
+		lyric.SearchSource = GetSource();
+		lyric.DeferredLyricLoader = cancellation =>
+		{
+			using NetEaseMusicTagProvider netEaseProvider = new NetEaseMusicTagProvider(cancellation);
+			return netEaseProvider.LoadLyrics(song);
+		};
+		track.LyricResult = lyric;
+		return track;
+	}
 
 	private LyricSearchResult LoadLyrics(NetEaseSongInfo song)
 	{

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -101,6 +102,53 @@ internal class CombinedTagSearchDialog : Form
 		}
 	}
 
+	private sealed class TrackIdLookupSourceOption
+	{
+		public SearchSource Source { get; }
+
+		public TrackIdLookupSourceOption(SearchSource source)
+		{
+			Source = source;
+		}
+
+		public override string ToString()
+		{
+			return Source.GetDisplayName();
+		}
+	}
+
+	private sealed class TrackIdLookupOperationResult
+	{
+		public TrackSearchResult Track;
+
+		public HttpResult TransportResult;
+	}
+
+	private sealed class TrackIdLookupRequest
+	{
+		public CancellationTokenSource Cancellation;
+
+		public string TrackId;
+
+		public SearchSource Source;
+
+		public int SourceOrder;
+
+		internal TrackIdLookupOperationResult Execute()
+		{
+			using ITrackIdLookupProvider provider = SearchProviderFactory.CreateTrackIdLookup(Source, Cancellation);
+			if (provider == null)
+			{
+				return new TrackIdLookupOperationResult();
+			}
+			return new TrackIdLookupOperationResult
+			{
+				Track = provider.LookupTrackById(TrackId, SourceOrder),
+				TransportResult = provider.LastTransportResult
+			};
+		}
+	}
+
 	private sealed class TrackSearchCoordinator
 	{
 		public CombinedTagSearchDialog Owner;
@@ -113,8 +161,7 @@ internal class CombinedTagSearchDialog : Form
 		{
 			if (!Owner.cancellationSource.IsCancellationRequested)
 			{
-				cachedSearchResults.AddRange(searchResults);
-				Owner.AddSearchResultsToList(searchResults);
+				Owner.AddSearchResultsToList(searchResults, cacheNewResults: true);
 			}
 		}
 
@@ -345,9 +392,25 @@ internal class CombinedTagSearchDialog : Form
 
 	private readonly TaskbarProgressController taskbarProgress;
 
+	private bool trackIdLookupInProgress;
+
 	private IContainer components;
 
 	private FlowLayoutPanel mainPanel;
+
+	private TableLayoutPanel trackIdLookupPanel;
+
+	private Label trackIdLabel;
+
+	private ComboBox trackIdSourceComboBox;
+
+	private TextBox trackIdTextBox;
+
+	private Button trackIdLookupButton;
+
+	private Label trackIdLookupStatusLabel;
+
+	private ToolTip trackIdLookupToolTip;
 
 	private ImageList coverImageList;
 
@@ -397,6 +460,17 @@ internal class CombinedTagSearchDialog : Form
 	public void SetPreferredSource(SearchSource? source)
 	{
 		preferredSource = source;
+		if (source.HasValue && trackIdSourceComboBox != null)
+		{
+			for (int index = 0; index < trackIdSourceComboBox.Items.Count; index++)
+			{
+				if (trackIdSourceComboBox.Items[index] is TrackIdLookupSourceOption option && option.Source == source.Value)
+				{
+					trackIdSourceComboBox.SelectedIndex = index;
+					break;
+				}
+			}
+		}
 	}
 
 	public TrackSearchResult GetSelectedTrackResult()
@@ -417,6 +491,7 @@ internal class CombinedTagSearchDialog : Form
 		taskbarProgress = new TaskbarProgressController(this);
 		InitializeComponent();
 		InitializeResultListImagesAndScaling();
+		InitializeTrackIdLookup();
 		searchStatusIndicator = new SearchStatusIndicator(searchStatusLabel, () => searchResultsListView.Items.Count > 0, components);
 		ApplyLocalizedText();
 		UpdateSearchDialogLayout();
@@ -439,6 +514,34 @@ internal class CombinedTagSearchDialog : Form
 		okSplitButton.Image = FontAwesome.Type.Check.AsImage(fontProperties);
 	}
 
+	private void InitializeTrackIdLookup()
+	{
+		foreach (SearchSource source in new[] { SearchSource.Music163, SearchSource.QQ, SearchSource.Kuwo, SearchSource.Kugou })
+		{
+			trackIdSourceComboBox.Items.Add(new TrackIdLookupSourceOption(source));
+		}
+		trackIdSourceComboBox.SelectedIndex = 0;
+		UpdateTrackIdLookupIconForDpi(DeviceDpi);
+		UpdateTrackIdInputHint();
+	}
+
+	private void UpdateTrackIdLookupIconForDpi(int dpi)
+	{
+		if (trackIdLookupButton == null || trackIdLookupButton.IsDisposed)
+		{
+			return;
+		}
+		int iconSize = Math.Max(1, (int)Math.Round(18d * Math.Max(dpi, 96) / 96d));
+		FontAwesome.Properties iconProperties = new FontAwesome.Properties
+		{
+			Size = iconSize,
+			ShowBorder = false
+		};
+		Image oldImage = trackIdLookupButton.Image;
+		trackIdLookupButton.Image = FontAwesome.Type.Search.AsImage(iconProperties);
+		oldImage?.Dispose();
+	}
+
 	private void ApplyLocalizedText()
 	{
 		okSplitButton.Text = Resources.OK;
@@ -449,11 +552,21 @@ internal class CombinedTagSearchDialog : Form
 		albumColumn.Text = Resources.album;
 		commentColumn.Text = Resources.comment;
 		overwriteOptionsMenuItem.Text = Resources.OverwriteOptions;
+		trackIdLabel.Text = UiText.Get("Track ID", "歌曲 ID", "歌曲 ID");
+		trackIdLookupToolTip.SetToolTip(trackIdLookupButton, UiText.Get("Look up track by ID", "按歌曲 ID 查询", "按歌曲 ID 查詢"));
+		UpdateTrackIdInputHint();
+	}
+
+	protected override void OnHandleCreated(EventArgs e)
+	{
+		base.OnHandleCreated(e);
+		UpdateTrackIdLookupIconForDpi(DeviceDpi);
 	}
 
 	protected override void OnShown(EventArgs param)
 	{
 		base.OnShown(param);
+		UpdateTrackIdLookupIconForDpi(DeviceDpi);
 		TrackSearchContext searchContext = currentSearchContext;
 		bool canReuseCachedResults = cachedSearchCompleted && cachedSearchResults != null && lastSearchContext != null && cachedSearchResults.Any() && lastPreferredSource == preferredSource && searchContext.Title == lastSearchContext.Title && searchContext.Artist == lastSearchContext.Artist && searchContext.Album == lastSearchContext.Album;
 		if (canReuseCachedResults)
@@ -483,6 +596,16 @@ internal class CombinedTagSearchDialog : Form
 		Text = searchContext.Title + " | " + searchContext.Artist + " | " + searchContext.Album;
 	}
 
+	protected override void OnDpiChanged(DpiChangedEventArgs e)
+	{
+		base.OnDpiChanged(e);
+		UpdateTrackIdLookupIconForDpi(e.DeviceDpiNew);
+		if (IsHandleCreated && !IsDisposed)
+		{
+			BeginInvoke(new Action(() => UpdateTrackIdLookupIconForDpi(DeviceDpi)));
+		}
+	}
+
 	protected override void OnClosed(EventArgs spec)
 	{
 		cachedResultsTimer.Stop();
@@ -497,10 +620,181 @@ internal class CombinedTagSearchDialog : Form
 		PathFileUtilities.TrimDirectorySize(PathFileUtilities.GetPictureCacheDirectory(), selectedCoverPath, 31457280L, 62914560L);
 	}
 
+	private SearchSource GetSelectedTrackIdSource()
+	{
+		return (trackIdSourceComboBox.SelectedItem as TrackIdLookupSourceOption)?.Source ?? SearchSource.Music163;
+	}
+
+	private void TrackIdSourceSelectedIndexChanged(object sender, EventArgs args)
+	{
+		UpdateTrackIdInputHint();
+		trackIdLookupStatusLabel.Visible = false;
+	}
+
+	private void UpdateTrackIdInputHint()
+	{
+		if (trackIdTextBox == null || trackIdSourceComboBox == null)
+		{
+			return;
+		}
+		string hint = GetTrackIdInputHint(GetSelectedTrackIdSource(), CultureInfo.CurrentUICulture);
+		trackIdTextBox.PlaceholderText = hint;
+		trackIdLookupToolTip?.SetToolTip(trackIdTextBox, hint);
+	}
+
+	internal static string GetTrackIdInputHint(SearchSource source, CultureInfo culture)
+	{
+		switch (source)
+		{
+		case SearchSource.QQ:
+			return UiText.Get("songmid, songid, or song link", "songmid、songid 或歌曲链接", "songmid、songid 或歌曲連結", culture);
+		case SearchSource.Kuwo:
+			return UiText.Get("musicId or song link", "musicId 或歌曲链接", "musicId 或歌曲連結", culture);
+		case SearchSource.Kugou:
+			return UiText.Get("MixSongID, hash, or song link", "MixSongID、hash 或歌曲链接", "MixSongID、hash 或歌曲連結", culture);
+		default:
+			return UiText.Get("Numeric ID or song link", "数字 ID 或歌曲链接", "數字 ID 或歌曲連結", culture);
+		}
+	}
+
+	private void TrackIdTextBoxKeyDown(object sender, KeyEventArgs args)
+	{
+		if (args.KeyCode != Keys.Enter)
+		{
+			return;
+		}
+		args.SuppressKeyPress = true;
+		args.Handled = true;
+		LookupTrackByIdAsync();
+	}
+
+	private void TrackIdLookupButtonClick(object sender, EventArgs args)
+	{
+		LookupTrackByIdAsync();
+	}
+
+	private async void LookupTrackByIdAsync()
+	{
+		if (trackIdLookupInProgress || cancellationSource.IsCancellationRequested)
+		{
+			return;
+		}
+		SearchSource source = GetSelectedTrackIdSource();
+		if (!TrackIdInput.TryNormalize(source, trackIdTextBox.Text, out string normalizedId))
+		{
+			ShowTrackIdLookupStatus(UiText.Get("Invalid ID format", "歌曲 ID 格式不正确", "歌曲 ID 格式不正確"), isError: true);
+			return;
+		}
+
+		trackIdLookupInProgress = true;
+		SetTrackIdLookupControlsEnabled(enabled: false);
+		ShowTrackIdLookupStatus(UiText.Get("Looking up...", "正在查询...", "正在查詢..."), isError: false);
+		try
+		{
+			TrackIdLookupRequest request = new TrackIdLookupRequest
+			{
+				Cancellation = cancellationSource,
+				TrackId = normalizedId,
+				Source = source,
+				SourceOrder = trackIdSourceComboBox.SelectedIndex
+			};
+			TrackIdLookupOperationResult outcome = await Task.Run((Func<TrackIdLookupOperationResult>)request.Execute, cancellationSource.Token);
+			if (IsDisposed || cancellationSource.IsCancellationRequested)
+			{
+				return;
+			}
+			if (outcome.Track == null)
+			{
+				ShowTrackIdLookupStatus(GetTrackIdLookupFailureText(outcome.TransportResult, CultureInfo.CurrentUICulture), isError: true);
+				return;
+			}
+
+			ListViewItem existingItem = FindSearchResultItem(outcome.Track);
+			if (existingItem != null)
+			{
+				existingItem.Selected = true;
+				existingItem.EnsureVisible();
+				ShowTrackIdLookupStatus(UiText.Get("Already in results", "结果中已存在该歌曲", "結果中已存在該歌曲"), isError: false);
+				return;
+			}
+
+			AddSearchResultsToList(new List<TrackSearchResult> { outcome.Track }, cacheNewResults: true);
+			ListViewItem addedItem = FindSearchResultItem(outcome.Track);
+			if (addedItem != null)
+			{
+				addedItem.Selected = true;
+				addedItem.EnsureVisible();
+			}
+			ShowTrackIdLookupStatus(UiText.Get("Track added", "已添加查询结果", "已加入查詢結果"), isError: false);
+		}
+		catch (OperationCanceledException) when (cancellationSource.IsCancellationRequested)
+		{
+		}
+		catch (Exception ex)
+		{
+			LogService.WriteExceptionDetails(ex, "CombinedTagSearchDialog.LookupTrackByIdAsync");
+			if (!IsDisposed)
+			{
+				ShowTrackIdLookupStatus(UiText.Get("Lookup failed", "查询失败", "查詢失敗"), isError: true);
+			}
+		}
+		finally
+		{
+			trackIdLookupInProgress = false;
+			if (!IsDisposed)
+			{
+				SetTrackIdLookupControlsEnabled(enabled: true);
+			}
+		}
+	}
+
+	private void SetTrackIdLookupControlsEnabled(bool enabled)
+	{
+		trackIdSourceComboBox.Enabled = enabled;
+		trackIdTextBox.Enabled = enabled;
+		trackIdLookupButton.Enabled = enabled;
+	}
+
+	private void ShowTrackIdLookupStatus(string text, bool isError)
+	{
+		trackIdLookupStatusLabel.Text = text;
+		trackIdLookupStatusLabel.ForeColor = isError ? Color.Firebrick : SystemColors.GrayText;
+		trackIdLookupStatusLabel.Visible = true;
+	}
+
+	internal static string GetTrackIdLookupFailureText(HttpResult transportResult, CultureInfo culture)
+	{
+		if (transportResult == null || transportResult.IsSuccess)
+		{
+			return UiText.Get("Track not found", "未找到该歌曲", "未找到該歌曲", culture);
+		}
+		string message;
+		switch (transportResult.Error)
+		{
+		case RemoteErrorKind.RateLimited:
+			message = UiText.Get("Request rate limited", "请求被限流", "請求被限流", culture);
+			break;
+		case RemoteErrorKind.Timeout:
+			message = UiText.Get("Request timed out", "请求超时", "請求逾時", culture);
+			break;
+		case RemoteErrorKind.Network:
+			message = UiText.Get("Network error", "网络错误", "網路錯誤", culture);
+			break;
+		case RemoteErrorKind.HttpStatus:
+			message = UiText.Get("HTTP error", "HTTP 错误", "HTTP 錯誤", culture);
+			break;
+		default:
+			message = UiText.Get("Invalid provider response", "接口响应格式错误", "介面回應格式錯誤", culture);
+			break;
+		}
+		return string.IsNullOrWhiteSpace(transportResult.ErrorCode) ? message : message + " (" + transportResult.ErrorCode + ")";
+	}
+
 	private void UpdateSearchDialogLayout()
 	{
+		trackIdLookupPanel.Width = mainPanel.Width;
 		searchResultsListView.Width = mainPanel.Width;
-		searchResultsListView.Height = mainPanel.Height - footerPanel.Height;
+		searchResultsListView.Height = Math.Max(0, mainPanel.Height - trackIdLookupPanel.Height - footerPanel.Height);
 		SearchStatusIndicator.LayoutFooterStatus(footerPanel, buttonPanel, searchStatusLabel);
 	}
 
@@ -509,7 +803,12 @@ internal class CombinedTagSearchDialog : Form
 		UpdateSearchDialogLayout();
 	}
 
-	private void AddSearchResultsToList(List<TrackSearchResult> results)
+	private ListViewItem FindSearchResultItem(TrackSearchResult searchResult)
+	{
+		return searchResultsListView.Items.Cast<ListViewItem>().FirstOrDefault(item => item.Tag is TrackSearchResult existingResult && existingResult.SearchSource == searchResult.SearchSource && string.Equals(existingResult.SourceTrackId, searchResult.SourceTrackId, StringComparison.OrdinalIgnoreCase));
+	}
+
+	private void AddSearchResultsToList(List<TrackSearchResult> results, bool cacheNewResults = false)
 	{
 		if (results == null || base.IsDisposed)
 		{
@@ -518,6 +817,15 @@ internal class CombinedTagSearchDialog : Form
 		searchResultsListView.BeginUpdate();
 		foreach (TrackSearchResult searchResult in results)
 		{
+			if (FindSearchResultItem(searchResult) != null)
+			{
+				continue;
+			}
+			if (cacheNewResults)
+			{
+				cachedSearchResults ??= new List<TrackSearchResult>();
+				cachedSearchResults.Add(searchResult);
+			}
 			SearchResultSelectionContext selectionContext = new SearchResultSelectionContext();
 			selectionContext.Owner = this;
 			if (cancellationSource.IsCancellationRequested)
@@ -1017,6 +1325,12 @@ internal class CombinedTagSearchDialog : Form
 	{
 		if (disposing)
 		{
+			if (trackIdLookupButton != null)
+			{
+				Image trackIdLookupImage = trackIdLookupButton.Image;
+				trackIdLookupButton.Image = null;
+				trackIdLookupImage?.Dispose();
+			}
 			if (coverImageCache != null)
 			{
 				// 释放缓存的缩放/占位封面位图副本,避免反复搜索累积 GDI 句柄泄漏。
@@ -1035,6 +1349,13 @@ internal class CombinedTagSearchDialog : Form
 	{
 		components = new System.ComponentModel.Container();
 		mainPanel = new FlowLayoutPanel();
+		trackIdLookupPanel = new TableLayoutPanel();
+		trackIdLabel = new Label();
+		trackIdSourceComboBox = new ComboBox();
+		trackIdTextBox = new TextBox();
+		trackIdLookupButton = new Button();
+		trackIdLookupStatusLabel = new Label();
+		trackIdLookupToolTip = new ToolTip(components);
 		searchResultsListView = new MusicTagWinApp.Roles.EditableListView();
 		coverColumn = new ColumnHeader();
 		sourceColumn = new ColumnHeader();
@@ -1056,11 +1377,13 @@ internal class CombinedTagSearchDialog : Form
 		extractCoverMenuItem = new ToolStripMenuItem();
 		saveCoverDialog = new SaveFileDialog();
 		mainPanel.SuspendLayout();
+		trackIdLookupPanel.SuspendLayout();
 		footerPanel.SuspendLayout();
 		buttonPanel.SuspendLayout();
 		okButtonMenu.SuspendLayout();
 		coverContextMenu.SuspendLayout();
 		SuspendLayout();
+		mainPanel.Controls.Add(trackIdLookupPanel);
 		mainPanel.Controls.Add(searchResultsListView);
 		mainPanel.Controls.Add(footerPanel);
 		mainPanel.Dock = DockStyle.Fill;
@@ -1072,17 +1395,79 @@ internal class CombinedTagSearchDialog : Form
 		mainPanel.TabIndex = 1;
 		mainPanel.WrapContents = false;
 		mainPanel.SizeChanged += SearchPanelSizeChanged;
+		trackIdLookupPanel.ColumnCount = 4;
+		trackIdLookupPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 62f));
+		trackIdLookupPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112f));
+		trackIdLookupPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+		trackIdLookupPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 42f));
+		trackIdLookupPanel.Controls.Add(trackIdLabel, 0, 0);
+		trackIdLookupPanel.Controls.Add(trackIdSourceComboBox, 1, 0);
+		trackIdLookupPanel.Controls.Add(trackIdTextBox, 2, 0);
+		trackIdLookupPanel.Controls.Add(trackIdLookupButton, 3, 0);
+		trackIdLookupPanel.Controls.Add(trackIdLookupStatusLabel, 1, 1);
+		trackIdLookupPanel.SetColumnSpan(trackIdLookupStatusLabel, 3);
+		trackIdLookupPanel.Location = new Point(0, 0);
+		trackIdLookupPanel.Margin = new Padding(0);
+		trackIdLookupPanel.Name = "trackIdLookupPanel";
+		trackIdLookupPanel.Padding = new Padding(6, 4, 6, 0);
+		trackIdLookupPanel.RowCount = 2;
+		trackIdLookupPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32f));
+		trackIdLookupPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 20f));
+		trackIdLookupPanel.Size = new Size(534, 58);
+		trackIdLookupPanel.TabIndex = 0;
+		trackIdLabel.Dock = DockStyle.Fill;
+		trackIdLabel.Location = new Point(6, 4);
+		trackIdLabel.Margin = new Padding(0);
+		trackIdLabel.Name = "trackIdLabel";
+		trackIdLabel.Size = new Size(62, 32);
+		trackIdLabel.TabIndex = 0;
+		trackIdLabel.Text = "Track ID";
+		trackIdLabel.TextAlign = ContentAlignment.MiddleLeft;
+		trackIdSourceComboBox.Dock = DockStyle.Fill;
+		trackIdSourceComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
+		trackIdSourceComboBox.FormattingEnabled = true;
+		trackIdSourceComboBox.Location = new Point(71, 7);
+		trackIdSourceComboBox.Margin = new Padding(3);
+		trackIdSourceComboBox.Name = "trackIdSourceComboBox";
+		trackIdSourceComboBox.Size = new Size(106, 22);
+		trackIdSourceComboBox.TabIndex = 1;
+		trackIdSourceComboBox.SelectedIndexChanged += TrackIdSourceSelectedIndexChanged;
+		trackIdTextBox.Dock = DockStyle.Fill;
+		trackIdTextBox.Location = new Point(183, 7);
+		trackIdTextBox.Margin = new Padding(3);
+		trackIdTextBox.Name = "trackIdTextBox";
+		trackIdTextBox.Size = new Size(303, 22);
+		trackIdTextBox.TabIndex = 2;
+		trackIdTextBox.KeyDown += TrackIdTextBoxKeyDown;
+		trackIdLookupButton.Dock = DockStyle.Fill;
+		trackIdLookupButton.Location = new Point(492, 6);
+		trackIdLookupButton.Margin = new Padding(3, 2, 3, 2);
+		trackIdLookupButton.Name = "trackIdLookupButton";
+		trackIdLookupButton.Size = new Size(36, 28);
+		trackIdLookupButton.TabIndex = 3;
+		trackIdLookupButton.UseVisualStyleBackColor = true;
+		trackIdLookupButton.Click += TrackIdLookupButtonClick;
+		trackIdLookupStatusLabel.AutoEllipsis = true;
+		trackIdLookupStatusLabel.Dock = DockStyle.Fill;
+		trackIdLookupStatusLabel.ForeColor = SystemColors.GrayText;
+		trackIdLookupStatusLabel.Location = new Point(71, 36);
+		trackIdLookupStatusLabel.Margin = new Padding(3, 0, 3, 0);
+		trackIdLookupStatusLabel.Name = "trackIdLookupStatusLabel";
+		trackIdLookupStatusLabel.Size = new Size(457, 20);
+		trackIdLookupStatusLabel.TabIndex = 4;
+		trackIdLookupStatusLabel.TextAlign = ContentAlignment.MiddleLeft;
+		trackIdLookupStatusLabel.Visible = false;
 		searchResultsListView.Columns.AddRange(new ColumnHeader[6] { coverColumn, sourceColumn, titleColumn, artistColumn, albumColumn, commentColumn });
 		searchResultsListView.EmbeddedControlInset = 4;
 		searchResultsListView.FullRowSelect = true;
 		searchResultsListView.HeaderStyle = ColumnHeaderStyle.Nonclickable;
 		searchResultsListView.HideSelection = false;
-		searchResultsListView.Location = new Point(0, 0);
+		searchResultsListView.Location = new Point(0, 58);
 		searchResultsListView.Margin = new Padding(0);
 		searchResultsListView.MultiSelect = false;
 		searchResultsListView.Name = "listView1";
 		searchResultsListView.OwnerDraw = true;
-		searchResultsListView.Size = new Size(534, 431);
+		searchResultsListView.Size = new Size(534, 373);
 		searchResultsListView.SmallImageList = coverImageList;
 		searchResultsListView.TabIndex = 9;
 		searchResultsListView.UseCompatibleStateImageBehavior = false;
@@ -1184,6 +1569,8 @@ internal class CombinedTagSearchDialog : Form
 		base.Activated += DialogActivated;
 		base.Deactivate += DialogDeactivate;
 		mainPanel.ResumeLayout(performLayout: false);
+		trackIdLookupPanel.ResumeLayout(performLayout: false);
+		trackIdLookupPanel.PerformLayout();
 		footerPanel.ResumeLayout(performLayout: false);
 		buttonPanel.ResumeLayout(performLayout: false);
 		okButtonMenu.ResumeLayout(performLayout: false);

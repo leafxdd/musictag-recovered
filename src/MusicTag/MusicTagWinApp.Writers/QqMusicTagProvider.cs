@@ -20,7 +20,7 @@ using Newtonsoft.Json.Linq;
 
 namespace MusicTagWinApp.Writers;
 
-internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider, ILyricSearchProvider, ICoverSearchProvider, ITrackLyricLoader
+internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider, ITrackIdLookupProvider, ILyricSearchProvider, ICoverSearchProvider, ITrackLyricLoader
 {
 	// 显式接口实现:把能力接口的统一签名(网易云超集)转发到本类既有 concrete,丢弃 QQ 不接收的 knownSongId / existingLyrics。
 	// concrete 方法体与签名一字未动;SearchCovers / LoadLyricsForTrack 因签名匹配而隐式实现。
@@ -39,6 +39,8 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 	private const string callbackName = "MusicJsonCallback34475857153687595";
 
 	private const string searchEndpointUrl = "https://u.y.qq.com/cgi-bin/musicu.fcg";
+
+	private const string songDetailUrlFormat = "https://c.y.qq.com/v8/fcg-bin/fcg_play_single_song.fcg?{0}={1}&tpl=yqq_song_detail&format=json";
 
 	private const string searchRequestTemplate = "{{\"{0}\":{{\"method\":\"DoSearchForQQMusicDesktop\",\"module\":\"music.search.SearchCgiService\",\"param\":{{\"search_type\":0,\"query\":\"{1}\",\"page_num\":1,\"num_per_page\":{2}}}}}}}";
 
@@ -185,6 +187,48 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 	public List<TrackSearchResult> SearchTracks(string query, int maxResults, int searchPass, int sourceOrder, List<TrackSearchResult> existingTracks, List<TrackSearchResult> previousResults)
 	{
 		return BuildOrderedTracks<QqSongInfo>(SearchSongs(query, maxResults), BuildTrackResult, searchPass, sourceOrder, existingTracks, previousResults);
+	}
+
+	public TrackSearchResult LookupTrackById(string trackId, int sourceOrder)
+	{
+		string normalizedId = TrackIdInput.ExtractLastPathOrQueryValue(trackId, "songmid", "songid", "id");
+		if (string.IsNullOrWhiteSpace(normalizedId))
+		{
+			return null;
+		}
+		string idParameter = normalizedId.All(char.IsDigit) ? "songid" : "songmid";
+		string responseBody = GetResponseString(string.Format(songDetailUrlFormat, idParameter, TextUtilities.UrlEncodeUtf8(normalizedId)));
+		if (cancellationSource.IsCancellationRequested)
+		{
+			return null;
+		}
+		try
+		{
+			JToken songJson = JObject.Parse(responseBody)?["data"]?.First;
+			if (songJson == null || songJson.Type != JTokenType.Object)
+			{
+				return null;
+			}
+			QqSongInfo song = ParseSongSearchResult(songJson);
+			if (song.Id <= 0L || string.IsNullOrWhiteSpace(song.Mid) || string.IsNullOrWhiteSpace(song.Title))
+			{
+				return null;
+			}
+			TrackSearchResult track = BuildTrackResult(song);
+			track.ResultOrder = 0;
+			track.SearchPass = 0;
+			track.SourceOrder = sourceOrder;
+			return track;
+		}
+		catch (Exception parseError)
+		{
+			Console.WriteLine("Parse QQ song detail error:" + parseError.GetMessageChain());
+			if (!string.IsNullOrWhiteSpace(responseBody))
+			{
+				SetTransportError(RemoteErrorKind.ParseFailed, "parse");
+			}
+			return null;
+		}
 	}
 
 	private TrackSearchResult BuildTrackResult(QqSongInfo songInfo)

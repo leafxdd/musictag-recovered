@@ -62,6 +62,60 @@ internal static class DialogConstructionSmoke
 				}
 			});
 		});
+
+		yield return ("Smoke: CombinedTagSearchDialog track ID toolbar layout + dispose (zh-CHS ui culture)", delegate
+		{
+			RunWithAppUiCulture(delegate
+			{
+				Form dialog = (Form)ConstructNonPublic(typeof(MusicTag.Mocks.CombinedTagSearchDialog));
+				try
+				{
+					TableLayoutPanel lookupPanel = (TableLayoutPanel)GetField(dialog, "trackIdLookupPanel");
+					ComboBox source = (ComboBox)GetField(dialog, "trackIdSourceComboBox");
+					TextBox idInput = (TextBox)GetField(dialog, "trackIdTextBox");
+					Button lookup = (Button)GetField(dialog, "trackIdLookupButton");
+					Check.Equal(4, source.Items.Count, "four ID lookup sources");
+					Check.True(lookupPanel.Height > 0, "lookup panel has stable height");
+					Check.True(idInput.Width > 100, "ID input remains usable");
+					Check.True(lookup.Width > 0 && lookup.Right <= lookupPanel.ClientSize.Width, "lookup button fits panel");
+					InvokeMethod(dialog, "UpdateTrackIdLookupIconForDpi", 144);
+					Check.Equal(27, lookup.Image.Width, "150 percent lookup icon width");
+					Check.Equal(27, lookup.Image.Height, "150 percent lookup icon height");
+					InvokeMethod(dialog, "UpdateTrackIdLookupIconForDpi", 96);
+					Check.Equal(18, lookup.Image.Width, "100 percent lookup icon width after downscale");
+					Check.Equal(18, lookup.Image.Height, "100 percent lookup icon height after downscale");
+					Check.True(ReferenceEquals(dialog.AcceptButton, GetField(dialog, "okSplitButton")), "dialog Enter remains OK outside ID input");
+				}
+				finally
+				{
+					dialog.Dispose();
+				}
+			});
+		});
+
+		yield return ("TagSearchCandidatePanel DPI metrics are absolute and round-trip safely", delegate
+		{
+			Control panel = (Control)ConstructNonPublic(typeof(MusicTag.Consumers.TagSearchCandidatePanel));
+			try
+			{
+				Label sourceLabel = (Label)GetField(panel, "sourceLabel");
+				PictureBox lyricPictureBox = (PictureBox)GetField(panel, "lyricPictureBox");
+				InvokeMethod(panel, "ApplyDpiMetrics", 144);
+				Check.Equal(30, sourceLabel.Height, "150 percent source label height");
+				Check.Equal(24, lyricPictureBox.Height, "150 percent lyric icon height");
+				Check.Equal(3, lyricPictureBox.Margin.Top, "150 percent lyric margin");
+				InvokeMethod(panel, "ApplyDpiMetrics", 96);
+				Check.Equal(20, sourceLabel.Height, "100 percent source label height");
+				Check.Equal(16, lyricPictureBox.Height, "100 percent lyric icon height");
+				Check.Equal(2, lyricPictureBox.Margin.Top, "100 percent lyric margin");
+				InvokeMethod(panel, "ApplyDpiMetrics", 144);
+				Check.Equal(30, sourceLabel.Height, "round-trip source label does not compound");
+			}
+			finally
+			{
+				panel.Dispose();
+			}
+		});
 	}
 
 	private static void CheckTranslatedLyricConnectorState(Form dialog)
@@ -127,5 +181,15 @@ internal static class DialogConstructionSmoke
 			throw new Exception("field not found: " + fieldName);
 		}
 		return field.GetValue(instance);
+	}
+
+	private static object InvokeMethod(object instance, string methodName, params object[] arguments)
+	{
+		MethodInfo method = instance.GetType().GetMethod(methodName, BindingFlags.NonPublic | BindingFlags.Instance);
+		if (method == null)
+		{
+			throw new Exception("method not found: " + methodName);
+		}
+		return method.Invoke(instance, arguments);
 	}
 }
