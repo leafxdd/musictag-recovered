@@ -604,8 +604,8 @@ internal class OptionsDialog : Form
 
 		pendingPictureJpegQuality = Settings.Default.PictureJpegQuality;
 		pendingPicturePngCompressionLevel = Settings.Default.PicturePngCompressionLevel;
-		pictureFormatLimitComboBox.Items.AddRange(GetResourceText(Resources.PictureFormatLimitsEntries, DefaultPictureFormatLimitEntries).Split('|'));
-		pictureFormatLimitComboBox.SelectedIndex = ResolveIndexOrDefault(GetResourceText(Resources.PictureFormatLimitsKeys, DefaultPictureFormatLimitValues).Split('|').ToList(), Settings.Default.PictureFormatLimits);
+		pictureFormatLimitComboBox.Items.AddRange(GetPictureFormatEntries());
+		pictureFormatLimitComboBox.SelectedIndex = ResolveIndexOrDefault(GetPictureFormatValues().ToList(), Settings.Default.PictureFormatLimits);
 		UpdatePictureEncodingOptions(null, null);
 
 		qqCookieTextBox.Text = Settings.Default.QQMusic_Cookie;
@@ -865,7 +865,7 @@ internal class OptionsDialog : Form
 		Settings.Default.MinimizeToNotiArea = minimizeToNotifyAreaCheckBox.Checked;
 		Settings.Default.CheckForUpdatesOnStartup = checkForUpdatesOnStartupCheckBox.Checked;
 		Settings.Default.RestrictFileExts = string.Join(";", StateFieldInstance.EnabledTagTypesByExtension.Keys) + ";";
-		Settings.Default.PictureFormatLimits = GetResourceText(Resources.PictureFormatLimitsKeys, DefaultPictureFormatLimitValues).Split('|')[pictureFormatLimitComboBox.SelectedIndex];
+		Settings.Default.PictureFormatLimits = GetPictureFormatValues()[pictureFormatLimitComboBox.SelectedIndex];
 		Settings.Default.PictureJpegQuality = pendingPictureJpegQuality;
 		Settings.Default.PicturePngCompressionLevel = pendingPicturePngCompressionLevel;
 		Settings.Default.ConnectorsArtists = artistConnectorComboBox.Text;
@@ -986,11 +986,14 @@ internal class OptionsDialog : Form
 
 	private void UpdatePictureEncodingOptions(object sender, EventArgs e)
 	{
-		string format = GetResourceText(Resources.PictureFormatLimitsKeys, DefaultPictureFormatLimitValues).Split('|')[Math.Max(0, pictureFormatLimitComboBox.SelectedIndex)];
+		string format = GetPictureFormatValues()[Math.Max(0, pictureFormatLimitComboBox.SelectedIndex)];
 		bool png = format == "PNG";
 		pictureEncodingQualityLabel.Text = png
-			? UiText.Get("PNG compression level:", "PNG 压缩级别：", "PNG 壓縮級別：")
-			: UiText.Get(format == "AUTO" ? "JPEG quality when compression is required:" : "JPEG quality:", format == "AUTO" ? "需要压缩时的 JPEG 质量：" : "JPEG 质量：", format == "AUTO" ? "需要壓縮時的 JPEG 品質：" : "JPEG 品質：");
+			? UiText.Get("PNG compression:", "PNG 压缩级别：", "PNG 壓縮級別：")
+			: UiText.Get("JPEG quality:", "JPEG 质量：", "JPEG 品質：");
+		optionsToolTip.SetToolTip(pictureEncodingQualityNumericUpDown, format == "AUTO"
+			? UiText.Get("Used only when a JPEG must be resized or compressed.", "仅在 JPEG 需要缩放或压缩时使用。", "僅在 JPEG 需要縮放或壓縮時使用。")
+			: pictureEncodingQualityLabel.Text);
 		updatingPictureEncodingOptions = true;
 		pictureEncodingQualityNumericUpDown.Minimum = png ? 0 : 1;
 		pictureEncodingQualityNumericUpDown.Maximum = png ? 9 : 100;
@@ -1001,9 +1004,26 @@ internal class OptionsDialog : Form
 	private void PictureEncodingQualityValueChanged(object sender, EventArgs e)
 	{
 		if (updatingPictureEncodingOptions) return;
-		string format = GetResourceText(Resources.PictureFormatLimitsKeys, DefaultPictureFormatLimitValues).Split('|')[Math.Max(0, pictureFormatLimitComboBox.SelectedIndex)];
+		string format = GetPictureFormatValues()[Math.Max(0, pictureFormatLimitComboBox.SelectedIndex)];
 		if (format == "PNG") pendingPicturePngCompressionLevel = (int)pictureEncodingQualityNumericUpDown.Value;
 		else pendingPictureJpegQuality = (int)pictureEncodingQualityNumericUpDown.Value;
+	}
+
+	private static string[] GetPictureFormatValues()
+	{
+		List<string> values = GetResourceText(Resources.PictureFormatLimitsKeys, DefaultPictureFormatLimitValues).Split('|').ToList();
+		if (!values.Contains("PNG")) values.Add("PNG");
+		return values.ToArray();
+	}
+
+	private static string[] GetPictureFormatEntries()
+	{
+		List<string> entries = GetResourceText(Resources.PictureFormatLimitsEntries, DefaultPictureFormatLimitEntries).Split('|').ToList();
+		while (entries.Count < GetPictureFormatValues().Length)
+		{
+			entries.Add(UiText.Get("Fixed to png format", "固定为 PNG 格式", "固定為 PNG 格式"));
+		}
+		return entries.ToArray();
 	}
 
 	private void UpdateWebSearchLimitLabel(object sender, EventArgs e)

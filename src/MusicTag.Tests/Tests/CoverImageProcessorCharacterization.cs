@@ -70,6 +70,15 @@ internal static class CoverImageProcessorCharacterization
 			Check.Equal("image/png", picture.MimeType, "mime");
 		});
 
+		yield return ("CoverImageProcessor AUTO detects missing MIME without rewriting bytes", delegate
+		{
+			byte[] original = CreatePng(48, 32);
+			ConfigDescriptorState.PictureData picture = Picture((byte[])original.Clone(), null);
+			Check.True(CoverImageProcessor.Process(picture, new CoverImageProcessingOptions { FormatMode = "AUTO" }), "processed");
+			Check.Equal("image/png", picture.MimeType, "detected MIME");
+			Check.True(original.SequenceEqual(picture.ImageBytes), "original bytes preserved");
+		});
+
 		yield return ("CoverImageProcessor AUTO resizes PNG and keeps PNG", delegate
 		{
 			ConfigDescriptorState.PictureData picture = Picture(CreatePng(120, 80), "image/png");

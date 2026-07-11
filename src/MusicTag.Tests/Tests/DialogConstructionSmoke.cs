@@ -57,6 +57,13 @@ internal static class DialogConstructionSmoke
 				{
 					Check.True(dialog != null, "constructed");
 					Check.True(ReferenceEquals(dialog.AcceptButton, GetField(dialog, "okButton")), "Enter invokes OK");
+					ComboBox pictureFormat = (ComboBox)GetField(dialog, "pictureFormatLimitComboBox");
+					NumericUpDown pictureQuality = (NumericUpDown)GetField(dialog, "pictureEncodingQualityNumericUpDown");
+					Check.Equal(3, pictureFormat.Items.Count, "AUTO/JPG/PNG format options");
+					pictureFormat.SelectedIndex = 2;
+					Check.Equal(9m, pictureQuality.Maximum, "PNG compression maximum");
+					pictureFormat.SelectedIndex = 1;
+					Check.Equal(100m, pictureQuality.Maximum, "JPEG quality maximum");
 					CheckTranslatedLyricConnectorState(dialog);
 				}
 				finally

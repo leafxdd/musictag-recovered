@@ -47,6 +47,15 @@ internal static class CoverImageProcessor
 		using Image image = Image.Load(pictureData.ImageBytes, out IImageFormat detectedFormat);
 		sourceMimeType = NormalizeMimeType(detectedFormat?.DefaultMimeType) ?? sourceMimeType;
 		targetMimeType = ResolveTargetMimeType(options.FormatMode, sourceMimeType);
+		formatAlreadyMatches = IsOriginalFormatAllowed(options.FormatMode, sourceMimeType, targetMimeType);
+		bool resolutionLimitSatisfied = options.MaxResolution <= 0 || Math.Max(image.Width, image.Height) <= options.MaxResolution;
+		if (formatAlreadyMatches && byteLimitSatisfied && resolutionLimitSatisfied)
+		{
+			pictureData.MimeType = sourceMimeType;
+			pictureData.Width = image.Width;
+			pictureData.Height = image.Height;
+			return true;
+		}
 		if (options.MaxResolution > 0 && Math.Max(image.Width, image.Height) > options.MaxResolution)
 		{
 			ResizeToMaximumDimension(image, options.MaxResolution);

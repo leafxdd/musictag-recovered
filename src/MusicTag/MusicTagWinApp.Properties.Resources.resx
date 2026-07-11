@@ -218,7 +218,7 @@ kdGgh0ql9oE4L1QxREZmwywO6Se3FM+B4pV3+XoljEaDDwR/oqJQjgPaiaf0DL0/bgs2nqPTtWNC
 hngvmHj1tEMKwmLpQZ2mFOm11qncJpvU+5LaQw4lXv1C2O12D0RW0xt/7/uIyfaSQ4nXgBC1mrMM
 kMYPhypXvA4FitdN29FNe0IiJ4JWsPEaAKIPgiBsCYLbEmy8bhtEKPoP4dY/ANHbD61WuzsQ5vYO
 OJaWcbvHAlEUdxpChUqCuNnahitXr0GnWweI2N84f/KphEaoocl1PHkhedsBWB4Ig8EAvV7Pkxe5
-rm1rCzbKDcGrZrsmj4r6A0fnkfOwnn/6AAAAAElFTkSuQmCCCw==</value></data><data name="PictureFormatLimitsKeys" xml:space="preserve"><value>AUTO|JPG</value></data>
+rm1rCzbKDcGrZrsmj4r6A0fnkfOwnn/6AAAAAElFTkSuQmCCCw==</value></data><data name="PictureFormatLimitsKeys" xml:space="preserve"><value>AUTO|JPG|PNG</value></data>
   <data name="OpenCover" xml:space="preserve"><value>Open cover</value></data>
   <data name="FilenameRelByBatch" xml:space="preserve"><value>File name-related operation by batch</value></data>
   <data name="Alipay" xml:space="preserve"><value>Alipay</value></data>
@@ -1229,7 +1229,7 @@ DzvkhdyiEGNdAAAAAElFTkSuQmCCCw==</value></data><data name="Msg_OK_Fail_Skip_Coun
   <data name="Msg_CannotFindText" xml:space="preserve"><value>Cannot find "{0}"</value></data>
   <data name="filename" xml:space="preserve"><value>File name</value></data>
   <data name="updatetime" xml:space="preserve"><value>Update time</value></data>
-  <data name="PictureFormatLimitsEntries" xml:space="preserve"><value>Auto|Fixed to jpg format</value></data>
+  <data name="PictureFormatLimitsEntries" xml:space="preserve"><value>Auto|Fixed to jpg format|Fixed to png format</value></data>
   <data name="Msg_NoSupportExt" xml:space="preserve"><value>Extension {0} not supported</value></data>
   <data name="Msg_OK_Fail_Count" xml:space="preserve"><value>OK: {0}, Fail: {1}, Total: {2}</value></data>
   <data name="saveToolStripMenuItem_Image" mimetype="application/x-microsoft.net.object.binary.base64"><value>AAEAAAD/////AQAAAAAAAAAMAgAAAFFTeXN0ZW0uRHJhd2luZywgVmVyc2lvbj00LjAuMC4wLCBD
