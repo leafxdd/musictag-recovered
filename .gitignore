@@ -43,5 +43,8 @@ docs/old/
 .claude/
 .mcp.json
 .repowise/
-AGENTS.md
 cctortest/
+.serena/
+
+# Local investigation screenshots.
+/docs/pic*.jpg
