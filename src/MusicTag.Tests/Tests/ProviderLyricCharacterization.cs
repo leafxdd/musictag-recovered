@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.IO.Compression;
 using System.Net.Http;
 using System.Text;
 using MusicTag.Candidates;
@@ -8,6 +10,7 @@ using MusicTagWinApp.Adapter;
 using MusicTagWinApp.Exporters;
 using MusicTagWinApp.Web;
 using MusicTagWinApp.Writers;
+using MusicTagWinApp.Properties;
 
 namespace MusicTag.Tests;
 
@@ -39,12 +42,25 @@ internal static class ProviderLyricCharacterization
 	{
 		private readonly string searchResponse;
 		private readonly string lyricResponse;
-		public StubQq(string searchResponse, string lyricResponse = null) : base(null)
+		private readonly string qrcResponse;
+		public string QrcRequestUrl { get; private set; }
+		public string QrcRequestBody { get; private set; }
+		public StubQq(string searchResponse, string lyricResponse = null, string qrcResponse = null) : base(null)
 		{
 			this.searchResponse = searchResponse;
 			this.lyricResponse = lyricResponse;
+			this.qrcResponse = qrcResponse;
 		}
-		protected override string PostString(string url, string body, HttpClient client = null, bool postJson = false) => searchResponse;
+		protected override string PostString(string url, string body, HttpClient client = null, bool postJson = false)
+		{
+			if (body?.Contains("GetPlayLyricInfo") == true)
+			{
+				QrcRequestUrl = url;
+				QrcRequestBody = body;
+				return qrcResponse ?? searchResponse;
+			}
+			return searchResponse;
+		}
 		protected override string GetResponseString(string url) => lyricResponse;
 	}
 
@@ -82,6 +98,57 @@ internal static class ProviderLyricCharacterization
 		return "MusicJsonCallback34475857153687595({\"lyric\":\"" + encodedLyric + "\",\"trans\":\"" + encodedTrans + "\"})";
 	}
 
+	private static string QqQrcResponse(string lyric, string translation = "")
+	{
+		return "{\"req_0\":{\"code\":0,\"data\":{\"qrc_t\":1,\"lyric\":\"" + EncryptQrcFixture(lyric) + "\",\"trans\":\"" + EncryptQrcFixture(translation) + "\"}}}";
+	}
+
+	private static string EncryptQrcFixture(string lyric)
+	{
+		if (string.IsNullOrEmpty(lyric))
+		{
+			return "";
+		}
+
+		byte[] compressed;
+		using (MemoryStream output = new MemoryStream())
+		{
+			using (ZLibStream compressor = new ZLibStream(output, CompressionLevel.Optimal, leaveOpen: true))
+			{
+				byte[] source = Encoding.UTF8.GetBytes(lyric);
+				compressor.Write(source, 0, source.Length);
+			}
+			compressed = output.ToArray();
+		}
+
+		int paddedLength = (compressed.Length + 7) / 8 * 8;
+		byte[] padded = new byte[paddedLength];
+		Buffer.BlockCopy(compressed, 0, padded, 0, compressed.Length);
+		byte[] encrypted = new byte[paddedLength];
+		byte[][][] schedule = new byte[3][][];
+		for (int keyIndex = 0; keyIndex < schedule.Length; keyIndex++)
+		{
+			schedule[keyIndex] = new byte[16][];
+			for (int round = 0; round < schedule[keyIndex].Length; round++)
+			{
+				schedule[keyIndex][round] = new byte[6];
+			}
+		}
+
+		byte[] key = Encoding.ASCII.GetBytes("!@#)(*$%123ZXC!@!@#)(NHL");
+		QqDesHelper.TripleDESKeySetup(key, schedule, QqDesHelper.ENCRYPT);
+		for (int offset = 0; offset < padded.Length; offset += 8)
+		{
+			byte[] block = new byte[8];
+			Buffer.BlockCopy(padded, offset, block, 0, block.Length);
+			byte[] encryptedBlock = new byte[8];
+			QqDesHelper.TripleDESCrypt(block, encryptedBlock, schedule);
+			Buffer.BlockCopy(encryptedBlock, 0, encrypted, offset, encryptedBlock.Length);
+		}
+
+		return Convert.ToHexString(encrypted);
+	}
+
 	private const string NetEaseSearchOneSong =
 		"{\"result\":{\"songs\":[{\"id\":111,\"name\":\"SongA\",\"ar\":[{\"id\":1,\"name\":\"ArtistA\"}],\"al\":{\"id\":10,\"name\":\"AlbumA\"}}]}}";
 
@@ -113,20 +180,23 @@ internal static class ProviderLyricCharacterization
 			Check.Equal(SearchSource.Music163, lyrics[0].SearchSource, "[0].SearchSource");
 			Check.Equal(0, lyrics[0].ResultOrder, "[0].ResultOrder");
 			Check.Equal(2, lyrics[0].SourceOrder, "[0].SourceOrder");
-		});
+		}
+		);
 
 		yield return ("NetEase.SearchLyrics empty lrc -> 0 lyrics (null result skipped)", delegate
 		{
 			List<LyricSearchResult> lyrics = new StubNetEase(NetEaseSearchOneSong, "{\"lrc\":{\"lyric\":\"\"}}").SearchLyrics("q", 10, 0L, new List<LyricSearchResult>(), 0);
 			Check.Equal(0, lyrics.Count, "count");
-		});
+		}
+		);
 
 		yield return ("NetEase.SearchLyrics existing TrackId skipped", delegate
 		{
 			List<LyricSearchResult> existing = new List<LyricSearchResult> { new LyricSearchResult { TrackId = "111" } };
 			List<LyricSearchResult> lyrics = new StubNetEase(NetEaseSearchOneSong, "{\"lrc\":{\"lyric\":\"[00:01.00]X\"}}").SearchLyrics("q", 10, 0L, existing, 0);
 			Check.Equal(0, lyrics.Count, "count");
-		});
+		}
+		);
 
 		yield return ("NetEase.SearchLyrics search HTTP-200 unparseable -> 0 + ParseFailed", delegate
 		{
@@ -135,7 +205,8 @@ internal static class ProviderLyricCharacterization
 			Check.Equal(0, lyrics.Count, "count");
 			Check.NotNull(provider.LastTransportResult, "LastTransportResult");
 			Check.Equal(RemoteErrorKind.ParseFailed, provider.LastTransportResult.Error, "Error");
-		});
+		}
+		);
 
 		// ---- QQ：base64-in-jsonp 歌词，纯原文（规避 AlignAndSplitTranslatedLyric） ----
 		yield return ("QQ.SearchLyrics decodes base64 jsonp lyric + fields", delegate
@@ -151,13 +222,80 @@ internal static class ProviderLyricCharacterization
 			Check.Equal("SingerA", lyrics[0].Artist, "[0].Artist");
 			Check.Equal(SearchSource.QQ, lyrics[0].SearchSource, "[0].SearchSource");
 			Check.Equal(3, lyrics[0].SourceOrder, "[0].SourceOrder");
-		});
+		}
+		);
+
+		yield return ("QQ.SearchLyrics prefers QRC and preserves real 3-digit milliseconds", delegate
+		{
+			bool previousSetting = Settings.Default.LyricDownload_ReformatTimetag;
+			try
+			{
+				Settings.Default.LyricDownload_ReformatTimetag = false;
+				string qrc = "<?xml version=\"1.0\"?><QrcInfos><LyricInfo LyricContent=\"[ti:Title] [ar:Singer] [12347,800]Hello(12347,400) world(12747,400) [13201,500]Next(13201,500)\" /></QrcInfos>";
+				StubQq provider = new StubQq(QqSearchOneSong, QqJsonpLyric("[00:01.00]fallback"), QqQrcResponse(qrc));
+				List<LyricSearchResult> lyrics = provider.SearchLyrics("q", 10, 0);
+				Check.Equal(1, lyrics.Count, "count");
+				Check.Equal("[ti:Title]\n[ar:Singer]\n[00:12.347]Hello world\n[00:13.201]Next", lyrics[0].Lyric, "QRC line lyric");
+				Check.True(provider.QrcRequestUrl.Contains("musicu.fcg"), "QRC endpoint");
+				Check.True(provider.QrcRequestBody.Contains("\"songID\":555"), "numeric song id");
+			}
+			finally
+			{
+				Settings.Default.LyricDownload_ReformatTimetag = previousSetting;
+			}
+		}
+		);
+
+		yield return ("QQ.SearchLyrics QRC follows ReformatTimetag 2-digit rounding", delegate
+		{
+			bool previousSetting = Settings.Default.LyricDownload_ReformatTimetag;
+			try
+			{
+				Settings.Default.LyricDownload_ReformatTimetag = true;
+				string qrc = "[12347,800]Hello(12347,800)";
+				List<LyricSearchResult> lyrics = new StubQq(QqSearchOneSong, QqJsonpLyric("fallback"), QqQrcResponse(qrc)).SearchLyrics("q", 10, 0);
+				Check.Equal("[00:12.35]Hello", lyrics[0].Lyric, "rounded QRC line lyric");
+			}
+			finally
+			{
+				Settings.Default.LyricDownload_ReformatTimetag = previousSetting;
+			}
+		}
+		);
+
+		yield return ("QQ.SearchLyrics aligns 2-digit translation to precise QRC line timestamps", delegate
+		{
+			bool previousSetting = Settings.Default.LyricDownload_ReformatTimetag;
+			try
+			{
+				Settings.Default.LyricDownload_ReformatTimetag = false;
+				string qrc = "<?xml version=\"1.0\"?><QrcInfos><LyricInfo LyricContent=\"[ti:Title] [12347,800]Hello(12347,800) [13201,500]Next(13201,500) [14509,500]Last(14509,500)\" /></QrcInfos>";
+				string translation = "[kana:fixture]\n[00:12.34]你好\n[00:13.20]//\n[00:14.50]最后";
+				List<LyricSearchResult> lyrics = new StubQq(QqSearchOneSong, QqJsonpLyric("fallback"), QqQrcResponse(qrc, translation)).SearchLyrics("q", 10, 0);
+				Check.Equal("[ti:Title]\n[00:12.347]Hello\n[00:13.201]Next\n[00:14.509]Last", lyrics[0].Lyric, "precise QRC original");
+				Check.Equal("[00:12.347]你好\n[00:14.509]最后", lyrics[0].TranslatedLyric, "translation aligned to QRC timestamps");
+			}
+			finally
+			{
+				Settings.Default.LyricDownload_ReformatTimetag = previousSetting;
+			}
+		}
+		);
+
+		yield return ("QQ.SearchLyrics invalid QRC falls back to base64 LRC", delegate
+		{
+			string fallback = "[00:01.23]fallback";
+			List<LyricSearchResult> lyrics = new StubQq(QqSearchOneSong, QqJsonpLyric(fallback), "{\"req_0\":{\"code\":0,\"data\":{\"lyric\":\"not-hex\"}}}").SearchLyrics("q", 10, 0);
+			Check.Equal(fallback, lyrics[0].Lyric, "fallback lyric");
+		}
+		);
 
 		yield return ("QQ.SearchLyrics empty jsonp lyric -> 0 lyrics", delegate
 		{
 			List<LyricSearchResult> lyrics = new StubQq(QqSearchOneSong, QqJsonpLyric("")).SearchLyrics("q", 10, 0);
 			Check.Equal(0, lyrics.Count, "count");
-		});
+		}
+		);
 
 		yield return ("QQ.SearchLyrics search HTTP-200 unparseable -> 0 + ParseFailed", delegate
 		{
@@ -166,7 +304,8 @@ internal static class ProviderLyricCharacterization
 			Check.Equal(0, lyrics.Count, "count");
 			Check.NotNull(provider.LastTransportResult, "LastTransportResult");
 			Check.Equal(RemoteErrorKind.ParseFailed, provider.LastTransportResult.Error, "Error");
-		});
+		}
+		);
 
 		// ---- Kugou：data.lrc 直取（无 landata 翻译时 TranslatedLyric 空） ----
 		yield return ("Kugou.SearchLyrics maps data.lrc + fields", delegate
@@ -180,13 +319,15 @@ internal static class ProviderLyricCharacterization
 			Check.Equal("AlbumA", lyrics[0].Album, "[0].Album");
 			Check.Equal(SearchSource.Kugou, lyrics[0].SearchSource, "[0].SearchSource");
 			Check.Equal(1, lyrics[0].SourceOrder, "[0].SourceOrder");
-		});
+		}
+		);
 
 		yield return ("Kugou.SearchLyrics empty lrc -> 0 lyrics", delegate
 		{
 			List<LyricSearchResult> lyrics = new StubKugou(KugouSearchOneSong, "{\"data\":{}}").SearchLyrics("q", 10, 0);
 			Check.Equal(0, lyrics.Count, "count");
-		});
+		}
+		);
 
 		yield return ("Kugou.SearchLyrics search HTTP-200 unparseable -> 0 + ParseFailed", delegate
 		{
@@ -195,7 +336,8 @@ internal static class ProviderLyricCharacterization
 			Check.Equal(0, lyrics.Count, "count");
 			Check.NotNull(provider.LastTransportResult, "LastTransportResult");
 			Check.Equal(RemoteErrorKind.ParseFailed, provider.LastTransportResult.Error, "Error");
-		});
+		}
+		);
 
 		// ---- Kuwo：详情 lrclist（time 秒*1000，FormatTimestamp 厘秒）逐行拼装；单语规避双语重排 ----
 		yield return ("Kuwo.SearchLyrics builds lyric from detail lrclist + fields", delegate
@@ -209,13 +351,15 @@ internal static class ProviderLyricCharacterization
 			Check.Equal("AlbumA", lyrics[0].Album, "[0].Album");
 			Check.Equal(SearchSource.Kuwo, lyrics[0].SearchSource, "[0].SearchSource");
 			Check.Equal(3, lyrics[0].SourceOrder, "[0].SourceOrder");
-		});
+		}
+		);
 
 		yield return ("Kuwo.SearchLyrics no lrclist -> 0 lyrics", delegate
 		{
 			List<LyricSearchResult> lyrics = new StubKuwo(KuwoSearchOneSong, "{\"data\":{}}").SearchLyrics("q", 10, 0);
 			Check.Equal(0, lyrics.Count, "count");
-		});
+		}
+		);
 
 		yield return ("Kuwo.SearchLyrics search HTTP-200 unparseable -> 0 + ParseFailed", delegate
 		{
@@ -224,6 +368,7 @@ internal static class ProviderLyricCharacterization
 			Check.Equal(0, lyrics.Count, "count");
 			Check.NotNull(provider.LastTransportResult, "LastTransportResult");
 			Check.Equal(RemoteErrorKind.ParseFailed, provider.LastTransportResult.Error, "Error");
-		});
+		}
+		);
 	}
 }

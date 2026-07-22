@@ -503,23 +503,35 @@ namespace MusicTag.Composer;
 	{
 		AbsorbTranslatedLines(translatedLyric);
 		long[] timestampKeys = linesByTimestamp.Keys.ToArray();
-		int keyIndex;
-		for (keyIndex = 1; keyIndex < timestampKeys.Length - 1; keyIndex++)
+		for (int keyIndex = 0; keyIndex < timestampKeys.Length; keyIndex++)
 		{
 			long currentTimestamp = timestampKeys[keyIndex];
-			LyricLine translationOnlyLine = linesByTimestamp[currentTimestamp];
+			if (!linesByTimestamp.TryGetValue(currentTimestamp, out LyricLine translationOnlyLine))
+			{
+				continue;
+			}
 			if (translationOnlyLine.OriginalText.Any() || translationOnlyLine.TranslatedText == null)
 			{
 				continue;
 			}
-			long previousTimestamp = timestampKeys[keyIndex - 1];
-			long nextTimestamp = timestampKeys[keyIndex + 1];
-			LyricLine previousLine = linesByTimestamp[previousTimestamp];
-			LyricLine nextLine = linesByTimestamp[nextTimestamp];
-			long previousDistance = Math.Abs(previousTimestamp - currentTimestamp);
-			long nextDistance = Math.Abs(nextTimestamp - currentTimestamp);
-			bool canAttachToPreviousLine = previousLine.OriginalText.Any() && previousLine.TranslatedText == null && previousDistance < 1000L;
-			bool canAttachToNextLine = nextLine.OriginalText.Any() && nextLine.TranslatedText == null && nextDistance < 1000L;
+			long previousTimestamp = 0L;
+			long nextTimestamp = 0L;
+			LyricLine previousLine = null;
+			LyricLine nextLine = null;
+			if (keyIndex > 0)
+			{
+				previousTimestamp = timestampKeys[keyIndex - 1];
+				linesByTimestamp.TryGetValue(previousTimestamp, out previousLine);
+			}
+			if (keyIndex < timestampKeys.Length - 1)
+			{
+				nextTimestamp = timestampKeys[keyIndex + 1];
+				linesByTimestamp.TryGetValue(nextTimestamp, out nextLine);
+			}
+			long previousDistance = previousLine == null ? long.MaxValue : Math.Abs(previousTimestamp - currentTimestamp);
+			long nextDistance = nextLine == null ? long.MaxValue : Math.Abs(nextTimestamp - currentTimestamp);
+			bool canAttachToPreviousLine = previousLine != null && previousLine.OriginalText.Any() && previousLine.TranslatedText == null && previousDistance < 1000L;
+			bool canAttachToNextLine = nextLine != null && nextLine.OriginalText.Any() && nextLine.TranslatedText == null && nextDistance < 1000L;
 			if (canAttachToPreviousLine && canAttachToNextLine)
 			{
 				if (previousDistance <= nextDistance)
@@ -539,23 +551,11 @@ namespace MusicTag.Composer;
 				translationOnlyLine.OriginalText = previousLine.OriginalText;
 				linesByTimestamp.Remove(previousTimestamp);
 			}
-			else
+			else if (canAttachToNextLine)
 			{
 				nextLine.TranslatedText = translationOnlyLine.TranslatedText;
 				linesByTimestamp.Remove(currentTimestamp);
 				keyIndex++;
-			}
-		}
-		if (keyIndex > 0 && keyIndex == timestampKeys.Length - 1)
-		{
-			long lastTimestamp = timestampKeys[keyIndex];
-			long previousTimestamp = timestampKeys[keyIndex - 1];
-			LyricLine lastLine = linesByTimestamp[lastTimestamp];
-			LyricLine previousLine = linesByTimestamp[previousTimestamp];
-			if (!lastLine.OriginalText.Any() && lastLine.TranslatedText != null && previousLine.OriginalText.Any() && previousLine.TranslatedText == null && Math.Abs(previousTimestamp - lastTimestamp) < 1000L)
-			{
-				lastLine.OriginalText = previousLine.OriginalText;
-				linesByTimestamp.Remove(previousTimestamp);
 			}
 		}
 		StringBuilder originalLyricBuilder = new StringBuilder();

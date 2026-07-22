@@ -10,7 +10,7 @@ namespace MusicTag.Tests;
 //   LyricTextProcessor.FormatTimestamp(public static):ms -> "[mm:ss.ff]"(2 位)/"[mm:ss.fff]"(3 位),
 //     InvariantCulture,2 位为四舍五入到最近 10ms,分钟不 wrap(可 >60)。
 //   LyricTextProcessor.AlignAndSplitTranslatedLyric(public,经 public ctor 解析 lrc):双语行对齐并拆回
-//     (原文, 译文)。此处只锁"时间戳完全对齐"主干(每个 attach 分支极微妙,留待后续 extraction 时扩展)。
+//     (原文, 译文),覆盖完全对齐与 QQ 三位原文/两位翻译的邻近吸附边界。
 //   QqMusicTagProvider.DecodeLyricPayload(private static -> internal static):jsonp 回调剥壳 +
 //     lyric/trans 的 base64(UTF-8) 解码,字面 "null" 与"纯音乐占位 base64"归一为 ""。
 internal static class LyricProcessingCharacterization
@@ -85,6 +85,41 @@ internal static class LyricProcessingCharacterization
 			var (original, translated) = lyric.AlignAndSplitTranslatedLyric(new LyricTextProcessor("[00:01.00]你好\n[00:02.00]世界"));
 			Check.Equal("[00:01.00]Hello\n[00:02.00]World", original, "two original lines");
 			Check.Equal("[00:01.00]你好\n[00:02.00]世界", translated, "two translated lines");
+		});
+
+		yield return ("AlignAndSplit: truncated first/last translations keep original 3-digit timestamps", delegate
+		{
+			bool previousSetting = MusicTagWinApp.Properties.Settings.Default.LyricDownload_ReformatTimetag;
+			try
+			{
+				MusicTagWinApp.Properties.Settings.Default.LyricDownload_ReformatTimetag = false;
+				LyricTextProcessor lyric = new LyricTextProcessor("[00:01.007]Hello\n[00:02.015]World\n[00:03.999]Last");
+				LyricTextProcessor translation = new LyricTextProcessor("[kana:fixture]\n[00:01.00]你好\n[00:02.01]//\n[00:03.99]最后");
+				var (original, translated) = lyric.AlignAndSplitTranslatedLyric(translation);
+				Check.Equal("[00:01.007]Hello\n[00:02.015]World\n[00:03.999]Last", original, "precise original timestamps");
+				Check.Equal("[00:01.007]你好\n[00:03.999]最后", translated, "translations aligned to original timestamps");
+			}
+			finally
+			{
+				MusicTagWinApp.Properties.Settings.Default.LyricDownload_ReformatTimetag = previousSetting;
+			}
+		});
+
+		yield return ("AlignAndSplit: distant translation is not attached to unrelated next line", delegate
+		{
+			bool previousSetting = MusicTagWinApp.Properties.Settings.Default.LyricDownload_ReformatTimetag;
+			try
+			{
+				MusicTagWinApp.Properties.Settings.Default.LyricDownload_ReformatTimetag = false;
+				LyricTextProcessor lyric = new LyricTextProcessor("[00:01.000]Previous\n[00:05.000]Next");
+				var (original, translated) = lyric.AlignAndSplitTranslatedLyric(new LyricTextProcessor("[00:03.00]Orphan"));
+				Check.True(original.Contains("[00:05.000]Next"), "next original remains intact");
+				Check.Equal("[00:03.000]Orphan", translated, "orphan keeps its own timestamp");
+			}
+			finally
+			{
+				MusicTagWinApp.Properties.Settings.Default.LyricDownload_ReformatTimetag = previousSetting;
+			}
 		});
 
 		// ===== DecodeLyricPayload =====

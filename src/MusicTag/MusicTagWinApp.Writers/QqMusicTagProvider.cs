@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using MusicTag.Composer;
@@ -16,6 +17,7 @@ using MusicTagWinApp.Properties;
 using MusicTagWinApp.Roles;
 using MusicTagWinApp.Structs;
 using MusicTagWinApp.Web;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 namespace MusicTagWinApp.Writers;
@@ -46,6 +48,8 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 
 	private const string lyricUrlTemplate = "https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg?songmid={0}&g_tk=5381&jsonpCallback={1}&format=jsonp";
 
+	private const string qrcLyricEndpointUrl = "https://u.y.qq.com/cgi-bin/musicu.fcg";
+
 	private const string albumCoverUrlTemplate = "https://y.qq.com/music/photo_new/T002R800x800M000{0}.jpg";
 
 	private static readonly Regex callbackJsonRegex = new Regex(Regex.Escape(callbackName) + "\\((.+)\\)", RegexOptions.Compiled);
@@ -67,7 +71,7 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 		})
 		{
 			Timeout = TimeSpan.FromSeconds(20.0),
-			DefaultRequestHeaders = 
+			DefaultRequestHeaders =
 			{
 				{ "accept-language", "zh-CN,zh;q=0.9,en;q=0.8" },
 				{ "referer", "https://i.y.qq.com/" },
@@ -275,6 +279,18 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 
 	private LyricSearchResult LoadLyrics(QqSongInfo songInfo)
 	{
+		string qrcResponseBody = PostString(qrcLyricEndpointUrl, BuildQrcLyricRequestBody(songInfo), null, postJson: true);
+		if (cancellationSource.IsCancellationRequested)
+		{
+			return null;
+		}
+
+		LyricSearchResult qrcLyric = CreateQrcLyricResult(songInfo, qrcResponseBody);
+		if (qrcLyric != null)
+		{
+			return qrcLyric;
+		}
+
 		string responseBody = GetResponseString(string.Format(lyricUrlTemplate, songInfo.Mid, callbackName));
 		if (cancellationSource.IsCancellationRequested)
 		{
@@ -282,6 +298,113 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 		}
 
 		return CreateLyricResult(songInfo, responseBody);
+	}
+
+	private static string BuildQrcLyricRequestBody(QqSongInfo songInfo)
+	{
+		string EncodeText(string value)
+		{
+			return Convert.ToBase64String(Encoding.UTF8.GetBytes(value ?? ""));
+		}
+
+		JObject request = new JObject
+		{
+			["comm"] = new JObject
+			{
+				["ct"] = 24,
+				["cv"] = 0,
+				["format"] = "json",
+				["uin"] = 0
+			},
+			["req_0"] = new JObject
+			{
+				["module"] = "music.musichallSong.PlayLyricInfo",
+				["method"] = "GetPlayLyricInfo",
+				["param"] = new JObject
+				{
+					["albumName"] = EncodeText(songInfo?.Album?.Name),
+					["crypt"] = 1,
+					["ct"] = 19,
+					["cv"] = 2111,
+					["interval"] = 0,
+					["lrc_t"] = 0,
+					["qrc"] = 1,
+					["qrc_t"] = 0,
+					["roma"] = 0,
+					["roma_t"] = 0,
+					["singerName"] = EncodeText(songInfo?.GetArtistNames()),
+					["songID"] = songInfo?.Id ?? 0L,
+					["songName"] = EncodeText(songInfo?.Title),
+					["trans"] = 1,
+					["trans_t"] = 0,
+					["type"] = 0
+				}
+			}
+		};
+
+		return request.ToString(Formatting.None);
+	}
+
+	private LyricSearchResult CreateQrcLyricResult(QqSongInfo songInfo, string responseBody)
+	{
+		try
+		{
+			LyricSearchResult lyric = ParseQrcLyricResponse(responseBody);
+			if (lyric == null)
+			{
+				return null;
+			}
+
+			PopulateLyricMetadata(lyric, songInfo);
+			return lyric;
+		}
+		catch (Exception parseError)
+		{
+			Console.WriteLine("Parse QQ QRC lyric error:" + parseError.GetMessageChain());
+			return null;
+		}
+	}
+
+	private static LyricSearchResult ParseQrcLyricResponse(string responseBody)
+	{
+		JToken lyricData = JObject.Parse(responseBody)?["req_0"]?["data"];
+		string lyricText = DecodeQrcField(lyricData?["lyric"]);
+		if (string.IsNullOrWhiteSpace(lyricText))
+		{
+			return null;
+		}
+
+		bool useThreeDigitMilliseconds = !Settings.Default.LyricDownload_ReformatTimetag;
+		LyricSearchResult lyric = new LyricSearchResult
+		{
+			Lyric = QqQrcDecoder.ConvertToLineLyric(lyricText, useThreeDigitMilliseconds),
+			TranslatedLyric = QqQrcDecoder.ConvertToLineLyric(DecodeQrcField(lyricData?["trans"]), useThreeDigitMilliseconds)
+		};
+
+		if (string.IsNullOrWhiteSpace(lyric.Lyric))
+		{
+			return null;
+		}
+
+		if (!string.IsNullOrWhiteSpace(lyric.TranslatedLyric))
+		{
+			string mergedTranslation;
+			(lyric.Lyric, mergedTranslation) = new LyricTextProcessor(lyric.Lyric).AlignAndSplitTranslatedLyric(new LyricTextProcessor(lyric.TranslatedLyric));
+			lyric.TranslatedLyric = mergedTranslation;
+		}
+
+		return lyric;
+	}
+
+	private static string DecodeQrcField(JToken encryptedField)
+	{
+		string encryptedLyrics = encryptedField?.ToString();
+		if (!QqQrcDecoder.LooksEncryptedLyrics(encryptedLyrics))
+		{
+			return "";
+		}
+
+		return QqQrcDecoder.DecryptLyrics(encryptedLyrics);
 	}
 
 	public LyricSearchResult LoadLyricsForTrack(TrackSearchResult track)
@@ -414,16 +537,7 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 				return null;
 			}
 
-			if (songInfo != null)
-			{
-				lyric.TrackId = songInfo.Id.ToString();
-				lyric.Title = songInfo.Title;
-				lyric.Artist = songInfo.GetArtistNames();
-				lyric.Album = songInfo.Album.Name;
-				lyric.OriginalTitle = songInfo.Name;
-			}
-
-			lyric.SearchSource = GetSource();
+			PopulateLyricMetadata(lyric, songInfo);
 		}
 		catch (Exception parseError)
 		{
@@ -431,6 +545,20 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 		}
 
 		return lyric;
+	}
+
+	private void PopulateLyricMetadata(LyricSearchResult lyric, QqSongInfo songInfo)
+	{
+		if (songInfo != null)
+		{
+			lyric.TrackId = songInfo.Id.ToString();
+			lyric.Title = songInfo.Title;
+			lyric.Artist = songInfo.GetArtistNames();
+			lyric.Album = songInfo.Album.Name;
+			lyric.OriginalTitle = songInfo.Name;
+		}
+
+		lyric.SearchSource = GetSource();
 	}
 
 	private static LyricSearchResult ParseLyricResponse(string responseBody)
