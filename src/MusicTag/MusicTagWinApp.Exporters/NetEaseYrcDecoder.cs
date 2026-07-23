@@ -3,7 +3,6 @@ using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using MusicTag.Composer;
-using Newtonsoft.Json.Linq;
 
 namespace MusicTagWinApp.Exporters;
 
@@ -36,9 +35,13 @@ internal static class NetEaseYrcDecoder
 				continue;
 			}
 
-			if (TryParseJsonMetadataLine(line, out long metadataTimestamp, out string metadataText))
+			// The v1 endpoint can prepend JSON credit records such as lyricist,
+			// composer, producer, and instrument performers. Ordinary LRC has no
+			// safe generic representation for these roles. Timestamping them at
+			// their shared t=0 value also makes LyricTextProcessor treat later
+			// records as translations, so omit them from the line lyric entirely.
+			if (line.StartsWith("{", StringComparison.Ordinal))
 			{
-				hasTimedLine |= AppendLine(lyricBuilder, metadataTimestamp, metadataText, useThreeDigitMilliseconds);
 				continue;
 			}
 
@@ -75,44 +78,4 @@ internal static class NetEaseYrcDecoder
 		return true;
 	}
 
-	private static bool TryParseJsonMetadataLine(string line, out long timestampMilliseconds, out string lyricContent)
-	{
-		timestampMilliseconds = 0L;
-		lyricContent = "";
-		if (!line.StartsWith("{", StringComparison.Ordinal))
-		{
-			return false;
-		}
-
-		try
-		{
-			JObject metadata = JObject.Parse(line);
-			if (!long.TryParse(metadata["t"]?.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out timestampMilliseconds) || timestampMilliseconds < 0L)
-			{
-				return false;
-			}
-
-			if (!(metadata["c"] is JArray contentItems))
-			{
-				return false;
-			}
-
-			StringBuilder contentBuilder = new StringBuilder();
-			foreach (JToken contentItem in contentItems)
-			{
-				string text = contentItem["tx"]?.ToString();
-				if (text != null)
-				{
-					contentBuilder.Append(text);
-				}
-			}
-
-			lyricContent = contentBuilder.ToString().Trim();
-			return lyricContent.Length > 0;
-		}
-		catch (Exception)
-		{
-			return false;
-		}
-	}
 }

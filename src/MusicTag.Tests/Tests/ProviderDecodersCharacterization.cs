@@ -106,10 +106,36 @@ internal static class ProviderDecodersCharacterization
 			Check.Equal("[00:12.867]岁月\n[00:19.878]下", NetEaseYrcDecoder.ConvertToLineLyric(yrc, useThreeDigitMilliseconds: true), "YRC conversion");
 		});
 
-		yield return ("NetEaseYrcDecoder: converts v1 JSON metadata into timestamped text", delegate
+		yield return ("NetEaseYrcDecoder: ignores v1 JSON credit metadata", delegate
 		{
-			string yrc = "{\"t\":0,\"c\":[{\"tx\":\"作词: \"},{\"tx\":\"作者\"}]}\n[1000,500](1000,200,0)A";
-			Check.Equal("[00:00.000]作词: 作者\n[00:01.000]A", NetEaseYrcDecoder.ConvertToLineLyric(yrc, useThreeDigitMilliseconds: true), "JSON metadata conversion");
+			string yrc = "{\"t\":0,\"c\":[{\"tx\":\"作词: \"},{\"tx\":\"作者\"}]}\n{\"t\":0,\"c\":[{\"tx\":\"作曲: \"},{\"tx\":\"作曲者\"}]}\n[1000,500](1000,200,0)A";
+			Check.Equal("[00:01.000]A", NetEaseYrcDecoder.ConvertToLineLyric(yrc, useThreeDigitMilliseconds: true), "JSON credit metadata omitted");
+		});
+
+		yield return ("ExtractLyricTexts: JSON credit metadata cannot pollute YTLRC alignment", delegate
+		{
+			bool previousSetting = Settings.Default.LyricDownload_ReformatTimetag;
+			try
+			{
+				Settings.Default.LyricDownload_ReformatTimetag = false;
+				string yrc = "{\"t\":0,\"c\":[{\"tx\":\"作词: \"},{\"tx\":\"作者\"}]}\n{\"t\":0,\"c\":[{\"tx\":\"作曲: \"},{\"tx\":\"作曲者\"}]}\n[1007,1000](1007,500,0)原";
+				string response = "{\"lrc\":{\"lyric\":\"[00:01.00]普通\"},\"tlyric\":{\"lyric\":\"[00:01.00]旧译\"},\"yrc\":{\"lyric\":\"" + yrc.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n") + "\"},\"ytlrc\":{\"lyric\":\"[00:01.00]逐译\"}}";
+				var (lyric, translated) = NetEaseMusicTagProvider.ExtractLyricTexts(response);
+				Check.Equal("[00:01.007]原", lyric, "YRC lyric without credit metadata");
+				Check.Equal("[00:01.007]逐译", translated, "YTLRC alignment without credit metadata");
+			}
+			finally
+			{
+				Settings.Default.LyricDownload_ReformatTimetag = previousSetting;
+			}
+		});
+
+		yield return ("ExtractLyricTexts: metadata-only YRC falls back to ordinary LRC", delegate
+		{
+			string response = "{\"lrc\":{\"lyric\":\"[00:01.00]普通\"},\"tlyric\":{\"lyric\":\"[00:01.00]译\"},\"yrc\":{\"lyric\":\"{\\\"t\\\":0,\\\"c\\\":[{\\\"tx\\\":\\\"作词: 作者\\\"}]}\"}}";
+			var (lyric, translated) = NetEaseMusicTagProvider.ExtractLyricTexts(response);
+			Check.Equal("[00:01.00]普通", lyric, "ordinary lyric fallback");
+			Check.Equal("[00:01.00]译", translated, "ordinary translation fallback");
 		});
 
 		yield return ("ExtractLyricTexts: YRC + ytlrc take precedence over ordinary lrc + tlyric", delegate
