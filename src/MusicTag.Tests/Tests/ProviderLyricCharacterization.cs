@@ -29,13 +29,18 @@ internal static class ProviderLyricCharacterization
 	{
 		private readonly string searchResponse;
 		private readonly string lyricResponse;
+		public string LastLyricUrl { get; private set; }
 		public StubNetEase(string searchResponse, string lyricResponse = null) : base(null)
 		{
 			this.searchResponse = searchResponse;
 			this.lyricResponse = lyricResponse;
 		}
 		protected override string PostString(string url, string body, HttpClient client = null, bool postJson = false) => searchResponse;
-		protected override string GetResponseString(string url) => lyricResponse;
+		protected override string GetResponseString(string url)
+		{
+			LastLyricUrl = url;
+			return lyricResponse;
+		}
 	}
 
 	private sealed class StubQq : QqMusicTagProvider
@@ -166,6 +171,13 @@ internal static class ProviderLyricCharacterization
 	public static IEnumerable<(string, Action)> All()
 	{
 		// ---- NetEase：lrc.lyric / tlyric.lyric 直取 ----
+		yield return ("NetEase.SearchLyrics requests latest YRC fields on the v1 lyric endpoint", delegate
+		{
+			StubNetEase provider = new StubNetEase(NetEaseSearchOneSong, "{\"lrc\":{\"lyric\":\"[00:01.00]Line1\"}}");
+			provider.SearchLyrics("q", 10, 0L, new List<LyricSearchResult>(), 0);
+			Check.Equal("https://music.163.com/api/song/lyric/v1?id=111&cp=false&lv=0&kv=0&tv=0&rv=0&yv=0&ytv=0&yrv=0", provider.LastLyricUrl, "latest lyric endpoint and flags");
+		});
+
 		yield return ("NetEase.SearchLyrics maps lrc + tlyric + fields", delegate
 		{
 			string lyricJson = "{\"lrc\":{\"lyric\":\"[00:01.00]Line1\\n[00:02.00]Line2\"},\"tlyric\":{\"lyric\":\"[00:01.00]Trans1\"}}";

@@ -4,6 +4,7 @@ using Newtonsoft.Json.Linq;
 using MusicTag.Candidates;
 using MusicTagWinApp.Exporters;
 using MusicTagWinApp.Instances;
+using MusicTagWinApp.Properties;
 using MusicTagWinApp.Writers;
 
 namespace MusicTag.Tests;
@@ -12,7 +13,7 @@ namespace MusicTag.Tests;
 // private helper 的边界分支零覆盖)。均 visibility-lift(private->internal,含两处 加 static),逐字节不变:
 //   NetEase.FormatPublishYear:epoch ms(>0)-> "yyyy"(UTC/InvariantCulture);null/<=0/溢出 -> null。
 //   NetEase.ParseCoverDocId:正则 /(\d+)\.\w+$ 提 albumPicDocId;无数字尾段/无扩展名 -> 0。
-//   NetEase.ExtractLyricTexts:lrc.lyric / tlyric.lyric,字面 "null" 与缺失归一为 ""。
+//   NetEase.ExtractLyricTexts:lrc/tlyric 回退、YRC/ytlrc 优先、字面 "null" 与缺失归一为 ""。
 //   QqSongInfo.GetGenreName(已 public):genre id -> 英文流派名 switch,未知/null -> ""。
 //   QQ.IsRateLimited:req_0.code 必须是 Integer 且 ==2001(字符串 "2001" -> false);空导航 -> false。
 //   Kugou.BuildEncodedLyricKeyword:artist&title 非空 -> "title - artist";title 空 -> artist;else -> title(先 Trim 再 UrlEncode)。
@@ -97,6 +98,110 @@ internal static class ProviderDecodersCharacterization
 			var (lyric, translated) = NetEaseMusicTagProvider.ExtractLyricTexts("{\"lrc\":{\"lyric\":\"x\"},\"tlyric\":{\"lyric\":\"null\"}}");
 			Check.Equal("x", lyric, "lyric x");
 			Check.Equal("", translated, "literal null translated normalized");
+		});
+
+		yield return ("NetEaseYrcDecoder: strips three-part word markers and keeps millisecond line starts", delegate
+		{
+			string yrc = "[12867,6282](12867,208,0)岁(13076,208,0)月\n[19878,1000](19878,500,0)下";
+			Check.Equal("[00:12.867]岁月\n[00:19.878]下", NetEaseYrcDecoder.ConvertToLineLyric(yrc, useThreeDigitMilliseconds: true), "YRC conversion");
+		});
+
+		yield return ("NetEaseYrcDecoder: converts v1 JSON metadata into timestamped text", delegate
+		{
+			string yrc = "{\"t\":0,\"c\":[{\"tx\":\"作词: \"},{\"tx\":\"作者\"}]}\n[1000,500](1000,200,0)A";
+			Check.Equal("[00:00.000]作词: 作者\n[00:01.000]A", NetEaseYrcDecoder.ConvertToLineLyric(yrc, useThreeDigitMilliseconds: true), "JSON metadata conversion");
+		});
+
+		yield return ("ExtractLyricTexts: YRC + ytlrc take precedence over ordinary lrc + tlyric", delegate
+		{
+			bool previousSetting = Settings.Default.LyricDownload_ReformatTimetag;
+			try
+			{
+				Settings.Default.LyricDownload_ReformatTimetag = false;
+				string response = "{\"lrc\":{\"lyric\":\"[00:12.720]普通\"},\"tlyric\":{\"lyric\":\"[00:12.500]旧译\"},\"yrc\":{\"lyric\":\"[12867,1000](12867,500,0)原\"},\"ytlrc\":{\"lyric\":\"[00:12.867]逐译\"}}";
+				var (lyric, translated) = NetEaseMusicTagProvider.ExtractLyricTexts(response);
+				Check.Equal("[00:12.867]原", lyric, "YRC original");
+				Check.Equal("[00:12.867]逐译", translated, "YTLRC translation");
+			}
+			finally
+			{
+				Settings.Default.LyricDownload_ReformatTimetag = previousSetting;
+			}
+		});
+
+		yield return ("ExtractLyricTexts: missing ytlrc aligns nearby tlyric to YRC", delegate
+		{
+			bool previousSetting = Settings.Default.LyricDownload_ReformatTimetag;
+			try
+			{
+				Settings.Default.LyricDownload_ReformatTimetag = false;
+				string response = "{\"lrc\":{\"lyric\":\"[00:12.720]普通\"},\"tlyric\":{\"lyric\":\"[00:12.86]旧译\"},\"yrc\":{\"lyric\":\"[12867,1000](12867,500,0)原\"}}";
+				var (lyric, translated) = NetEaseMusicTagProvider.ExtractLyricTexts(response);
+				Check.Equal("[00:12.867]原", lyric, "YRC original");
+				Check.Equal("[00:12.867]旧译", translated, "aligned tlyric");
+			}
+			finally
+			{
+				Settings.Default.LyricDownload_ReformatTimetag = previousSetting;
+			}
+		});
+
+		yield return ("ExtractLyricTexts: misaligned ytlrc falls through to alignable tlyric", delegate
+		{
+			bool previousSetting = Settings.Default.LyricDownload_ReformatTimetag;
+			try
+			{
+				Settings.Default.LyricDownload_ReformatTimetag = false;
+				string response = "{\"lrc\":{\"lyric\":\"[00:01.00]普通\"},\"tlyric\":{\"lyric\":\"[00:01.00]旧译\"},\"yrc\":{\"lyric\":\"[1007,1000](1007,500,0)原\"},\"ytlrc\":{\"lyric\":\"[00:03.00]孤立逐译\"}}";
+				var (lyric, translated) = NetEaseMusicTagProvider.ExtractLyricTexts(response);
+				Check.Equal("[00:01.007]原", lyric, "YRC original");
+				Check.Equal("[00:01.007]旧译", translated, "aligned tlyric fallback");
+			}
+			finally
+			{
+				Settings.Default.LyricDownload_ReformatTimetag = previousSetting;
+			}
+		});
+
+		yield return ("ExtractLyricTexts: orphan tlyric falls back to the legacy lrc pair", delegate
+		{
+			bool previousSetting = Settings.Default.LyricDownload_ReformatTimetag;
+			try
+			{
+				Settings.Default.LyricDownload_ReformatTimetag = false;
+				string response = "{\"lrc\":{\"lyric\":\"[00:01.00]普通\"},\"tlyric\":{\"lyric\":\"[00:03.00]孤立\"},\"yrc\":{\"lyric\":\"[1000,1000](1000,500,0)原\"}}";
+				var (lyric, translated) = NetEaseMusicTagProvider.ExtractLyricTexts(response);
+				Check.Equal("[00:01.00]普通", lyric, "legacy lrc fallback");
+				Check.Equal("[00:03.00]孤立", translated, "legacy tlyric fallback");
+			}
+			finally
+			{
+				Settings.Default.LyricDownload_ReformatTimetag = previousSetting;
+			}
+		});
+
+		yield return ("ExtractLyricTexts: malformed or absent YRC falls back to lrc + tlyric", delegate
+		{
+			string response = "{\"lrc\":{\"lyric\":\"[00:01.00]普通\"},\"tlyric\":{\"lyric\":\"[00:01.00]译\"},\"yrc\":{\"lyric\":\"not-yrc\"}}";
+			var (lyric, translated) = NetEaseMusicTagProvider.ExtractLyricTexts(response);
+			Check.Equal("[00:01.00]普通", lyric, "lrc fallback");
+			Check.Equal("[00:01.00]译", translated, "tlyric fallback");
+		});
+
+		yield return ("ExtractLyricTexts: YRC follows the two-digit reformat setting", delegate
+		{
+			bool previousSetting = Settings.Default.LyricDownload_ReformatTimetag;
+			try
+			{
+				Settings.Default.LyricDownload_ReformatTimetag = true;
+				var (lyric, translated) = NetEaseMusicTagProvider.ExtractLyricTexts("{\"yrc\":{\"lyric\":\"[12867,1000](12867,500,0)原\"}}");
+				Check.Equal("[00:12.87]原", lyric, "rounded YRC");
+				Check.Equal("", translated, "no translation");
+			}
+			finally
+			{
+				Settings.Default.LyricDownload_ReformatTimetag = previousSetting;
+			}
 		});
 
 		// ===== QqSongInfo.GetGenreName =====

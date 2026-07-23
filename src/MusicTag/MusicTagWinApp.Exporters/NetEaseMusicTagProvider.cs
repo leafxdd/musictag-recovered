@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Threading;
+using MusicTag.Composer;
 using MusicTag.Readers;
 using MusicTag.Serialization;
 using MusicTagWinApp.Adapter;
@@ -26,7 +27,7 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase, ITrackSearchProv
 
 	private const string encryptedPostDataFormat = "params={0}&encSecKey={1}";
 
-	private const string lyricEndpointFormat = "https://music.163.com/api/song/lyric?os=pc&id={0}&lv=-1&kv=-1&tv=-1";
+	private const string lyricEndpointFormat = "https://music.163.com/api/song/lyric/v1?id={0}&cp=false&lv=0&kv=0&tv=0&rv=0&yv=0&ytv=0&yrv=0";
 
 	private const string songDetailsEndpoint = "https://music.163.com/weapi/v3/song/detail";
 
@@ -37,6 +38,8 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase, ITrackSearchProv
 	private static readonly Random clientIpRandom = new Random();
 
 	private static readonly List<(long albumId, NetEaseAlbumInfo albumInfo)> albumInfoCache = new List<(long, NetEaseAlbumInfo)>();
+
+	private static readonly Regex LyricTimestampRegex = new Regex(@"\[(\d+):(\d{2})(?:\.(\d{1,3}))?\]", RegexOptions.Compiled);
 
 	protected override SearchSource GetSource()
 	{
@@ -666,17 +669,141 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase, ITrackSearchProv
 	internal static (string lyricText, string translatedLyricText) ExtractLyricTexts(string responseBody)
 	{
 		JObject responseJson = JObject.Parse(responseBody);
-		string lyricText = responseJson["lrc"]?["lyric"]?.ToString() ?? "";
-		if (lyricText == "null")
+		string lyricText = GetLyricField(responseJson["lrc"]);
+		string translatedLyricText = GetLyricField(responseJson["tlyric"]);
+		string yrcText = GetLyricField(responseJson["yrc"]);
+		if (string.IsNullOrWhiteSpace(yrcText))
 		{
-			lyricText = "";
+			return (lyricText, translatedLyricText);
 		}
-		string translatedLyricText = responseJson["tlyric"]?["lyric"]?.ToString();
-		if (translatedLyricText == null || translatedLyricText == "null")
+
+		bool useThreeDigitMilliseconds = !Settings.Default.LyricDownload_ReformatTimetag;
+		string convertedLyricText = NetEaseYrcDecoder.ConvertToLineLyric(yrcText, useThreeDigitMilliseconds);
+		if (string.IsNullOrWhiteSpace(convertedLyricText))
 		{
-			translatedLyricText = "";
+			return (lyricText, translatedLyricText);
 		}
+
+		string ytlrcText = GetLyricField(responseJson["ytlrc"]);
+		if (!string.IsNullOrWhiteSpace(ytlrcText))
+		{
+			string normalizedYtlrc = NormalizeTranslatedLyric(ytlrcText, useThreeDigitMilliseconds);
+			if (TryAlignTranslatedLyric(convertedLyricText, normalizedYtlrc, out (string original, string translated) alignedYtlrc))
+			{
+				return alignedYtlrc;
+			}
+		}
+
+		// YTLRC normally has the same line starts as YRC.  If it is absent or
+		// malformed, the same alignment path handles the legacy tlyric fallback,
+		// whose timestamps can be a few milliseconds earlier or later than YRC.
+		if (!string.IsNullOrWhiteSpace(translatedLyricText) &&
+			TryAlignTranslatedLyric(convertedLyricText, translatedLyricText, out (string original, string translated) alignedTlyric))
+		{
+			return alignedTlyric;
+		}
+
+		if (string.IsNullOrWhiteSpace(translatedLyricText))
+		{
+			return (convertedLyricText, "");
+		}
+
+		// Do not mix a partially aligned translation with YRC.  Retain the
+		// legacy pair when neither translated timeline can be aligned safely.
 		return (lyricText, translatedLyricText);
+	}
+
+	private static string GetLyricField(JToken lyricContainer)
+	{
+		string lyricText = lyricContainer?["lyric"]?.ToString() ?? "";
+		return lyricText == "null" ? "" : lyricText;
+	}
+
+	private static string NormalizeTranslatedLyric(string lyricText, bool useThreeDigitMilliseconds)
+	{
+		string convertedYrc = NetEaseYrcDecoder.ConvertToLineLyric(lyricText, useThreeDigitMilliseconds);
+		return string.IsNullOrWhiteSpace(convertedYrc) ? lyricText : convertedYrc;
+	}
+
+	private static bool TryAlignTranslatedLyric(string originalLyric, string translatedLyric, out (string original, string translated) alignedLyric)
+	{
+		alignedLyric = (originalLyric, "");
+		LyricTextProcessor lyricProcessor = new LyricTextProcessor(originalLyric);
+		(string original, string translated) candidate = lyricProcessor.AlignAndSplitTranslatedLyric(new LyricTextProcessor(translatedLyric));
+		if (string.IsNullOrWhiteSpace(candidate.translated))
+		{
+			alignedLyric = (candidate.original, "");
+			return true;
+		}
+
+		HashSet<long> originalTimestamps = ExtractNonEmptyLyricTimestamps(candidate.original);
+		int translatedTimestampCount = 0;
+		foreach (Match timestampMatch in LyricTimestampRegex.Matches(candidate.translated))
+		{
+			if (!TryParseLyricTimestamp(timestampMatch, out long timestampMilliseconds) || !originalTimestamps.Contains(timestampMilliseconds))
+			{
+				return false;
+			}
+
+			translatedTimestampCount++;
+		}
+
+		if (translatedTimestampCount == 0)
+		{
+			return false;
+		}
+
+		alignedLyric = candidate;
+		return true;
+	}
+
+	private static HashSet<long> ExtractNonEmptyLyricTimestamps(string lyricText)
+	{
+		HashSet<long> timestamps = new HashSet<long>();
+		string[] lines = (lyricText ?? "").Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.None);
+		foreach (string line in lines)
+		{
+			string text = LyricTimestampRegex.Replace(line, "").Trim();
+			if (text.Length == 0 || text == "//")
+			{
+				continue;
+			}
+
+			foreach (Match timestampMatch in LyricTimestampRegex.Matches(line))
+			{
+				if (TryParseLyricTimestamp(timestampMatch, out long timestampMilliseconds))
+				{
+					timestamps.Add(timestampMilliseconds);
+				}
+			}
+		}
+
+		return timestamps;
+	}
+
+	private static bool TryParseLyricTimestamp(Match timestampMatch, out long timestampMilliseconds)
+	{
+		timestampMilliseconds = 0L;
+		if (!long.TryParse(timestampMatch.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out long minutes) ||
+			!long.TryParse(timestampMatch.Groups[2].Value, NumberStyles.None, CultureInfo.InvariantCulture, out long seconds))
+		{
+			return false;
+		}
+
+		string fractionText = timestampMatch.Groups[3].Value;
+		long fraction = 0L;
+		if (fractionText.Length > 0 && !long.TryParse(fractionText, NumberStyles.None, CultureInfo.InvariantCulture, out fraction))
+		{
+			return false;
+		}
+
+		for (int digitCount = fractionText.Length; digitCount < 3; digitCount++)
+		{
+			fraction *= 10L;
+		}
+
+		timestampMilliseconds = (minutes * 60L + seconds) * 1000L + fraction;
+		return true;
 	}
 
 	private static string BuildClientHeaderValue()
