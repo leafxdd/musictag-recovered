@@ -13,7 +13,7 @@ namespace MusicTag.Tests;
 // private helper 的边界分支零覆盖)。均 visibility-lift(private->internal,含两处 加 static),逐字节不变:
 //   NetEase.FormatPublishYear:epoch ms(>0)-> "yyyy"(UTC/InvariantCulture);null/<=0/溢出 -> null。
 //   NetEase.ParseCoverDocId:正则 /(\d+)\.\w+$ 提 albumPicDocId;无数字尾段/无扩展名 -> 0。
-//   NetEase.ExtractLyricTexts:lrc/tlyric 回退、YRC/ytlrc 优先、字面 "null" 与缺失归一为 ""。
+//   NetEase.ExtractLyricTexts:lrc/tlyric 回退、YRC/ytlrc 优先、部分 YTLRC 丢孤立行、字面 "null" 与缺失归一为 ""。
 //   QQ QRC conversion:valid line timestamps stay authoritative; malformed line timestamps fall back to the first valid word timestamp.
 //   QqSongInfo.GetGenreName(已 public):genre id -> 英文流派名 switch,未知/null -> ""。
 //   QQ.IsRateLimited:req_0.code 必须是 Integer 且 ==2001(字符串 "2001" -> false);空导航 -> false。
@@ -149,6 +149,23 @@ internal static class ProviderDecodersCharacterization
 				var (lyric, translated) = NetEaseMusicTagProvider.ExtractLyricTexts(response);
 				Check.Equal("[00:12.867]原", lyric, "YRC original");
 				Check.Equal("[00:12.867]逐译", translated, "YTLRC translation");
+			}
+			finally
+			{
+				Settings.Default.LyricDownload_ReformatTimetag = previousSetting;
+			}
+		});
+
+		yield return ("ExtractLyricTexts: partially aligned ytlrc drops only orphan lines", delegate
+		{
+			bool previousSetting = Settings.Default.LyricDownload_ReformatTimetag;
+			try
+			{
+				Settings.Default.LyricDownload_ReformatTimetag = false;
+				string response = "{\"lrc\":{\"lyric\":\"[00:01.00]普通一\\n[00:02.00]普通二\"},\"tlyric\":{\"lyric\":\"[00:01.00]旧译一\\n[00:02.00]旧译二\"},\"yrc\":{\"lyric\":\"[1007,900](1007,400,0)原一\\n[2003,900](2003,400,0)原二\"},\"ytlrc\":{\"lyric\":\"[00:01.00]逐译一\\n[00:02.00]逐译二\\n[00:05.00]尾注\"}}";
+				var (lyric, translated) = NetEaseMusicTagProvider.ExtractLyricTexts(response);
+				Check.Equal("[00:01.007]原一\n[00:02.003]原二", lyric, "YRC original without orphan blank line");
+				Check.Equal("[00:01.007]逐译一\n[00:02.003]逐译二", translated, "matched YTLRC lines");
 			}
 			finally
 			{

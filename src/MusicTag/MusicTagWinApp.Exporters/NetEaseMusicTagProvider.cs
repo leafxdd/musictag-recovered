@@ -688,7 +688,7 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase, ITrackSearchProv
 		if (!string.IsNullOrWhiteSpace(ytlrcText))
 		{
 			string normalizedYtlrc = NormalizeTranslatedLyric(ytlrcText, useThreeDigitMilliseconds);
-			if (TryAlignTranslatedLyric(convertedLyricText, normalizedYtlrc, out (string original, string translated) alignedYtlrc))
+			if (TryAlignTranslatedLyric(convertedLyricText, normalizedYtlrc, out (string original, string translated) alignedYtlrc, dropUnmatchedLines: true))
 			{
 				return alignedYtlrc;
 			}
@@ -725,7 +725,7 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase, ITrackSearchProv
 		return string.IsNullOrWhiteSpace(convertedYrc) ? lyricText : convertedYrc;
 	}
 
-	private static bool TryAlignTranslatedLyric(string originalLyric, string translatedLyric, out (string original, string translated) alignedLyric)
+	private static bool TryAlignTranslatedLyric(string originalLyric, string translatedLyric, out (string original, string translated) alignedLyric, bool dropUnmatchedLines = false)
 	{
 		alignedLyric = (originalLyric, "");
 		LyricTextProcessor lyricProcessor = new LyricTextProcessor(originalLyric);
@@ -737,15 +737,37 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase, ITrackSearchProv
 		}
 
 		HashSet<long> originalTimestamps = ExtractNonEmptyLyricTimestamps(candidate.original);
+		List<string> retainedTranslatedLines = new List<string>();
 		int translatedTimestampCount = 0;
-		foreach (Match timestampMatch in LyricTimestampRegex.Matches(candidate.translated))
+		int droppedLineCount = 0;
+		string[] translatedLines = candidate.translated.Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.None);
+		foreach (string translatedLine in translatedLines)
 		{
-			if (!TryParseLyricTimestamp(timestampMatch, out long timestampMilliseconds) || !originalTimestamps.Contains(timestampMilliseconds))
+			MatchCollection timestampMatches = LyricTimestampRegex.Matches(translatedLine);
+			bool lineMatchesOriginal = true;
+			int lineTimestampCount = 0;
+			foreach (Match timestampMatch in timestampMatches)
 			{
-				return false;
+				if (!TryParseLyricTimestamp(timestampMatch, out long timestampMilliseconds) || !originalTimestamps.Contains(timestampMilliseconds))
+				{
+					lineMatchesOriginal = false;
+					break;
+				}
+				lineTimestampCount++;
 			}
 
-			translatedTimestampCount++;
+			if (!lineMatchesOriginal)
+			{
+				if (!dropUnmatchedLines)
+				{
+					return false;
+				}
+				droppedLineCount++;
+				continue;
+			}
+
+			translatedTimestampCount += lineTimestampCount;
+			retainedTranslatedLines.Add(translatedLine);
 		}
 
 		if (translatedTimestampCount == 0)
@@ -753,8 +775,54 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase, ITrackSearchProv
 			return false;
 		}
 
+		if (droppedLineCount > 0)
+		{
+			candidate.original = RemoveTranslationOnlyPlaceholderLines(candidate.original, originalLyric);
+			candidate.translated = string.Join("\n", retainedTranslatedLines).Trim();
+			Console.WriteLine($"NetEase translation alignment dropped {droppedLineCount} unmatched line(s).");
+		}
+
 		alignedLyric = candidate;
 		return true;
+	}
+
+	private static string RemoveTranslationOnlyPlaceholderLines(string candidateOriginalLyric, string sourceOriginalLyric)
+	{
+		HashSet<long> sourceTimestamps = new HashSet<long>();
+		foreach (Match timestampMatch in LyricTimestampRegex.Matches(sourceOriginalLyric ?? ""))
+		{
+			if (TryParseLyricTimestamp(timestampMatch, out long timestampMilliseconds))
+			{
+				sourceTimestamps.Add(timestampMilliseconds);
+			}
+		}
+
+		List<string> retainedLines = new List<string>();
+		string[] candidateLines = (candidateOriginalLyric ?? "").Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.None);
+		foreach (string candidateLine in candidateLines)
+		{
+			MatchCollection timestampMatches = LyricTimestampRegex.Matches(candidateLine);
+			if (timestampMatches.Count > 0 && LyricTimestampRegex.Replace(candidateLine, "").Trim().Length == 0)
+			{
+				bool belongsToSource = false;
+				foreach (Match timestampMatch in timestampMatches)
+				{
+					if (TryParseLyricTimestamp(timestampMatch, out long timestampMilliseconds) && sourceTimestamps.Contains(timestampMilliseconds))
+					{
+						belongsToSource = true;
+						break;
+					}
+				}
+				if (!belongsToSource)
+				{
+					continue;
+				}
+			}
+
+			retainedLines.Add(candidateLine);
+		}
+
+		return string.Join("\n", retainedLines).Trim();
 	}
 
 	private static HashSet<long> ExtractNonEmptyLyricTimestamps(string lyricText)
