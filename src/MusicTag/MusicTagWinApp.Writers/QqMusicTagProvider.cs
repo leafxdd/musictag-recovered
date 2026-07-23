@@ -96,6 +96,11 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 	{
 	}
 
+	protected virtual bool WaitForLyricRetryDelay(int waitMilliseconds)
+	{
+		return cancellationSource.Token.WaitHandle.WaitOne(waitMilliseconds);
+	}
+
 	private List<QqSongInfo> SearchSongs(string query, int maxResults)
 	{
 		string requestBody = string.Format(searchRequestTemplate, "req_0", TextEncodingService.JavaScriptStringEncode(query), maxResults);
@@ -279,16 +284,42 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 
 	private LyricSearchResult LoadLyrics(QqSongInfo songInfo)
 	{
-		string qrcResponseBody = PostString(qrcLyricEndpointUrl, BuildQrcLyricRequestBody(songInfo), null, postJson: true);
-		if (cancellationSource.IsCancellationRequested)
+		string qrcRequestBody = BuildQrcLyricRequestBody(songInfo);
+		bool qrcRateLimited = false;
+		const int maxAttempts = 2;
+		for (int attempt = 0; attempt < maxAttempts; attempt++)
 		{
-			return null;
-		}
+			string qrcResponseBody = PostString(qrcLyricEndpointUrl, qrcRequestBody, null, postJson: true);
+			if (cancellationSource.IsCancellationRequested)
+			{
+				return null;
+			}
 
-		LyricSearchResult qrcLyric = CreateQrcLyricResult(songInfo, qrcResponseBody);
-		if (qrcLyric != null)
-		{
-			return qrcLyric;
+			qrcRateLimited = IsRateLimited(TryParseJsonObject(qrcResponseBody));
+			if (qrcRateLimited && attempt + 1 < maxAttempts)
+			{
+				int retryNumber = attempt + 1;
+				int retryTotal = maxAttempts - 1;
+				const int countdownSeconds = 1;
+				int waitMilliseconds = countdownSeconds * 1000 + RetryCountdownBufferMs;
+				Console.WriteLine($"QQ lyric throttled (req_0.code 2001), retry {retryNumber}/{retryTotal}");
+				ReportStatus(SourceSearchPhase.Retrying, "2001", retryNumber, retryTotal, countdownSeconds);
+				if (WaitForLyricRetryDelay(waitMilliseconds))
+				{
+					return null;
+				}
+				continue;
+			}
+
+			if (!qrcRateLimited)
+			{
+				LyricSearchResult qrcLyric = CreateQrcLyricResult(songInfo, qrcResponseBody);
+				if (qrcLyric != null)
+				{
+					return qrcLyric;
+				}
+			}
+			break;
 		}
 
 		string responseBody = GetResponseString(string.Format(lyricUrlTemplate, songInfo.Mid, callbackName));
@@ -297,7 +328,12 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 			return null;
 		}
 
-		return CreateLyricResult(songInfo, responseBody);
+		LyricSearchResult legacyLyric = CreateLyricResult(songInfo, responseBody);
+		if (legacyLyric == null && qrcRateLimited && (LastTransportResult == null || LastTransportResult.IsSuccess))
+		{
+			SetTransportError(RemoteErrorKind.RateLimited, "2001");
+		}
+		return legacyLyric;
 	}
 
 	private static string BuildQrcLyricRequestBody(QqSongInfo songInfo)

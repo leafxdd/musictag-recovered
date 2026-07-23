@@ -48,26 +48,55 @@ internal static class ProviderLyricCharacterization
 	{
 		private readonly string searchResponse;
 		private readonly string lyricResponse;
-		private readonly string qrcResponse;
+		private readonly Queue<string> qrcResponses;
 		public string QrcRequestUrl { get; private set; }
 		public string QrcRequestBody { get; private set; }
+		public int QrcRequestCount { get; private set; }
+		public int LegacyRequestCount { get; private set; }
+		public int LyricRetryWaitCount { get; private set; }
+		public bool CancelOnLyricRetryWait { get; set; }
 		public StubQq(string searchResponse, string lyricResponse = null, string qrcResponse = null) : base(null)
 		{
 			this.searchResponse = searchResponse;
 			this.lyricResponse = lyricResponse;
-			this.qrcResponse = qrcResponse;
+			qrcResponses = new Queue<string>();
+			if (qrcResponse != null)
+			{
+				qrcResponses.Enqueue(qrcResponse);
+			}
+		}
+		public StubQq(string searchResponse, string lyricResponse, IEnumerable<string> qrcResponses) : base(null)
+		{
+			this.searchResponse = searchResponse;
+			this.lyricResponse = lyricResponse;
+			this.qrcResponses = new Queue<string>(qrcResponses ?? Array.Empty<string>());
 		}
 		protected override string PostString(string url, string body, HttpClient client = null, bool postJson = false)
 		{
 			if (body?.Contains("GetPlayLyricInfo") == true)
 			{
+				QrcRequestCount++;
 				QrcRequestUrl = url;
 				QrcRequestBody = body;
-				return qrcResponse ?? searchResponse;
+				return qrcResponses.Count > 0 ? qrcResponses.Dequeue() : searchResponse;
 			}
 			return searchResponse;
 		}
-		protected override string GetResponseString(string url) => lyricResponse;
+		protected override string GetResponseString(string url)
+		{
+			LegacyRequestCount++;
+			return lyricResponse;
+		}
+		protected override bool WaitForLyricRetryDelay(int waitMilliseconds)
+		{
+			LyricRetryWaitCount++;
+			if (CancelOnLyricRetryWait)
+			{
+				cancellationSource.Cancel();
+				return true;
+			}
+			return false;
+		}
 	}
 
 	private sealed class StubKugou : KugouTagProvider
@@ -385,6 +414,80 @@ internal static class ProviderLyricCharacterization
 			string fallback = "[00:01.23]fallback";
 			List<LyricSearchResult> lyrics = new StubQq(QqSearchOneSong, QqJsonpLyric(fallback), "{\"req_0\":{\"code\":0,\"data\":{\"lyric\":\"not-hex\"}}}").SearchLyrics("q", 10, 0);
 			Check.Equal(fallback, lyrics[0].Lyric, "fallback lyric");
+		}
+		);
+
+		yield return ("QQ.SearchLyrics retries QRC once after rate limit", delegate
+		{
+			string qrc = "[1007,500]Recovered(1007,500)";
+			List<SourceSearchStatus> statuses = new List<SourceSearchStatus>();
+			StubQq provider = new StubQq(
+				QqSearchOneSong,
+				QqJsonpLyric("[00:01.00]fallback"),
+				new[] { "{\"req_0\":{\"code\":2001}}", QqQrcResponse(qrc) });
+			provider.StatusReporter = statuses.Add;
+			List<LyricSearchResult> lyrics = provider.SearchLyrics("q", 10, 0);
+			Check.Equal(1, lyrics.Count, "count");
+			Check.Equal(2, provider.QrcRequestCount, "QRC request count");
+			Check.Equal(0, provider.LegacyRequestCount, "legacy request count");
+			Check.Equal(1, provider.LyricRetryWaitCount, "retry wait count");
+			Check.True(lyrics[0].Lyric.EndsWith("Recovered", StringComparison.Ordinal), "retried QRC lyric");
+			Check.Equal(1, statuses.Count, "status count");
+			Check.Equal(SourceSearchPhase.Retrying, statuses[0].Phase, "retry status phase");
+			Check.Equal("2001", statuses[0].ErrorCode, "retry status code");
+			Check.Equal(1, statuses[0].RetryAttempt, "retry attempt");
+			Check.Equal(1, statuses[0].RetryTotal, "retry total");
+			Check.Equal(1, statuses[0].RetrySecondsLeft, "retry seconds");
+		}
+		);
+
+		yield return ("QQ.SearchLyrics exhausted QRC retry still uses legacy lyric", delegate
+		{
+			string fallback = "[00:01.23]fallback";
+			StubQq provider = new StubQq(
+				QqSearchOneSong,
+				QqJsonpLyric(fallback),
+				new[] { "{\"req_0\":{\"code\":2001}}", "{\"req_0\":{\"code\":2001}}" });
+			List<LyricSearchResult> lyrics = provider.SearchLyrics("q", 10, 0);
+			Check.Equal(1, lyrics.Count, "count");
+			Check.Equal(fallback, lyrics[0].Lyric, "fallback lyric");
+			Check.Equal(2, provider.QrcRequestCount, "QRC request count");
+			Check.Equal(1, provider.LegacyRequestCount, "legacy request count");
+			Check.Equal(1, provider.LyricRetryWaitCount, "retry wait count");
+		}
+		);
+
+		yield return ("QQ.SearchLyrics stops QRC retry and reports exhausted rate limit", delegate
+		{
+			StubQq provider = new StubQq(
+				QqSearchOneSong,
+				QqJsonpLyric(""),
+				new[] { "{\"req_0\":{\"code\":2001}}", "{\"req_0\":{\"code\":2001}}" });
+			List<LyricSearchResult> lyrics = provider.SearchLyrics("q", 10, 0);
+			Check.Equal(0, lyrics.Count, "count");
+			Check.Equal(2, provider.QrcRequestCount, "QRC request count");
+			Check.Equal(1, provider.LegacyRequestCount, "legacy request count");
+			Check.Equal(1, provider.LyricRetryWaitCount, "retry wait count");
+			Check.NotNull(provider.LastTransportResult, "LastTransportResult");
+			Check.Equal(RemoteErrorKind.RateLimited, provider.LastTransportResult.Error, "Error");
+			Check.Equal("2001", provider.LastTransportResult.ErrorCode, "ErrorCode");
+		}
+		);
+
+		yield return ("QQ.SearchLyrics cancellation during QRC retry stops further requests", delegate
+		{
+			StubQq provider = new StubQq(
+				QqSearchOneSong,
+				QqJsonpLyric("[00:01.00]fallback"),
+				new[] { "{\"req_0\":{\"code\":2001}}", QqQrcResponse("[1000,500]Unused(1000,500)") })
+			{
+				CancelOnLyricRetryWait = true
+			};
+			List<LyricSearchResult> lyrics = provider.SearchLyrics("q", 10, 0);
+			Check.Equal(0, lyrics.Count, "count");
+			Check.Equal(1, provider.QrcRequestCount, "QRC request count");
+			Check.Equal(0, provider.LegacyRequestCount, "legacy request count");
+			Check.Equal(1, provider.LyricRetryWaitCount, "retry wait count");
 		}
 		);
 
