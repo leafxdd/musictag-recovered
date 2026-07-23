@@ -14,6 +14,7 @@ namespace MusicTag.Tests;
 //   NetEase.FormatPublishYear:epoch ms(>0)-> "yyyy"(UTC/InvariantCulture);null/<=0/溢出 -> null。
 //   NetEase.ParseCoverDocId:正则 /(\d+)\.\w+$ 提 albumPicDocId;无数字尾段/无扩展名 -> 0。
 //   NetEase.ExtractLyricTexts:lrc/tlyric 回退、YRC/ytlrc 优先、字面 "null" 与缺失归一为 ""。
+//   QQ QRC conversion:valid line timestamps stay authoritative; malformed line timestamps fall back to the first valid word timestamp.
 //   QqSongInfo.GetGenreName(已 public):genre id -> 英文流派名 switch,未知/null -> ""。
 //   QQ.IsRateLimited:req_0.code 必须是 Integer 且 ==2001(字符串 "2001" -> false);空导航 -> false。
 //   Kugou.BuildEncodedLyricKeyword:artist&title 非空 -> "title - artist";title 空 -> artist;else -> title(先 Trim 再 UrlEncode)。
@@ -228,6 +229,20 @@ internal static class ProviderDecodersCharacterization
 			{
 				Settings.Default.LyricDownload_ReformatTimetag = previousSetting;
 			}
+		});
+
+		// ===== QQ QRC conversion =====
+
+		yield return ("QqQrcDecoder: valid line timestamp stays authoritative", delegate
+		{
+			string qrc = "[1000,500]A(1007,500)";
+			Check.Equal("[00:01.000]A", QqQrcDecoder.ConvertToLineLyric(qrc, useThreeDigitMilliseconds: true), "valid line timestamp wins");
+		});
+
+		yield return ("QqQrcDecoder: invalid line timestamp falls back to first valid word timestamp", delegate
+		{
+			string qrc = "[99999999999999999999,500]A(99999999999999999999,100)B(1007,400)\n[2000,500]C(2000,500)";
+			Check.Equal("[00:01.007]AB\n[00:02.000]C", QqQrcDecoder.ConvertToLineLyric(qrc, useThreeDigitMilliseconds: true), "word timestamp fallback");
 		});
 
 		// ===== QqSongInfo.GetGenreName =====

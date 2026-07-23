@@ -16,7 +16,7 @@ internal static class QqQrcDecoder
 
 	private static readonly Regex QrcLineTimestampRegex = new Regex(@"\[(\d+),(\d+)\]", RegexOptions.Compiled);
 
-	private static readonly Regex QrcWordTimestampRegex = new Regex(@"\(\d+,\d+\)", RegexOptions.Compiled);
+	private static readonly Regex QrcWordTimestampRegex = new Regex(@"\((\d+),\d+\)", RegexOptions.Compiled);
 
 	private static readonly Regex MetadataTagRegex = new Regex(@"\[(?:ti|ar|al|by|offset):[^\]]*\]", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
@@ -104,14 +104,26 @@ internal static class QqQrcDecoder
 		for (int matchIndex = 0; matchIndex < timestampMatches.Count; matchIndex++)
 		{
 			Match timestampMatch = timestampMatches[matchIndex];
-			if (!long.TryParse(timestampMatch.Groups[1].Value, out long timestampMilliseconds))
-			{
-				continue;
-			}
-
 			int contentStart = timestampMatch.Index + timestampMatch.Length;
 			int contentEnd = matchIndex + 1 < timestampMatches.Count ? timestampMatches[matchIndex + 1].Index : lyricText.Length;
 			string content = lyricText.Substring(contentStart, contentEnd - contentStart);
+			if (!long.TryParse(timestampMatch.Groups[1].Value, out long timestampMilliseconds))
+			{
+				bool foundWordTimestamp = false;
+				foreach (Match wordTimestampMatch in QrcWordTimestampRegex.Matches(content))
+				{
+					if (long.TryParse(wordTimestampMatch.Groups[1].Value, out timestampMilliseconds))
+					{
+						foundWordTimestamp = true;
+						break;
+					}
+				}
+				if (!foundWordTimestamp)
+				{
+					continue;
+				}
+			}
+
 			content = QrcWordTimestampRegex.Replace(content, "").Trim();
 			lyricBuilder.Append(LyricTextProcessor.FormatTimestamp(timestampMilliseconds, useThreeDigitMilliseconds));
 			lyricBuilder.Append(content);
