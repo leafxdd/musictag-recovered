@@ -669,6 +669,11 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase, ITrackSearchProv
 	internal static (string lyricText, string translatedLyricText) ExtractLyricTexts(string responseBody)
 	{
 		JObject responseJson = JObject.Parse(responseBody);
+		if (IsTrueBooleanFlag(responseJson["nolyric"]) || IsTrueBooleanFlag(responseJson["uncollected"]))
+		{
+			return ("", "");
+		}
+
 		string lyricText = GetLyricField(responseJson["lrc"]);
 		string translatedLyricText = GetLyricField(responseJson["tlyric"]);
 		string yrcText = GetLyricField(responseJson["yrc"]);
@@ -717,6 +722,11 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase, ITrackSearchProv
 	{
 		string lyricText = lyricContainer?["lyric"]?.ToString() ?? "";
 		return lyricText == "null" ? "" : lyricText;
+	}
+
+	private static bool IsTrueBooleanFlag(JToken flag)
+	{
+		return flag?.Type == JTokenType.Boolean && flag.Value<bool>();
 	}
 
 	private static string NormalizeTranslatedLyric(string lyricText, bool useThreeDigitMilliseconds)

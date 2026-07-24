@@ -232,6 +232,14 @@ internal static class ProviderLyricCharacterization
 		}
 		);
 
+		yield return ("NetEase.SearchLyrics nolyric response -> 0 lyrics", delegate
+		{
+			string response = "{\"nolyric\":true,\"lrc\":{\"lyric\":\"[00:00.00]纯音乐，请欣赏。\"}}";
+			List<LyricSearchResult> lyrics = new StubNetEase(NetEaseSearchOneSong, response).SearchLyrics("q", 10, 0L, new List<LyricSearchResult>(), 0);
+			Check.Equal(0, lyrics.Count, "count");
+		}
+		);
+
 		yield return ("NetEase.SearchLyrics existing TrackId skipped", delegate
 		{
 			List<LyricSearchResult> existing = new List<LyricSearchResult> { new LyricSearchResult { TrackId = "111" } };

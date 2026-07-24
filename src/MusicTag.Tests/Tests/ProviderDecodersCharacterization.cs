@@ -101,6 +101,28 @@ internal static class ProviderDecodersCharacterization
 			Check.Equal("", translated, "literal null translated normalized");
 		});
 
+		yield return ("ExtractLyricTexts: nolyric true suppresses placeholder payloads", delegate
+		{
+			string response = "{\"nolyric\":true,\"lrc\":{\"lyric\":\"[00:00.00]纯音乐，请欣赏。\"},\"tlyric\":{\"lyric\":\"[00:00.00]placeholder\"},\"yrc\":{\"lyric\":\"[1000,500](1000,500,0)placeholder\"}}";
+			var (lyric, translated) = NetEaseMusicTagProvider.ExtractLyricTexts(response);
+			Check.Equal("", lyric, "nolyric original omitted");
+			Check.Equal("", translated, "nolyric translation omitted");
+		});
+
+		yield return ("ExtractLyricTexts: uncollected true suppresses otherwise valid lyrics", delegate
+		{
+			var (lyric, translated) = NetEaseMusicTagProvider.ExtractLyricTexts("{\"uncollected\":true,\"lrc\":{\"lyric\":\"[00:01.00]Line\"},\"tlyric\":{\"lyric\":\"[00:01.00]Trans\"}}");
+			Check.Equal("", lyric, "uncollected original omitted");
+			Check.Equal("", translated, "uncollected translation omitted");
+		});
+
+		yield return ("ExtractLyricTexts: non-boolean no-lyric flags do not suppress valid lyrics", delegate
+		{
+			var (lyric, translated) = NetEaseMusicTagProvider.ExtractLyricTexts("{\"nolyric\":\"true\",\"lrc\":{\"lyric\":\"[00:01.00]Line\"}}");
+			Check.Equal("[00:01.00]Line", lyric, "string flag ignored");
+			Check.Equal("", translated, "no translation");
+		});
+
 		yield return ("NetEaseYrcDecoder: strips three-part word markers and keeps millisecond line starts", delegate
 		{
 			string yrc = "[12867,6282](12867,208,0)岁(13076,208,0)月\n[19878,1000](19878,500,0)下";
