@@ -20,6 +20,8 @@ internal static class QqQrcDecoder
 
 	private static readonly Regex MetadataTagRegex = new Regex(@"\[(?:ti|ar|al|by|offset):[^\]]*\]", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+	private static readonly Regex InlineMetadataTagRegex = new Regex(@"\[[A-Za-z][A-Za-z0-9_-]*:[^\]]*\]", RegexOptions.Compiled);
+
 	/// <summary>
 	/// 解密 QRC 歌词
 	/// </summary>
@@ -124,6 +126,10 @@ internal static class QqQrcDecoder
 				}
 			}
 
+			// Metadata occasionally appears between timed lines instead of only in
+			// the header.  It applies to the document, not to the preceding sung
+			// text, so do not let tags such as [kana:] leak into that lyric line.
+			content = InlineMetadataTagRegex.Replace(content, "");
 			content = QrcWordTimestampRegex.Replace(content, "").Trim();
 			lyricBuilder.Append(LyricTextProcessor.FormatTimestamp(timestampMilliseconds, useThreeDigitMilliseconds));
 			lyricBuilder.Append(content);

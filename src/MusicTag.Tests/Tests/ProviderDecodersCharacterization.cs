@@ -262,6 +262,18 @@ internal static class ProviderDecodersCharacterization
 			Check.Equal("[00:01.007]AB\n[00:02.000]C", QqQrcDecoder.ConvertToLineLyric(qrc, useThreeDigitMilliseconds: true), "word timestamp fallback");
 		});
 
+		yield return ("QqQrcDecoder: inline metadata cannot attach to the preceding lyric", delegate
+		{
+			string qrc = "[1000,500]A(1000,500)\n[kana:fixture]\n[2000,500]B(2000,500)";
+			Check.Equal("[00:01.000]A\n[00:02.000]B", QqQrcDecoder.ConvertToLineLyric(qrc, useThreeDigitMilliseconds: true), "inline metadata omitted");
+		});
+
+		yield return ("QqQrcDecoder: XML LyricContent keeps lines separated across embedded newlines", delegate
+		{
+			string qrcXml = "<?xml version=\"1.0\"?><QrcInfos><LyricInfo LyricContent=\"[1000,500]A(1000,500)&#10;[2000,500]B(2000,500)\" /></QrcInfos>";
+			Check.Equal("[00:01.000]A\n[00:02.000]B", QqQrcDecoder.ConvertToLineLyric(qrcXml, useThreeDigitMilliseconds: true), "XML attribute newline");
+		});
+
 		// ===== QqSongInfo.GetGenreName =====
 
 		yield return ("GetGenreName: 1 -> Pop", delegate
