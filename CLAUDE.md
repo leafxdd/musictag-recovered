@@ -50,21 +50,26 @@ Keep commits small and use Conventional Commit prefixes such as `fix:`, `feat:`,
 `refactor:`, and `docs:`. Stage explicit paths only. Do not stage `.claude/`, `.mcp.json`,
 `.repowise/`, `cctortest/`, `.serena/`, screenshots, or unrelated generated/user files.
 
-## QQ QRC Lyrics
+## Lyrics (QQ QRC / NetEase YRC)
 
-QQ lyric loading requests QRC first and falls back to the legacy Base64 LRC endpoint.
-`QqQrcDecoder` decrypts the QQ payload and converts QRC to ordinary LRC. QRC contains
-line timestamps (`[start,duration]`) and word timestamps (`(start,duration)`); the
-current conversion keeps the line start and removes word markers. Therefore ordinary
-LRC cannot retain complete per-word timing. With `LyricDownload_ReformatTimetag` off,
-three-digit millisecond formatting is exact; with it on, the existing two-digit
-formatting intentionally rounds to 10 ms.
+Both sources prefer word-level lyrics and fall back to plain LRC. QQ requests QRC
+first (one short retry on rate-limit code 2001) and falls back to the legacy Base64
+LRC endpoint; `QqQrcDecoder` decrypts the payload (3DES + zlib, locked by a real
+ciphertext golden vector — do not regenerate it with the self-encrypting fixture).
+NetEase reads the plaintext `api/song/lyric/v1` endpoint; `NetEaseYrcDecoder`
+converts YRC, dropping JSON credit records, and the provider honors boolean
+`nolyric`/`uncollected` flags.
 
-The current precision investigation recommends a QQ-only policy of using the first
-valid word start as the line timestamp, with the line timestamp as a malformed/missing
-data fallback. Keep translation lines aligned and do not change global timestamp
-formatting without a separate compatibility decision. Full word timing would require
-an enhanced LRC/QRC representation and broader consumer support.
+Conversion keeps the line start (`[start,duration]`) and removes word markers; a
+malformed line start falls back to the first parseable word start, and LRC-style
+metadata tags between timed lines are stripped. Ordinary LRC therefore cannot retain
+complete per-word timing; that would require an enhanced representation and broader
+consumer support. YTLRC translations align per line with unmatched lines dropped;
+plain tlyric alignment stays strict. With `LyricDownload_ReformatTimetag` off,
+three-digit millisecond formatting is exact; with it on, the two-digit formatting
+intentionally rounds to 10 ms. Do not change global timestamp formatting without a
+separate compatibility decision. History and open items:
+`docs/QRC_PRECISION_REVIEW_2026-07.md`, `docs/LYRIC_FETCH_REPAIR_REPORT_2026-07.md`.
 
 ## Handoff Notes
 

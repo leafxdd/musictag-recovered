@@ -109,15 +109,15 @@ Online search flows through provider capability interfaces/factories and shared 
 - Result limits, `SearchSource` ordinals, optional status/reporting parameters, and batch-dialog call signatures are persisted or shared contracts.
 - Characterization fixtures use recorded data and must exercise the intended parsing/search path, not merely produce a passing result.
 
-QQ QRC lyrics are a current high-risk parsing path:
+QQ QRC and NetEase YRC lyrics are current high-risk parsing paths:
 
-- `QqMusicTagProvider` requests `music.musichallSong.PlayLyricInfo` QRC lyrics first and falls back to the legacy Base64 LRC endpoint when QRC is unavailable or malformed.
-- `QqQrcDecoder` uses the QQ-compatible 3DES/zlib decoder adapted from `jitwxs/163MusicLyrics`; the Apache-2.0 attribution is recorded in `docs/THIRD_PARTY_NOTICES.md` and `docs/licenses/Apache-2.0-jitwxs-163MusicLyrics.txt`.
-- QRC line timestamps use `[start,duration]`; word timestamps use `(start,duration)`. The current ordinary-LRC conversion keeps line starts and removes word markers, so it cannot retain full per-word timing.
-- With `LyricDownload_ReformatTimetag` disabled, three-digit milliseconds are emitted without rounding. With it enabled, the existing two-digit output intentionally rounds to 10 ms.
-- A proposed precision improvement is QQ-only: use the first valid word start as the line timestamp, fall back to the line start for missing or malformed word timing, and preserve translation alignment. Do not change global `FormatTimestamp` behavior without a separate compatibility decision.
+- `QqMusicTagProvider` requests `music.musichallSong.PlayLyricInfo` QRC lyrics first (one short retry on throttling code 2001) and falls back to the legacy Base64 LRC endpoint when QRC is unavailable or malformed.
+- `QqQrcDecoder` uses the QQ-compatible 3DES/zlib decoder adapted from `jitwxs/163MusicLyrics`; the Apache-2.0 attribution is recorded in `docs/THIRD_PARTY_NOTICES.md` and `docs/licenses/Apache-2.0-jitwxs-163MusicLyrics.txt`. Decryption is locked by a real-ciphertext golden vector; do not regenerate that vector with the self-encrypting fixture.
+- QRC line timestamps use `[start,duration]`; word timestamps use `(start,duration)`. The ordinary-LRC conversion keeps the line start and removes word markers; a malformed line start falls back to the first parseable word start, and LRC-style metadata tags between timed lines are stripped. Full per-word timing is still not retained.
+- `NetEaseMusicTagProvider` reads the plaintext `api/song/lyric/v1` endpoint. `NetEaseYrcDecoder` converts YRC to line LRC and drops JSON credit records; the provider honors boolean `nolyric`/`uncollected` flags. YTLRC translations align per line with unmatched lines dropped; plain tlyric alignment stays strict.
+- With `LyricDownload_ReformatTimetag` disabled, three-digit milliseconds are emitted without rounding. With it enabled, the existing two-digit output intentionally rounds to 10 ms. Do not change global `FormatTimestamp` behavior without a separate compatibility decision.
 
-The current QRC precision investigation is analysis-only until a design is approved. Any implementation must add recorded characterization cases for first-word precision, malformed/missing word markers, formatting settings, and translated-line alignment.
+Lyric conversion changes must add recorded characterization cases covering word-marker handling, malformed timestamps, formatting settings, translated-line alignment, and no-lyric flags. Background and open items live in `docs/QRC_PRECISION_REVIEW_2026-07.md` and `docs/LYRIC_FETCH_REPAIR_REPORT_2026-07.md`.
 
 Tag writes converge through `ConfigDescriptorState.SaveWithId3v2Version`, which calls the write body, `ApplyTagWritePolicy`, version selection, and `tagFile.Save()` under a shared lock. Keep new save paths inside this funnel. The current settings are:
 
