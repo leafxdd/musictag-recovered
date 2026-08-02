@@ -245,6 +245,10 @@ internal class KugouTagProvider : RemoteTagProviderBase, ITrackSearchProvider, I
 				return KrcLoadStatus.Malformed;
 			}
 			lyric = CreateKrcLyricResult(song, decoded);
+			if (string.IsNullOrWhiteSpace(lyric.TranslatedLyric) && IsTranslatedLyricWanted())
+			{
+				lyric.TranslatedLyric = TryLoadLegacyTranslatedLyric(song, lyric.Lyric);
+			}
 			return KrcLoadStatus.Success;
 		}
 		catch (Exception decodeError)
@@ -271,6 +275,48 @@ internal class KugouTagProvider : RemoteTagProviderBase, ITrackSearchProvider, I
 	private static bool CanLoadKrc(KugouSongInfo song)
 	{
 		return song != null && song.DurationMs > 0 && !string.IsNullOrWhiteSpace(song.Hash) && kugouHashRegex.IsMatch(song.Hash);
+	}
+
+	// KRC 通道经常不带 [language:] 译文,而同一首歌的 legacy landata 有(实测 Lemon 的 11 个
+	// 候选无一携带译文,legacy 却有完整中文翻译)。KRC 成功即返回会静默丢掉译文,因此在需要
+	// 译文时补一次 legacy 请求。两个通道的正文逐行相同,只差时间精度,所以 legacy 译文可以
+	// 按行序对齐到 KRC 的高精度时间轴。
+	private string TryLoadLegacyTranslatedLyric(KugouSongInfo song, string krcLyricText)
+	{
+		if (cancellationSource.IsCancellationRequested)
+		{
+			return "";
+		}
+
+		HttpResult response = GetResponseStringResult(string.Format(lyricUrlTemplate, BuildEncodedLyricKeyword(song.Artist, song.Title), song.Hash, song.DurationMs));
+		if (!response.IsSuccess)
+		{
+			// 译文是可选增量:取译文失败不得把已成功的高精度歌词标记成传输错误。
+			SetTransportError(RemoteErrorKind.None, null);
+			return "";
+		}
+		if (cancellationSource.IsCancellationRequested)
+		{
+			return "";
+		}
+
+		try
+		{
+			JObject lyricDataJson = JObject.Parse(response.Body ?? "")["data"] as JObject;
+			return lyricDataJson == null ? "" : ExtractLandataTranslation(lyricDataJson, krcLyricText);
+		}
+		catch (Exception parseError)
+		{
+			Console.WriteLine("Parse Kugou legacy translation error:" + parseError.GetType().Name);
+			return "";
+		}
+	}
+
+	// LyricSearchResult.GetFormattedLyricText 在 DownloadTrans_Enable 关闭但格式为 3
+	// (仅译文)时仍然只输出 TranslatedLyric,所以这两种配置都需要译文。
+	private static bool IsTranslatedLyricWanted()
+	{
+		return Settings.Default.LyricDownload_DownloadTrans_Enable || Settings.Default.LyricDownload_DownloadTrans_LyricFormat == 3;
 	}
 
 	private static bool TryReadSuccessStatus(JObject response)
@@ -592,24 +638,7 @@ internal class KugouTagProvider : RemoteTagProviderBase, ITrackSearchProvider, I
 			}
 
 			string lyricText = lyricDataJson["lrc"]?.ToString() ?? "";
-			string translatedLyric = "";
-			if (lyricDataJson["landata"] is JArray translatedLines)
-			{
-				LyricTextProcessor lyricMerger = new LyricTextProcessor(lyricText, allowDuplicateTimestamps: true);
-				foreach (JToken translatedLine in translatedLines)
-				{
-					if (translatedLine?.Type != JTokenType.Object)
-					{
-						continue;
-					}
-
-					int lineType;
-					if (int.TryParse(translatedLine["type"]?.ToString(), out lineType) && lineType == 1)
-					{
-						translatedLyric = ParseTranslatedLyric(translatedLine["content"]?.ToString() ?? "", lyricMerger);
-					}
-				}
-			}
+			string translatedLyric = ExtractLandataTranslation(lyricDataJson, lyricText);
 			if (!string.IsNullOrWhiteSpace(lyricText))
 			{
 				lyric = new LyricSearchResult();
@@ -647,6 +676,31 @@ internal class KugouTagProvider : RemoteTagProviderBase, ITrackSearchProvider, I
 			return TextUtilities.UrlEncodeUtf8((artist ?? "").Trim());
 		}
 		return TextUtilities.UrlEncodeUtf8((title ?? "").Trim());
+	}
+
+	// legacy `data.landata` 的 type==1 逐行译文,按行序对齐到给定的主歌词时间轴。
+	// KRC 主歌词与 legacy 主歌词逐行文本相同,两条调用路径共用同一份解析。
+	private string ExtractLandataTranslation(JObject lyricDataJson, string lyricText)
+	{
+		string translatedLyric = "";
+		if (lyricDataJson["landata"] is JArray translatedLines)
+		{
+			LyricTextProcessor lyricMerger = new LyricTextProcessor(lyricText, allowDuplicateTimestamps: true);
+			foreach (JToken translatedLine in translatedLines)
+			{
+				if (translatedLine?.Type != JTokenType.Object)
+				{
+					continue;
+				}
+
+				int lineType;
+				if (int.TryParse(translatedLine["type"]?.ToString(), out lineType) && lineType == 1)
+				{
+					translatedLyric = ParseTranslatedLyric(translatedLine["content"]?.ToString() ?? "", lyricMerger);
+				}
+			}
+		}
+		return translatedLyric;
 	}
 
 	private string ParseTranslatedLyric(string content, LyricTextProcessor lyricMerger)

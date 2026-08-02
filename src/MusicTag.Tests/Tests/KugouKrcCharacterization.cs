@@ -35,6 +35,9 @@ internal static class KugouKrcCharacterization
 	private const string LegacyLyricResponse =
 		"{\"data\":{\"lrc\":\"[00:01.00]Legacy\"}}";
 
+	// 真实 KRC 固定向量(歌词 ID 216374858)的时间轴行数,legacy landata 必须逐行对齐。
+	private const int RealKrcTimedLineCount = 54;
+
 	private sealed class ScriptedKugouProvider : KugouTagProvider
 	{
 		private readonly Func<string, HttpResult> responder;
@@ -137,9 +140,12 @@ internal static class KugouKrcCharacterization
 		yield return ("Kugou KRC primary succeeds without calling legacy", delegate
 		{
 			bool originalSetting = Settings.Default.LyricDownload_ReformatTimetag;
+			bool originalTranslation = Settings.Default.LyricDownload_DownloadTrans_Enable;
 			try
 			{
 				Settings.Default.LyricDownload_ReformatTimetag = false;
+				// 关闭译文下载,使本用例只覆盖主歌词通道;译文回退另有专门用例。
+				Settings.Default.LyricDownload_DownloadTrans_Enable = false;
 				ScriptedKugouProvider provider = new ScriptedKugouProvider(url =>
 				{
 					if (url.Contains("song_search_v2", StringComparison.Ordinal))
@@ -170,28 +176,156 @@ internal static class KugouKrcCharacterization
 			finally
 			{
 				Settings.Default.LyricDownload_ReformatTimetag = originalSetting;
+				Settings.Default.LyricDownload_DownloadTrans_Enable = originalTranslation;
+			}
+		});
+
+		yield return ("Kugou KRC without [language:] falls back to legacy landata translation", delegate
+		{
+			bool originalReformat = Settings.Default.LyricDownload_ReformatTimetag;
+			bool originalTranslation = Settings.Default.LyricDownload_DownloadTrans_Enable;
+			try
+			{
+				Settings.Default.LyricDownload_ReformatTimetag = false;
+				Settings.Default.LyricDownload_DownloadTrans_Enable = true;
+				ScriptedKugouProvider provider = new ScriptedKugouProvider(url =>
+				{
+					if (url.Contains("song_search_v2", StringComparison.Ordinal))
+					{
+						return Success(OneSongResponse);
+					}
+					if (url.Contains("lyrics.kugou.com/search", StringComparison.Ordinal))
+					{
+						return Success(KrcCandidateResponse);
+					}
+					if (url.Contains("lyrics.kugou.com/download", StringComparison.Ordinal))
+					{
+						return Success(BuildDownloadResponse(0, KugouKrcFixtures.RealKrcContentBase64));
+					}
+					if (url.Contains("m3ws.kugou.com", StringComparison.Ordinal))
+					{
+						return Success(BuildLegacyTranslationResponse(RealKrcTimedLineCount));
+					}
+					throw new TestFailure("unexpected request: " + url);
+				});
+
+				List<LyricSearchResult> lyrics = provider.SearchLyrics("query", 5, 4);
+				Check.Equal(1, lyrics.Count, "count");
+				// 主歌词仍是 KRC 的三位毫秒,译文来自 legacy 且对齐到同一高精度时间轴。
+				Check.True(lyrics[0].Lyric.Contains("[00:22.144]", StringComparison.Ordinal), "high precision lyric");
+				Check.True(lyrics[0].TranslatedLyric.StartsWith("[00:22.144]T0\n", StringComparison.Ordinal), "translation aligned to KRC timestamps");
+				Check.True(lyrics[0].TranslatedLyric.Contains("[00:28.386]T1", StringComparison.Ordinal), "second translated line");
+				Check.Equal(1, provider.RequestedUrls.Count(url => url.Contains("m3ws.kugou.com", StringComparison.Ordinal)), "legacy translation request count");
+			}
+			finally
+			{
+				Settings.Default.LyricDownload_ReformatTimetag = originalReformat;
+				Settings.Default.LyricDownload_DownloadTrans_Enable = originalTranslation;
+			}
+		});
+
+		yield return ("Kugou KRC skips the legacy translation request when translations are off", delegate
+		{
+			bool originalTranslation = Settings.Default.LyricDownload_DownloadTrans_Enable;
+			int originalFormat = Settings.Default.LyricDownload_DownloadTrans_LyricFormat;
+			try
+			{
+				Settings.Default.LyricDownload_DownloadTrans_Enable = false;
+				Settings.Default.LyricDownload_DownloadTrans_LyricFormat = 1;
+				ScriptedKugouProvider provider = new ScriptedKugouProvider(url =>
+				{
+					if (url.Contains("song_search_v2", StringComparison.Ordinal))
+					{
+						return Success(OneSongResponse);
+					}
+					if (url.Contains("lyrics.kugou.com/search", StringComparison.Ordinal))
+					{
+						return Success(KrcCandidateResponse);
+					}
+					if (url.Contains("lyrics.kugou.com/download", StringComparison.Ordinal))
+					{
+						return Success(BuildDownloadResponse(0, KugouKrcFixtures.RealKrcContentBase64));
+					}
+					throw new TestFailure("unexpected request: " + url);
+				});
+
+				List<LyricSearchResult> lyrics = provider.SearchLyrics("query", 5, 4);
+				Check.Equal(1, lyrics.Count, "count");
+				Check.Equal("", lyrics[0].TranslatedLyric, "no translation");
+				Check.Equal(0, provider.RequestedUrls.Count(url => url.Contains("m3ws.kugou.com", StringComparison.Ordinal)), "legacy request count");
+			}
+			finally
+			{
+				Settings.Default.LyricDownload_DownloadTrans_Enable = originalTranslation;
+				Settings.Default.LyricDownload_DownloadTrans_LyricFormat = originalFormat;
+			}
+		});
+
+		yield return ("Kugou legacy translation failure keeps the high precision lyric", delegate
+		{
+			bool originalTranslation = Settings.Default.LyricDownload_DownloadTrans_Enable;
+			try
+			{
+				Settings.Default.LyricDownload_DownloadTrans_Enable = true;
+				ScriptedKugouProvider provider = new ScriptedKugouProvider(url =>
+				{
+					if (url.Contains("song_search_v2", StringComparison.Ordinal))
+					{
+						return Success(OneSongResponse);
+					}
+					if (url.Contains("lyrics.kugou.com/search", StringComparison.Ordinal))
+					{
+						return Success(KrcCandidateResponse);
+					}
+					if (url.Contains("lyrics.kugou.com/download", StringComparison.Ordinal))
+					{
+						return Success(BuildDownloadResponse(0, KugouKrcFixtures.RealKrcContentBase64));
+					}
+					return HttpResult.FromHttpStatus(503);
+				});
+
+				List<LyricSearchResult> lyrics = provider.SearchLyrics("query", 5, 4);
+				Check.Equal(1, lyrics.Count, "count");
+				Check.True(lyrics[0].Lyric.Contains("[00:22.14", StringComparison.Ordinal), "lyric survives");
+				Check.Equal("", lyrics[0].TranslatedLyric, "no translation");
+				// 可选译文取不到不得把已成功的高精度歌词报成传输错误。
+				Check.Equal(RemoteErrorKind.None, provider.LastTransportResult.Error, "no transport error");
+			}
+			finally
+			{
+				Settings.Default.LyricDownload_DownloadTrans_Enable = originalTranslation;
 			}
 		});
 
 		yield return ("Kugou LoadLyricsForTrack uses the KRC path", delegate
 		{
-			ScriptedKugouProvider provider = new ScriptedKugouProvider(url =>
-				url.Contains("/search?", StringComparison.Ordinal)
-					? Success(KrcCandidateResponse)
-					: Success(BuildDownloadResponse(0, KugouKrcFixtures.RealKrcContentBase64)));
-			TrackSearchResult track = new TrackSearchResult
+			bool originalTranslation = Settings.Default.LyricDownload_DownloadTrans_Enable;
+			try
 			{
-				SourceTrackId = "track",
-				Title = "Title",
-				Artist = "Artist",
-				Album = "Album",
-				KugouHash = ValidHash,
-				KugouDurationMs = 256000
-			};
-			LyricSearchResult lyric = provider.LoadLyricsForTrack(track);
-			Check.NotNull(lyric, "lyric");
-			Check.Equal("track", lyric.TrackId, "track id");
-			Check.Equal(2, provider.RequestedUrls.Count, "request count");
+				// 关闭译文下载,使请求计数只反映主歌词通道的两次请求。
+				Settings.Default.LyricDownload_DownloadTrans_Enable = false;
+				ScriptedKugouProvider provider = new ScriptedKugouProvider(url =>
+					url.Contains("/search?", StringComparison.Ordinal)
+						? Success(KrcCandidateResponse)
+						: Success(BuildDownloadResponse(0, KugouKrcFixtures.RealKrcContentBase64)));
+				TrackSearchResult track = new TrackSearchResult
+				{
+					SourceTrackId = "track",
+					Title = "Title",
+					Artist = "Artist",
+					Album = "Album",
+					KugouHash = ValidHash,
+					KugouDurationMs = 256000
+				};
+				LyricSearchResult lyric = provider.LoadLyricsForTrack(track);
+				Check.NotNull(lyric, "lyric");
+				Check.Equal("track", lyric.TrackId, "track id");
+				Check.Equal(2, provider.RequestedUrls.Count, "request count");
+			}
+			finally
+			{
+				Settings.Default.LyricDownload_DownloadTrans_Enable = originalTranslation;
+			}
 		});
 
 		yield return ("Kugou no KRC candidate falls back without tripping the circuit breaker", delegate
@@ -238,30 +372,40 @@ internal static class KugouKrcCharacterization
 
 		yield return ("Kugou malformed candidate payload is per-song and does not trip circuit breaker", delegate
 		{
+			bool originalTranslation = Settings.Default.LyricDownload_DownloadTrans_Enable;
 			int downloadCount = 0;
-			ScriptedKugouProvider provider = new ScriptedKugouProvider(url =>
+			try
 			{
-				if (url.Contains("song_search_v2", StringComparison.Ordinal))
+				// 关闭译文下载,使 legacy 计数只反映损坏载荷的回退,不含第二首的译文补取。
+				Settings.Default.LyricDownload_DownloadTrans_Enable = false;
+				ScriptedKugouProvider provider = new ScriptedKugouProvider(url =>
 				{
-					return Success(TwoSongResponse);
-				}
-				if (url.Contains("lyrics.kugou.com/search", StringComparison.Ordinal))
-				{
-					return Success(KrcCandidateResponse);
-				}
-				if (url.Contains("lyrics.kugou.com/download", StringComparison.Ordinal))
-				{
-					downloadCount++;
-					return Success(BuildDownloadResponse(0, downloadCount == 1 ? "bm90a3Jj" : KugouKrcFixtures.RealKrcContentBase64));
-				}
-				return Success(LegacyLyricResponse);
-			});
+					if (url.Contains("song_search_v2", StringComparison.Ordinal))
+					{
+						return Success(TwoSongResponse);
+					}
+					if (url.Contains("lyrics.kugou.com/search", StringComparison.Ordinal))
+					{
+						return Success(KrcCandidateResponse);
+					}
+					if (url.Contains("lyrics.kugou.com/download", StringComparison.Ordinal))
+					{
+						downloadCount++;
+						return Success(BuildDownloadResponse(0, downloadCount == 1 ? "bm90a3Jj" : KugouKrcFixtures.RealKrcContentBase64));
+					}
+					return Success(LegacyLyricResponse);
+				});
 
-			List<LyricSearchResult> lyrics = provider.SearchLyrics("query", 5, 0);
-			Check.Equal(2, lyrics.Count, "count");
-			Check.Equal(2, provider.RequestedUrls.Count(url => url.Contains("lyrics.kugou.com/search", StringComparison.Ordinal)), "KRC search count");
-			Check.Equal(2, downloadCount, "download count");
-			Check.Equal(1, provider.RequestedUrls.Count(url => url.Contains("m3ws.kugou.com", StringComparison.Ordinal)), "legacy count");
+				List<LyricSearchResult> lyrics = provider.SearchLyrics("query", 5, 0);
+				Check.Equal(2, lyrics.Count, "count");
+				Check.Equal(2, provider.RequestedUrls.Count(url => url.Contains("lyrics.kugou.com/search", StringComparison.Ordinal)), "KRC search count");
+				Check.Equal(2, downloadCount, "download count");
+				Check.Equal(1, provider.RequestedUrls.Count(url => url.Contains("m3ws.kugou.com", StringComparison.Ordinal)), "legacy count");
+			}
+			finally
+			{
+				Settings.Default.LyricDownload_DownloadTrans_Enable = originalTranslation;
+			}
 		});
 
 		yield return ("Kugou malformed KRC and legacy response remains diagnosable", delegate
@@ -334,6 +478,21 @@ internal static class KugouKrcCharacterization
 	private static string BuildDownloadResponse(int contentType, string content)
 	{
 		return "{\"status\":200,\"contenttype\":" + contentType + ",\"content\":\"" + content + "\"}";
+	}
+
+	// legacy m3ws 响应:lrc 保持低精度,landata 的 type==1 逐行译文行数必须与 KRC 一致。
+	private static string BuildLegacyTranslationResponse(int lineCount)
+	{
+		StringBuilder builder = new StringBuilder("{\"data\":{\"lrc\":\"[00:22.14]Legacy\",\"landata\":[{\"type\":1,\"content\":\"[");
+		for (int index = 0; index < lineCount; index++)
+		{
+			if (index > 0)
+			{
+				builder.Append(',');
+			}
+			builder.Append("[T").Append(index).Append(']');
+		}
+		return builder.Append("]\"}]}}").ToString();
 	}
 
 	private static HttpResult Success(string body)
