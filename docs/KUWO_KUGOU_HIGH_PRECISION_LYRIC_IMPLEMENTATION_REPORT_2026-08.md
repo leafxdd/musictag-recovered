@@ -32,6 +32,7 @@
 | `8fd127c` | 新增酷我 LRCX 请求/解码、专用翻译配对、回退、缓存质量和封面隔离 | 用户可见精度修正 |
 | `9862443` | 增加非法 UTF-8 字节定向用例，锁定纯文本 KRC 响应的严格解码 | 测试补强，不改产品行为 |
 | `86d68da` | 交叉审阅后续修复：KRC 无 `[language:]` 时回落 legacy `landata` 取译文 | 回归修正，见 §11 |
+| `32bedd8` | 酷我 LRCX 保留标准 LRC 元数据，与酷狗对齐 | 用户可见输出变更，见 §11.4 |
 
 设计与 Claude 交叉审阅的处置记录保存在
 [`KUWO_KUGOU_HIGH_PRECISION_LYRIC_IMPLEMENTATION_DESIGN_2026-08.md`](KUWO_KUGOU_HIGH_PRECISION_LYRIC_IMPLEMENTATION_DESIGN_2026-08.md)。
@@ -374,11 +375,26 @@ QQ QRC、网易 YRC、酷狗 KRC、酷我 LRCX 在传输、编码、行时间、
 同时应注意：`type=0` 罗马音本轮未接入（§8.2），LDDC 的 offset 逻辑主要服务罗马音，
 将来接入罗马音时需要独立重测，不能沿用本节对 `type=1` 的结论。
 
-### 11.4 仍未处理
+### 11.4 已修：两个 decoder 的元数据处理统一（`32bedd8`）
 
-- 两个 decoder 对元数据不一致：`KugouKrcDecoder` 保留 `ti/ar/al/by/offset`，
-  `KuwoLrcxDecoder` 只保留时间行、丢弃全部标签（含 `[offset:]`）。抽样 offset 均为 0，
-  非零时一个源静默忽略、另一个静默透传，需要一次明确决策。
+`KugouKrcDecoder` 保留 `ti/ar/al/by/offset`，而 `KuwoLrcxDecoder` 只保留时间行、
+把标签全部丢弃，两个新源对"下载下来的 LRC 带不带头部"给出相反答案。已按酷狗的规则统一：
+**两源都保留这五个标准标签**。
+
+酷我私有标签不写入 LRC。真实响应还带 `[ml:]`、`[ver:]` 和 `[kuwo:]`，其中 `[kuwo:xxx]`
+是逐词时间的八进制混淆参数（§8.3），任何一个泄漏到正文都会让用户在歌词前看到无意义标记。
+这与酷狗"KRC 私有元数据不写入 LRC"是同一条规则。
+
+与酷狗一致，元数据只写主歌词，不在译文里重复。不想要头部的用户已有
+`LyricDownload_DeleteHeadTag` 开关，因此默认保留不会造成不可逆结果。
+
+值得记录的是：**改动前后既有 956 条用例无一失败**——原有断言全部使用 `Contains`，
+没有任何一条锁住头部形态，这正是两个 decoder 能够漂移的原因。现已在真实固定向量上
+用精确前缀断言锁定（`[ti:孤勇者]\n[ar:陈奕迅]\n[al:孤勇者]\n[by:p_pttzhang]\n[offset:0]\n[00:00.000]`），
+并补充 decoder 用例覆盖标签顺序、私有标签剔除和"译文不携带元数据"。
+
+### 11.5 仍未处理
+
 - `KugouKrcDecoder.TryParseTimedLine` 的损坏兜底用 `行起始 + 首词偏移`，
   正常路径用 `行起始`。两者从同一捕获组取行起始，因此仅时长损坏时两条路径会相差一个首词偏移。
   首词偏移为 0 时无害，但与 §3.2「不把首词偏移当协议保证」的原则相抵，属低优先级一致性问题。
