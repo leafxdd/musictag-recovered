@@ -19,7 +19,7 @@
 - 酷我还顺带获得可用率提升：68 首实测样本中 legacy 通道仅 22 首可用（32%），LRCX 为 66 首（97%），
   详见 §9.1。这也意味着酷我的 legacy 回退实测不提供额外覆盖，不能当作安全网。
 
-本轮完整自动验证为 `952 passed, 0 failed`。Debug、Release 构建通过，Release 应用启动后保持存活，未发现致命异常日志。
+本报告最终完整自动验证为 `956 passed, 0 failed`。Debug、Release 构建通过，Release 应用启动后保持存活，未发现致命异常日志。
 
 本次仍只把逐词格式转换为逐行 LRC，没有保存逐词时间轴，也没有增加 UI 或设置项。外部端点均为非官方开放接口，legacy 回退是尽力而为，不构成可用性保证。
 
@@ -33,6 +33,7 @@
 | `9862443` | 增加非法 UTF-8 字节定向用例，锁定纯文本 KRC 响应的严格解码 | 测试补强，不改产品行为 |
 | `86d68da` | 交叉审阅后续修复：KRC 无 `[language:]` 时回落 legacy `landata` 取译文 | 回归修正，见 §11 |
 | `32bedd8` | 酷我 LRCX 保留标准 LRC 元数据，与酷狗对齐 | 用户可见输出变更，见 §11.4 |
+| `afab8b1` | KRC 损坏行时长兜底保留绝对行起始，不再叠加首词相对偏移 | 回归修正，见 §11.5 |
 
 设计与 Claude 交叉审阅的处置记录保存在
 [`KUWO_KUGOU_HIGH_PRECISION_LYRIC_IMPLEMENTATION_DESIGN_2026-08.md`](KUWO_KUGOU_HIGH_PRECISION_LYRIC_IMPLEMENTATION_DESIGN_2026-08.md)。
@@ -393,8 +394,22 @@ QQ QRC、网易 YRC、酷狗 KRC、酷我 LRCX 在传输、编码、行时间、
 用精确前缀断言锁定（`[ti:孤勇者]\n[ar:陈奕迅]\n[al:孤勇者]\n[by:p_pttzhang]\n[offset:0]\n[00:00.000]`），
 并补充 decoder 用例覆盖标签顺序、私有标签剔除和"译文不携带元数据"。
 
-### 11.5 仍未处理
+### 11.5 已修：损坏 KRC 行保持绝对行起始（`afab8b1`）
 
-- `KugouKrcDecoder.TryParseTimedLine` 的损坏兜底用 `行起始 + 首词偏移`，
-  正常路径用 `行起始`。两者从同一捕获组取行起始，因此仅时长损坏时两条路径会相差一个首词偏移。
-  首词偏移为 0 时无害，但与 §3.2「不把首词偏移当协议保证」的原则相抵，属低优先级一致性问题。
+原损坏兜底用 `行起始 + 首词偏移`，正常路径只用 `行起始`。KRC 行头的 `lineStartMs`
+已经是绝对时间，逐词标记中的首词起始则是相对行首偏移；损坏分支的正则既然已经成功解析行头，
+再次叠加首词偏移就是重复应用时间基准。
+
+修复后，损坏分支直接使用 `damagedLineStartMs`，同时保留“必须存在可解析首词标记”的恢复保护。
+由于不再做整数加法，对应的 `checked` 和 `OverflowException` 分支一并移除。
+
+characterization 用同一个非零首词偏移同时覆盖正常与损坏路径：
+
+```text
+[1000,500]<5,100,0>Normal      -> [00:01.000]Normal
+[2000,broken]<5,100,0>Fallback -> [00:02.000]Fallback
+```
+
+`impact(TryParseTimedLine, upstream)` 为 `LOW`：1 个直接调用者、5 个传递符号、0 条执行流程。
+完整 `Verify-Build.ps1 -RunSmokeTests` 为 `956 passed, 0 failed`，应用启动存活且无致命异常日志；
+提交前 `detect_changes(scope: staged)` 只识别到 decoder 与对应测试的 4 个预期符号，风险为 `low`。
