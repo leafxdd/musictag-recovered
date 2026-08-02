@@ -302,12 +302,31 @@ QQ QRC、网易 YRC、酷狗 KRC、酷我 LRCX 在传输、编码、行时间、
 因此不是候选挑选问题，而是该通道本身缺失。§5.5「译文损坏时放弃译文」的取舍原本针对*损坏*，
 没有覆盖这种*系统性缺失*。
 
+**影响面测量（93 首带 `landata` 译文的样本）**：
+
+| 分类 | 首数 | 占比 |
+|---|---|---|
+| KRC 自带 `type=1` 译文，不受影响 | 29 | 31% |
+| KRC 无译文，修复前**静默丢失** | **64** | **69%** |
+
+即该回归影响了**约七成**有中文翻译的酷狗歌曲，远不止最初抽样的三首。
+
 修复：KRC 解码成功但译文为空、且用户需要译文时，补一次 legacy 请求取 `landata`，
 按行序对齐到 KRC 的高精度时间轴。可行性依据是两条通道的正文**逐行文本完全相同**
 （Lemon 实测 57 行文本序列逐条一致），差别只有时间精度与译文可用性。
 `landata` 解析已抽出为 `ExtractLandataTranslation`，与 legacy 路径共用同一实现。
 
+上述 93 首中，**KRC 时间轴行数与 `landata` 译文条数无一例外完全相等**，
+因此 64 首触发修复的歌曲**对齐成功率 64/64 = 100%**。
+
 三点约束：
+
+- 触发条件为 `LyricDownload_DownloadTrans_Enable || LyricDownload_DownloadTrans_LyricFormat == 3`
+  ——后者是因为 `GetFormattedLyricText` 在"关闭译文下载但格式为仅译文"时仍只输出 `TranslatedLyric`；
+  关闭译文下载时不发这次请求，不给不需要译文的用户增加开销。
+- 取译文失败时显式 `SetTransportError(RemoteErrorKind.None, null)`：`GetResponseStringResult`
+  内部会 `RecordResult`，若不清除，一次可选译文的失败会把已成功的高精度歌词报成传输错误。
+- 译文取不到只是没有译文，绝不回退到低精度主歌词。
 
 - 触发条件为 `LyricDownload_DownloadTrans_Enable || LyricDownload_DownloadTrans_LyricFormat == 3`
   ——后者是因为 `GetFormattedLyricText` 在"关闭译文下载但格式为仅译文"时仍只输出 `TranslatedLyric`；
@@ -336,11 +355,30 @@ QQ QRC、网易 YRC、酷狗 KRC、酷我 LRCX 在传输、编码、行时间、
 `impact(TryLoadKrc, upstream)` 为 HIGH（6 个符号、3 条执行流），改动为成功路径上的追加步骤，
 不改签名与状态语义；`detect_changes()` 范围仅 `KugouTagProvider.cs` 与对应 characterization。
 
-### 11.3 仍未处理
+### 11.3 已用数据关闭：KRC 译文行号对齐是否需要跳过空白行
+
+设计文档 §11 Q2 问「`type=1` 翻译是否存在需要跳过空正文行的真实样本，还是只有 `type=0`
+罗马音需要偏移修正」。本轮用实测回答：
+
+- 跨 18 个关键词、成功解出 KRC 的 **102 首**歌曲中，**含空白时间轴行的为 0 首**
+  （判定方式：剥掉 `<a,b,c>` 词标记后 `Trim()` 为空）。
+- 在所有带 `[language:] type=1` 的样本里，译文条数**始终等于时间轴总行数**，
+  `TryDecodeTranslatedLines` 的 `lyricContent.Count != expectedLineCount` 保护**一次都没有触发**。
+- 上一节 93 首 `landata` 样本同样是 100% 行数相等。
+
+结论：**空白行偏移在 KRC 正文里不是真实形态**，因此不为它增加推测性的 offset 逻辑
+（那会写出无法用真实数据验证的代码）。现有的"行数不符即放弃译文、保留高精度主歌词"
+是安全降级，予以保留。若日后出现真实反例，本节给出了复现口径：先确认空白行是否存在，
+再决定是按 LDDC 的 `offset` 跳空行，还是改为按时间戳而非行号对齐。
+
+同时应注意：`type=0` 罗马音本轮未接入（§8.2），LDDC 的 offset 逻辑主要服务罗马音，
+将来接入罗马音时需要独立重测，不能沿用本节对 `type=1` 的结论。
+
+### 11.4 仍未处理
 
 - 两个 decoder 对元数据不一致：`KugouKrcDecoder` 保留 `ti/ar/al/by/offset`，
   `KuwoLrcxDecoder` 只保留时间行、丢弃全部标签（含 `[offset:]`）。抽样 offset 均为 0，
   非零时一个源静默忽略、另一个静默透传，需要一次明确决策。
-- 酷狗 `[language:]` 行数与正文行数不符时整份丢弃译文（`TryDecodeTranslatedLines`），
-  而正文会跳过空白行；设计文档 §11 Q2 提出的"`type=1` 是否也需要跳空行偏移"至今无真实反例样本。
-  叠加 §11.1 后，这仍是一条无 legacy 兜底的静默丢译文路径。
+- `KugouKrcDecoder.TryParseTimedLine` 的损坏兜底用 `行起始 + 首词偏移`，
+  正常路径用 `行起始`。两者从同一捕获组取行起始，因此仅时长损坏时两条路径会相差一个首词偏移。
+  首词偏移为 0 时无害，但与 §3.2「不把首词偏移当协议保证」的原则相抵，属低优先级一致性问题。
