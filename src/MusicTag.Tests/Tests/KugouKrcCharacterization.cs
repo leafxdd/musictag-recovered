@@ -123,10 +123,11 @@ internal static class KugouKrcCharacterization
 			Check.Equal("", result.TranslatedLyric, "translation dropped");
 		});
 
-		yield return ("KugouKrcDecoder rejects invalid Base64, magic, compressed body, and content type", delegate
+		yield return ("KugouKrcDecoder rejects invalid Base64, UTF-8, magic, compressed body, and content type", delegate
 		{
 			CheckThrows<FormatException>(() => KugouKrcDecoder.DecodeContent("not!base64", 1, true), "invalid base64");
 			CheckThrows<FormatException>(() => KugouKrcDecoder.DecodeContent("QQ==\u4e2d", 1, true), "non-ASCII base64");
+			CheckThrows<DecoderFallbackException>(() => KugouKrcDecoder.DecodeContent("/w==", 1, true), "invalid UTF-8");
 			CheckThrows<InvalidDataException>(() => KugouKrcDecoder.DecodeContent("bm90a3Jj", 0, true), "wrong magic");
 			CheckThrows<InvalidDataException>(() => KugouKrcDecoder.DecodeContent("a3JjMQ==", 0, true), "missing compressed body");
 			CheckThrows<InvalidDataException>(() => KugouKrcDecoder.DecodeContent("a3JjMQA=", 0, true), "damaged zlib body");
