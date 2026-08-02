@@ -50,15 +50,36 @@ Keep commits small and use Conventional Commit prefixes such as `fix:`, `feat:`,
 `refactor:`, and `docs:`. Stage explicit paths only. Do not stage `.claude/`, `.mcp.json`,
 `.repowise/`, `cctortest/`, `.serena/`, screenshots, or unrelated generated/user files.
 
-## Lyrics (QQ QRC / NetEase YRC)
+## Lyrics (four word-level sources)
 
-Both sources prefer word-level lyrics and fall back to plain LRC. QQ requests QRC
-first (one short retry on rate-limit code 2001) and falls back to the legacy Base64
-LRC endpoint; `QqQrcDecoder` decrypts the payload (3DES + zlib, locked by a real
-ciphertext golden vector — do not regenerate it with the self-encrypting fixture).
-NetEase reads the plaintext `api/song/lyric/v1` endpoint; `NetEaseYrcDecoder`
-converts YRC, dropping JSON credit records, and the provider honors boolean
-`nolyric`/`uncollected` flags.
+All four sources prefer word-level lyrics and fall back to plain LRC. Decoders are
+provider-local by design; the only shared point is `LyricTextProcessor.FormatTimestamp`.
+
+QQ requests QRC first (one short retry on rate-limit code 2001) and falls back to the
+legacy Base64 LRC endpoint; `QqQrcDecoder` decrypts the payload (3DES + zlib, locked by a
+real ciphertext golden vector — do not regenerate it with the self-encrypting fixture).
+NetEase reads the plaintext `api/song/lyric/v1` endpoint; `NetEaseYrcDecoder` converts
+YRC, dropping JSON credit records, and the provider honors boolean `nolyric`/`uncollected`
+flags. Kugou uses `lyrics.kugou.com` search + `download?fmt=krc`; `KugouKrcDecoder` strips
+the `krc1` magic, XORs with a fixed 16-byte key, inflates. Kuwo uses `newlyric.kuwo.cn`
+with the *entire* query string XOR-`yeelion`'d then Base64'd — plaintext probes of that
+endpoint fail and prove nothing; `KuwoLrcxDecoder` inflates, un-Base64s, XORs again and
+decodes **GB18030** (needs the code-page provider registered first in `Program.Main`).
+
+Protocol facts that are easy to get wrong: QRC/YRC word times are absolute, KRC word
+times are **relative to the line start**. Kugou `contenttype` is 0 for KRC and 1 for plain
+LRC, not the 2 that public implementations claim. Kuwo LRCX encodes translations as
+duplicate timestamps where the **first** entry at a timestamp is the *previous* line's
+translation and the second is the current original. Both new decoders keep
+`ti/ar/al/by/offset` and drop provider-private tags; `[kuwo:xxx]` is the word-timing
+obfuscation parameter and must never reach the LRC.
+
+Two measured asymmetries drive current behavior. Kugou KRC often has no `[language:]`
+translation while the legacy `m3ws` `landata` does (69% of translated songs), so a KRC
+success with an empty translation still fetches `landata` and aligns it by line order; an
+optional translation failure must never downgrade or error out a successful high-precision
+lyric. Kuwo's legacy `songinfoandlrc` serves only ~32% of songs against ~97% for LRCX and
+adds no coverage over it, so that fallback is cheap defence, not a safety net.
 
 Conversion keeps the line start (`[start,duration]`) and removes word markers; a
 malformed line start falls back to the first parseable word start, and LRC-style
@@ -69,7 +90,8 @@ plain tlyric alignment stays strict. With `LyricDownload_ReformatTimetag` off,
 three-digit millisecond formatting is exact; with it on, the two-digit formatting
 intentionally rounds to 10 ms. Do not change global timestamp formatting without a
 separate compatibility decision. History and open items:
-`docs/QRC_PRECISION_REVIEW_2026-07.md`, `docs/LYRIC_FETCH_REPAIR_REPORT_2026-07.md`.
+`docs/QRC_PRECISION_REVIEW_2026-07.md`, `docs/LYRIC_FETCH_REPAIR_REPORT_2026-07.md`,
+`docs/KUWO_KUGOU_HIGH_PRECISION_LYRIC_IMPLEMENTATION_REPORT_2026-08.md`.
 
 ## Handoff Notes
 
@@ -81,7 +103,7 @@ caches, settings, backups, and debug symbols.
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **musictag-recovered** (4102 symbols, 12617 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **musictag-recovered** (4397 symbols, 13390 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 
