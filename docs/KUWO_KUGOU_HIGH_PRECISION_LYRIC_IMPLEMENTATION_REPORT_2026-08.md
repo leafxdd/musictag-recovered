@@ -15,7 +15,9 @@
 - 酷我 LRCX 的 `7.433 s` 输出为 `[00:07.433]`，第三位不再由旧 `lrclist` 补成恒定的 `0`；
 - 开启“格式化时间轴”时，两源继续调用既有 `LyricTextProcessor.FormatTimestamp`，保持两位小数和四舍五入到 10 ms 的兼容行为；
 - 高精度通道无候选、不可用或载荷损坏时，仍尝试原有 legacy 端点；用户取消时不继续请求或回退；
-- 酷我封面详情加载与歌词加载已分离，高精度歌词不会被后续封面详情中的低精度歌词覆盖。
+- 酷我封面详情加载与歌词加载已分离，高精度歌词不会被后续封面详情中的低精度歌词覆盖；
+- 酷我还顺带获得可用率提升：68 首实测样本中 legacy 通道仅 22 首可用（32%），LRCX 为 66 首（97%），
+  详见 §9.1。这也意味着酷我的 legacy 回退实测不提供额外覆盖，不能当作安全网。
 
 本轮完整自动验证为 `952 passed, 0 failed`。Debug、Release 构建通过，Release 应用启动后保持存活，未发现致命异常日志。
 
@@ -29,9 +31,11 @@
 | `17cfad9` | 新增酷狗 KRC 解码、三位毫秒逐行转换、翻译、回退、取消和搜索内熔断 | 用户可见精度修正 |
 | `8fd127c` | 新增酷我 LRCX 请求/解码、专用翻译配对、回退、缓存质量和封面隔离 | 用户可见精度修正 |
 | `9862443` | 增加非法 UTF-8 字节定向用例，锁定纯文本 KRC 响应的严格解码 | 测试补强，不改产品行为 |
+| `86d68da` | 交叉审阅后续修复：KRC 无 `[language:]` 时回落 legacy `landata` 取译文 | 回归修正，见 §11 |
 
 设计与 Claude 交叉审阅的处置记录保存在
 [`KUWO_KUGOU_HIGH_PRECISION_LYRIC_IMPLEMENTATION_DESIGN_2026-08.md`](KUWO_KUGOU_HIGH_PRECISION_LYRIC_IMPLEMENTATION_DESIGN_2026-08.md)。
+本文 §1、§9.1、§11 为交叉审阅后补入的更正，其余章节保持 `9862443` 当时的记录。
 
 ## 3. 酷狗 KRC 实施结果
 
@@ -223,6 +227,8 @@ QQ QRC、网易 YRC、酷狗 KRC、酷我 LRCX 在传输、编码、行时间、
 ## 9. 剩余风险和手工验证建议
 
 - 酷狗、酷我高精度与 legacy 端点都可能随服务端协议或风控变化；回退降低故障面，但两条路径可以同时失效。
+- **酷我 legacy 回退实测几乎不提供额外覆盖，不能当作安全网**（测量见 §9.1）。酷我的
+  可用性事实上等于 LRCX 的可用性，监控与告警应以 LRCX 为准。
 - 酷狗 `contenttype == 2` 仍无本轮实时样本，当前行为由开源交叉证据和合成固定用例覆盖。
 - 酷我真实全链路固定向量不含译文；Lemon 翻译边界来自真实明文序列，但传输包装由测试 helper 构造。
 - 自动测试没有验证实时网络、地区差异或长时间限流，也没有覆盖所有纯音乐、超长歌词和冷门曲目。
@@ -230,12 +236,43 @@ QQ QRC、网易 YRC、酷狗 KRC、酷我 LRCX 在传输、编码、行时间、
 - 取消用例使用 scripted provider，证明请求返回后的编排会停止；没有用阻塞中的真实 HTTP 集成用例验证传输中断时机。
 - 封面相关用例直接验证详情解析不会覆盖高精度歌词，但没有执行完整的延迟下载、文件写入、锁和 UI 并发路径。
 
+### 9.1 酷我两条通道的实测可用性（2026-08-02，68 首样本）
+
+用 `KuwoTagProvider.CreateHttpClient` 的**完全相同请求头**（`referer: https://kuwo.cn`、
+同一 UA、`accept-language: zh-CN,...`），对应用自身 `SearchUrlFormat` 搜索得到的 68 个
+真实 `MUSIC_` ID 逐个请求两条通道：
+
+| 通道 | 可用 | 占比 |
+|---|---|---|
+| legacy `songinfoandlrc` | 22 / 68 | 32% |
+| LRCX `newlyric.lrc` | 66 / 68 | 97% |
+
+关键结论:
+
+- **legacy 独立贡献为 0**。22 首 legacy 可用的歌，LRCX 全部同样可用；2 首 LRCX 失败的歌
+  （`180732768`、`386932312`），legacy 同样是 301。样本内不存在"LRCX 失败、legacy 救回"的情形。
+- 不可用的形态是 HTTP 200 + 业务体 `status:301 音乐查询失败`，**按歌稳定**而非瞬时波动：
+  `198554068` 连续 3 次均为 301，同一轮次里其它歌返回 200，因此不是本机被限流所致。
+- LRCX 的行数普遍 ≥ legacy（如 `40602735` 为 115 vs 114、`231126` 为 72 vs 63、
+  `6871754` 为 84 vs 70），即 legacy 不仅可用率低，内容也更不完整。
+
+因此 §4.4 的回退编排应理解为**廉价的兜底代码路径**（仅在 LRCX 失败时才发一次请求），
+而不是"回退保证能拿到改动前的歌词"。本轮升级对酷我的实际效果是把可用率从 32% 提到 97%，
+精度提升之外还顺带修复了大面积取不到歌词的问题。
+
+上述测量只覆盖单一时间点、单一出口 IP 和华语/日语流行曲，不构成长期可用性保证；
+若 legacy 可用率日后回升，本节数字需要重测。
+
 建议手工抽查：
 
 1. 酷狗各选一首有翻译和无翻译歌曲，确认三位时间、译文对齐和 legacy 回退提示；
 2. 酷我各选一首有翻译和无翻译歌曲，确认第三位非恒 0，且先加载封面/先加载歌词两种顺序都不覆盖高精度歌词；
 3. 在组合标签源中取消一次进行中的酷狗或酷我歌词下载，再重试，确认无额外请求和缓存卡死；
 4. 保留失败时的响应合同、HTTP 状态和时间，不记录完整歌词或访问凭据，再据此决定是否调整端点或容错。
+
+注意第 2 项：按 §9.1 的实测，多数酷我歌曲的 legacy 通道当前返回 `status:301`，因此
+"LRCX 失败后回退到 legacy 仍有歌词"这一条在真机上大概率**无法复现**，不要据此判定回退坏了；
+要验证回退编排，应改用 characterization 用例或手工构造 LRCX 失败。
 
 ## 10. 工作区边界
 
@@ -245,3 +282,65 @@ QQ QRC、网易 YRC、酷狗 KRC、酷我 LRCX 在传输、编码、行时间、
 - `.claude/tmp/lyric-spotcheck/`。
 
 它们继续留在本地，不属于产品或报告提交范围。
+
+## 11. 交叉审阅后续修复（`86d68da`）
+
+### 11.1 已修：酷狗高精度升级静默丢失译文
+
+`17cfad9` 让 KRC 解码成功即返回，不再请求 `m3ws`。但 KRC 通道经常**不携带**
+`[language:]` 译文，而同一首歌的 legacy `landata` 有。实测五首日文曲：
+
+| 歌曲 | KRC `[language:]` | legacy `landata` type=1 |
+|---|---|---|
+| Lemon `da60f11f…` | content 数组为空 | 57 行 |
+| Lemon (Live) `06c3e69a…` | content 数组为空 | 35 行 |
+| Lemon `50e5dc96…` | content 数组为空 | 57 行 |
+| Lemon (NHK) `515cbd08…` | content 数组为空 | 67 行 |
+| 打上花火 `8800bedb…` | type 0 + type 1，57 行 | 57 行 |
+
+前四首在升级后**多了三位毫秒、少了整份中文翻译**。Lemon 的 11 个候选逐个下载确认无一携带译文，
+因此不是候选挑选问题，而是该通道本身缺失。§5.5「译文损坏时放弃译文」的取舍原本针对*损坏*，
+没有覆盖这种*系统性缺失*。
+
+修复：KRC 解码成功但译文为空、且用户需要译文时，补一次 legacy 请求取 `landata`，
+按行序对齐到 KRC 的高精度时间轴。可行性依据是两条通道的正文**逐行文本完全相同**
+（Lemon 实测 57 行文本序列逐条一致），差别只有时间精度与译文可用性。
+`landata` 解析已抽出为 `ExtractLandataTranslation`，与 legacy 路径共用同一实现。
+
+三点约束：
+
+- 触发条件为 `LyricDownload_DownloadTrans_Enable || LyricDownload_DownloadTrans_LyricFormat == 3`
+  ——后者是因为 `GetFormattedLyricText` 在"关闭译文下载但格式为仅译文"时仍只输出 `TranslatedLyric`；
+  关闭译文下载时不发这次请求，不给不需要译文的用户增加开销。
+- 取译文失败时显式 `SetTransportError(RemoteErrorKind.None, null)`：`GetResponseStringResult`
+  内部会 `RecordResult`，若不清除，一次可选译文的失败会把已成功的高精度歌词报成传输错误。
+- 译文取不到只是没有译文，绝不回退到低精度主歌词。
+
+复算五首：需要修复的 4 首全部对齐成功，自带译文的 1 首正确跳过、不多发请求。
+
+### 11.2 测试与验证
+
+新增 3 条 characterization（复用真实 KRC 固定向量 `216374858`，其本身无 `[language:]`，正是回归场景）：
+
+- 无译文 → 走 legacy `landata`，断言译文首行为 `[00:22.144]T0`、次行 `[00:28.386]T1`，
+  即对齐到 KRC 的三位毫秒而非 legacy 的两位；
+- 关闭译文下载 → 0 次 `m3ws` 请求；
+- legacy 取译文返回 503 → 主歌词存活且 `LastTransportResult.Error == None`。
+
+既有三条断言 legacy 请求数的用例（`KRC primary succeeds without calling legacy`、
+`LoadLyricsForTrack uses the KRC path`、`malformed candidate payload is per-song`）
+在各自 try/finally 内显式关闭译文下载，继续只考主歌词通道，**断言值未修改**。
+
+`.\scripts\Verify-Build.ps1 -RunSmokeTests`：`955 passed, 0 failed`，
+`StartedAndStayedAlive=True`，`NoFatalExceptionLogs=True`。
+`impact(TryLoadKrc, upstream)` 为 HIGH（6 个符号、3 条执行流），改动为成功路径上的追加步骤，
+不改签名与状态语义；`detect_changes()` 范围仅 `KugouTagProvider.cs` 与对应 characterization。
+
+### 11.3 仍未处理
+
+- 两个 decoder 对元数据不一致：`KugouKrcDecoder` 保留 `ti/ar/al/by/offset`，
+  `KuwoLrcxDecoder` 只保留时间行、丢弃全部标签（含 `[offset:]`）。抽样 offset 均为 0，
+  非零时一个源静默忽略、另一个静默透传，需要一次明确决策。
+- 酷狗 `[language:]` 行数与正文行数不符时整份丢弃译文（`TryDecodeTranslatedLines`），
+  而正文会跳过空白行；设计文档 §11 Q2 提出的"`type=1` 是否也需要跳空行偏移"至今无真实反例样本。
+  叠加 §11.1 后，这仍是一条无 legacy 兜底的静默丢译文路径。
