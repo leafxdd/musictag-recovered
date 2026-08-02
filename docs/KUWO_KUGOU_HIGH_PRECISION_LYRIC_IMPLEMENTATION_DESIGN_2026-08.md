@@ -28,7 +28,7 @@
 2. 酷我 LRCX 的行标签包含真实三位毫秒；当前 `lrclist.time` 主要只有两位小数，第三位由本地格式化补零。
 3. KRC 解码链为 Base64 → 校验并跳过 `krc1` → 循环 XOR → zlib → UTF-8。
 4. 酷我 LRCX 请求为明文参数循环 XOR `yeelion` 后 Base64，并把 Base64 直接放在 `?` 后；响应为头部 → zlib → Base64 → XOR → GB18030。
-5. 酷狗 `contenttype == 2` 时载荷是 Base64 纯文本，不应进入 KRC 解密链。
+5. 酷狗 `contenttype == 1`、`2` 时载荷按 Base64 纯文本处理，不应进入 KRC 解密链；`1` 已由 `fmt=lrc` 真实响应确认，`2` 来自 LDDC 源码且尚无本地真实样本。
 6. 两个高精度通道都可以保留当前 provider 端点作为回退，不需要引入第三方二进制库。
 7. 酷狗免签名 `/search` + `/download` 路径和酷我 `https://newlyric.kuwo.cn/` 路径在 2026-08-02 的实时复核中可用；稳定性仍须由回退链兜底。
 
@@ -52,7 +52,9 @@
 [00:02.880]当前行原文
 ```
 
-同一时间点的第一条是上一行译文，第二条才是当前原文。`lx-music` 的整理逻辑先取出重复组的前项作为前一行译文，再保留后项作为当前原文。当前 `KuwoTagProvider.PopulateSongDetails` 的 `PrimaryText` / `AlternateText` 和“借用前一行时间戳”逻辑也依赖这一输入顺序。因此 LRCX 解析必须保留原始行顺序和重复项，不能先按时间戳去重，也不能把第二条解释成上一行译文。
+同一时间点的第一条是上一行译文槽，第二条才是当前原文。`lx-music` 的整理逻辑先取出重复组的前项，把非空内容重定时到上一条原文，再保留后项作为当前原文。
+
+当前 `KuwoTagProvider.PopulateSongDetails` **没有实现这套 LRCX 语义**：它把重复项聚合到同一时间戳，再依赖 `ContainsChinese` 和尾部特判推断归属。legacy 提取必须保持该行为不变；LRCX 必须用独立、协议明确的转换器处理，不能直接喂入 legacy assembler，也不能把协议修正藏在 `refactor:` 提交里。
 
 #### 本轮不抽取四源统一 decoder
 
@@ -98,7 +100,7 @@ protected virtual byte[] GetResponseBytes(string url)
 
 ### 3.2 必须保持不变的合同
 
-- `ISearchTrackProvider`、`ISearchLyricProvider` 等 provider 能力接口不变。
+- `ITrackSearchProvider`、`ILyricSearchProvider`、`ITrackIdLookupProvider`、`ICoverSearchProvider`、`ITrackLyricLoader` 等 provider 能力接口不变。
 - `SearchSource` 枚举序号不变。
 - 公开方法、可选参数和组合搜索调用签名不变。
 - 酷狗和酷我现有 `LyricSearchResult.LyricUrl` 可观察值不变，继续指向当前 legacy URL；高精度端点是内部加载细节。
@@ -201,7 +203,7 @@ TryLoadKrc(song)
 按 `contenttype` 分流：
 
 - `0` 或明确的 KRC 类型：严格 Base64 → 至少 4 字节 → 校验前四字节为 `krc1` → 对剩余字节循环 XOR 固定 16 字节 key → `ZLibStream` 解压 → 严格 UTF-8。
-- `2`：严格 Base64 → 严格 UTF-8 纯文本；不得检查 `krc1` 或 XOR。
+- `1`、`2`：严格 Base64 → 严格 UTF-8 纯文本；不得检查 `krc1` 或 XOR。
 - 未知类型：失败并回退，不猜测格式。
 
 KRC XOR key 必须按字节写入并用已知密文向量锁定：
@@ -246,27 +248,29 @@ KRC XOR key 必须按字节写入并用已知密文向量锁定：
 
 ### 6.1 先提取并锁定现有行整理算法
 
-`KuwoTagProvider.PopulateSongDetails` 当前把 JSON `lrclist` 解析、重复时间戳归类、原文/译文推断、尾部特判、时间戳格式化和封面解析混在一个方法中。LRCX 若复制这段逻辑，会立即产生两份难以验证的翻译启发式。
+`KuwoTagProvider.PopulateSongDetails` 当前把 JSON `lrclist` 解析、重复时间戳归类、原文/译文推断、尾部特判、时间戳格式化和封面解析混在一个方法中。LRCX 的重复行协议与这套 legacy 启发式不同，不能共用同一输入解释器。
 
 第一阶段先新增 provider-local 纯 helper：
 
 ```text
-src/MusicTag/MusicTagWinApp.Adapter/KuwoLyricAssembler.cs
+src/MusicTag/MusicTagWinApp.Adapter/KuwoLegacyLyricAssembler.cs
 ```
 
 建议输入、输出：
 
 ```csharp
-internal readonly record struct KuwoTimedLyricLine(long TimestampMs, string Text);
+internal readonly record struct KuwoLegacyTimedLyricLine(long TimestampMs, string Text);
 
-internal sealed class KuwoAssembledLyrics
+internal sealed class KuwoLegacyAssembledLyrics
 {
   public string Lyric { get; init; }
   public string TranslatedLyric { get; init; }
 }
 ```
 
-`KuwoLyricAssembler.Build` 必须接收保留原始顺序和重复时间戳的序列。先补齐 characterization，再把 `PopulateSongDetails` 中从 `SortedDictionary` 到两个 `StringBuilder` 的既有行为逐步移入 helper；提取提交不得改变任何现有 fixture 输出。
+`KuwoLegacyLyricAssembler.Build` 接收 legacy JSON 转成的原始顺序序列，并逐字保留现有 `SortedDictionary`、`ContainsChinese`、尾部 `+5000 ms` 和时间戳借用行为。
+
+当前 characterization 在最吃重的 alternate 双语路径上覆盖稀薄，这是已知风险。以下测试是**开始提取前的前置条件**，不是提取时顺手补充；只有这些用例先在未改产品实现上通过，才能开始移动代码。提取提交不得改变任何既有或新加 fixture 输出。
 
 最低 characterization 包括：
 
@@ -275,7 +279,7 @@ internal sealed class KuwoAssembledLyrics
 - 中间重复时间点的原文/译文交换。
 - 三行边界“上一行原文 → 上一行译文 → 当前原文”。
 - 尾部多个 alternate 拆到 `+5000 ms` 的当前兼容行为。
-- 中英、中日以及全非中文内容，避免只靠 `ContainsChinese` 的样本产生假安全感。
+- 中英、中日以及全非中文内容；日文必须同时覆盖纯假名（`ContainsChinese == false`）和含汉字（`ContainsChinese == true`），避免同一首歌跨分支产生假安全感。
 
 ### 6.2 新增 LRCX decoder
 
@@ -291,7 +295,7 @@ src/MusicTag/MusicTagWinApp.Adapter/KuwoLrcxDecoder.cs
 2. `DecodeResponse(byte[])`：验证响应头、解压、严格 Base64、XOR、GB18030。
 3. `ParseTimedLines(string)`：解析行时间戳、去词标记并保留重复行顺序。
 
-decoder 不直接创建 `LyricSearchResult`，也不读取全局设置；provider 把解析结果交给 `KuwoLyricAssembler`。
+decoder 不直接创建 `LyricSearchResult`，也不读取全局设置。它返回协议级主歌词行和译文行；provider 只负责补齐结果元数据。LRCX 结果不进入 `KuwoLegacyLyricAssembler`。
 
 ### 6.3 请求构造
 
@@ -328,10 +332,31 @@ Base64 query 不经普通 `UrlEncode`；`+`、`/`、`=` 是该协议的一部分
 
 - 识别 `[mm:ss.fff]` 时间行，并兼容一至三位小数；通过整数补位换算为毫秒，避免 `double`。
 - 用能覆盖负数和二/三元组的模式去除词标记：`<-?\d+,-?\d+(?:,-?\d+)?>`。
-- 保留时间行在载荷中的原始顺序和全部重复项，再交给 `KuwoLyricAssembler`。
+- 保留时间行在载荷中的原始顺序和全部重复项，再执行 LRCX 专用配对。
 - `[kuwo:]`、`[ver:]`、`[ti:]` 等无时间标签不进入最终歌词；酷我旧 JSON 路径本来不输出这些头部，避免借精度升级扩大可见行为。
 - 一行词标记损坏但行时间和可见文本仍可安全读取时，保留文本并去除能识别的标记；无法辨认的协议残片不得写入最终 LRC。
 - 解析后没有任何有效时间行则视为失败并回退。
+
+LRCX 专用配对规则：
+
+1. 首次遇到某时间戳时暂存该行。
+2. 紧接着遇到相同时间戳时，前一条是上一行译文槽，当前条是本行原文。
+3. 从主歌词序列移除译文槽；若其文本非空白，则把它绑定到移除后最后一条主歌词的时间戳。
+4. 把当前条作为新主歌词保留在原时间戳。
+5. 译文槽为纯空格或空字符串时只表示“上一行无译文”，必须丢弃，不能输出空歌词，也不能触发 `ContainsChinese`。
+6. 重复组出现时没有上一条主歌词可绑定，仍保留当前原文并丢弃无归属译文槽。
+7. LRCX 不使用 `ContainsChinese` 判断原文/译文；纯假名和含汉字日文应走同一协议路径。
+
+真实 Lemon 样本必须锁定：
+
+```text
+[00:01.547](纯空格占位)
+[00:01.547]夢ならば
+[00:02.880]如果只是一场梦
+[00:02.880]どれほどよかったでしょう
+```
+
+期望主歌词为 `夢ならば`、`どれほどよかったでしょう`，译文 `如果只是一场梦` 绑定到 `00:01.547`；空白槽不出现在任一输出中。
 
 ### 6.6 独立歌词编排和缓存状态
 
@@ -418,7 +443,7 @@ decoder 本身保持同步纯函数；载荷很小，不引入额外线程。取
 - 多个 `<relative,duration,0>` 词标记和标点/空格保留。
 - 首词相对偏移非 0，仍使用显式行起始。
 - 行头损坏、魔数错误、截断 XOR 数据、zlib 损坏。
-- `contenttype == 2` Base64 纯文本。
+- `contenttype == 1`、`2` Base64 纯文本，其中 `1` 使用真实 `fmt=lrc` 响应，`2` 使用独立固定向量并标记来源为开源参照。
 - `[language:]` 中 `type=1` 翻译，`type=0` 罗马音忽略。
 - 翻译损坏时主歌词仍成功。
 
@@ -432,6 +457,8 @@ decoder 本身保持同步纯函数；载荷很小，不引入额外线程。取
 - GB18030 中文/日文样本。
 - 非 ASCII、非法 Base64、错误 `tp`、缺少分隔符、zlib 损坏严格失败。
 - 重复时间戳三行边界，确认第一条重复项是上一行译文、第二条是当前原文。
+- 真实空白译文槽；纯空格不得进入主歌词或译文。
+- 同一日文样本内同时包含纯假名和含汉字原文，且两者不依赖 `ContainsChinese` 分支。
 
 ### 8.3 Provider 编排
 
@@ -444,6 +471,7 @@ decoder 本身保持同步纯函数；载荷很小，不引入额外线程。取
 - 两次请求之间取消，不发第二次请求。
 - primary 失败后取消，不发 legacy。
 - legacy 成功时不保留 primary 的失败状态为整源错误。
+- 高精度失败且 legacy 同时失败，保留可诊断错误，并确认 LRCX 健康状态与现有 `IsDetailApiBackoffActive` 互不污染。
 - 首次端点级故障后，本次多候选搜索不再重复调用高精度端点。
 - `LyricUrl` 和结果元数据保持当前合同。
 
@@ -489,7 +517,7 @@ codegraph sync
 - 酷狗真实 KRC `22144` 输出 `[00:22.144]`，且最终歌词无 KRC 词标记。
 - 酷我 LRCX `7.433` 输出 `[00:07.433]`，第三位不是本地补零。
 - 开启格式化时间轴时，两源继续遵循当前两位四舍五入策略。
-- primary 不可用时，用户仍能通过现有端点取得与改动前相同的歌词。
+- primary 不可用但 legacy 响应仍可用时，用户取得与改动前相同的歌词；两条路径都失败时应返回可诊断错误，而不是承诺 legacy 一定可用。
 - 翻译缺失/损坏不拖垮可用的高精度主歌词。
 - 取消不会触发后续请求或回退。
 - 酷我封面详情不会覆盖高精度歌词，封面下载也不会依赖 LRCX。
@@ -500,7 +528,7 @@ codegraph sync
 
 请重点审阅以下问题，并尽量给出基于真实格式或开源源码的反例：
 
-1. KRC `contenttype` 除 `0`、`2` 外是否还有必须支持的已知值？未知值直接回退是否安全？
+1. KRC 已知 `0` 为 KRC、`1`/`2` 为纯文本；是否存在其它有真实样本支持的取值？未知值继续直接回退。
 2. KRC `type=1` 翻译是否存在需要跳过空正文行的真实样本，还是只有 `type=0` 罗马音需要偏移修正？
 3. 酷我重复时间戳是否存在三条以上、或译文不紧邻下一句原文的变体，现有 assembler 的尾部启发式是否会误判？
 4. 酷我解压后 Base64 是否有合法换行/空白变体；“允许 ASCII 空白、拒绝其它字节”是否覆盖全部已知实现？
@@ -517,3 +545,178 @@ codegraph sync
 - 酷我现有翻译整理包含内容语言启发式和尾部 `+5000 ms` 兼容逻辑，本设计先复用而不重新定义产品语义；是否应长期保留需要单独讨论。
 - 罗马音、多语歌词保存格式和真正逐词歌词文件输出均不在本轮范围。
 - 本设计使用 2026-08-02 的实时协议证据；实施时仍须把固定样本纳入测试，不能依赖本地 `.claude/tmp` 文件或仅引用调研结论。
+
+---
+
+## 13. Claude 交叉审阅结论（2026-08-02）
+
+审阅方法：逐条核对设计稿引用的仓库符号与真实抓包证据；对存在分歧的两处补做了针对性联网实测
+（酷我带翻译日文曲、酷狗 `download` 响应字段）。以下按"必须修正 / 需澄清 / 需补充 / 已确认成立"分组。
+
+### 13.1 必须修正（事实错误）
+
+**A1. `contenttype` 取值表与真实响应不符 —— 这条同时回答了 §11 Q1**
+
+2026-08-02 实测同一 `id`/`accesskey` 的 `lyrics.kugou.com/download` 响应顶层字段：
+
+| 请求 | `fmt` | `contenttype` | `charset` |
+|---|---|---|---|
+| `fmt=krc` | `krc` | **0** | 空 |
+| `fmt=lrc` | `lrc` | **1** | `utf8` |
+
+- `0` = 加密 KRC ✅ 与设计一致。
+- **纯文本载荷实测是 `1`，不是设计稿 §2.1.5 / §5.3 写的 `2`。** 设计稿把 `1` 归入
+  "未知类型 → 失败并回退"，会把一份本可直接 Base64 解码使用的歌词误判丢弃；
+  而 `2` 分支在实测中从未命中。
+- LDDC `kg.py` 只判 `contenttype == 2` 走 Base64 纯文本、`else` 一律走 KRC 解密链，
+  与本次实测的 `1` 也对不上。可见该字段至少有 `0/1/2` 三种取值，社区实现并未穷举。
+- **建议**：改为"`0` → KRC 解密链；`1`、`2` → 严格 Base64 + 严格 UTF-8 纯文本；
+  其它 → 失败回退"。"未知值直接回退"的保守取向本身正确，予以保留。
+
+**A2. provider 能力接口名写错（§3.2）**
+
+设计稿写 `ISearchTrackProvider`、`ISearchLyricProvider`；仓库实际为
+`ITrackSearchProvider`、`ILyricSearchProvider`（`KugouTagProvider.cs:21`、`KuwoTagProvider.cs:23`，
+另有 `ITrackIdLookupProvider`、`ICoverSearchProvider`、`ITrackLyricLoader`）。
+§3.2 是"必须保持不变的合同"清单，名字必须准确。
+
+### 13.2 需澄清（设计内部矛盾）
+
+**B1. §2.2/§8.2 的翻译语义 与 §6.1 的"提取不得改变输出"不可同时满足**
+
+设计稿 §2.2 称"当前 `PopulateSongDetails` 的 `PrimaryText`/`AlternateText` 和
+『借用前一行时间戳』逻辑也依赖这一输入顺序"，§8.2 进而要求测试
+"确认第一条重复项是上一行译文、第二条是当前原文"——这是 **lx-music 的语义**。
+
+但现有实现并非如此：
+
+- `KuwoTagProvider.cs:466-480` 用 `SortedDictionary<long,…>` 按时间戳配对，
+  重复项进入**同一时间戳**的 `AlternateText`，**没有**把首项重定时到前一行；
+- 真正的"借用时间戳"发生在 `:516-533`，且借的是**下一行**的时间戳；
+- 原文/译文归属最终由 `:509-512` 的 `ContainsChinese` 启发式和 `:535-550` 的尾部特判决定，
+  与"第一条即译文"无关。
+
+因此 §6.1 的"提取提交不得改变任何现有 fixture 输出"与 §8.2 的断言互斥。
+**必须明确一期取哪一个**：
+（a）只提精度、完全保持现有（可能与 lx-music 不同）的归属语义；或
+（b）顺带改成 lx-music 语义——那是**行为变更**，不能藏在 `refactor:` 提交里，
+需按仓库惯例显式标注并单独锁定。建议取 (a)，把 (b) 留作独立议题。
+
+**B2. §6.1 依赖的"现有 fixture 保护"在最吃重的路径上几乎不存在**
+
+`KuwoLyricBuildCharacterization.cs:11-12` 的注释自述：
+"真正的 alternate 双语交替对齐趟（多时间戳且某时间戳多行触发 AlternateText，含中文重排／
+末三行特判／前一行时间戳借用）输出极绕，**留待专门追踪，此处不覆盖**以守 probe-first 置信。"
+
+而 LRCX 恰恰会大量走这条路径（Lemon 115 行中 57 组重复时间戳）。
+设计稿 §6.1 已列出应补的用例，方向正确，但应显式写明：
+**当前覆盖是已知稀薄的，补测试是提取的前置条件而非伴随产物**，否则
+"fixture 输出不变"会给出虚假安全感。
+
+### 13.3 需补充（真实数据里存在、设计未覆盖的情形）
+
+**C1. LRCX 的空白占位行**
+
+真实带翻译样本（酷我 Lemon，`musicId=40602735`，已去词标记）：
+
+```text
+[00:00.530]                     ← 纯空格，上一行的"译文槽"
+[00:00.530]词：米津玄師
+[00:01.547](纯空格占位)
+[00:01.547]夢ならば
+[00:02.880]如果只是一场梦        ← 上一行的真实译文
+[00:02.880]どれほどよかったでしょう
+```
+
+每个原文行前都有一条同时间戳的行；无译文时该行是**纯空白**而非缺失。
+§5.4.3 为酷狗写了空文本行规则，**§6.5 对酷我没有对应条款**。
+这直接决定 `PrimaryText` 会不会变成空白字符串，必须补规则 + 补用例。
+
+**C2. `ContainsChinese` 在日文上是双态的**
+
+`TextUtilities.cs:147` 实现为 `Regex.Match(text, "[一-龥]")`：
+纯假名行（`どれほどよかったでしょう`）返回 **false**，含汉字行（`未だにあなたのことを夢にみる`）
+返回 **true**。§8.2 要求"中英、中日以及全非中文内容"是对的，但应显式点名这个双态，
+否则日文样本只挑到一半就会产生假安全感——同一首歌内两种分支都会出现。
+
+**C3. legacy 回退比设计假设的更脆弱**
+
+本轮实测 `songinfoandlrc` 对 4 首歌（含此前成功过的 `198554068`）**持续返回
+`status:301 音乐查询失败`，而同期 LRCX 4/4 全部成功**。含义有三：
+
+1. §10 验收标准"primary 不可用时，用户仍能通过现有端点取得与改动前相同的歌词"
+   是乐观假设，legacy 自身就可能不可用；
+2. 升级后 LRCX 很可能成为**实际唯一可用路径**，其正确性权重高于设计当前的定位；
+3. §8.3 的 provider 编排用例应补"**高精度失败且 legacy 也失败**"的组合，
+   确认错误分类与既有 `IsDetailApiBackoffActive` 退避不互相污染。
+
+### 13.4 已核验成立（可直接作为实现依据）
+
+1. **§2.2"重复时间戳译文归属"对 Claude 报告的纠正是正确的**，我方原报告
+   （`KUWO_KUGOU_LYRIC_PRECISION_2026-08.md` §2.3）表述有误。真实样本见 C1：
+   同一时间点第一条确为上一行译文。lx-music `sortLrcArr` 的 `lrc.pop()` + 重定时到
+   `lrc[last].time` 也印证。已在此确认，源报告应同步更正。
+2. **`GetResponseBytesResult` / `GetResponseBytes` 确实存在**
+   （`RemoteTagProviderBase.cs:195`、`:216`），§2.2"不修改基类"成立。
+3. **酷我 provider 方法名全部准确**：`LoadSongLyric:153`、`LoadLyricForTrack:159`、
+   `LoadDeferredLyric:239`、`DownloadDeferredCover:221`、`LoadSongDetails:288`、
+   `song.LoadedLyric`。§6.6 的改造入口清单可直接用。
+4. **严格 Base64 的取向有数据支持**：本轮 4 个 LRCX 样本 zlib 解压后
+   `非 ASCII 字节 = 0`。补充一条分歧供决策（回应 §11 Q4）：
+   lx-music-api-server（Python）直接 `b64decode` 不过滤，voicefox（Rust）**主动过滤非 ASCII**，
+   两家不一致。设计选"严格拒绝"比 voicefox 更严，可能在个别真实响应上更早失败；
+   建议严格拒绝 + 明确日志阶段标记，出现真实反例再放宽。
+5. **曾担心的"毫秒精度打散重复时间戳配对"经实测不成立**：Lemon LRCX 115 行仍有
+   **57 组精确重复**（`278064641` 为 116 行 / 58 组），重复项在毫秒级仍完全相等，
+   `SortedDictionary` 按 ms 配对的机制不受精度提升影响。此风险可从待办中移除。
+6. **验收数值正确**：`22144 → [00:22.144]`、`7.433 → [00:07.433]` 与本方实测一致；
+   KRC 魔数 4 字节 `6B 72 63 31` 与 XOR key 16 字节表均与实测逐字节吻合
+   （注：LDDC 常量名 `KRC_MAGICHEADER = b"krc18"` 是 5 字节，与其自身 `[4:]` 跳过不自洽，
+   以 4 字节为准）。
+7. **§2.2"首词偏移不能作为协议保证"的收紧是对的**。原报告的 186/186 只是样本事实；
+   主路径用显式 `lineStart`、仅畸形行兜底，比原报告的表述更稳健，采纳。
+
+### 13.5 对 §11 其余提问的回答
+
+- **Q2（`type=1` 是否需跳空行）**：LDDC `krc2mdata` 只对 `type == 0` 罗马音维护 `offset`
+  跳过全空行，`type == 1` 直接按 `lyricContent[i]` 取，**不跳**。故设计"`type=1` 按行序号对齐"
+  与 LDDC 一致；但 LDDC 对 `type=1` 也未做长度校验，行数不匹配会直接下标越界——
+  设计要求"行数不匹配则放弃译文、保留主歌词"比 LDDC 更稳健，**建议保留**。
+- **Q5（熔断粒度）**：建议维持设计原意——只有传输层失败或顶层响应合同整体不可解析才熔断。
+  `download` 返回 404/单候选缺歌词属于单曲问题；把它计入端点故障会让一首冷门歌
+  连累同批其余 4 首。
+- **Q8（是否需同轮准备签名 `/v1/search`）**：无证据表明必须。本轮免签名
+  `lyrics.kugou.com/search` 全程可用（5 首）；LDDC 走带签名的 `/v1/search` 是其客户端
+  模拟策略，非免签名失效的证据。**同意暂缓**。
+- **Q10（许可证）**：本设计"按协议重写、不复制 GPL 函数体"的边界正确。补充一点提醒：
+  XOR 密钥、魔数、参数模板属事实性协议常量，不构成可版权表达；但**注释组织、
+  变量命名序列、分支结构**若与 LDDC（GPL-3.0）雷同则风险实质存在。
+  酷我侧参考实现中 lx-music-api-server 为 Apache-2.0 系、voicefox 需单独确认，
+  若最终确有借鉴应按 §3.4 补 notice。
+
+### 13.6 审阅未覆盖
+
+- 未实测 `contenttype == 2` 的真实样本（仅证实 `0`/`1`）；`2` 的语义仍来自 LDDC 源码阅读。
+- 未能对"带翻译歌曲"做 `songinfoandlrc` 与 LRCX 的结构逐行比对——该端点在本轮
+  持续 301。故"LRCX 喂入现有 assembler 可复现 legacy 行为"这一等价性
+  **尚未在带翻译样本上验证**，属实施前应补的关键实验（C3 的直接后果）。
+- 未运行仓库测试；本节不构成任何构建验证。
+
+---
+
+## 14. 审阅处置与最终实施决策
+
+| 审阅项 | 处置 | 最终决策 |
+|---|---|---|
+| A1 `contenttype` | 接受并修正文档 | `0` 走 KRC；`1`、`2` 走严格 Base64 + UTF-8；其它回退。 |
+| A2 provider 接口名 | 接受并修正文档 | 使用仓库真实接口名，不改任何能力合同。 |
+| B1 legacy/LRCX 语义冲突 | 接受并改架构 | legacy assembler 只做等价提取；LRCX 使用独立协议配对，放在功能提交。 |
+| B2 fixture 稀薄 | 接受并提升为门禁 | alternate、尾部特判、日文双态测试先于 legacy 提取。 |
+| C1 空白占位 | 接受并补规则 | 空白译文槽不输出、不触发语言启发式；真实 Lemon 序列加入固定用例。 |
+| C2 日文 `ContainsChinese` 双态 | 接受 | legacy 用例覆盖两态；LRCX 不使用该启发式。 |
+| C3 legacy 持续 301 | 接受并降级承诺 | legacy 是尽力回退，不是可用性保证；补两条路径同时失败用例。 |
+| 严格 Base64 分歧 | 保持原设计 | 先严格拒绝并记录阶段；只有真实反例才能放宽。 |
+| 毫秒精度打散重复时间戳 | 从风险中移除 | 真实样本仍为精确重复，不为此增加吸附窗口。 |
+| 签名 Kugou `/v1/search` | 暂缓 | 免签名路径失败且有真实证据后另立任务。 |
+
+实施顺序保持四个独立提交，但第 1 个提交明确只处理 **Kuwo legacy**；第 3 个提交才引入 LRCX 的独立翻译语义。任何 LRCX 新输出都不得反向修改 legacy fixture。
