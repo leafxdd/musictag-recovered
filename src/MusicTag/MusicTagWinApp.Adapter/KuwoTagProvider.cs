@@ -56,6 +56,8 @@ internal class KuwoTagProvider : RemoteTagProviderBase, ITrackSearchProvider, IT
 	// 本实例(本次搜索)期间是否因详情接口熔断/不可用而拿不到封面与歌词,供 UI 单独提示。
 	private bool detailUnavailableThisSearch;
 
+	private bool lrcxUnavailableThisSearch;
+
 	public bool DetailApiUnavailableThisSearch => detailUnavailableThisSearch;
 
 	protected override SearchSource GetSource()
@@ -152,8 +154,163 @@ internal class KuwoTagProvider : RemoteTagProviderBase, ITrackSearchProvider, IT
 
 	private LyricSearchResult LoadSongLyric(KuwoSongInfo song)
 	{
+		return LoadLyrics(song);
+	}
+
+	internal LyricSearchResult LoadLyrics(KuwoSongInfo song)
+	{
+		if (song == null || cancellationSource.IsCancellationRequested)
+		{
+			return song?.LoadedLyric;
+		}
+		if (song.LoadedLyricQuality == KuwoLyricQuality.HighPrecision && song.LoadedLyric != null)
+		{
+			return song.LoadedLyric;
+		}
+
+		HttpResult highPrecisionFailure = null;
+		if (!song.LrcxAttempted && !lrcxUnavailableThisSearch && CanLoadLrcx(song))
+		{
+			song.LrcxAttempted = true;
+			LrcxLoadStatus status = TryLoadLrcx(song, out LyricSearchResult lrcxLyric, out highPrecisionFailure);
+			if (status == LrcxLoadStatus.Success)
+			{
+				song.LoadedLyric = lrcxLyric;
+				song.LoadedLyricQuality = KuwoLyricQuality.HighPrecision;
+				return song.LoadedLyric;
+			}
+			if (status == LrcxLoadStatus.Canceled)
+			{
+				song.LrcxAttempted = false;
+				return song.LoadedLyric;
+			}
+			if (status == LrcxLoadStatus.TransportFailure || status == LrcxLoadStatus.ProtocolFailure)
+			{
+				lrcxUnavailableThisSearch = true;
+			}
+		}
+
+		if (cancellationSource.IsCancellationRequested)
+		{
+			return song.LoadedLyric;
+		}
+		if (song.LoadedLyricQuality == KuwoLyricQuality.Legacy && song.LoadedLyric != null)
+		{
+			if (highPrecisionFailure != null)
+			{
+				SetTransportError(RemoteErrorKind.None, null);
+			}
+			return song.LoadedLyric;
+		}
+
 		LoadSongDetails(song);
-		return song.LoadedLyric;
+		if (song.LoadedLyric != null)
+		{
+			if (highPrecisionFailure != null)
+			{
+				SetTransportError(RemoteErrorKind.None, null);
+			}
+			return song.LoadedLyric;
+		}
+
+		if (highPrecisionFailure != null && (LastTransportResult == null || LastTransportResult.IsSuccess))
+		{
+			SetTransportError(highPrecisionFailure.Error, highPrecisionFailure.ErrorCode);
+		}
+		return null;
+	}
+
+	private LrcxLoadStatus TryLoadLrcx(KuwoSongInfo song, out LyricSearchResult lyric, out HttpResult failure)
+	{
+		lyric = null;
+		failure = null;
+		if (cancellationSource.IsCancellationRequested)
+		{
+			return LrcxLoadStatus.Canceled;
+		}
+
+		HttpResult response = GetResponseBytesResult(KuwoLrcxDecoder.BuildRequestUrl(song.TrackId));
+		if (cancellationSource.IsCancellationRequested)
+		{
+			return LrcxLoadStatus.Canceled;
+		}
+		if (response == null || !response.IsSuccess)
+		{
+			failure = CopyFailure(response, RemoteErrorKind.Network, "network");
+			SetTransportError(failure.Error, failure.ErrorCode);
+			return LrcxLoadStatus.TransportFailure;
+		}
+
+		try
+		{
+			if (response.Bytes == null || response.Bytes.Length == 0)
+			{
+				throw new InvalidDataException("Kuwo LRCX response is empty.");
+			}
+			KuwoLrcxDecodeResult decoded = KuwoLrcxDecoder.DecodeResponse(response.Bytes);
+			if (decoded.LyricLines.Count == 0)
+			{
+				return LrcxLoadStatus.NoCandidate;
+			}
+
+			bool useThreeDigitMilliseconds = !Settings.Default.LyricDownload_ReformatTimetag;
+			string lyricText = decoded.FormatLyric(useThreeDigitMilliseconds);
+			if (string.IsNullOrWhiteSpace(lyricText))
+			{
+				return LrcxLoadStatus.NoCandidate;
+			}
+			if (cancellationSource.IsCancellationRequested)
+			{
+				return LrcxLoadStatus.Canceled;
+			}
+
+			lyric = new LyricSearchResult
+			{
+				Lyric = lyricText,
+				TranslatedLyric = decoded.FormatTranslatedLyric(useThreeDigitMilliseconds),
+				Title = song.Title,
+				Artist = song.Artist,
+				Album = song.Album,
+				OriginalTitle = song.OriginalTitle,
+				SearchSource = GetSource()
+			};
+			return LrcxLoadStatus.Success;
+		}
+		catch (Exception decodeError)
+		{
+			Console.WriteLine("Decode Kuwo LRCX error:" + decodeError.GetType().Name);
+			failure = new HttpResult { Error = RemoteErrorKind.ParseFailed, ErrorCode = "lrcx_parse" };
+			SetTransportError(failure.Error, failure.ErrorCode);
+			return LrcxLoadStatus.ProtocolFailure;
+		}
+	}
+
+	private static bool CanLoadLrcx(KuwoSongInfo song)
+	{
+		return song != null && long.TryParse(song.TrackId, NumberStyles.None, CultureInfo.InvariantCulture, out long trackId) && trackId > 0L;
+	}
+
+	private static HttpResult CopyFailure(HttpResult result, RemoteErrorKind fallbackError, string fallbackCode)
+	{
+		if (result == null || result.Error == RemoteErrorKind.None)
+		{
+			return new HttpResult { Error = fallbackError, ErrorCode = fallbackCode };
+		}
+		return new HttpResult
+		{
+			Error = result.Error,
+			ErrorCode = result.ErrorCode,
+			HttpStatus = result.HttpStatus
+		};
+	}
+
+	private enum LrcxLoadStatus
+	{
+		Success,
+		NoCandidate,
+		TransportFailure,
+		ProtocolFailure,
+		Canceled
 	}
 
 	public LyricSearchResult LoadLyricForTrack(TrackSearchResult track)
@@ -166,8 +323,7 @@ internal class KuwoTagProvider : RemoteTagProviderBase, ITrackSearchProvider, IT
 			Album = track.Album,
 			OriginalTitle = track.OriginalTitle
 		};
-		LoadSongDetails(song);
-		return song.LoadedLyric;
+		return LoadLyrics(song);
 	}
 
 	public List<CoverSearchResult> SearchCovers(string query, int maxResults, List<CoverSearchResult> existingCovers)
@@ -241,7 +397,7 @@ internal class KuwoTagProvider : RemoteTagProviderBase, ITrackSearchProvider, IT
 		using KuwoTagProvider provider = new KuwoTagProvider(cancellation);
 		lock (track)
 		{
-			provider.LoadSongDetails(song);
+			provider.LoadLyrics(song);
 		}
 
 		return song.LoadedLyric;
@@ -287,8 +443,9 @@ internal class KuwoTagProvider : RemoteTagProviderBase, ITrackSearchProvider, IT
 
 	private void LoadSongDetails(KuwoSongInfo song)
 	{
-		if (song.CoverUrl != null)
+		if (song.LegacyDetailsLoaded || song.CoverUrl != null)
 		{
+			song.LegacyDetailsLoaded = true;
 			return;
 		}
 		if (IsDetailApiBackoffActive())
@@ -440,6 +597,7 @@ internal class KuwoTagProvider : RemoteTagProviderBase, ITrackSearchProvider, IT
 	internal void PopulateSongDetails(KuwoSongInfo song, string detailsJson)
 	{
 		song.CoverUrl = "";
+		song.LegacyDetailsLoaded = true;
 
 		try
 		{
@@ -478,7 +636,7 @@ internal class KuwoTagProvider : RemoteTagProviderBase, ITrackSearchProvider, IT
 				song.LargeCoverUrl = coverMatch.Groups[1].Value + "/700/" + coverMatch.Groups[3].Value;
 			}
 
-			if (assembledLyricText.Length > 0)
+			if (assembledLyricText.Length > 0 && song.LoadedLyricQuality != KuwoLyricQuality.HighPrecision)
 			{
 				song.LoadedLyric = new LyricSearchResult
 				{
@@ -490,11 +648,16 @@ internal class KuwoTagProvider : RemoteTagProviderBase, ITrackSearchProvider, IT
 					OriginalTitle = song.OriginalTitle,
 					SearchSource = GetSource()
 				};
+				song.LoadedLyricQuality = KuwoLyricQuality.Legacy;
 			}
 		}
 		catch (Exception ex)
 		{
 			Console.WriteLine("ParseSongsJson error:" + ex.GetMessageChain());
+			if (!string.IsNullOrWhiteSpace(detailsJson))
+			{
+				SetTransportError(RemoteErrorKind.ParseFailed, "parse");
+			}
 		}
 	}
 

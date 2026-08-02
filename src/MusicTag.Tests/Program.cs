@@ -24,6 +24,7 @@ internal static class Program
 		tests.AddRange(KuwoProviderCharacterization.All());
 		tests.AddRange(KugouProviderCharacterization.All());
 		tests.AddRange(KugouKrcCharacterization.All());
+		tests.AddRange(KuwoLrcxCharacterization.All());
 		tests.AddRange(TrackIdLookupCharacterization.All());
 		tests.AddRange(ProviderCoverCharacterization.All());
 		tests.AddRange(ProviderLyricCharacterization.All());

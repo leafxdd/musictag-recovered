@@ -1,5 +1,12 @@
 namespace MusicTagWinApp.Adapter;
 
+internal enum KuwoLyricQuality
+{
+	None,
+	Legacy,
+	HighPrecision
+}
+
 internal class KuwoSongInfo
 {
 	public string Album;
@@ -21,4 +28,10 @@ internal class KuwoSongInfo
 	public string SearchAlbumCoverUrl;
 
 	public LyricSearchResult LoadedLyric;
+
+	internal bool LrcxAttempted;
+
+	internal bool LegacyDetailsLoaded;
+
+	internal KuwoLyricQuality LoadedLyricQuality;
 }

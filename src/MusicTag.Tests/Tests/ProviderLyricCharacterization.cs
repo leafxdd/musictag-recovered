@@ -123,6 +123,8 @@ internal static class ProviderLyricCharacterization
 		}
 		// 搜索（search.kuwo.cn/r.s）与详情/歌词（…/songinfoandlrc）同走 GET，按 URL 关键字分流。
 		protected override string GetResponseString(string url) => url.Contains("songinfoandlrc") ? detailResponse : searchResponse;
+		protected override HttpResult GetResponseBytesResult(string url) =>
+			new HttpResult { Bytes = KuwoLrcxCharacterization.BuildPlainTextResponse("[ti:legacy fixture]\n") };
 	}
 
 	// QQ 歌词响应：callbackName({"lyric":"<base64>","trans":"<base64>"})。空串保持为空（触发"无歌词"分支）。
