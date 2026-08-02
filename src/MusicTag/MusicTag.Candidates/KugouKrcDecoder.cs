@@ -216,19 +216,12 @@ internal static class KugouKrcDecoder
 			return false;
 		}
 		Match firstWordMatch = WordTimingRegex.Match(match.Groups[2].Value);
-		if (!firstWordMatch.Success || !long.TryParse(firstWordMatch.Groups[1].Value, out long firstWordOffsetMs))
+		if (!firstWordMatch.Success || !long.TryParse(firstWordMatch.Groups[1].Value, out _))
 		{
 			return false;
 		}
-		try
-		{
-			timedLine = new KrcTimedLine(checked(damagedLineStartMs + firstWordOffsetMs), WordTimingRegex.Replace(match.Groups[2].Value, ""));
-			return true;
-		}
-		catch (OverflowException)
-		{
-			return false;
-		}
+		timedLine = new KrcTimedLine(damagedLineStartMs, WordTimingRegex.Replace(match.Groups[2].Value, ""));
+		return true;
 	}
 
 	private static List<string> TryDecodeTranslatedLines(string encodedLanguage, int expectedLineCount)

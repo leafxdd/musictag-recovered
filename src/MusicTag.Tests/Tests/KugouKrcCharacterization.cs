@@ -105,12 +105,13 @@ internal static class KugouKrcCharacterization
 			Check.Equal("", result.TranslatedLyric, "translation dropped");
 		});
 
-		yield return ("KugouKrcDecoder damaged line duration falls back to first word offset", delegate
+		yield return ("KugouKrcDecoder damaged line duration preserves the absolute line start", delegate
 		{
 			KugouKrcDecodeResult result = KugouKrcDecoder.ConvertKrcText(
-				"[1000,broken]<5,100,0>Fallback\n",
+				"[1000,500]<5,100,0>Normal\n" +
+				"[2000,broken]<5,100,0>Fallback\n",
 				useThreeDigitMilliseconds: true);
-			Check.Equal("[00:01.005]Fallback\n", result.Lyric, "fallback timestamp");
+			Check.Equal("[00:01.000]Normal\n[00:02.000]Fallback\n", result.Lyric, "line timestamps");
 		});
 
 		yield return ("KugouKrcDecoder mismatched translation count keeps the main lyric", delegate
