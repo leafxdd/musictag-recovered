@@ -6,10 +6,8 @@ namespace MusicTag.Tests;
 
 // 酷我详情歌词构建 characterization(KuwoTagProvider.PopulateSongDetails,private void -> internal void,body 逐字不变)。
 // PopulateSongDetails 纯解析传入 detailsJson(无网络),写回 song.CoverUrl / LargeCoverUrl / LoadedLyric。
-// 覆盖高信心主干:单语多行 / 单行小数秒 / 同时间戳合并(Count==1 分支)/ 空或缺 lrclist(不产出歌词)/
-// 封面尺寸段改写为 700。Lyric 末尾保留 "\n"(源不 Trim)。
-// 说明:真正的 alternate 双语交替对齐趟(多时间戳且某时间戳多行触发 AlternateText,含中文重排/末三行特判/
-//       前一行时间戳借用)输出极绕,留待专门追踪,此处不覆盖以守 probe-first 置信。
+// 覆盖单语、重复时间戳 alternate、中英文重排、日文 ContainsChinese 双态、时间戳借用、尾部特判和封面解析。
+// Lyric 末尾保留 "\n"(源不 Trim)。这些输出是 legacy songinfoandlrc 的兼容基线,不代表 LRCX 协议语义。
 internal static class KuwoLyricBuildCharacterization
 {
 	public static IEnumerable<(string, Action)> All()
@@ -56,6 +54,33 @@ internal static class KuwoLyricBuildCharacterization
 			Check.NotNull(song.LoadedLyric, "lyric produced");
 			Check.Equal("[00:01.00]L1\n[00:02.00]B\n", song.LoadedLyric.Lyric, "tail alternates: B stays at 2s primary track");
 			Check.Equal("[00:01.00]A\n[00:02.00]C\n", song.LoadedLyric.TranslatedLyric, "A/C flow to translated track (split C rejoins alignment)");
+		});
+
+		yield return ("PopulateSongDetails: middle duplicate timestamps preserve current English/Chinese split", delegate
+		{
+			KuwoSongInfo song = new KuwoSongInfo();
+			new KuwoTagProvider().PopulateSongDetails(song, "{\"data\":{\"lrclist\":[{\"time\":\"1\",\"lineLyric\":\"Intro\"},{\"time\":\"2\",\"lineLyric\":\"Hello\"},{\"time\":\"2\",\"lineLyric\":\"你好\"},{\"time\":\"3\",\"lineLyric\":\"World\"},{\"time\":\"3\",\"lineLyric\":\"世界\"}],\"songinfo\":{\"pic\":\"\"}}}");
+			Check.NotNull(song.LoadedLyric, "lyric produced");
+			Check.Equal("[00:01.00]Intro\n[00:02.00]Hello\n[00:03.00]World\n", song.LoadedLyric.Lyric, "English primary track");
+			Check.Equal("[00:01.00]你好\n[00:02.00]世界\n", song.LoadedLyric.TranslatedLyric, "Chinese alternate track borrows previous timestamps");
+		});
+
+		yield return ("PopulateSongDetails: Japanese kana and kanji take different legacy ContainsChinese branches", delegate
+		{
+			KuwoSongInfo song = new KuwoSongInfo();
+			new KuwoTagProvider().PopulateSongDetails(song, "{\"data\":{\"lrclist\":[{\"time\":\"1\",\"lineLyric\":\"Intro\"},{\"time\":\"2\",\"lineLyric\":\"どれほどよかったでしょう\"},{\"time\":\"2\",\"lineLyric\":\"如果只是一场梦\"},{\"time\":\"3\",\"lineLyric\":\"未だにあなたのことを夢にみる\"},{\"time\":\"3\",\"lineLyric\":\"至今仍会梦见你\"}],\"songinfo\":{\"pic\":\"\"}}}");
+			Check.NotNull(song.LoadedLyric, "lyric produced");
+			Check.Equal("[00:01.00]Intro\n[00:02.00]どれほどよかったでしょう\n[00:03.00]至今仍会梦见你\n", song.LoadedLyric.Lyric, "kana swaps while kanji remains in legacy primary slot");
+			Check.Equal("[00:01.00]如果只是一场梦\n[00:02.00]未だにあなたのことを夢にみる\n", song.LoadedLyric.TranslatedLyric, "legacy language heuristic baseline");
+		});
+
+		yield return ("PopulateSongDetails: untranslated gap borrows next timestamp after translation starts", delegate
+		{
+			KuwoSongInfo song = new KuwoSongInfo();
+			new KuwoTagProvider().PopulateSongDetails(song, "{\"data\":{\"lrclist\":[{\"time\":\"1\",\"lineLyric\":\"Intro\"},{\"time\":\"2\",\"lineLyric\":\"Hello\"},{\"time\":\"2\",\"lineLyric\":\"你好\"},{\"time\":\"3\",\"lineLyric\":\"Middle\"},{\"time\":\"4\",\"lineLyric\":\"End\"}],\"songinfo\":{\"pic\":\"\"}}}");
+			Check.NotNull(song.LoadedLyric, "lyric produced");
+			Check.Equal("[00:01.00]Intro\n[00:02.00]Hello\n[00:04.00]End\n", song.LoadedLyric.Lyric, "next line becomes primary at its own timestamp");
+			Check.Equal("[00:01.00]你好\n[00:02.00]Middle\n", song.LoadedLyric.TranslatedLyric, "untranslated middle line follows current borrowing heuristic");
 		});
 
 		yield return ("PopulateSongDetails: missing lrclist -> no LoadedLyric", delegate

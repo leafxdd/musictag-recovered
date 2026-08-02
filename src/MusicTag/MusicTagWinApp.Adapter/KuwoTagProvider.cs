@@ -446,9 +446,7 @@ internal class KuwoTagProvider : RemoteTagProviderBase, ITrackSearchProvider, IT
 			JObject data = JObject.Parse(detailsJson)["data"] as JObject;
 			JArray lyricItems = data?["lrclist"] as JArray;
 			JObject songInfo = data?["songinfo"] as JObject;
-			StringBuilder lyricBuilder = new StringBuilder();
-			StringBuilder translatedLyricBuilder = new StringBuilder();
-			SortedDictionary<long, (string PrimaryText, List<string> AlternateText)> timedLines = new SortedDictionary<long, (string, List<string>)>();
+			List<(long TimestampMs, string Text)> lyricLines = new List<(long, string)>();
 
 			if (lyricItems != null)
 			{
@@ -463,119 +461,15 @@ internal class KuwoTagProvider : RemoteTagProviderBase, ITrackSearchProvider, IT
 
 						long timestampMs = Convert.ToInt64(double.Parse(ReadJsonString(lyricToken, "time"), CultureInfo.InvariantCulture) * 1000.0);
 						string lyricText = TextEncodingService.DecodeBasicHtmlEntities(ReadJsonString(lyricToken, "lineLyric"));
-						if (timedLines.TryGetValue(timestampMs, out (string PrimaryText, List<string> AlternateText) line))
-						{
-							if (timedLines.Count == 1)
-							{
-								timedLines[timestampMs] = (line.PrimaryText + " " + lyricText, new List<string>());
-							}
-							else
-							{
-								line.AlternateText.Add(lyricText);
-							}
-						}
-						else
-						{
-							timedLines.Add(timestampMs, (lyricText, new List<string>()));
-						}
+						lyricLines.Add((timestampMs, lyricText));
 					}
 					catch (Exception lyricParseError)
 					{
 						Console.WriteLine("ParseSongsJson lyric item error:" + lyricParseError.GetMessageChain());
 					}
 				}
-
-				if (timedLines.Any())
-				{
-					KeyValuePair<long, (string PrimaryText, List<string> AlternateText)> lastLine = timedLines.Last();
-					List<string> alternateText = lastLine.Value.AlternateText;
-					if (alternateText.Count > 1)
-					{
-						timedLines.Add(lastLine.Key + 5000L, (string.Join(" ", alternateText.Skip(1)), new List<string>()));
-						alternateText.RemoveRange(1, alternateText.Count - 1);
-					}
-				}
-
-				List<(long TimestampMs, string PrimaryText, string AlternateText)> normalizedLines = new List<(long, string, string)>();
-				foreach (KeyValuePair<long, (string PrimaryText, List<string> AlternateText)> timedLine in timedLines)
-				{
-					string alternateText = timedLine.Value.AlternateText.Any() ? string.Join(" ", timedLine.Value.AlternateText) : null;
-					normalizedLines.Add((timedLine.Key, timedLine.Value.PrimaryText, alternateText));
-				}
-
-				for (int index = 0; index < normalizedLines.Count; index++)
-				{
-					(long TimestampMs, string PrimaryText, string AlternateText) line = normalizedLines[index];
-					if (line.AlternateText != null && TextUtilities.ContainsChinese(line.AlternateText) && !TextUtilities.ContainsChinese(line.PrimaryText))
-					{
-						normalizedLines[index] = (line.TimestampMs, line.AlternateText, line.PrimaryText);
-					}
-				}
-
-				bool foundTranslatedLine = false;
-				for (int index = 1; index < normalizedLines.Count - 1; index++)
-				{
-					(long TimestampMs, string PrimaryText, string AlternateText) line = normalizedLines[index];
-					if (!foundTranslatedLine && line.AlternateText != null)
-					{
-						foundTranslatedLine = true;
-					}
-
-					if (foundTranslatedLine && line.AlternateText == null)
-					{
-						(long TimestampMs, string PrimaryText, string AlternateText) nextLine = normalizedLines[index + 1];
-						if (nextLine.AlternateText == null)
-						{
-							normalizedLines[index] = (nextLine.TimestampMs, line.PrimaryText, nextLine.PrimaryText);
-							normalizedLines.RemoveAt(index + 1);
-						}
-					}
-				}
-
-				if (normalizedLines.Count >= 3)
-				{
-					(long TimestampMs, string PrimaryText, string AlternateText) thirdFromLast = normalizedLines[normalizedLines.Count - 3];
-					(long TimestampMs, string PrimaryText, string AlternateText) secondFromLast = normalizedLines[normalizedLines.Count - 2];
-					(long TimestampMs, string PrimaryText, string AlternateText) lastLine = normalizedLines[normalizedLines.Count - 1];
-					if (lastLine.AlternateText != null && thirdFromLast.AlternateText != null && secondFromLast.AlternateText == null)
-					{
-						if (TextUtilities.ContainsChinese(secondFromLast.PrimaryText) && TextUtilities.ContainsChinese(lastLine.PrimaryText) && !TextUtilities.ContainsChinese(lastLine.AlternateText))
-						{
-							lastLine = (lastLine.TimestampMs, lastLine.AlternateText, lastLine.PrimaryText);
-						}
-
-						normalizedLines[normalizedLines.Count - 2] = (lastLine.TimestampMs, secondFromLast.PrimaryText, lastLine.PrimaryText);
-						normalizedLines[normalizedLines.Count - 1] = (lastLine.TimestampMs + 5000L, lastLine.AlternateText, null);
-					}
-				}
-
-				for (int index = 0; index < normalizedLines.Count; index++)
-				{
-					(long TimestampMs, string PrimaryText, string AlternateText) line = normalizedLines[index];
-					bool appendedPrimaryLyric = false;
-					if (line.AlternateText != null)
-					{
-						lyricBuilder.Append(LyricTextProcessor.FormatTimestamp(line.TimestampMs, useThreeDigitMilliseconds: !Settings.Default.LyricDownload_ReformatTimetag));
-						lyricBuilder.Append(line.AlternateText);
-						lyricBuilder.Append("\n");
-					}
-					else if (index < normalizedLines.Count - 1 || translatedLyricBuilder.Length == 0)
-					{
-						lyricBuilder.Append(LyricTextProcessor.FormatTimestamp(line.TimestampMs, useThreeDigitMilliseconds: !Settings.Default.LyricDownload_ReformatTimetag));
-						lyricBuilder.Append(line.PrimaryText);
-						lyricBuilder.Append("\n");
-						appendedPrimaryLyric = true;
-					}
-
-					if (!appendedPrimaryLyric)
-					{
-						long translatedTimestampMs = index > 0 ? normalizedLines[index - 1].TimestampMs : line.TimestampMs;
-						translatedLyricBuilder.Append(LyricTextProcessor.FormatTimestamp(translatedTimestampMs, useThreeDigitMilliseconds: !Settings.Default.LyricDownload_ReformatTimetag));
-						translatedLyricBuilder.Append(line.PrimaryText);
-						translatedLyricBuilder.Append("\n");
-					}
-				}
 			}
+			(string assembledLyricText, string assembledTranslatedLyricText) = KuwoLegacyLyricAssembler.Build(lyricLines, !Settings.Default.LyricDownload_ReformatTimetag);
 
 			song.CoverUrl = songInfo?["pic"]?.ToString() ?? "";
 			Match coverMatch = Regex.Match(song.CoverUrl, "^(.+)[/](\\d+)[/](\\d+[/]\\d+[/].+)$");
@@ -584,12 +478,12 @@ internal class KuwoTagProvider : RemoteTagProviderBase, ITrackSearchProvider, IT
 				song.LargeCoverUrl = coverMatch.Groups[1].Value + "/700/" + coverMatch.Groups[3].Value;
 			}
 
-			if (lyricBuilder.Length > 0)
+			if (assembledLyricText.Length > 0)
 			{
 				song.LoadedLyric = new LyricSearchResult
 				{
-					Lyric = lyricBuilder.ToString(),
-					TranslatedLyric = translatedLyricBuilder.ToString(),
+					Lyric = assembledLyricText,
+					TranslatedLyric = assembledTranslatedLyricText,
 					Title = song.Title,
 					Artist = song.Artist,
 					Album = song.Album,
