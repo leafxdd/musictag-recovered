@@ -12,6 +12,7 @@ using MusicTag.Serialization;
 using MusicTag.Services;
 using MusicTagWinApp.Adapter;
 using MusicTagWinApp.Instances;
+using MusicTagWinApp.Properties;
 using MusicTagWinApp.Roles;
 using MusicTagWinApp.Web;
 using Newtonsoft.Json.Linq;
@@ -46,7 +47,15 @@ internal class KugouTagProvider : RemoteTagProviderBase, ITrackSearchProvider, I
 
 	private const string lyricUrlTemplate = "https://m3ws.kugou.com/api/v1/krc/get_krc?keyword={0}&hash={1}&timelength={2}";
 
+	private const string krcSearchUrlTemplate = "https://lyrics.kugou.com/search?ver=1&man=yes&client=pc&hash={0}&duration={1}";
+
+	private const string krcDownloadUrlTemplate = "https://lyrics.kugou.com/download?ver=1&client=pc&id={0}&accesskey={1}&fmt=krc&charset=utf8";
+
 	private static readonly Regex bracketedContentRegex = new Regex("^\\[(.*)\\]$", RegexOptions.Compiled);
+
+	private static readonly Regex kugouHashRegex = new Regex("^[A-Fa-f0-9]{32}$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+	private bool krcUnavailableThisSearch;
 
 	public static HttpClient CreateKugouHttpClient()
 	{
@@ -103,8 +112,179 @@ internal class KugouTagProvider : RemoteTagProviderBase, ITrackSearchProvider, I
 
 	private LyricSearchResult LoadLyrics(KugouSongInfo song)
 	{
+		if (!krcUnavailableThisSearch && CanLoadKrc(song))
+		{
+			KrcLoadStatus krcStatus = TryLoadKrc(song, out LyricSearchResult krcLyric);
+			if (krcStatus == KrcLoadStatus.Success)
+			{
+				return krcLyric;
+			}
+			if (krcStatus == KrcLoadStatus.Canceled)
+			{
+				return null;
+			}
+			if (krcStatus == KrcLoadStatus.EndpointFailure)
+			{
+				krcUnavailableThisSearch = true;
+			}
+		}
+		if (cancellationSource.IsCancellationRequested)
+		{
+			return null;
+		}
+
 		string responseBody = GetResponseString(string.Format(lyricUrlTemplate, BuildEncodedLyricKeyword(song.Artist, song.Title), song.Hash, song.DurationMs));
+		if (cancellationSource.IsCancellationRequested)
+		{
+			return null;
+		}
 		return ParseLyricResponse(song, responseBody);
+	}
+
+	private KrcLoadStatus TryLoadKrc(KugouSongInfo song, out LyricSearchResult lyric)
+	{
+		lyric = null;
+		if (cancellationSource.IsCancellationRequested)
+		{
+			return KrcLoadStatus.Canceled;
+		}
+
+		HttpResult searchResponse = GetResponseStringResult(string.Format(krcSearchUrlTemplate, song.Hash, song.DurationMs));
+		if (cancellationSource.IsCancellationRequested)
+		{
+			return KrcLoadStatus.Canceled;
+		}
+		if (!searchResponse.IsSuccess)
+		{
+			return KrcLoadStatus.EndpointFailure;
+		}
+
+		JObject searchJson;
+		try
+		{
+			searchJson = JObject.Parse(searchResponse.Body ?? "");
+		}
+		catch (Exception parseError)
+		{
+			Console.WriteLine("Parse Kugou KRC search response error:" + parseError.GetType().Name);
+			return KrcLoadStatus.EndpointFailure;
+		}
+		if (!TryReadSuccessStatus(searchJson) || !(searchJson["candidates"] is JArray candidates))
+		{
+			return KrcLoadStatus.EndpointFailure;
+		}
+
+		string lyricId = null;
+		string accessKey = null;
+		foreach (JToken candidateToken in candidates)
+		{
+			if (!(candidateToken is JObject candidate))
+			{
+				continue;
+			}
+			string candidateId = candidate["id"]?.ToString() ?? "";
+			string candidateAccessKey = candidate["accesskey"]?.ToString() ?? "";
+			if (!string.IsNullOrWhiteSpace(candidateId) && !string.IsNullOrWhiteSpace(candidateAccessKey))
+			{
+				lyricId = candidateId;
+				accessKey = candidateAccessKey;
+				break;
+			}
+		}
+		if (lyricId == null)
+		{
+			return KrcLoadStatus.NoCandidate;
+		}
+		if (cancellationSource.IsCancellationRequested)
+		{
+			return KrcLoadStatus.Canceled;
+		}
+
+		string downloadUrl = string.Format(
+			krcDownloadUrlTemplate,
+			Uri.EscapeDataString(lyricId),
+			Uri.EscapeDataString(accessKey));
+		HttpResult downloadResponse = GetResponseStringResult(downloadUrl);
+		if (cancellationSource.IsCancellationRequested)
+		{
+			return KrcLoadStatus.Canceled;
+		}
+		if (!downloadResponse.IsSuccess)
+		{
+			return KrcLoadStatus.EndpointFailure;
+		}
+
+		JObject downloadJson;
+		try
+		{
+			downloadJson = JObject.Parse(downloadResponse.Body ?? "");
+		}
+		catch (Exception parseError)
+		{
+			Console.WriteLine("Parse Kugou KRC download response error:" + parseError.GetType().Name);
+			return KrcLoadStatus.EndpointFailure;
+		}
+		if (!TryReadSuccessStatus(downloadJson))
+		{
+			return KrcLoadStatus.EndpointFailure;
+		}
+		if (!int.TryParse(downloadJson["contenttype"]?.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out int contentType) ||
+			string.IsNullOrWhiteSpace(downloadJson["content"]?.ToString()))
+		{
+			return KrcLoadStatus.Malformed;
+		}
+
+		try
+		{
+			KugouKrcDecodeResult decoded = KugouKrcDecoder.DecodeContent(
+				downloadJson["content"].ToString(),
+				contentType,
+				useThreeDigitMilliseconds: !Settings.Default.LyricDownload_ReformatTimetag);
+			if (string.IsNullOrWhiteSpace(decoded.Lyric))
+			{
+				return KrcLoadStatus.Malformed;
+			}
+			lyric = CreateKrcLyricResult(song, decoded);
+			return KrcLoadStatus.Success;
+		}
+		catch (Exception decodeError)
+		{
+			Console.WriteLine("Decode Kugou KRC error:" + decodeError.GetType().Name);
+			return KrcLoadStatus.Malformed;
+		}
+	}
+
+	private LyricSearchResult CreateKrcLyricResult(KugouSongInfo song, KugouKrcDecodeResult decoded)
+	{
+		return new LyricSearchResult
+		{
+			Lyric = decoded.Lyric,
+			TranslatedLyric = decoded.TranslatedLyric,
+			TrackId = song.AudioId,
+			Title = song.Title,
+			Artist = song.Artist,
+			Album = song.Album,
+			SearchSource = GetSource()
+		};
+	}
+
+	private static bool CanLoadKrc(KugouSongInfo song)
+	{
+		return song != null && song.DurationMs > 0 && !string.IsNullOrWhiteSpace(song.Hash) && kugouHashRegex.IsMatch(song.Hash);
+	}
+
+	private static bool TryReadSuccessStatus(JObject response)
+	{
+		return int.TryParse(response?["status"]?.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out int status) && status == 200;
+	}
+
+	private enum KrcLoadStatus
+	{
+		Success,
+		NoCandidate,
+		Malformed,
+		EndpointFailure,
+		Canceled
 	}
 
 	public LyricSearchResult LoadLyricsForTrack(TrackSearchResult track)
@@ -448,6 +628,10 @@ internal class KugouTagProvider : RemoteTagProviderBase, ITrackSearchProvider, I
 		catch (Exception parseError)
 		{
 			Console.WriteLine("ParseSongsJson error:" + parseError.GetMessageChain());
+			if (!string.IsNullOrWhiteSpace(responseBody))
+			{
+				SetTransportError(RemoteErrorKind.ParseFailed, "parse");
+			}
 		}
 		return lyric;
 	}
