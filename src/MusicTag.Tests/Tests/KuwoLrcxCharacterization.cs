@@ -75,6 +75,11 @@ internal static class KuwoLrcxCharacterization
 			Check.True(lyric.Contains("[00:07.433]\u8BCD\uFF1A\u5510\u606C", StringComparison.Ordinal), "real 7.433 line");
 			Check.True(!lyric.Contains("<2104,-2104>", StringComparison.Ordinal), "word markers removed");
 			Check.True(result.FormatLyric(useThreeDigitMilliseconds: false).Contains("[00:07.43]\u8BCD\uFF1A\u5510\u606C", StringComparison.Ordinal), "two-digit rounding");
+			// \u771F\u5B9E\u54CD\u5E94\u7684\u6807\u51C6 LRC \u5143\u6570\u636E\u6309\u539F\u6837\u4FDD\u7559\u5728\u4E3B\u6B4C\u8BCD\u5934\u90E8,\u4E0E\u9177\u72D7 KRC \u4E00\u81F4\u3002
+			Check.Equal(5, result.MetadataLines.Count, "metadata line count");
+			Check.True(lyric.StartsWith("[ti:\u5B64\u52C7\u8005]\n[ar:\u9648\u5955\u8FC5]\n[al:\u5B64\u52C7\u8005]\n[by:p_pttzhang]\n[offset:0]\n[00:00.000]", StringComparison.Ordinal), "metadata header");
+			// [ver:] \u662F\u9177\u6211\u79C1\u6709\u683C\u5F0F\u7248\u672C\u53F7,\u4E0D\u5199\u5165 LRC\u3002
+			Check.True(!lyric.Contains("[ver:", StringComparison.Ordinal), "proprietary ver tag dropped");
 		});
 
 		yield return ("KuwoLrcxDecoder parses fractional precision and negative word markers", delegate
@@ -95,6 +100,33 @@ internal static class KuwoLrcxCharacterization
 				"[00:01.005]\u5922\u306A\u3089\u3070\n[00:02.010]\u5982\u679C\u53EA\u662F\u4E00\u573A\u68A6\n",
 				result.FormatLyric(true),
 				"GB18030 lyric");
+		});
+
+		yield return ("KuwoLrcxDecoder keeps standard LRC metadata and drops Kuwo private tags", delegate
+		{
+			KuwoLrcxDecodeResult result = KuwoLrcxDecoder.ParseTimedLines(
+				"[ml:1.0]\n" +
+				"[kuwo:027]\n" +
+				"[ver:v1.0]\n" +
+				"[ti:Lemon]\n" +
+				"[ar:米津玄師]\n" +
+				"[al:Lemon]\n" +
+				"[by:]\n" +
+				"[offset:0]\n" +
+				"[00:01.000]<0,1,0>A\n" +
+				"[00:02.000]译文\n" +
+				"[00:02.000]<0,1,0>B\n");
+			Check.Equal(5, result.MetadataLines.Count, "metadata line count");
+			Check.Equal(
+				"[ti:Lemon]\n[ar:米津玄師]\n[al:Lemon]\n[by:]\n[offset:0]\n" +
+				"[00:01.000]A\n[00:02.000]B\n",
+				result.FormatLyric(true),
+				"metadata header order preserved");
+			// [kuwo:] 是逐词时间的混淆参数,泄漏到歌词正文会让用户看到无意义标签。
+			Check.True(!result.FormatLyric(true).Contains("[kuwo:", StringComparison.Ordinal), "kuwo tag dropped");
+			Check.True(!result.FormatLyric(true).Contains("[ml:", StringComparison.Ordinal), "ml tag dropped");
+			// 与酷狗一致:元数据只写主歌词,译文不重复携带。
+			Check.Equal("[00:01.000]译文\n", result.FormatTranslatedLyric(true), "translation carries no metadata");
 		});
 
 		yield return ("KuwoLrcxDecoder pairs Lemon translation slots without language heuristics", delegate

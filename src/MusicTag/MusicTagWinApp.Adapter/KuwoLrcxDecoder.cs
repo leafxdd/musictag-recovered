@@ -24,38 +24,50 @@ internal sealed class KuwoLrcxTimedLine
 
 internal sealed class KuwoLrcxDecodeResult
 {
+	internal IReadOnlyList<string> MetadataLines { get; }
+
 	internal IReadOnlyList<KuwoLrcxTimedLine> LyricLines { get; }
 
 	internal IReadOnlyList<KuwoLrcxTimedLine> TranslatedLyricLines { get; }
 
 	internal KuwoLrcxDecodeResult(
 		IReadOnlyList<KuwoLrcxTimedLine> lyricLines,
-		IReadOnlyList<KuwoLrcxTimedLine> translatedLyricLines)
+		IReadOnlyList<KuwoLrcxTimedLine> translatedLyricLines,
+		IReadOnlyList<string> metadataLines = null)
 	{
 		LyricLines = lyricLines ?? Array.Empty<KuwoLrcxTimedLine>();
 		TranslatedLyricLines = translatedLyricLines ?? Array.Empty<KuwoLrcxTimedLine>();
+		MetadataLines = metadataLines ?? Array.Empty<string>();
 	}
 
+	// 与 KugouKrcDecoder 一致:标准 LRC 元数据只写在主歌词头部,译文不重复携带。
 	internal string FormatLyric(bool useThreeDigitMilliseconds)
 	{
-		return FormatLines(LyricLines, useThreeDigitMilliseconds);
+		StringBuilder builder = new StringBuilder();
+		foreach (string metadataLine in MetadataLines)
+		{
+			builder.Append(metadataLine);
+			builder.Append('\n');
+		}
+		AppendLines(builder, LyricLines, useThreeDigitMilliseconds);
+		return builder.ToString();
 	}
 
 	internal string FormatTranslatedLyric(bool useThreeDigitMilliseconds)
 	{
-		return FormatLines(TranslatedLyricLines, useThreeDigitMilliseconds);
+		StringBuilder builder = new StringBuilder();
+		AppendLines(builder, TranslatedLyricLines, useThreeDigitMilliseconds);
+		return builder.ToString();
 	}
 
-	private static string FormatLines(IReadOnlyList<KuwoLrcxTimedLine> lines, bool useThreeDigitMilliseconds)
+	private static void AppendLines(StringBuilder builder, IReadOnlyList<KuwoLrcxTimedLine> lines, bool useThreeDigitMilliseconds)
 	{
-		StringBuilder builder = new StringBuilder();
 		foreach (KuwoLrcxTimedLine line in lines)
 		{
 			builder.Append(LyricTextProcessor.FormatTimestamp(line.TimestampMs, useThreeDigitMilliseconds));
 			builder.Append(line.Text);
 			builder.Append('\n');
 		}
-		return builder.ToString();
 	}
 }
 
@@ -84,6 +96,10 @@ internal static class KuwoLrcxDecoder
 
 	private static readonly Regex ResidualAngleTagRegex = new Regex(
 		"<[^>]*>",
+		RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+	private static readonly Regex MetadataRegex = new Regex(
+		"^\\[([A-Za-z]+):(.*)\\]$",
 		RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
 	internal static string BuildRequestUrl(string trackId)
@@ -142,6 +158,7 @@ internal static class KuwoLrcxDecoder
 		}
 
 		List<KuwoLrcxTimedLine> timedLines = new List<KuwoLrcxTimedLine>();
+		List<string> metadataLines = new List<string>();
 		using (StringReader reader = new StringReader(lyricText))
 		{
 			string line;
@@ -150,11 +167,26 @@ internal static class KuwoLrcxDecoder
 				if (TryParseTimedLine(line, out KuwoLrcxTimedLine timedLine))
 				{
 					timedLines.Add(timedLine);
+					continue;
+				}
+
+				// 标准 LRC 元数据按原样保留;[ml:]/[ver:] 与 [kuwo:] 是酷我私有标签
+				// ([kuwo:] 还是逐词时间的混淆参数),不写入 LRC。
+				Match metadataMatch = MetadataRegex.Match(line);
+				if (metadataMatch.Success && IsStandardLrcMetadata(metadataMatch.Groups[1].Value.ToLowerInvariant()))
+				{
+					metadataLines.Add(line);
 				}
 			}
 		}
 
-		return PairTimedLines(timedLines);
+		KuwoLrcxDecodeResult pairedLines = PairTimedLines(timedLines);
+		return new KuwoLrcxDecodeResult(pairedLines.LyricLines, pairedLines.TranslatedLyricLines, metadataLines);
+	}
+
+	private static bool IsStandardLrcMetadata(string metadataName)
+	{
+		return metadataName == "ti" || metadataName == "ar" || metadataName == "al" || metadataName == "by" || metadataName == "offset";
 	}
 
 	private static KuwoLrcxDecodeResult PairTimedLines(IReadOnlyList<KuwoLrcxTimedLine> timedLines)
