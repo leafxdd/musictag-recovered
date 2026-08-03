@@ -2,8 +2,11 @@
 
 - 日期：2026-08-03
 - 分支：`develop-net8`
-- 状态：方案已落盘，待实施授权
+- 状态：方案已落盘并经交叉审阅修订，待实施授权
 - 范围：只完成 x64 迁移；不在本阶段精简、替换或移除 SQLite
+
+本文已并入 Claude 的交叉审阅结论：§4.2、§4.3、§4.4、§5 批次 1、§6、§8.1、§8.2 有实质修订，
+§12 记录独立复核的核验项与排除项。修订处均在正文标注，未标注的章节保持初稿判断。
 
 ## 1. 目标与结论
 
@@ -27,15 +30,15 @@
 ### 2.1 架构约束
 
 - `src/MusicTag/MusicTag.csproj` 和 `src/MusicTag.Tests/MusicTag.Tests.csproj` 当前均为 `PlatformTarget=x86`。
-- 仓库内本地 DLL 中，`TagLibSharp`、`UtfUnknown`、`Newtonsoft.Json`、`Fkosoft.FontAwesome4`、`System.Data.SQLite` 和三个 satellite resource DLL 都是 `ILOnly` 托管程序集。
-- 唯一直接把进程锁定在 x86 的运行时文件是原生 `SQLite.Interop.dll`。
+- 仓库内本地 DLL 中，`TagLibSharp`、`UtfUnknown`、`Newtonsoft.Json`、`Fkosoft.FontAwesome4`、`System.Data.SQLite` 和三个 satellite resource DLL 都是 `ILOnly` 托管程序集（已按 COR20 标志位复核，无一个带 `32BITREQUIRED`，见 §12.1）。
+- 唯一直接把进程锁定在 x86 的运行时文件是原生 `SQLite.Interop.dll`（已复核，见 §12.1）。
 - 标准 Windows `user32`、`shell32`、`uxtheme` P/Invoke 和系统 COM 组件同时支持 x64，但其托管结构体字段宽度必须正确。
 
 ### 2.2 SQLite 二进制来源
 
-仓库现有文件已经与官方 NuGet 包逐字节核对：
+仓库现有文件已经与官方 NuGet 包逐字节核对（交叉审阅时独立复算过一次，见 §12.1）：
 
-| 仓库文件 | 官方 `System.Data.SQLite.Core 1.0.113` 条目 | 结果 |
+| 仓库文件 | 官方 `System.Data.SQLite.Core 1.0.113.0` 条目 | 结果 |
 |---|---|---|
 | `System.Data.SQLite.dll` | `lib/net46/System.Data.SQLite.dll` | SHA-256 完全一致 |
 | 当前 `SQLite.Interop.dll` | `build/net46/x86/SQLite.Interop.dll` | SHA-256 完全一致 |
@@ -45,7 +48,9 @@
 - PE 架构：`AMD64 / PE32+`
 - 文件版本：`1.0.113.0`
 - SHA-256：`1D534617B38323027A64579A581258A55C3986F5B4B15297126C8A4CEF5AA105`
-- 来源：<https://www.nuget.org/packages/System.Data.SQLite.Core/1.0.113>
+- 来源：<https://www.nuget.org/packages/System.Data.SQLite.Core/1.0.113.0>
+  （包的规范版本号是 `1.0.113.0`；`api/v2/package/System.Data.SQLite.Core/1.0.113`
+  与 `.../1.0.113.0` 均可下载到同一文件，已实测。）
 
 ### 2.3 隔离 x64 探针
 
@@ -72,7 +77,9 @@ SQLite 只持久化标签历史，不保存音乐库、在线 Provider 结果、
 
 因此本阶段只替换同版本原生二进制，不修改 `TagHistoryRepository` 的 Provider API、SQL、事务、数据库路径或 schema。
 
-## 4. 必须修正的 x64 interop
+## 4. x64 interop 审计结果
+
+§4.1、§4.2 必须修正；§4.3 可达但已论证安全；§4.5 不可达、本阶段不处理。
 
 ### 4.1 `NativeNotificationHeader`
 
@@ -84,28 +91,82 @@ UINT_PTR idFrom
 UINT     code
 ```
 
-当前 `ControlId` 使用 32 位 `int`。在 x64 中 `UINT_PTR` 必须为 8 字节，当前托管结构只有 16 字节，而正确的 x64 `NMHDR` 应为 24 字节。该结构位于列表头右键通知的可达路径，必须改为指针宽类型并增加偏移/尺寸测试。
+当前 `ControlId` 使用 32 位 `int`。在 x64 中 `UINT_PTR` 必须为 8 字节，当前托管结构只有 16 字节，而正确的 x64 `NMHDR` 应为 24 字节。该结构位于列表头右键通知的可达路径（`HeaderAwareListView.cs:55` 的 `WM_NOTIFY` 处理），必须改为指针宽类型并增加偏移/尺寸测试（期望值见 §4.4）。
+
+改为 `IntPtr` 在两个位数下都正确（x86 = 12 字节、x64 = 24 字节，均与原生一致），
+因此批次 1 在 x86 基线上落地该修改是安全的。`ControlId` 本身无消费方，仅 `NotificationCode` 被读取。
 
 ### 4.2 `ShellFileInfo`
 
-该结构映射 Windows `SHFILEINFO`。当前 `IconIndex` 被声明为 `IntPtr`，但原生 `iIcon` 实际为 32 位 `int`；结构也没有显式指定与 `SHGetFileInfoW` 一致的 Unicode 字符集。
+**修订（交叉审阅）**：该结构不只是"x64 隐患"，它**现在就是错的**，本次是修复既有缺陷，
+提交信息与验收口径都应按行为修正对待。
+
+该结构映射 Windows `SHFILEINFO`。三处问题：
+
+1. 结构**没有任何 `StructLayout` 特性**，C# 默认 `CharSet.Ansi`，因此两个 `ByValTStr` 按 ANSI 计算宽度；
+   而 `EntryPoint = "SHGetFileInfo"` + `CharSet.Auto` 在 Windows 上解析到的是 **`SHGetFileInfoW`**。
+   ANSI/Unicode 当场不匹配。
+2. 因此 `Marshal.SizeOf` 当前为 **352**（x86），而原生 `SHFILEINFOW` 为 **692**。
+   `ImageUtilities.cs:178` 正是用 `Marshal.SizeOf(fileInfo)` 传 `cbFileInfo`，即**一直在传错值**。
+3. `IconIndex` 被声明为 `IntPtr`，但原生 `iIcon` 实际为 32 位 `int`。
+
+当前没有暴露为故障，是因为调用方 flags 为 `0x101 = SHGFI_ICON | SHGFI_SMALLICON`，
+**没有请求 `SHGFI_DISPLAYNAME` / `SHGFI_TYPENAME`**，那两个字符串缓冲区从未被写入；
+唯一被读取的 `IconHandle` 又恰好位于偏移 0。一旦 flags 变化即为缓冲区溢出。
 
 最小修复为：
 
 - 给结构增加 `StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)`。
 - 把 `IconIndex` 改为 `int`。
 - 把导入固定为 Unicode 入口/字符集。
-- 增加 `IconIndex`、`Attributes`、字符串数组的字段偏移和总尺寸测试。
+- 增加 `IconIndex`、`Attributes`、字符串数组的字段偏移和总尺寸测试（期望值见 §4.4）。
 
-该路径只使用返回的图标句柄，但错误布局不能带入 x64 版本。
+**实施约束**：修复后 `Marshal.SizeOf` 变为 692（x86）/ 696（x64），即 `cbFileInfo`
+从 352 改为 692——这是对原生调用的**可观察变更**，且在批次 1 仍为 x86 时就会生效。
+因此批次 1 必须**先记录图标当前是否正常**（截图或明确记录），否则事后无法区分
+"修好了"与"弄坏了"。
 
-### 4.3 本阶段不处理的声明
+### 4.3 可达但已论证安全的声明
 
-以下项目不属于已确认的 x64 阻塞，不在最小迁移中顺带重构：
+**修订（交叉审阅）**：初稿把"可达但安全"与"完全不可达"混在同一份延后清单里，
+风险等级不同，此处拆开。以下声明**在可达路径上**，经分析在 x64 下安全，本阶段可不改，
+但必须记录为"已审计"，不得被后续读者误认为漏审：
 
-- 未使用的 `ListViewColumnInfo` / `SendListViewColumnMessage`。
-- 未调用缩略图按钮方法的 `ThumbButton` 声明。
-- 参数实际恒为零或 32 位消息值、当前没有失败证据的其它 `SendMessage`/回调签名。
+- **`NativeMethods.EnumThreadWindowsCallback(IntPtr, int lParam)`**：`LPARAM` 应为指针宽。
+  调用点 `StateFieldInstance.cs:2244`（枚举 `#32770` 对话框）真实可达。x64 下无害——
+  两个参数均走寄存器（RCX/RDX），不涉及栈平衡；`CollectIfMatchingDialog` 不读 `lParam`，
+  调用方恒传 `IntPtr.Zero`。改为 `IntPtr` 只是一个词，建议顺手修正。
+- **`NativeMethods.SendTextBufferMessage(..., int wParam, ...)`**：`WPARAM` 应为指针宽。
+  用于 `WM_GETTEXT`，实参是 `StringBuilder.Capacity`（恒为正），x64 上 32 位值零扩展入寄存器，
+  取值正确。
+- **`EditableListView.cs:90` 的私有 `SendMessage(IntPtr, uint, int wParam, int lParam)`**：
+  该文件是仓库内**第二处 `DllImport`**，初稿未提及。调用点仅 `ScrollListView` 发
+  `LVM_SCROLL (4116)`。dx/dy 可为负，x64 下 32 位实参只做零扩展，但 Windows 侧按
+  `(int)wParam` 取低 32 位，负值仍正确还原；返回值被忽略。**判定安全，不改动。**
+
+### 4.4 布局期望值（跨位数）
+
+测试断言**必须写成 `IntPtr.Size` 的函数**，不得写死单一位数的常量——否则同一份断言在批次 1
+（x86）与批次 2（x64）不可能同时成立，为过门禁而改断言会使"锁定 ABI"失去意义。
+
+| 结构 | x86 尺寸 | x64 尺寸 | 关键字段偏移 x86 → x64 |
+|---|---|---|---|
+| `NativeNotificationHeader`（修复后） | 12 | 24 | `NotificationCode` 8 → 16 |
+| `ShellFileInfo`（修复后） | 692 | 696 | `IconIndex` 4 → 8；`Attributes` 8 → 12；`DisplayName` 12 → 16 |
+| `CopyDataStruct`（现状即正确） | 12 | 24 | `Data` 8 → 16 |
+| `HeaderHitTestInfo`（与位数无关） | 16 | 16 | `ItemIndex` 12 → 12 |
+
+`HeaderHitTestInfo` 位于列表头右键可达路径，本身无指针字段、天然安全；一并加断言是零成本，
+且能固化"该结构与位数无关"这一事实，避免后续误加指针字段。
+
+### 4.5 本阶段不处理的声明
+
+以下项目**不可达**，不属于已确认的 x64 阻塞，不在最小迁移中顺带重构：
+
+- 未使用的 `ListViewColumnInfo` / `SendListViewColumnMessage`（全仓零调用点，已复核）。
+- 未调用缩略图按钮方法的 `ThumbButton` 声明（`ThumbBar*` 全仓零调用点，已复核；
+  其 `ByValTStr` 同样是 ANSI/W 不匹配，但仅出现在未调用方法的签名中，
+  COM vtable 槽位顺序不受结构内部布局影响）。
 - File Dialog 与 Taskbar COM 接口的整理、重命名或抽象。
 
 这些声明可以在后续 interop 精简议题中单独审计，不能扩大本阶段行为面。
@@ -115,9 +176,14 @@ UINT     code
 ### 批次 1：锁定并修正可达 Win32 布局
 
 1. 对即将修改的结构和消费方法重新执行 GitNexus upstream impact。
-2. 增加 `NativeNotificationHeader`、`ShellFileInfo` 和已确认正确的 `CopyDataStruct` 布局测试。
-3. 修正两处可达结构及对应 P/Invoke。
-4. 在仍为 x86 的基线下运行完整门禁，确认没有改变现有列表头右键和文件图标行为。
+2. **在改动前记录文件图标当前行为基线**（§4.2 会改变 `cbFileInfo` 传值，事后无基线则无法归因）。
+3. 增加 `NativeNotificationHeader`、`ShellFileInfo`、`CopyDataStruct` 和 `HeaderHitTestInfo`
+   布局测试。断言按 §4.4 **参数化为 `IntPtr.Size` 的函数**，使同一份断言在批次 1 与批次 2 均成立。
+4. 修正两处可达结构及对应 P/Invoke；可顺带把 `EnumThreadWindowsCallback` 的 `int lParam`
+   改为 `IntPtr`（§4.3，一词改动、无行为变化）。
+5. 在仍为 x86 的基线下运行完整门禁，确认没有改变现有列表头右键和文件图标行为。
+   注意：x86 门禁只能证明**没有回归**，无法验证 x64 修复是否正确——后者由 §4.4 的
+   参数化断言与批次 2 的手工验证承担。
 
 建议提交：
 
@@ -158,7 +224,17 @@ docs: record x64 migration results
 - `src/MusicTag.Tests/MusicTag.Tests.csproj`
 - `src/MusicTag/musictag/SQLite.Interop.dll`
 - `src/MusicTag/MusicTagWinApp.Containers/NativeMethods.cs`
-- `scripts/Verify-Build.ps1`
+- `scripts/Verify-Build.ps1`（新增产物架构检查；顺带更新第 14 行已失效的
+  "外部 netfx/x64 宿主无法加载 x86 net8 程序集"注释）
+
+已审计、判定不需改动（记录在案，避免后续误认为漏审）：
+
+- `src/MusicTag/MusicTagWinApp.Roles/EditableListView.cs`——仓库内第二处 `DllImport`，
+  分析见 §4.3。
+- `src/MusicTag/app.manifest`——无 `processorArchitecture` 依赖项声明。
+- `src/MusicTag/musictag/MusicTag.exe.config`——仅含 net8 忽略的 netfx 遗留节。
+- 全部 COM 接口（`IFileDialog` / `IFileOpenDialog` / `IShellItem` / `IShellItemArray` /
+  `ITaskbarList4` / `FileDialogFilterSpec`）——指针宽参数均已是 `IntPtr` 或接口类型。
 
 测试与文档：
 
@@ -182,6 +258,9 @@ docs: record x64 migration results
 - 本阶段没有 schema migration；x64 版本写入后的数据库仍可由原 x86 版本读取。
 - 程序设置键、JSON、资源名称、`SearchSource` 序号、TagLib 写入策略和在线 Provider 合同均不变。
 - framework-dependent 部署模式保持不变，但运行时架构前提会从 x86 Desktop Runtime 切换为 .NET 8 Windows Desktop Runtime x64。
+  该前提变化**必须写进发布说明**：只装了 x86 Desktop Runtime 的用户升级后会直接启动失败。
+- 用户设置不受影响：`XmlSettingsProvider` 把设置写在 exe 同目录的 `MusicTag.config`，
+  不是带 evidence 哈希的 `%LOCALAPPDATA%` `user.config`，位数切换不改变该路径（已复核）。
 - 回滚必须同时还原两个项目的 `PlatformTarget` 和 x86 `SQLite.Interop.dll`，不能只回滚其中一项。
 - 因为数据库格式不变，回滚不需要转换或删除用户数据库。
 
@@ -201,25 +280,32 @@ codegraph sync
 
 新增的 x64 专项断言至少覆盖：
 
-- 主测试进程为 64 位。
-- `MusicTag.exe`、`MusicTag.Tests.exe` 和原生 `SQLite.Interop.dll` 为 AMD64。
-- `System.Data.SQLite.dll` 与 `SQLite.Interop.dll` 文件版本均为 `1.0.113.0`。
-- x64 进程能够打开 SQLite、执行查询并正常释放连接。
-- `NMHDR` 和 `SHFILEINFO` 关键字段偏移与 Windows ABI 一致。
-- 现有 characterization 全部继续通过。
-- Release 启动后保持存活且没有 `UnhandledException` / `ThreadException` 日志。
+| 断言 | 自哪个批次起生效 |
+|---|---|
+| `NMHDR` / `SHFILEINFO` / `COPYDATASTRUCT` / `HDHITTESTINFO` 布局与 §4.4 一致 | 批次 1（参数化，两个批次都要过） |
+| 现有 characterization 全部继续通过 | 批次 1 |
+| 主测试进程为 64 位（`Environment.Is64BitProcess`） | **批次 2**（批次 1 仍为 x86，此断言必然失败） |
+| `MusicTag.exe`、`MusicTag.Tests.exe` 和原生 `SQLite.Interop.dll` 为 AMD64 | **批次 2** |
+| `System.Data.SQLite.dll` 与 `SQLite.Interop.dll` 文件版本均为 `1.0.113.0` | **批次 2** |
+| x64 进程能够打开 SQLite、执行查询并正常释放连接 | **批次 2** |
+| Release 启动后保持存活且没有 `UnhandledException` / `ThreadException` 日志 | 批次 1 |
+
+批次归属必须照此执行：把"进程为 64 位"一类断言写进批次 1 会直接卡死门禁。
 
 ### 8.2 重点手工验证
 
 1. 使用仓库现有数据库启动，打开标签历史窗口并读取历史。
 2. 保存标签后查看/恢复历史；验证事务提交和回滚。
 3. 重命名、删除、自动匹配和清空历史，确认数据库路径同步与 `VACUUM` 正常。
-4. 加载带文件图标的列表，验证图标获取、释放和重复刷新。
+4. 加载带文件图标的列表，验证图标获取、释放和重复刷新，并**与批次 1 记录的基线逐项比对**
+   （§4.2 改变了 `cbFileInfo` 传值）。
 5. 右键列表头，验证列菜单命中位置正常。
 6. 启动第二实例并传入文件参数，验证 `WM_COPYDATA` 转发。
-7. 验证文件/目录对话框和任务栏进度。
-8. 在 100% 与 150% DPI 双屏环境执行副屏首启、跨屏拖动和往返；组合标签源与歌词源窗口不得出现新的缩放问题。
-9. 对代表性 MP3/FLAC 执行实体标签写入和回读。
+7. 若需覆盖升级期并存场景：在旧 x86 版仍在运行时启动新 x64 版并带文件参数，
+   验证跨位数单实例转发；若不打算支持，应在发布说明中声明为非目标。
+8. 验证文件/目录对话框和任务栏进度。
+9. 在 100% 与 150% DPI 双屏环境执行副屏首启、跨屏拖动和往返；组合标签源与歌词源窗口不得出现新的缩放问题。
+10. 对代表性 MP3/FLAC 执行实体标签写入和回读。
 
 ### 8.3 打包检查
 
@@ -264,3 +350,50 @@ codegraph sync
 - 已确认的 Win32 结构布局在 x64 下符合 ABI。
 - 完整自动门禁和重点手工验证通过。
 - 没有混入 SQLite 精简、Provider 替换、版本升级、输出目录调整或部署模型变化。
+
+## 12. 独立复核记录（2026-08-03）
+
+本节记录交叉审阅时**实际执行的核验**，用于避免后续重复求证或重新争论已定事实。
+
+### 12.1 已独立验证为真
+
+| 方案声明 | 验证方式 | 结果 |
+|---|---|---|
+| 仓库两个 SQLite 文件与官方包逐字节一致 | 下载 `System.Data.SQLite.Core 1.0.113.0`，逐条目算 SHA-256 | 托管件 = `lib/net46/`，原生件 = `build/net46/x86/`，**均吻合** |
+| x64 interop SHA-256 `1D5346…A105` | 同一包 `build/net46/x64/SQLite.Interop.dll` | **逐位吻合**，且确为 `AMD64 / PE32+` |
+| 本地托管程序集均为 ILOnly | 解析 COR20 header 的 flags 位 | 8 个全部 `ILONLY`，**无一个带 `32BITREQUIRED`**，可载入 64 位进程 |
+| `SQLite.Interop.dll` 是唯一原生库 | 按有无 COR20 数据目录区分托管/原生 | ✓ `musictag/` 下仅此一个原生 PE |
+| `NativeNotificationHeader` 在可达路径 | 追调用点 | ✓ `HeaderAwareListView.cs:55` 的 `WM_NOTIFY` 实时读取 |
+| `ListViewColumnInfo`、`ThumbButton` 不可达 | 全仓搜引用 | ✓ 均零调用点 |
+| `CopyDataStruct` 布局已正确 | 手算 x64 对齐 | ✓ 8+4+pad4+8 = 24，与 `COPYDATASTRUCT` 一致 |
+
+### 12.2 已排查、确认不构成风险
+
+以下是 x64 迁移的常见故障源，本仓库均不适用，无需为其增加工作项：
+
+- **`app.manifest` 无 `processorArchitecture` 硬编码**（老程序最常见的 x64 坑）。
+- **全仓零注册表访问** → 不存在 `Wow6432Node` 重定向行为差异。
+- **无 `System32` / `Program Files` 路径硬编码** → 不存在 WOW64 文件系统重定向差异。
+- **全仓零 `IntPtr.ToInt32()`** → 不存在句柄截断的 `OverflowException`。
+- **全仓零 `m.WParam` / `m.LParam` 直接访问**；4 个 `WndProc` 覆写只比较 `m.Msg`；
+  `Marshal.PtrToStructure` / `GetLParam` 全仓仅 2 处，均已在 §4 覆盖。
+- **无 `unsafe` / `stackalloc` / `fixed` 代码**。
+- **设置文件路径不变**（详见 §7）。
+- **§2.3 探针遗留的中间产物无害**：探针未覆盖 `BaseIntermediateOutputPath`，
+  致 `obj/Release/net8.0-windows/` 留下 AMD64 中间件而 csproj 仍为 x86。
+  已实测：`dotnet build -c Release` 会正确重建并输出 I386，**不需要额外的 obj 清理步骤**。
+  （复现探针时建议一并覆盖 `BaseIntermediateOutputPath`，以免读者困惑。）
+- **`MusicTag.csproj` 中 CS0649 注释提到的 `NativePictureEntry` 已不存在**，
+  是过期注释而非漏审的第三个结构。
+
+### 12.3 复核带来的方案修订
+
+1. §4.2：`ShellFileInfo` 重新定性为**既有缺陷修复**（ANSI/W 不匹配 + `cbFileInfo` 传 352 而非 692），
+   并要求批次 1 先取图标行为基线。
+2. §4.3：拆出"可达但已论证安全"一类，点名 `EnumThreadWindowsCallback`、
+   `SendTextBufferMessage` 和此前完全未提及的 `EditableListView.cs` 第二处 `DllImport`。
+3. §4.4：新增跨位数布局期望值表，要求断言参数化为 `IntPtr.Size` 的函数——
+   否则批次 1（x86）与批次 2（x64）的断言不可能同时成立。
+4. §8.1：门禁按批次归属重排，避免把"进程为 64 位"写进仍为 x86 的批次 1。
+5. §6：新增"已审计、判定不需改动"清单。
+6. §7、§8.2：补运行时前置条件的发布说明要求，以及跨位数 `WM_COPYDATA` 的处置选择。
