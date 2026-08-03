@@ -2,8 +2,9 @@
 
 - 日期：2026-08-03
 - 分支：`develop-net8`
-- 状态：方案已落盘并经交叉审阅修订，待实施授权
+- 状态：代码实施与自动门禁完成（提交 `1cecade`、`a654b10`）；目标机手工验收待完成
 - 范围：只完成 x64 迁移；不在本阶段精简、替换或移除 SQLite
+- 实施报告：`docs/X64_MIGRATION_IMPLEMENTATION_REPORT_2026-08.md`
 
 本文已并入 Claude 的交叉审阅结论：§4.2、§4.3、§4.4、§5 批次 1、§6、§8.1、§8.2 有实质修订，
 §12 记录独立复核的核验项与排除项。修订处均在正文标注，未标注的章节保持初稿判断。
@@ -25,18 +26,18 @@
 
 本阶段也不把现有本地 `Reference` 改为 `PackageReference`。`net8.0-windows` 从该 NuGet 包解析时会优先选择 `netstandard2.1` 托管资产，而不是仓库当前逐字节匹配的 `net46` 程序集；这样会同时改变托管 Provider，超出“只替换架构配对”的最小边界。
 
-## 2. 已确认的当前状态
+## 2. 实施前已确认的基线
 
 ### 2.1 架构约束
 
-- `src/MusicTag/MusicTag.csproj` 和 `src/MusicTag.Tests/MusicTag.Tests.csproj` 当前均为 `PlatformTarget=x86`。
+- 实施前，`src/MusicTag/MusicTag.csproj` 和 `src/MusicTag.Tests/MusicTag.Tests.csproj` 均为 `PlatformTarget=x86`；实施后状态见实施报告。
 - 仓库内本地 DLL 中，`TagLibSharp`、`UtfUnknown`、`Newtonsoft.Json`、`Fkosoft.FontAwesome4`、`System.Data.SQLite` 和三个 satellite resource DLL 都是 `ILOnly` 托管程序集（已按 COR20 标志位复核，无一个带 `32BITREQUIRED`，见 §12.1）。
 - 唯一直接把进程锁定在 x86 的运行时文件是原生 `SQLite.Interop.dll`（已复核，见 §12.1）。
 - 标准 Windows `user32`、`shell32`、`uxtheme` P/Invoke 和系统 COM 组件同时支持 x64，但其托管结构体字段宽度必须正确。
 
 ### 2.2 SQLite 二进制来源
 
-仓库现有文件已经与官方 NuGet 包逐字节核对（交叉审阅时独立复算过一次，见 §12.1）：
+仓库实施前的两个文件已经与官方 NuGet 包逐字节核对（交叉审阅时独立复算过一次，见 §12.1）：
 
 | 仓库文件 | 官方 `System.Data.SQLite.Core 1.0.113` 条目 | 结果 |
 |---|---|---|
@@ -345,6 +346,8 @@ codegraph sync
 这些讨论必须先收集实际历史功能使用需求、数据保留要求、包体积和部署目标，再单独形成设计文档。不得反向扩大本最小迁移方案。
 
 ## 11. 验收标准
+
+截至 2026-08-03，自动门禁相关条目已经通过；真实历史数据库、标签写回、双屏 DPI 等手工条目仍待目标机验证，详见实施报告 §6。
 
 - 标准 Debug/Release 构建产生真正的 AMD64 主程序和测试宿主。
 - 官方同版本 x64 `SQLite.Interop.dll` 是包内唯一 SQLite 原生库。

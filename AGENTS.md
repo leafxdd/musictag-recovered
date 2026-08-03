@@ -4,9 +4,9 @@
 
 This repository restores and maintains the MusicTag Windows WinForms desktop app from recovered/decompiled sources. Preserve observable behavior by default and make changes in small, reviewable batches.
 
-Always inspect `git branch --show-current`, the project files, and `scripts/Verify-Build.ps1` before assuming a framework or workflow. At the 2026-07-11 initialization point, the active checkout is `develop-net8`:
+Always inspect `git branch --show-current`, the project files, and `scripts/Verify-Build.ps1` before assuming a framework or workflow. As of the 2026-08-03 x64 migration, the active checkout is `develop-net8`:
 
-- `develop-net8` targets `net8.0-windows` x86 and contains the Per-Monitor V2 DPI work plus the ID3 write-policy options.
+- `develop-net8` targets `net8.0-windows` x64 and contains the Per-Monitor V2 DPI work plus the ID3 write-policy options.
 - `develop` remains the separate .NET Framework 4.8.1 development line. Do not casually merge framework-specific fixes between the two branches.
 - `main` is a curated orphan release snapshot, not the normal development branch. Never push ordinary development history to it.
 
@@ -17,11 +17,11 @@ The root `AGENTS.md` and `CLAUDE.md` are the committed repository guidance. `.cl
 Open the repository through `MusicTag.sln`. It currently contains:
 
 - `src/MusicTag/MusicTag.csproj`: the WinForms application.
-- `src/MusicTag.Tests/MusicTag.Tests.csproj`: an x86 console characterization-test harness with hand-written assertions and no third-party test framework.
+- `src/MusicTag.Tests/MusicTag.Tests.csproj`: an x64 console characterization-test harness with hand-written assertions and no third-party test framework.
 
 Recovered namespaces under `src/MusicTag/` do not reliably describe logical ownership. WinForms UI, online providers, serialization, and interop types are scattered across legacy namespace/folder boundaries. Locate code by type or symbol, not by guessing a folder.
 
-Runtime assets in `src/MusicTag/musictag/` are required and copied by the project, including managed dependencies, SQLite interop/data files, satellite resources, and fonts. Do not remove or replace them without verifying startup, resource loading, tag I/O, and packaging.
+Runtime assets in `src/MusicTag/musictag/` are required and copied by the project, including managed dependencies, SQLite interop/data files, satellite resources, and fonts. The managed `System.Data.SQLite.dll 1.0.113.0` is paired with the official x64 `SQLite.Interop.dll` of the same version; a bitness or version mismatch fails at runtime. Do not remove or replace these assets without verifying startup, resource loading, tag I/O, and packaging.
 
 Maintenance records live in `docs/`; build and investigation output belongs in `artifacts/`. Some documentation describes the `develop`/net481 line and can be stale for `develop-net8`. When facts conflict, the active `.csproj`, source, verification script, and current Git history win.
 
@@ -44,7 +44,7 @@ The standard local regression gate is:
 .\scripts\Verify-Build.ps1 -RunSmokeTests
 ```
 
-On `develop-net8`, this builds Debug and Release, runs the characterization executable, constructs key dialogs through the test suite, launches the Release app, and scans startup logs for fatal exceptions. The expected application output is:
+On `develop-net8`, this builds Debug and Release, verifies the main/test/SQLite native PEs are AMD64, runs the characterization executable (including a real SQLite open/query), constructs key dialogs through the test suite, launches the Release app, and scans startup logs for fatal exceptions. The expected application output is:
 
 ```text
 src/MusicTag/bin/Release/net8.0-windows/MusicTag.exe

@@ -3,12 +3,17 @@
 ## Repository State
 
 `MusicTag` is a recovered Windows WinForms application. The active checkout is
-`develop-net8`, targeting `net8.0-windows` x86 through `MusicTag.sln`:
+`develop-net8`, targeting `net8.0-windows` x64 through `MusicTag.sln`:
 
 - `src/MusicTag/MusicTag.csproj` is the application.
-- `src/MusicTag.Tests/MusicTag.Tests.csproj` is the x86 characterization harness.
+- `src/MusicTag.Tests/MusicTag.Tests.csproj` is the x64 characterization harness.
 - `scripts/Verify-Build.ps1` is the normal build and smoke-test entry point.
 - Runtime files under `src/MusicTag/musictag/` are required application assets.
+
+The existing `System.Data.SQLite.dll 1.0.113.0` remains paired with the official x64
+`SQLite.Interop.dll` of the same version. Do not change only one half of that pair. The
+solution configuration is still named `Any CPU`, but both projects hard-target x64 and
+the verification script rejects non-AMD64 app hosts or native interop output.
 
 Preserve observable behavior by default. Names in JSON, settings, resources, Win32
 interop signatures, enum ordinals, and public method signatures are stable contracts.
