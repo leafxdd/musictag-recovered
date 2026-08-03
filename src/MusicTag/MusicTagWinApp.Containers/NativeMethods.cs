@@ -8,13 +8,13 @@ namespace MusicTagWinApp.Containers;
 
 internal static class NativeMethods
 {
-	public delegate bool EnumThreadWindowsCallback(IntPtr windowHandle, int lParam);
+	public delegate bool EnumThreadWindowsCallback(IntPtr windowHandle, IntPtr lParam);
 
 	public struct NativeNotificationHeader
 	{
 		public IntPtr WindowHandle;
 
-		public int ControlId;
+		public UIntPtr ControlId;
 
 		public int NotificationCode;
 	}
@@ -28,11 +28,12 @@ internal static class NativeMethods
 		public int ItemIndex;
 	}
 
+	[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
 	public struct ShellFileInfo
 	{
 		public IntPtr IconHandle;
 
-		public IntPtr IconIndex;
+		public int IconIndex;
 
 		public uint Attributes;
 
@@ -138,7 +139,7 @@ internal static class NativeMethods
 	[DllImport("user32.dll", EntryPoint = "DestroyIcon")]
 	public static extern bool DestroyIcon(IntPtr iconHandle);
 
-	[DllImport("shell32.dll", CharSet = CharSet.Auto, EntryPoint = "SHGetFileInfo")]
+	[DllImport("shell32.dll", CharSet = CharSet.Unicode, EntryPoint = "SHGetFileInfoW", ExactSpelling = true)]
 	public static extern IntPtr GetShellFileInfo(string path, uint fileAttributes, ref ShellFileInfo fileInfo, uint fileInfoSize, uint flags);
 
 	[DllImport("shell32.dll", CharSet = CharSet.Unicode, EntryPoint = "SHCreateItemFromParsingName", SetLastError = true)]

@@ -2244,7 +2244,7 @@ internal partial class StateFieldInstance : Form
 			NativeMethods.EnumThreadWindows(thread.Id, enumThreadWindowsCallback ?? (enumThreadWindowsCallback = CollectIfMatchingDialog), IntPtr.Zero);
 		}
 
-		internal bool CollectIfMatchingDialog(IntPtr windowHandle, int lParam)
+		internal bool CollectIfMatchingDialog(IntPtr windowHandle, IntPtr lParam)
 		{
 			NativeMethods.GetClassName(windowHandle, ClassNameBuffer, ClassNameBuffer.Capacity);
 			if (ClassNameBuffer.ToString() != "#32770")

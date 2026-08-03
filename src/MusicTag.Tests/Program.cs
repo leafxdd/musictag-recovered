@@ -82,6 +82,7 @@ internal static class Program
 		tests.AddRange(CoverDownloadCoreCharacterization.All());
 		tests.AddRange(CoverImageProcessorCharacterization.All());
 		tests.AddRange(AppIconCharacterization.All());
+		tests.AddRange(NativeInteropLayoutCharacterization.All());
 		tests.AddRange(TrackLinkInputCharacterization.All());
 		tests.AddRange(ChineseTextConverterCharacterization.All());
 			tests.AddRange(DialogConstructionSmoke.All());
