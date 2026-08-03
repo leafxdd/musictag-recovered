@@ -38,7 +38,7 @@
 
 仓库现有文件已经与官方 NuGet 包逐字节核对（交叉审阅时独立复算过一次，见 §12.1）：
 
-| 仓库文件 | 官方 `System.Data.SQLite.Core 1.0.113.0` 条目 | 结果 |
+| 仓库文件 | 官方 `System.Data.SQLite.Core 1.0.113` 条目 | 结果 |
 |---|---|---|
 | `System.Data.SQLite.dll` | `lib/net46/System.Data.SQLite.dll` | SHA-256 完全一致 |
 | 当前 `SQLite.Interop.dll` | `build/net46/x86/SQLite.Interop.dll` | SHA-256 完全一致 |
@@ -48,9 +48,9 @@
 - PE 架构：`AMD64 / PE32+`
 - 文件版本：`1.0.113.0`
 - SHA-256：`1D534617B38323027A64579A581258A55C3986F5B4B15297126C8A4CEF5AA105`
-- 来源：<https://www.nuget.org/packages/System.Data.SQLite.Core/1.0.113.0>
-  （包的规范版本号是 `1.0.113.0`；`api/v2/package/System.Data.SQLite.Core/1.0.113`
-  与 `.../1.0.113.0` 均可下载到同一文件，已实测。）
+- 来源：<https://www.nuget.org/packages/System.Data.SQLite.Core/1.0.113>
+  （NuGet V3 索引中的归一化包版本是 `1.0.113`；包内程序集与原生文件版本为
+  `1.0.113.0`。NuGet 下载端点可接受带尾随 `.0` 的等价版本写法，但文档统一使用索引版本。）
 
 ### 2.3 隔离 x64 探针
 
@@ -93,7 +93,7 @@ UINT     code
 
 当前 `ControlId` 使用 32 位 `int`。在 x64 中 `UINT_PTR` 必须为 8 字节，当前托管结构只有 16 字节，而正确的 x64 `NMHDR` 应为 24 字节。该结构位于列表头右键通知的可达路径（`HeaderAwareListView.cs:55` 的 `WM_NOTIFY` 处理），必须改为指针宽类型并增加偏移/尺寸测试（期望值见 §4.4）。
 
-改为 `IntPtr` 在两个位数下都正确（x86 = 12 字节、x64 = 24 字节，均与原生一致），
+改为 `UIntPtr` 在两个位数下都正确（x86 = 12 字节、x64 = 24 字节，均与原生一致），
 因此批次 1 在 x86 基线上落地该修改是安全的。`ControlId` 本身无消费方，仅 `NotificationCode` 被读取。
 
 ### 4.2 `ShellFileInfo`
@@ -112,7 +112,8 @@ UINT     code
 
 当前没有暴露为故障，是因为调用方 flags 为 `0x101 = SHGFI_ICON | SHGFI_SMALLICON`，
 **没有请求 `SHGFI_DISPLAYNAME` / `SHGFI_TYPENAME`**，那两个字符串缓冲区从未被写入；
-唯一被读取的 `IconHandle` 又恰好位于偏移 0。一旦 flags 变化即为缓冲区溢出。
+唯一被读取的 `IconHandle` 又恰好位于偏移 0。若以后请求字符串字段，错误的 `cbFileInfo`
+可能导致调用失败、返回不完整，或在不遵守长度的实现路径上产生越界写入风险；不能继续依赖当前 flags 掩盖布局错误。
 
 最小修复为：
 
@@ -301,11 +302,13 @@ codegraph sync
    （§4.2 改变了 `cbFileInfo` 传值）。
 5. 右键列表头，验证列菜单命中位置正常。
 6. 启动第二实例并传入文件参数，验证 `WM_COPYDATA` 转发。
-7. 若需覆盖升级期并存场景：在旧 x86 版仍在运行时启动新 x64 版并带文件参数，
-   验证跨位数单实例转发；若不打算支持，应在发布说明中声明为非目标。
-8. 验证文件/目录对话框和任务栏进度。
-9. 在 100% 与 150% DPI 双屏环境执行副屏首启、跨屏拖动和往返；组合标签源与歌词源窗口不得出现新的缩放问题。
-10. 对代表性 MP3/FLAC 执行实体标签写入和回读。
+7. 验证文件/目录对话框和任务栏进度。
+8. 在 100% 与 150% DPI 双屏环境执行副屏首启、跨屏拖动和往返；组合标签源与歌词源窗口不得出现新的缩放问题。
+9. 对代表性 MP3/FLAC 执行实体标签写入和回读。
+
+旧 x86 版与新 x64 版的并存转发不在本阶段范围：Windows 会锁定正在运行的 exe，不能在同一路径
+原位替换；从不同路径启动时，现有 `IsSameExecutable` 又会有意把它们视为两个独立实例。
+升级前应退出旧进程，不能把侧载目录之间的跨位数通信写成产品承诺。
 
 ### 8.3 打包检查
 
@@ -359,7 +362,7 @@ codegraph sync
 
 | 方案声明 | 验证方式 | 结果 |
 |---|---|---|
-| 仓库两个 SQLite 文件与官方包逐字节一致 | 下载 `System.Data.SQLite.Core 1.0.113.0`，逐条目算 SHA-256 | 托管件 = `lib/net46/`，原生件 = `build/net46/x86/`，**均吻合** |
+| 仓库两个 SQLite 文件与官方包逐字节一致 | 下载 `System.Data.SQLite.Core 1.0.113`，逐条目算 SHA-256 | 托管件 = `lib/net46/`，原生件 = `build/net46/x86/`，**均吻合** |
 | x64 interop SHA-256 `1D5346…A105` | 同一包 `build/net46/x64/SQLite.Interop.dll` | **逐位吻合**，且确为 `AMD64 / PE32+` |
 | 本地托管程序集均为 ILOnly | 解析 COR20 header 的 flags 位 | 8 个全部 `ILONLY`，**无一个带 `32BITREQUIRED`**，可载入 64 位进程 |
 | `SQLite.Interop.dll` 是唯一原生库 | 按有无 COR20 数据目录区分托管/原生 | ✓ `musictag/` 下仅此一个原生 PE |
