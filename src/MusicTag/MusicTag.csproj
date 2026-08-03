@@ -9,8 +9,8 @@
          WM_DPICHANGED 缩放属框架缺陷(两轮实测均无法在 4.8 上修复),.NET 8 已系统性修复。
          回退 = 还原本文件与 MusicTag.Tests.csproj,并按各文件 "net8 迁移" 注释恢复代码。 -->
     <TargetFramework>net8.0-windows</TargetFramework>
-    <!-- net8:Prefer32Bit 是 netfx 语义;x86 硬约束来自 SQLite.Interop.dll(x86 原生库)。 -->
-    <PlatformTarget>x86</PlatformTarget>
+    <!-- net8:x64 硬约束与同版本官方 SQLite.Interop.dll(x64 原生库)配套。 -->
+    <PlatformTarget>x64</PlatformTarget>
     <!-- net8:BinaryFormatter 默认禁用(net9 起整体移除)。ChineseTextConverter 反序列化内嵌
          简繁字库资源 MappingChars(tsmap/tcmap,构建期内嵌、非用户输入)仍依赖它,显式启用。
          resx 内的位图/图标资源同样经 BinaryFormatter(MSB3825),属同一知情决定,压掉逐条警告。 -->

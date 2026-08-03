@@ -3,16 +3,16 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWindowsForms>True</UseWindowsForms>
-    <PlatformTarget>x86</PlatformTarget>
+    <PlatformTarget>x64</PlatformTarget>
     <AssemblyName>MusicTag.Tests</AssemblyName>
     <RootNamespace>MusicTag.Tests</RootNamespace>
     <LangVersion>latest</LangVersion>
     <!-- net8:ChineseTextConverter 用例经 BinaryFormatter 反序列化简繁字库(与主工程同一开关)。 -->
     <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
-    <!-- characterization 测试宿主：独立 x86 console exe，自写极简断言（零 NuGet，
+    <!-- characterization 测试宿主：独立 x64 console exe，自写极简断言（零测试框架，
          保持主项目零-NuGet 纯净度）。经 InternalsVisibleTo 访问主程序集 internal 类型。
          net8 迁移（实验分支）：随主工程 net481 -> net8.0-windows；System.Net.Http 由
-         共享框架隐式提供（显式 Reference 已删），Prefer32Bit（netfx 语义）改 PlatformTarget=x86。 -->
+         共享框架隐式提供（显式 Reference 已删），PlatformTarget 与主程序一并固定为 x64。 -->
   </PropertyGroup>
   <ItemGroup>
     <!-- TagLibSharp：163-key COMM round-trip 测试需直接构造 ID3v2 CommentsFrame 预置 fixture(与 MusicTag.csproj 同一 dll)。 -->
@@ -22,6 +22,9 @@
     <!-- Newtonsoft.Json：GetFirstField / provider 解码器 characterization 需直接构造 JObject/JToken(与 MusicTag.csproj 同一 dll)。 -->
     <Reference Include="Newtonsoft.Json">
       <HintPath>..\MusicTag\musictag\Newtonsoft.Json.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Data.SQLite">
+      <HintPath>..\MusicTag\musictag\System.Data.SQLite.dll</HintPath>
     </Reference>
     <ProjectReference Include="..\MusicTag\MusicTag.csproj" />
   </ItemGroup>

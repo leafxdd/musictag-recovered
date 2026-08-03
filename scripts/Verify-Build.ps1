@@ -10,8 +10,8 @@ $ErrorActionPreference = 'Stop'
 # net8 迁移(experiment/per-monitor-dpi-v2):
 #   - msbuild.exe -> dotnet build(net8.0-windows SDK 项目;dotnet SDK 8+)。
 #   - 输出路径 net481 -> net8.0-windows。
-#   - 原两个"外部 PowerShell 反射构造对话框"冒烟并入 characterization 套件
-#     (Tests/DialogConstructionSmoke.cs)——外部 netfx/x64 宿主无法加载 x86 net8 程序集。
+#   - 原两个"外部 PowerShell 反射构造对话框"冒烟并入 characterization 套件，
+#     现在与主程序在同一 x64 net8 测试宿主内执行。
 #   - 启动冒烟新增异常日志扫描:net8 首启曾出现"进程活着但挂在未处理异常弹窗"的假阳性
 #     (FontAwesome 缺 System.Runtime.Caching),仅凭 StayedAlive 判定不可靠。
 
@@ -53,6 +53,56 @@ if (-not $stayedAlive) { exit 1 }
     }
 }
 
+function Get-PeMachine {
+    param([Parameter(Mandatory = $true)][string] $Path)
+
+    $resolvedPath = (Resolve-Path -LiteralPath $Path).Path
+    $stream = [System.IO.File]::OpenRead($resolvedPath)
+    try {
+        $reader = New-Object System.IO.BinaryReader($stream)
+        try {
+            if ($reader.ReadUInt16() -ne 0x5A4D) {
+                throw "'$resolvedPath' is not an MZ executable."
+            }
+            $stream.Position = 0x3C
+            $peOffset = $reader.ReadInt32()
+            if ($peOffset -lt 0 -or $peOffset -gt ($stream.Length - 6)) {
+                throw "'$resolvedPath' has an invalid PE header offset."
+            }
+            $stream.Position = $peOffset
+            if ($reader.ReadUInt32() -ne 0x00004550) {
+                throw "'$resolvedPath' has an invalid PE signature."
+            }
+            return [int]$reader.ReadUInt16()
+        }
+        finally {
+            $reader.Dispose()
+        }
+    }
+    finally {
+        $stream.Dispose()
+    }
+}
+
+function Assert-Amd64Pe {
+    param([Parameter(Mandatory = $true)][string] $Path)
+
+    $machine = Get-PeMachine -Path $Path
+    if ($machine -ne 0x8664) {
+        throw "Expected AMD64 PE '$Path', got machine 0x$($machine.ToString('X4'))."
+    }
+    Write-Host "AMD64: $Path"
+}
+
+function Invoke-ArchitectureChecks {
+    param([Parameter(Mandatory = $true)][string] $Configuration)
+
+    $targetFramework = 'net8.0-windows'
+    Assert-Amd64Pe -Path "src\MusicTag\bin\$Configuration\$targetFramework\MusicTag.exe"
+    Assert-Amd64Pe -Path "src\MusicTag.Tests\bin\$Configuration\$targetFramework\MusicTag.Tests.exe"
+    Assert-Amd64Pe -Path "src\MusicTag\bin\$Configuration\$targetFramework\SQLite.Interop.dll"
+}
+
 New-Item -ItemType Directory -Force -Path $ArtifactsDir | Out-Null
 
 foreach ($configuration in $Configurations) {
@@ -61,6 +111,7 @@ foreach ($configuration in $Configurations) {
     if ($LASTEXITCODE -ne 0) {
         throw "dotnet build failed for configuration '$configuration'. See '$logPath'."
     }
+    Invoke-ArchitectureChecks -Configuration $configuration
 }
 
 if ($RunSmokeTests) {
