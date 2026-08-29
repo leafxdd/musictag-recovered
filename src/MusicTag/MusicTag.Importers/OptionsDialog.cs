@@ -808,6 +808,19 @@ internal class OptionsDialog : Form
 			return;
 		}
 
+		string qqCookie = qqCookieTextBox.Text.Trim();
+		QqMusicCookieValidationResult qqCookieValidation = QqMusicCookieValidator.Validate(qqCookie);
+		if (!qqCookieValidation.IsValid)
+		{
+			DialogService.ShowErrorMessage(UiText.Get(
+				"QQ Music cookie is missing required fields: " + string.Join(", ", qqCookieValidation.MissingFields),
+				"QQ 音乐 Cookie 缺少必要字段: " + string.Join(", ", qqCookieValidation.MissingFields),
+				"QQ 音樂 Cookie 缺少必要欄位: " + string.Join(", ", qqCookieValidation.MissingFields)));
+			optionsTreeView.SelectedNode = optionsTreeView.Nodes["Network"];
+			qqCookieTextBox.Focus();
+			return;
+		}
+
 		restrictedExtensionsTextBox.Text = string.Join(";", restrictedExtensions) + ";";
 
 		Dictionary<string, string> previousExtensions = new Dictionary<string, string>(StateFieldInstance.EnabledTagTypesByExtension);

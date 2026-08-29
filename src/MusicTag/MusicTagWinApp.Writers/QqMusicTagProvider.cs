@@ -467,10 +467,10 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 	private static string BuildSearchRequestBody(string query, int maxResults)
 	{
 		JObject request = JObject.Parse(string.Format(searchRequestTemplate, "req_0", TextEncodingService.JavaScriptStringEncode(query), maxResults));
-		Dictionary<string, string> cookies = ParseCookieHeader(Settings.Default.QQMusic_Cookie);
-		string uin = GetCookieValue(cookies, "loginUin", "uin", "p_uin", "euin", "p_euin");
-		string authst = GetCookieValue(cookies, "authst", "qm_keyst", "qqmusic_key", "qqmusic_key_new");
-		string loginType = GetCookieValue(cookies, "tmeLoginType");
+		Dictionary<string, string> cookies = QqMusicCookieValidator.ParseCookieHeader(Settings.Default.QQMusic_Cookie);
+		string uin = QqMusicCookieValidator.GetCookieValue(cookies, "loginUin", "uin", "p_uin", "euin", "p_euin");
+		string authst = QqMusicCookieValidator.GetCookieValue(cookies, "authst", "qm_keyst", "qqmusic_key", "qqmusic_key_new");
+		string loginType = QqMusicCookieValidator.GetCookieValue(cookies, "tmeLoginType");
 		if (uin.Length == 0 && authst.Length == 0 && loginType.Length == 0)
 		{
 			return request.ToString(Formatting.None);
@@ -497,43 +497,6 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 		}
 		request["comm"] = comm;
 		return request.ToString(Formatting.None);
-	}
-
-	private static Dictionary<string, string> ParseCookieHeader(string cookieHeader)
-	{
-		Dictionary<string, string> cookies = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-		if (string.IsNullOrWhiteSpace(cookieHeader))
-		{
-			return cookies;
-		}
-
-		foreach (string segment in cookieHeader.Split(';'))
-		{
-			int separator = segment.IndexOf('=');
-			if (separator <= 0)
-			{
-				continue;
-			}
-			string name = segment.Substring(0, separator).Trim();
-			string value = segment.Substring(separator + 1).Trim();
-			if (name.Length > 0 && value.Length > 0)
-			{
-				cookies[name] = value.Trim('"');
-			}
-		}
-		return cookies;
-	}
-
-	private static string GetCookieValue(Dictionary<string, string> cookies, params string[] names)
-	{
-		foreach (string name in names)
-		{
-			if (cookies.TryGetValue(name, out string value) && !string.IsNullOrWhiteSpace(value))
-			{
-				return value.Trim();
-			}
-		}
-		return "";
 	}
 
 	private static string BuildQrcLyricRequestBody(QqSongInfo songInfo)

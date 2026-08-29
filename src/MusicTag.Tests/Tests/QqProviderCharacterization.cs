@@ -117,6 +117,35 @@ internal static class QqProviderCharacterization
 
 	public static IEnumerable<(string, Action)> All()
 	{
+		yield return ("QQ Cookie validation accepts empty optional Cookie", delegate
+		{
+			QqMusicCookieValidationResult result = QqMusicCookieValidator.Validate("  ");
+			Check.True(result.IsValid, "empty cookie is valid");
+			Check.True(result.IsEmpty, "empty cookie flag");
+		});
+
+		yield return ("QQ Cookie validation accepts browser Uin casing and authst", delegate
+		{
+			QqMusicCookieValidationResult result = QqMusicCookieValidator.Validate("Uin=123456; authst=token");
+			Check.True(result.IsValid, "browser cookie casing");
+			Check.Equal(0, result.MissingFields.Count, "missing fields");
+		});
+
+		yield return ("QQ Cookie validation accepts a Cookie header prefix", delegate
+		{
+			QqMusicCookieValidationResult result = QqMusicCookieValidator.Validate("Cookie: uin=123456; qm_keyst=token");
+			Check.True(result.IsValid, "Cookie header prefix");
+		});
+
+		yield return ("QQ Cookie validation reports missing account and auth fields", delegate
+		{
+			QqMusicCookieValidationResult result = QqMusicCookieValidator.Validate("foo=bar");
+			Check.True(!result.IsValid, "invalid cookie");
+			Check.Equal(2, result.MissingFields.Count, "missing field count");
+			Check.Equal("uin/p_uin/euin", result.MissingFields[0], "account field");
+			Check.Equal("authst/qm_keyst/qqmusic_key", result.MissingFields[1], "auth field");
+		});
+
 		yield return ("QQ request coordinator enters cooldown after 2001", delegate
 		{
 			QqRequestCoordinator.ResetForTests();

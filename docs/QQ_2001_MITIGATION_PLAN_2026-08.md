@@ -56,6 +56,7 @@
 - 首次 `2001` 立即进入 60 秒冷却；冷却期间停止新的 QQ 搜索、组合回退和 QRC/legacy 歌词请求；连续再次命中时延长至 120 秒。
 - 搜索状态增加 `CoolingDown`，三个共用搜索窗口显示 QQ 冷却剩余秒数，归零后转为普通错误状态。
 - Cookie 中的 `uin/loginUin/authst/qm_keyst/qqmusic_key/tmeLoginType`（仅实际存在的字段）同步到搜索请求的 `loginUin/comm`，原始 Cookie header 保持兼容。
+- 设置页保存非空 Cookie 时校验账号字段（`uin/Uin/p_uin/euin`）和鉴权字段（`authst/qm_keyst/qqmusic_key`）；`loginUin` 是请求体字段，不作为 Cookie 缺失项。
 - 测试 provider 显式关闭真实协调器等待，避免 characterization 依赖墙钟时间；生产类型默认始终启用。
 
 当前 characterization 结果为 `968 passed, 0 failed`；完整 `Verify-Build.ps1 -RunSmokeTests` 通过。上述缓存和协调器测试使用录制响应，不代表真实 QQ 端已稳定放行。
