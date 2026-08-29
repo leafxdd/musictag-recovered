@@ -170,6 +170,12 @@ internal static class SearchStatusIndicatorCharacterization
 			Check.Equal("QQ 暂时受限(2001)，42 秒后可重试", line, "cooldown line");
 		});
 
+		yield return ("BuildErrorOrRetryLine: expired QQ Cookie asks for a fresh copy", delegate
+		{
+			string line = SearchStatusIndicator.BuildErrorOrRetryLine(Seq(S(SearchSource.QQ, SourceSearchPhase.CredentialsExpired, "104401")), SimplifiedChinese);
+			Check.Equal("QQ 音乐 Cookie 已过期，请重新复制", line, "expired Cookie line");
+		});
+
 		yield return ("BuildErrorOrRetryLine: negative RetrySecondsLeft clamped to 0", delegate
 		{
 			string line = SearchStatusIndicator.BuildErrorOrRetryLine(Seq(S(SearchSource.QQ, SourceSearchPhase.Retrying, "2001", -1, 1, 3)), SimplifiedChinese);

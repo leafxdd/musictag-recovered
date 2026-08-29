@@ -23,6 +23,25 @@ using Newtonsoft.Json.Linq;
 
 namespace MusicTagWinApp.Writers;
 
+internal enum QqCookieProbeStatus
+{
+	Invalid,
+	Valid,
+	Expired,
+	RateLimited,
+	Unavailable,
+	NotConfigured
+}
+
+internal sealed class QqCookieProbeResult
+{
+	public QqCookieProbeStatus Status { get; set; }
+
+	public string ErrorCode { get; set; }
+
+	public bool IsUsable => Status == QqCookieProbeStatus.Valid;
+}
+
 internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider, ITrackIdLookupProvider, ILyricSearchProvider, ICoverSearchProvider, ITrackLyricLoader
 {
 	// 显式接口实现:把能力接口的统一签名(网易云超集)转发到本类既有 concrete,丢弃 QQ 不接收的 knownSongId / existingLyrics。
@@ -65,9 +84,20 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 
 	private static readonly Dictionary<string, Lazy<List<QqSongInfo>>> inFlightSearches = new Dictionary<string, Lazy<List<QqSongInfo>>>(StringComparer.Ordinal);
 
+	private static readonly Dictionary<string, CachedLyric> lyricCache = new Dictionary<string, CachedLyric>(StringComparer.Ordinal);
+
+	private static readonly Dictionary<string, Lazy<LyricSearchResult>> inFlightLyrics = new Dictionary<string, Lazy<LyricSearchResult>>(StringComparer.Ordinal);
+
 	private sealed class CachedSongSearch
 	{
 		public List<QqSongInfo> Songs;
+
+		public DateTime ExpiresUtc;
+	}
+
+	private sealed class CachedLyric
+	{
+		public LyricSearchResult Lyric;
 
 		public DateTime ExpiresUtc;
 	}
@@ -79,12 +109,17 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 
 	protected override HttpClient CreateHttpClient()
 	{
+		return CreateHttpClientForCookie(Settings.Default.QQMusic_Cookie, TimeSpan.FromSeconds(20.0));
+	}
+
+	private static HttpClient CreateHttpClientForCookie(string cookie, TimeSpan timeout)
+	{
 		HttpClient client = new HttpClient(new HttpClientHandler
 		{
 			AutomaticDecompression = (DecompressionMethods.GZip | DecompressionMethods.Deflate)
 		})
 		{
-			Timeout = TimeSpan.FromSeconds(20.0),
+			Timeout = timeout,
 			DefaultRequestHeaders =
 			{
 				{ "accept-language", "zh-CN,zh;q=0.9,en;q=0.8" },
@@ -92,10 +127,15 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 				{ "user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36" }
 			}
 		};
-		string cookie = Settings.Default.QQMusic_Cookie;
 		if (!string.IsNullOrWhiteSpace(cookie))
 		{
 			client.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", cookie.Trim());
+		}
+		string customUserAgent = Settings.Default.WebSearch_CustomUserAgent;
+		if (!string.IsNullOrWhiteSpace(customUserAgent))
+		{
+			client.DefaultRequestHeaders.Remove("User-Agent");
+			client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", customUserAgent.Trim());
 		}
 		return client;
 	}
@@ -181,6 +221,91 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 		return normalizedQuery + "|" + maxResults.ToString(CultureInfo.InvariantCulture) + "|" + cookieHash;
 	}
 
+	private static string BuildLyricCacheKey(QqSongInfo songInfo)
+	{
+		string cookie = Settings.Default.QQMusic_Cookie ?? "";
+		string cookieHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(cookie)));
+		return songInfo.Id.ToString(CultureInfo.InvariantCulture) + "|" + (songInfo.Mid ?? "") + "|" + cookieHash;
+	}
+
+	private LyricSearchResult LoadLyrics(QqSongInfo songInfo)
+	{
+		if (!UseSharedRequestCoordination || songInfo == null || songInfo.Id <= 0L)
+		{
+			return LoadLyricsCore(songInfo);
+		}
+
+		string cacheKey = BuildLyricCacheKey(songInfo);
+		Lazy<LyricSearchResult> load;
+		lock (searchCacheLock)
+		{
+			if (lyricCache.TryGetValue(cacheKey, out CachedLyric cached))
+			{
+				if (cached.ExpiresUtc > DateTime.UtcNow)
+				{
+					return CloneLyricResult(cached.Lyric);
+				}
+				lyricCache.Remove(cacheKey);
+			}
+
+			if (!inFlightLyrics.TryGetValue(cacheKey, out load))
+			{
+				load = new Lazy<LyricSearchResult>(() => LoadLyricsCore(songInfo), LazyThreadSafetyMode.ExecutionAndPublication);
+				inFlightLyrics.Add(cacheKey, load);
+			}
+		}
+
+		try
+		{
+			LyricSearchResult lyric = load.Value;
+			if (lyric != null && (!string.IsNullOrWhiteSpace(lyric.Lyric) || !string.IsNullOrWhiteSpace(lyric.TranslatedLyric)))
+			{
+				lock (searchCacheLock)
+				{
+					lyricCache[cacheKey] = new CachedLyric
+					{
+						Lyric = CloneLyricResult(lyric),
+						ExpiresUtc = DateTime.UtcNow.AddMinutes(30)
+					};
+				}
+			}
+			return lyric == null ? null : CloneLyricResult(lyric);
+		}
+		finally
+		{
+			lock (searchCacheLock)
+			{
+				if (inFlightLyrics.TryGetValue(cacheKey, out Lazy<LyricSearchResult> current) && ReferenceEquals(current, load))
+				{
+					inFlightLyrics.Remove(cacheKey);
+				}
+			}
+		}
+	}
+
+	private static LyricSearchResult CloneLyricResult(LyricSearchResult source)
+	{
+		if (source == null)
+		{
+			return null;
+		}
+		return new LyricSearchResult
+		{
+			LyricUrl = source.LyricUrl,
+			TrackId = source.TrackId,
+			Title = source.Title,
+			Artist = source.Artist,
+			Album = source.Album,
+			OriginalTitle = source.OriginalTitle,
+			SearchSource = source.SearchSource,
+			Lyric = source.Lyric,
+			TranslatedLyric = source.TranslatedLyric,
+			SourceOrder = source.SourceOrder,
+			ResultOrder = source.ResultOrder,
+			IsLoaded = source.IsLoaded
+		};
+	}
+
 	private List<QqSongInfo> SearchSongsCore(string query, int maxResults)
 	{
 		string requestBody = BuildSearchRequestBody(query, maxResults);
@@ -215,6 +340,13 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 			}
 
 			JObject parsedResponse = TryParseJsonObject(responseBody);
+			if (IsCredentialsExpired(parsedResponse))
+			{
+				string errorCode = GetBusinessCode(parsedResponse)?.ToString(CultureInfo.InvariantCulture) ?? "credentials_expired";
+				SetTransportError(RemoteErrorKind.CredentialsExpired, errorCode);
+				ReportStatus(SourceSearchPhase.CredentialsExpired, errorCode);
+				return new List<QqSongInfo>();
+			}
 			if (attempt + 1 < maxAttempts && IsRateLimited(parsedResponse))
 			{
 				if (UseSharedRequestCoordination)
@@ -273,8 +405,122 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 
 	internal static bool IsRateLimited(JObject parsedResponse)
 	{
-		JToken codeToken = parsedResponse?["req_0"]?["code"];
-		return codeToken != null && codeToken.Type == JTokenType.Integer && (int)codeToken == 2001;
+		JToken requestCode = parsedResponse?["req_0"]?["code"];
+		if (requestCode != null && requestCode.Type == JTokenType.Integer && requestCode.Value<int>() == 2001)
+		{
+			return true;
+		}
+		JToken topLevelCode = parsedResponse?["code"];
+		return topLevelCode != null && topLevelCode.Type == JTokenType.Integer && topLevelCode.Value<int>() == 2001;
+	}
+
+	internal static bool IsCredentialsExpired(JObject parsedResponse)
+	{
+		int? code = GetBusinessCode(parsedResponse);
+		return code == 1000 || code == 104400 || code == 104401;
+	}
+
+	internal static int? GetBusinessCode(JObject parsedResponse)
+	{
+		return ReadBusinessCode(parsedResponse?["req_0"]?["code"]) ?? ReadBusinessCode(parsedResponse?["code"]);
+	}
+
+	private static int? ReadBusinessCode(JToken codeToken)
+	{
+		if (codeToken == null)
+		{
+			return null;
+		}
+		if (codeToken.Type == JTokenType.Integer)
+		{
+			return codeToken.Value<int>();
+		}
+		return int.TryParse(codeToken.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out int code) ? code : (int?)null;
+	}
+
+	internal static QqCookieProbeResult ParseCookieProbeResponse(string responseBody, int? httpStatus = null)
+	{
+		if (httpStatus.HasValue && (httpStatus.Value < 200 || httpStatus.Value >= 300))
+		{
+			return new QqCookieProbeResult { Status = QqCookieProbeStatus.Unavailable, ErrorCode = httpStatus.Value.ToString(CultureInfo.InvariantCulture) };
+		}
+		JObject parsedResponse = TryParseJsonObject(responseBody);
+		if (parsedResponse == null)
+		{
+			return new QqCookieProbeResult { Status = QqCookieProbeStatus.Unavailable, ErrorCode = "parse" };
+		}
+		int? code = GetBusinessCode(parsedResponse);
+		if (code == 0)
+		{
+			return new QqCookieProbeResult { Status = QqCookieProbeStatus.Valid };
+		}
+		if (IsCredentialsExpired(parsedResponse))
+		{
+			return new QqCookieProbeResult { Status = QqCookieProbeStatus.Expired, ErrorCode = code?.ToString(CultureInfo.InvariantCulture) };
+		}
+		if (IsRateLimited(parsedResponse))
+		{
+			return new QqCookieProbeResult { Status = QqCookieProbeStatus.RateLimited, ErrorCode = "2001" };
+		}
+		return new QqCookieProbeResult { Status = QqCookieProbeStatus.Unavailable, ErrorCode = code?.ToString(CultureInfo.InvariantCulture) ?? "unknown" };
+	}
+
+	internal static QqCookieProbeResult ProbeCookie(string cookieHeader, CancellationToken cancellationToken = default)
+	{
+		QqMusicCookieValidationResult validation = QqMusicCookieValidator.Validate(cookieHeader);
+		if (!validation.IsValid)
+		{
+			return new QqCookieProbeResult { Status = QqCookieProbeStatus.Invalid, ErrorCode = "cookie_fields" };
+		}
+		if (validation.IsEmpty)
+		{
+			return new QqCookieProbeResult { Status = QqCookieProbeStatus.NotConfigured };
+		}
+
+		QqRequestPermit permit = QqRequestCoordinator.WaitForPermit(cancellationToken, out _);
+		if (permit == QqRequestPermit.Cancelled)
+		{
+			return new QqCookieProbeResult { Status = QqCookieProbeStatus.Unavailable, ErrorCode = "cancelled" };
+		}
+		if (permit == QqRequestPermit.CoolingDown)
+		{
+			return new QqCookieProbeResult { Status = QqCookieProbeStatus.RateLimited, ErrorCode = "2001" };
+		}
+
+		try
+		{
+			using HttpClient client = CreateHttpClientForCookie(cookieHeader, TimeSpan.FromSeconds(5.0));
+			string body = BuildSearchRequestBody("__musictag_cookie_check__", 1, cookieHeader);
+			using StringContent content = new StringContent(body, Encoding.UTF8, "application/json");
+			using HttpResponseMessage response = client.PostAsync(searchEndpointUrl, content, cancellationToken).GetAwaiter().GetResult();
+			string responseBody = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+			QqCookieProbeResult result = ParseCookieProbeResponse(responseBody, (int)response.StatusCode);
+			if (result.Status == QqCookieProbeStatus.RateLimited)
+			{
+				QqRequestCoordinator.RecordRateLimited();
+			}
+			return result;
+		}
+		catch (OperationCanceledException)
+		{
+			return new QqCookieProbeResult { Status = QqCookieProbeStatus.Unavailable, ErrorCode = "timeout" };
+		}
+		catch (Exception exception)
+		{
+			Console.WriteLine("QQ cookie probe error:" + exception.GetMessageChain());
+			return new QqCookieProbeResult { Status = QqCookieProbeStatus.Unavailable, ErrorCode = "network" };
+		}
+	}
+
+	internal static void ClearCachesForTests()
+	{
+		lock (searchCacheLock)
+		{
+			searchCache.Clear();
+			inFlightSearches.Clear();
+			lyricCache.Clear();
+			inFlightLyrics.Clear();
+		}
 	}
 
 	public List<LyricSearchResult> SearchLyrics(string query, int maxResults, int sourceOrder)
@@ -313,6 +559,14 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 		string responseBody = GetResponseString(string.Format(songDetailUrlFormat, idParameter, TextUtilities.UrlEncodeUtf8(normalizedId)));
 		if (cancellationSource.IsCancellationRequested)
 		{
+			return null;
+		}
+		JObject responseJson = TryParseJsonObject(responseBody);
+		if (IsCredentialsExpired(responseJson))
+		{
+			string errorCode = GetBusinessCode(responseJson)?.ToString(CultureInfo.InvariantCulture) ?? "credentials_expired";
+			SetTransportError(RemoteErrorKind.CredentialsExpired, errorCode);
+			ReportStatus(SourceSearchPhase.CredentialsExpired, errorCode);
 			return null;
 		}
 		try
@@ -386,7 +640,7 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 		return track;
 	}
 
-	private LyricSearchResult LoadLyrics(QqSongInfo songInfo)
+	private LyricSearchResult LoadLyricsCore(QqSongInfo songInfo)
 	{
 		string qrcRequestBody = BuildQrcLyricRequestBody(songInfo);
 		bool qrcRateLimited = false;
@@ -415,7 +669,15 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 				return null;
 			}
 
-			qrcRateLimited = IsRateLimited(TryParseJsonObject(qrcResponseBody));
+			JObject qrcResponse = TryParseJsonObject(qrcResponseBody);
+			if (IsCredentialsExpired(qrcResponse))
+			{
+				string errorCode = GetBusinessCode(qrcResponse)?.ToString(CultureInfo.InvariantCulture) ?? "credentials_expired";
+				SetTransportError(RemoteErrorKind.CredentialsExpired, errorCode);
+				ReportStatus(SourceSearchPhase.CredentialsExpired, errorCode);
+				return null;
+			}
+			qrcRateLimited = IsRateLimited(qrcResponse);
 			if (qrcRateLimited && UseSharedRequestCoordination)
 			{
 				int cooldownSeconds = QqRequestCoordinator.RecordRateLimited();
@@ -466,17 +728,28 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 
 	private static string BuildSearchRequestBody(string query, int maxResults)
 	{
+		return BuildSearchRequestBody(query, maxResults, Settings.Default.QQMusic_Cookie);
+	}
+
+	private static string BuildSearchRequestBody(string query, int maxResults, string cookieHeader)
+	{
 		JObject request = JObject.Parse(string.Format(searchRequestTemplate, "req_0", TextEncodingService.JavaScriptStringEncode(query), maxResults));
-		Dictionary<string, string> cookies = QqMusicCookieValidator.ParseCookieHeader(Settings.Default.QQMusic_Cookie);
+		ApplyCookieRequestContext(request, cookieHeader);
+		return request.ToString(Formatting.None);
+	}
+
+	private static void ApplyCookieRequestContext(JObject request, string cookieHeader)
+	{
+		Dictionary<string, string> cookies = QqMusicCookieValidator.ParseCookieHeader(cookieHeader);
 		string uin = QqMusicCookieValidator.GetCookieValue(cookies, "loginUin", "uin", "p_uin", "euin", "p_euin");
 		string authst = QqMusicCookieValidator.GetCookieValue(cookies, "authst", "qm_keyst", "qqmusic_key", "qqmusic_key_new");
 		string loginType = QqMusicCookieValidator.GetCookieValue(cookies, "tmeLoginType");
 		if (uin.Length == 0 && authst.Length == 0 && loginType.Length == 0)
 		{
-			return request.ToString(Formatting.None);
+			return;
 		}
 
-		JObject comm = new JObject
+		JObject comm = request["comm"] as JObject ?? new JObject
 		{
 			["format"] = "json",
 			["ct"] = 19,
@@ -496,7 +769,6 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 			comm["tmeLoginType"] = loginType;
 		}
 		request["comm"] = comm;
-		return request.ToString(Formatting.None);
 	}
 
 	private static string BuildQrcLyricRequestBody(QqSongInfo songInfo)
@@ -540,6 +812,7 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 				}
 			}
 		};
+		ApplyCookieRequestContext(request, Settings.Default.QQMusic_Cookie);
 
 		return request.ToString(Formatting.None);
 	}

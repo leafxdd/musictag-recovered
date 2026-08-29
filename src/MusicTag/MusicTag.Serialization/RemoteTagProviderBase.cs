@@ -505,7 +505,8 @@ internal sealed class ResponseSizeLimitExceededException : IOException
 
 // 传输层错误归类(详见 docs/SEARCH_STATUS_INDICATOR_DESIGN.md §5.4)。
 // RateLimited / ParseFailed 由 provider 在解析阶段判定后回填,传输层只产出
-// None / HttpStatus / Timeout / Network。
+// None / HttpStatus / Timeout / Network; provider-level parsing may add
+// ParseFailed / RateLimited / CredentialsExpired.
 internal enum RemoteErrorKind
 {
 	None,
@@ -513,11 +514,12 @@ internal enum RemoteErrorKind
 	Timeout,
 	Network,
 	ParseFailed,
-	RateLimited
+	RateLimited,
+	CredentialsExpired
 }
 
 // 统一的 GET/POST 请求结果,既保留响应体(Body/Bytes),又携带错误归类与错误码,
-// 使上层能区分 "搜到 0 条" / "网络失败" / "HTTP 错误" / "解析失败" / "限流"。
+// 使上层能区分 "搜到 0 条" / "网络失败" / "HTTP 错误" / "解析失败" / "限流" / "登录态过期"。
 internal sealed class HttpResult
 {
 	public string Body { get; set; }

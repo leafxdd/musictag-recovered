@@ -11,6 +11,7 @@ using MusicTagWinApp.Adapter;
 using MusicTagWinApp.Exporters;
 using MusicTagWinApp.Web;
 using MusicTagWinApp.Writers;
+using MusicTagWinApp.Roles;
 using MusicTagWinApp.Properties;
 
 namespace MusicTag.Tests;
@@ -99,6 +100,26 @@ internal static class ProviderLyricCharacterization
 		}
 
 		protected override bool UseSharedRequestCoordination => false;
+	}
+
+	private sealed class CoordinatedStubQq : QqMusicTagProvider
+	{
+		private readonly string qrcResponse;
+
+		public int RequestCount { get; private set; }
+
+		public CoordinatedStubQq(string qrcResponse) : base(null)
+		{
+			this.qrcResponse = qrcResponse;
+		}
+
+		protected override string PostString(string url, string body, HttpClient client = null, bool postJson = false)
+		{
+			RequestCount++;
+			return qrcResponse;
+		}
+
+		protected override string GetResponseString(string url) => null;
 	}
 
 	private sealed class StubKugou : KugouTagProvider
@@ -385,6 +406,27 @@ internal static class ProviderLyricCharacterization
 		}
 		);
 
+		yield return ("QQ QRC lyric request carries configured Cookie context", delegate
+		{
+			string previousCookie = Settings.Default.QQMusic_Cookie;
+		try
+		{
+			Settings.Default.QQMusic_Cookie = "Uin=123456; qm_keyst=login-token; tmeLoginType=2";
+			string qrc = "[1000,500]Cookie(1000,500)";
+			StubQq provider = new StubQq(QqSearchOneSong, QqJsonpLyric("fallback"), QqQrcResponse(qrc));
+			List<LyricSearchResult> lyrics = provider.SearchLyrics("q", 10, 0);
+			Newtonsoft.Json.Linq.JObject request = Newtonsoft.Json.Linq.JObject.Parse(provider.QrcRequestBody);
+			Check.Equal("123456", request["comm"]?["uin"]?.ToString(), "comm.uin");
+			Check.Equal("login-token", request["comm"]?["authst"]?.ToString(), "comm.authst");
+			Check.Equal("2", request["comm"]?["tmeLoginType"]?.ToString(), "comm.tmeLoginType");
+			Check.Equal(1, lyrics.Count, "count");
+		}
+		finally
+		{
+			Settings.Default.QQMusic_Cookie = previousCookie;
+		}
+		});
+
 		yield return ("QQ.SearchLyrics QRC follows ReformatTimetag 2-digit rounding", delegate
 		{
 			bool previousSetting = Settings.Default.LyricDownload_ReformatTimetag;
@@ -401,6 +443,36 @@ internal static class ProviderLyricCharacterization
 			}
 		}
 		);
+
+		yield return ("QQ lyric cache deduplicates repeated loads for the same song and Cookie", delegate
+		{
+			QqMusicTagProvider.ClearCachesForTests();
+			QqRequestCoordinator.ResetForTests();
+			try
+			{
+				CoordinatedStubQq provider = new CoordinatedStubQq(QqQrcResponse("[1000,500]Cached(1000,500)"));
+				TrackSearchResult track = new TrackSearchResult
+				{
+					SourceTrackId = "900555",
+					QqMusicMid = "CACHE_MID",
+					Title = "Cached",
+					OriginalTitle = "Cached",
+					Artist = "Artist",
+					Album = "Album"
+				};
+				LyricSearchResult first = provider.LoadLyricsForTrack(track);
+				LyricSearchResult second = provider.LoadLyricsForTrack(track);
+				Check.NotNull(first, "first lyric");
+				Check.NotNull(second, "second lyric");
+				Check.Equal(first.Lyric, second.Lyric, "cached lyric text");
+				Check.Equal(1, provider.RequestCount, "QRC request count");
+			}
+			finally
+			{
+				QqMusicTagProvider.ClearCachesForTests();
+				QqRequestCoordinator.ResetForTests();
+			}
+		});
 
 		yield return ("QQ.SearchLyrics aligns 2-digit translation to precise QRC line timestamps", delegate
 		{

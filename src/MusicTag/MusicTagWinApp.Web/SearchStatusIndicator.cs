@@ -81,7 +81,7 @@ internal sealed class SearchStatusIndicator
 			{
 				keepCooldownTimer = true;
 			}
-			else if (status.Phase != SourceSearchPhase.Error)
+			else if (status.Phase != SourceSearchPhase.Error && status.Phase != SourceSearchPhase.CredentialsExpired)
 			{
 				status.Phase = SourceSearchPhase.Completed;
 			}
@@ -276,6 +276,18 @@ internal sealed class SearchStatusIndicator
 					sourceName + " temporarily limited (" + errorCode + "), retry after " + Math.Max(0, status.CooldownSecondsLeft) + " seconds",
 					sourceName + " 暂时受限(" + errorCode + ")，" + Math.Max(0, status.CooldownSecondsLeft) + " 秒后可重试",
 					sourceName + " 暫時受限(" + errorCode + ")，" + Math.Max(0, status.CooldownSecondsLeft) + " 秒後可重試",
+					culture);
+			}
+		}
+		foreach (SourceSearchStatus status in statusesInDisplayOrder)
+		{
+			if (status.Phase == SourceSearchPhase.CredentialsExpired)
+			{
+				string sourceName = GetSourceDisplayName(status.Source, culture);
+				return UiText.Get(
+					sourceName + " Music Cookie expired, please update it",
+					sourceName + " 音乐 Cookie 已过期，请重新复制",
+					sourceName + " 音樂 Cookie 已過期，請重新複製",
 					culture);
 			}
 		}

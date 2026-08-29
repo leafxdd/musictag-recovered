@@ -9,7 +9,8 @@ internal enum SourceSearchPhase
 	Completed,
 	Error,
 	Retrying,
-	CoolingDown
+	CoolingDown,
+	CredentialsExpired
 }
 
 internal sealed class SourceSearchStatus

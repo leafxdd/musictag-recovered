@@ -39,6 +39,12 @@
 2. 在字段存在时同步到 `comm` 和请求体，并保留原始 Cookie header 兼容现有配置。
 3. 区分完整登录态、不完整登录态和匿名态；失效时向 UI 提示，不输出敏感字段值。
 
+### 阶段 3.1：歌词请求削峰和 Cookie 可用性检查
+
+1. 对成功解析的 QQ 歌词按歌曲 ID、MID 和 Cookie 摘要缓存 30 分钟；同一歌曲的并发加载复用 in-flight 结果，缓存返回值使用独立对象，避免窗口间共享 UI 状态。
+2. Cookie 保存前执行一次短超时 API 探测；明确登录失效业务码（`1000`、`104400`、`104401`）阻止保存并提示重新复制。限流、断网和未知响应只提示暂时无法确认，仍允许保存。
+3. 搜索、歌词 QRC 和歌曲 ID 详情遇到上述失效码时停止 QQ 后续回退，并在搜索状态栏显示 Cookie 已过期；不把失效结果写入缓存。
+
 ### 阶段 4：Mobile/Session 协议评估
 
 1. 录制 `DoSearchForQQMusicMobile`、完整 `comm` 和 `GetSession` 的低频请求/响应 fixture。
@@ -47,7 +53,7 @@
 
 ## 本次执行范围
 
-本次已执行阶段 0 至阶段 3：新增共享协调器、接入 QQ 搜索和 QRC 歌词请求、补充 characterization、UI 冷却状态和登录态请求上下文。阶段 4 仍单独保留，避免把尚未完成录制和低频验证的 Mobile/Session 协议变化混入确定性的请求削峰改动。
+本次已执行阶段 0 至阶段 3.1：新增共享协调器、接入 QQ 搜索和 QRC 歌词请求、补充 characterization、UI 冷却状态和登录态请求上下文，并增加歌词缓存、Cookie 在线探测和过期状态。阶段 4 仍单独保留，避免把尚未完成录制和低频验证的 Mobile/Session 协议变化混入确定性的请求削峰改动。
 
 ### 已落地实现
 
@@ -57,9 +63,11 @@
 - 搜索状态增加 `CoolingDown`，三个共用搜索窗口显示 QQ 冷却剩余秒数，归零后转为普通错误状态。
 - Cookie 中的 `uin/loginUin/authst/qm_keyst/qqmusic_key/tmeLoginType`（仅实际存在的字段）同步到搜索请求的 `loginUin/comm`，原始 Cookie header 保持兼容。
 - 设置页保存非空 Cookie 时校验账号字段（`uin/Uin/p_uin/euin`）和鉴权字段（`authst/qm_keyst/qqmusic_key`）；`loginUin` 是请求体字段，不作为 Cookie 缺失项。
+- 成功 QQ 歌词按歌曲 ID、MID 和 Cookie 摘要缓存 30 分钟，并复用同一歌曲的并发 in-flight 加载；缓存只接受至少有原文或译文的解析结果，不缓存空结果、解析失败或限流结果。
+- 设置页保存非空 Cookie 时发送一次 5 秒超时探测；`1000/104400/104401` 显示 Cookie 过期并阻止保存，`2001`、网络错误和未知响应显示提示但保留设置。查询和 ID 详情遇到失效码时显示专用状态并停止 QQ 回退。
 - 测试 provider 显式关闭真实协调器等待，避免 characterization 依赖墙钟时间；生产类型默认始终启用。
 
-当前 characterization 结果为 `968 passed, 0 failed`；完整 `Verify-Build.ps1 -RunSmokeTests` 通过。上述缓存和协调器测试使用录制响应，不代表真实 QQ 端已稳定放行。
+当前 characterization 结果为 `978 passed, 0 failed`；本轮已完成测试项目构建和 characterization，完整 `Verify-Build.ps1 -RunSmokeTests` 仍需在提交前执行。上述缓存、探测解析和协调器测试使用录制响应，不代表真实 QQ 端已稳定放行。
 
 ## 验证门槛
 

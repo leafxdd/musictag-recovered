@@ -146,6 +146,18 @@ internal static class QqProviderCharacterization
 			Check.Equal("authst/qm_keyst/qqmusic_key", result.MissingFields[1], "auth field");
 		});
 
+		yield return ("QQ cookie probe distinguishes valid, expired, rate-limited and malformed responses", delegate
+		{
+			QqCookieProbeResult valid = QqMusicTagProvider.ParseCookieProbeResponse("{\"req_0\":{\"code\":0}}");
+			QqCookieProbeResult expired = QqMusicTagProvider.ParseCookieProbeResponse("{\"req_0\":{\"code\":104401}}");
+			QqCookieProbeResult rateLimited = QqMusicTagProvider.ParseCookieProbeResponse("{\"req_0\":{\"code\":2001}}");
+			QqCookieProbeResult malformed = QqMusicTagProvider.ParseCookieProbeResponse("not-json");
+			Check.Equal(QqCookieProbeStatus.Valid, valid.Status, "valid status");
+			Check.Equal(QqCookieProbeStatus.Expired, expired.Status, "expired status");
+			Check.Equal(QqCookieProbeStatus.RateLimited, rateLimited.Status, "rate limited status");
+			Check.Equal(QqCookieProbeStatus.Unavailable, malformed.Status, "malformed status");
+		});
+
 		yield return ("QQ request coordinator enters cooldown after 2001", delegate
 		{
 			QqRequestCoordinator.ResetForTests();
@@ -238,6 +250,21 @@ internal static class QqProviderCharacterization
 			Check.Equal(RemoteErrorKind.ParseFailed, provider.LastTransportResult.Error, "Error");
 		});
 
+		yield return ("QQ.SearchTracks expired Cookie reports a dedicated status and error", delegate
+		{
+			List<SourceSearchStatus> statuses = new List<SourceSearchStatus>();
+			StubQqProvider provider = new StubQqProvider("{\"req_0\":{\"code\":104400}}")
+			{
+				StatusReporter = statuses.Add
+			};
+			List<TrackSearchResult> tracks = provider.SearchTracks("query", 10, 0, 0, new List<TrackSearchResult>(), new List<TrackSearchResult>());
+			Check.Equal(0, tracks.Count, "count");
+			Check.Equal(RemoteErrorKind.CredentialsExpired, provider.LastTransportResult.Error, "Error");
+			Check.Equal("104400", provider.LastTransportResult.ErrorCode, "ErrorCode");
+			Check.Equal(1, statuses.Count, "status count");
+			Check.Equal(SourceSearchPhase.CredentialsExpired, statuses[0].Phase, "phase");
+		});
+
 		yield return ("QQ.SearchTracks rate-limited (2001) reports Retrying then stops", delegate
 		{
 			CancellationTokenSource cts = new CancellationTokenSource();
@@ -310,6 +337,21 @@ internal static class QqProviderCharacterization
 
 				Check.Equal(2, provider.Calls.Count, "call count");
 				Check.Equal(RemoteErrorKind.RateLimited, search.LastTransportResult.Error, "final error");
+			});
+		});
+
+		yield return ("QQ combined search stops fallback queries after expired Cookie", delegate
+		{
+			WithFullSearchContext(delegate(TrackSearchContext context)
+			{
+				using CancellationTokenSource cts = new CancellationTokenSource();
+				StubTrackSearchProvider provider = new StubTrackSearchProvider(new HttpResult { Error = RemoteErrorKind.CredentialsExpired, ErrorCode = "104401" });
+				using QqCombinedTrackSearch search = new QqCombinedTrackSearch(cts, provider);
+
+				search.SearchTracks(false, new List<TrackSearchResult>(), 0, context);
+
+				Check.Equal(1, provider.Calls.Count, "call count");
+				Check.Equal(RemoteErrorKind.CredentialsExpired, search.LastTransportResult.Error, "final error");
 			});
 		});
 	}

@@ -58,7 +58,7 @@ internal sealed class QqCombinedTrackSearch : ICombinedTrackSearch
 
 	private bool ShouldStopSearch()
 	{
-		return cancellationSource.IsCancellationRequested || qqProvider.LastTransportResult?.Error == RemoteErrorKind.RateLimited;
+		return cancellationSource.IsCancellationRequested || qqProvider.LastTransportResult?.Error == RemoteErrorKind.RateLimited || qqProvider.LastTransportResult?.Error == RemoteErrorKind.CredentialsExpired;
 	}
 
 	public void Dispose()

@@ -45,7 +45,7 @@ internal sealed class SourceOutcomeTracker
 			return new SourceSearchStatus
 			{
 				Source = source,
-				Phase = SourceSearchPhase.Error,
+				Phase = error.Error == RemoteErrorKind.CredentialsExpired ? SourceSearchPhase.CredentialsExpired : SourceSearchPhase.Error,
 				ErrorCode = error.ErrorCode
 			};
 		}

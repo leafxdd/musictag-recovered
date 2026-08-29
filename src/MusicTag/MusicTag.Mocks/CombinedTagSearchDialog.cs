@@ -871,6 +871,9 @@ internal class CombinedTagSearchDialog : Form
 		string message;
 		switch (transportResult.Error)
 		{
+		case RemoteErrorKind.CredentialsExpired:
+			message = UiText.Get("QQ Music Cookie expired, please update it", "QQ 音乐 Cookie 已过期，请重新复制", "QQ 音樂 Cookie 已過期，請重新複製", culture);
+			break;
 		case RemoteErrorKind.RateLimited:
 			message = UiText.Get("Request rate limited", "请求被限流", "請求被限流", culture);
 			break;
@@ -1156,7 +1159,7 @@ internal class CombinedTagSearchDialog : Form
 			statusReporter(new SourceSearchStatus
 			{
 				Source = source,
-				Phase = SourceSearchPhase.Error,
+				Phase = lastTransportResult.Error == RemoteErrorKind.CredentialsExpired ? SourceSearchPhase.CredentialsExpired : SourceSearchPhase.Error,
 				ErrorCode = lastTransportResult.ErrorCode
 			});
 			return;

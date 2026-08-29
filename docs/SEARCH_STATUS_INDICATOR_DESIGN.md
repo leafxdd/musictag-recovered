@@ -88,7 +88,7 @@ QQ 重试循环在 `QqMusicTagProvider.SearchSongs`(`:77-106`)内部:
 ### 5.1 每源搜索状态模型
 为每个已勾选源维护一个状态:
 ```
-enum SourceSearchPhase { Pending, Searching, Completed, Error, Retrying }
+enum SourceSearchPhase { Pending, Searching, Completed, Error, Retrying, CoolingDown, CredentialsExpired }
 SourceSearchStatus {
     SearchSource Source;
     SourceSearchPhase Phase;

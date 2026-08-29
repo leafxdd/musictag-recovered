@@ -17,6 +17,7 @@ using MusicTagWinApp.Properties;
 using MusicTagWinApp.Roles;
 using MusicTagWinApp.Stubs;
 using MusicTagWinApp.Web;
+using MusicTagWinApp.Writers;
 
 namespace MusicTag.Importers;
 
@@ -819,6 +820,27 @@ internal class OptionsDialog : Form
 			optionsTreeView.SelectedNode = optionsTreeView.Nodes["Network"];
 			qqCookieTextBox.Focus();
 			return;
+		}
+		if (!qqCookieValidation.IsEmpty)
+		{
+			QqCookieProbeResult qqCookieProbe = QqMusicTagProvider.ProbeCookie(qqCookie);
+			if (qqCookieProbe.Status == QqCookieProbeStatus.Expired)
+			{
+				DialogService.ShowErrorMessage(UiText.Get(
+					"QQ Music Cookie expired, please copy a fresh Cookie from the browser" + (string.IsNullOrWhiteSpace(qqCookieProbe.ErrorCode) ? "" : " (" + qqCookieProbe.ErrorCode + ")"),
+					"QQ 音乐 Cookie 已过期，请从浏览器重新复制" + (string.IsNullOrWhiteSpace(qqCookieProbe.ErrorCode) ? "" : " (" + qqCookieProbe.ErrorCode + ")"),
+					"QQ 音樂 Cookie 已過期，請從瀏覽器重新複製" + (string.IsNullOrWhiteSpace(qqCookieProbe.ErrorCode) ? "" : " (" + qqCookieProbe.ErrorCode + ")")));
+				optionsTreeView.SelectedNode = optionsTreeView.Nodes["Network"];
+				qqCookieTextBox.Focus();
+				return;
+			}
+			if (qqCookieProbe.Status == QqCookieProbeStatus.RateLimited || qqCookieProbe.Status == QqCookieProbeStatus.Unavailable)
+			{
+				DialogService.ShowInformationMessage(UiText.Get(
+					"QQ Music Cookie could not be verified right now; it will be saved and checked again on the next query",
+					"当前无法确认 QQ 音乐 Cookie 是否可用，将先保存并在下次查询时再次检查",
+					"目前無法確認 QQ 音樂 Cookie 是否可用，將先儲存並在下次查詢時再次檢查"));
+			}
 		}
 
 		restrictedExtensionsTextBox.Text = string.Join(";", restrictedExtensions) + ";";
