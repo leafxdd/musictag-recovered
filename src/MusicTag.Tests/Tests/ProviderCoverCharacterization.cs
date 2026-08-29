@@ -31,6 +31,7 @@ internal static class ProviderCoverCharacterization
 		private readonly string response;
 		public StubQq(string response) : base(null) { this.response = response; }
 		protected override string PostString(string url, string body, HttpClient client = null, bool postJson = false) => response;
+		protected override bool UseSharedRequestCoordination => false;
 	}
 
 	private sealed class StubKuwo : KuwoTagProvider

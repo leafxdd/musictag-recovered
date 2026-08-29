@@ -100,7 +100,7 @@ internal abstract class RemoteTagProviderBase : IDisposable
 	// 由协调器转发到 UI。默认 null(自动匹配等无 UI 场景不设置,零开销)。
 	public Action<SourceSearchStatus> StatusReporter { get; set; }
 
-	protected void ReportStatus(SourceSearchPhase phase, string errorCode = null, int retryAttempt = 0, int retryTotal = 0, int retrySecondsLeft = 0)
+	protected void ReportStatus(SourceSearchPhase phase, string errorCode = null, int retryAttempt = 0, int retryTotal = 0, int retrySecondsLeft = 0, int cooldownSecondsLeft = 0)
 	{
 		StatusReporter?.Invoke(new SourceSearchStatus
 		{
@@ -109,7 +109,8 @@ internal abstract class RemoteTagProviderBase : IDisposable
 			ErrorCode = errorCode,
 			RetryAttempt = retryAttempt,
 			RetryTotal = retryTotal,
-			RetrySecondsLeft = retrySecondsLeft
+			RetrySecondsLeft = retrySecondsLeft,
+			CooldownSecondsLeft = cooldownSecondsLeft
 		});
 	}
 

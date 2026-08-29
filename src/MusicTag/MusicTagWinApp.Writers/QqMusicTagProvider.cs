@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -58,6 +59,19 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 	// 使倒计时计时器能在等待结束前数到 0 再发起重试(否则秒数会停在 1,跳不到 0)。
 	private const int RetryCountdownBufferMs = 300;
 
+	private static readonly object searchCacheLock = new object();
+
+	private static readonly Dictionary<string, CachedSongSearch> searchCache = new Dictionary<string, CachedSongSearch>(StringComparer.Ordinal);
+
+	private static readonly Dictionary<string, Lazy<List<QqSongInfo>>> inFlightSearches = new Dictionary<string, Lazy<List<QqSongInfo>>>(StringComparer.Ordinal);
+
+	private sealed class CachedSongSearch
+	{
+		public List<QqSongInfo> Songs;
+
+		public DateTime ExpiresUtc;
+	}
+
 	protected override SearchSource GetSource()
 	{
 		return SearchSource.QQ;
@@ -101,15 +115,97 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 		return cancellationSource.Token.WaitHandle.WaitOne(waitMilliseconds);
 	}
 
+	// 测试 provider 覆盖此开关以跳过真实的进程级等待和缓存;生产 provider 始终启用。
+	protected virtual bool UseSharedRequestCoordination => true;
+
 	private List<QqSongInfo> SearchSongs(string query, int maxResults)
 	{
-		string requestBody = string.Format(searchRequestTemplate, "req_0", TextEncodingService.JavaScriptStringEncode(query), maxResults);
+		if (!UseSharedRequestCoordination)
+		{
+			return SearchSongsCore(query, maxResults);
+		}
+
+		string cacheKey = BuildSearchCacheKey(query, maxResults);
+		Lazy<List<QqSongInfo>> search;
+		lock (searchCacheLock)
+		{
+			if (searchCache.TryGetValue(cacheKey, out CachedSongSearch cached))
+			{
+				if (cached.ExpiresUtc > DateTime.UtcNow)
+				{
+					return new List<QqSongInfo>(cached.Songs);
+				}
+				searchCache.Remove(cacheKey);
+			}
+
+			if (!inFlightSearches.TryGetValue(cacheKey, out search))
+			{
+				search = new Lazy<List<QqSongInfo>>(() => SearchSongsCore(query, maxResults), LazyThreadSafetyMode.ExecutionAndPublication);
+				inFlightSearches.Add(cacheKey, search);
+			}
+		}
+
+		try
+		{
+			List<QqSongInfo> songs = search.Value ?? new List<QqSongInfo>();
+			if (songs.Count > 0)
+			{
+				lock (searchCacheLock)
+				{
+					searchCache[cacheKey] = new CachedSongSearch
+					{
+						Songs = new List<QqSongInfo>(songs),
+						ExpiresUtc = DateTime.UtcNow.AddMinutes(10)
+					};
+				}
+			}
+			return new List<QqSongInfo>(songs);
+		}
+		finally
+		{
+			lock (searchCacheLock)
+			{
+				if (inFlightSearches.TryGetValue(cacheKey, out Lazy<List<QqSongInfo>> current) && ReferenceEquals(current, search))
+				{
+					inFlightSearches.Remove(cacheKey);
+				}
+			}
+		}
+	}
+
+	private static string BuildSearchCacheKey(string query, int maxResults)
+	{
+		string normalizedQuery = Regex.Replace((query ?? "").Trim(), "\\s+", " ").ToUpperInvariant();
+		string cookie = Settings.Default.QQMusic_Cookie ?? "";
+		string cookieHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(cookie)));
+		return normalizedQuery + "|" + maxResults.ToString(CultureInfo.InvariantCulture) + "|" + cookieHash;
+	}
+
+	private List<QqSongInfo> SearchSongsCore(string query, int maxResults)
+	{
+		string requestBody = BuildSearchRequestBody(query, maxResults);
 		const int maxAttempts = 6;
 		for (int attempt = 0; attempt < maxAttempts; attempt++)
 		{
 			if (cancellationSource.IsCancellationRequested)
 			{
 				return new List<QqSongInfo>();
+			}
+
+			if (UseSharedRequestCoordination)
+			{
+				int cooldownSeconds;
+				QqRequestPermit permit = QqRequestCoordinator.WaitForPermit(cancellationSource.Token, out cooldownSeconds);
+				if (permit == QqRequestPermit.Cancelled)
+				{
+					return new List<QqSongInfo>();
+				}
+				if (permit == QqRequestPermit.CoolingDown)
+				{
+					SetTransportError(RemoteErrorKind.RateLimited, "2001");
+					ReportStatus(SourceSearchPhase.CoolingDown, "2001", cooldownSecondsLeft: cooldownSeconds);
+					return new List<QqSongInfo>();
+				}
 			}
 
 			string responseBody = PostString(searchEndpointUrl, requestBody, null, postJson: true);
@@ -121,6 +217,14 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 			JObject parsedResponse = TryParseJsonObject(responseBody);
 			if (attempt + 1 < maxAttempts && IsRateLimited(parsedResponse))
 			{
+				if (UseSharedRequestCoordination)
+				{
+					int cooldownSeconds = QqRequestCoordinator.RecordRateLimited();
+					SetTransportError(RemoteErrorKind.RateLimited, "2001");
+					Console.WriteLine($"QQ search throttled (req_0.code 2001), cooldown {cooldownSeconds}s");
+					ReportStatus(SourceSearchPhase.CoolingDown, "2001", cooldownSecondsLeft: cooldownSeconds);
+					return new List<QqSongInfo>();
+				}
 				int retryNumber = attempt + 1;
 				int retryTotal = maxAttempts - 1;
 				// 退避:2/4/4/4/4 秒(前两次 2、4,其后封顶 4;应用户要求缩短第 3–5 次等待)。
@@ -289,6 +393,22 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 		const int maxAttempts = 2;
 		for (int attempt = 0; attempt < maxAttempts; attempt++)
 		{
+			if (UseSharedRequestCoordination)
+			{
+				int cooldownSeconds;
+				QqRequestPermit permit = QqRequestCoordinator.WaitForPermit(cancellationSource.Token, out cooldownSeconds);
+				if (permit == QqRequestPermit.Cancelled)
+				{
+					return null;
+				}
+				if (permit == QqRequestPermit.CoolingDown)
+				{
+					SetTransportError(RemoteErrorKind.RateLimited, "2001");
+					ReportStatus(SourceSearchPhase.CoolingDown, "2001", cooldownSecondsLeft: cooldownSeconds);
+					return null;
+				}
+			}
+
 			string qrcResponseBody = PostString(qrcLyricEndpointUrl, qrcRequestBody, null, postJson: true);
 			if (cancellationSource.IsCancellationRequested)
 			{
@@ -296,6 +416,14 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 			}
 
 			qrcRateLimited = IsRateLimited(TryParseJsonObject(qrcResponseBody));
+			if (qrcRateLimited && UseSharedRequestCoordination)
+			{
+				int cooldownSeconds = QqRequestCoordinator.RecordRateLimited();
+				SetTransportError(RemoteErrorKind.RateLimited, "2001");
+				Console.WriteLine($"QQ lyric throttled (req_0.code 2001), cooldown {cooldownSeconds}s");
+				ReportStatus(SourceSearchPhase.CoolingDown, "2001", cooldownSecondsLeft: cooldownSeconds);
+				return null;
+			}
 			if (qrcRateLimited && attempt + 1 < maxAttempts)
 			{
 				int retryNumber = attempt + 1;
@@ -334,6 +462,78 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 			SetTransportError(RemoteErrorKind.RateLimited, "2001");
 		}
 		return legacyLyric;
+	}
+
+	private static string BuildSearchRequestBody(string query, int maxResults)
+	{
+		JObject request = JObject.Parse(string.Format(searchRequestTemplate, "req_0", TextEncodingService.JavaScriptStringEncode(query), maxResults));
+		Dictionary<string, string> cookies = ParseCookieHeader(Settings.Default.QQMusic_Cookie);
+		string uin = GetCookieValue(cookies, "loginUin", "uin", "p_uin", "euin", "p_euin");
+		string authst = GetCookieValue(cookies, "authst", "qm_keyst", "qqmusic_key", "qqmusic_key_new");
+		string loginType = GetCookieValue(cookies, "tmeLoginType");
+		if (uin.Length == 0 && authst.Length == 0 && loginType.Length == 0)
+		{
+			return request.ToString(Formatting.None);
+		}
+
+		JObject comm = new JObject
+		{
+			["format"] = "json",
+			["ct"] = 19,
+			["cv"] = 0
+		};
+		if (uin.Length > 0)
+		{
+			request["loginUin"] = uin;
+			comm["uin"] = uin;
+		}
+		if (authst.Length > 0)
+		{
+			comm["authst"] = authst;
+		}
+		if (loginType.Length > 0)
+		{
+			comm["tmeLoginType"] = loginType;
+		}
+		request["comm"] = comm;
+		return request.ToString(Formatting.None);
+	}
+
+	private static Dictionary<string, string> ParseCookieHeader(string cookieHeader)
+	{
+		Dictionary<string, string> cookies = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+		if (string.IsNullOrWhiteSpace(cookieHeader))
+		{
+			return cookies;
+		}
+
+		foreach (string segment in cookieHeader.Split(';'))
+		{
+			int separator = segment.IndexOf('=');
+			if (separator <= 0)
+			{
+				continue;
+			}
+			string name = segment.Substring(0, separator).Trim();
+			string value = segment.Substring(separator + 1).Trim();
+			if (name.Length > 0 && value.Length > 0)
+			{
+				cookies[name] = value.Trim('"');
+			}
+		}
+		return cookies;
+	}
+
+	private static string GetCookieValue(Dictionary<string, string> cookies, params string[] names)
+	{
+		foreach (string name in names)
+		{
+			if (cookies.TryGetValue(name, out string value) && !string.IsNullOrWhiteSpace(value))
+			{
+				return value.Trim();
+			}
+		}
+		return "";
 	}
 
 	private static string BuildQrcLyricRequestBody(QqSongInfo songInfo)

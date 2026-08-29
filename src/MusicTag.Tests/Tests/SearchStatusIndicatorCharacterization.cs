@@ -22,7 +22,7 @@ internal static class SearchStatusIndicatorCharacterization
 
 	private static readonly CultureInfo TraditionalChinese = CultureInfo.GetCultureInfo("zh-CHT");
 
-	private static SourceSearchStatus S(SearchSource source, SourceSearchPhase phase, string errorCode = null, int retrySecondsLeft = 0, int retryAttempt = 0, int retryTotal = 0)
+	private static SourceSearchStatus S(SearchSource source, SourceSearchPhase phase, string errorCode = null, int retrySecondsLeft = 0, int retryAttempt = 0, int retryTotal = 0, int cooldownSecondsLeft = 0)
 	{
 		return new SourceSearchStatus
 		{
@@ -31,7 +31,8 @@ internal static class SearchStatusIndicatorCharacterization
 			ErrorCode = errorCode,
 			RetrySecondsLeft = retrySecondsLeft,
 			RetryAttempt = retryAttempt,
-			RetryTotal = retryTotal
+			RetryTotal = retryTotal,
+			CooldownSecondsLeft = cooldownSecondsLeft
 		};
 	}
 
@@ -161,6 +162,12 @@ internal static class SearchStatusIndicatorCharacterization
 		{
 			string line = SearchStatusIndicator.BuildErrorOrRetryLine(Seq(S(SearchSource.Music163, SourceSearchPhase.Error, "500"), S(SearchSource.QQ, SourceSearchPhase.Retrying, "2001", 2, 1, 5)), SimplifiedChinese);
 			Check.Equal("QQ API错误(2001), 2 秒后重试 (1/5)", line, "retrying priority");
+		});
+
+		yield return ("BuildErrorOrRetryLine: QQ cooldown shows remaining seconds", delegate
+		{
+			string line = SearchStatusIndicator.BuildErrorOrRetryLine(Seq(S(SearchSource.QQ, SourceSearchPhase.CoolingDown, "2001", cooldownSecondsLeft: 42)), SimplifiedChinese);
+			Check.Equal("QQ 暂时受限(2001)，42 秒后可重试", line, "cooldown line");
 		});
 
 		yield return ("BuildErrorOrRetryLine: negative RetrySecondsLeft clamped to 0", delegate

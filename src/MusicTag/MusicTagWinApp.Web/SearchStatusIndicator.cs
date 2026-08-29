@@ -74,13 +74,21 @@ internal sealed class SearchStatusIndicator
 	public void End()
 	{
 		searchInProgress = false;
-		retryCountdownTimer.Stop();
+		bool keepCooldownTimer = false;
 		foreach (SourceSearchStatus status in statuses.Values)
 		{
-			if (status.Phase != SourceSearchPhase.Error)
+			if (status.Phase == SourceSearchPhase.CoolingDown)
+			{
+				keepCooldownTimer = true;
+			}
+			else if (status.Phase != SourceSearchPhase.Error)
 			{
 				status.Phase = SourceSearchPhase.Completed;
 			}
+		}
+		if (!keepCooldownTimer)
+		{
+			retryCountdownTimer.Stop();
 		}
 		Refresh();
 	}
@@ -119,7 +127,7 @@ internal sealed class SearchStatusIndicator
 			return;
 		}
 		statuses[status.Source] = status;
-		if (status.Phase == SourceSearchPhase.Retrying && !retryCountdownTimer.Enabled)
+		if ((status.Phase == SourceSearchPhase.Retrying || status.Phase == SourceSearchPhase.CoolingDown) && !retryCountdownTimer.Enabled)
 		{
 			retryCountdownTimer.Start();
 		}
@@ -142,6 +150,21 @@ internal sealed class SearchStatusIndicator
 				if (status.RetrySecondsLeft > 0)
 				{
 					status.RetrySecondsLeft--;
+				}
+			}
+			else if (status.Phase == SourceSearchPhase.CoolingDown)
+			{
+				if (status.CooldownSecondsLeft > 0)
+				{
+					status.CooldownSecondsLeft--;
+				}
+				if (status.CooldownSecondsLeft > 0)
+				{
+					anyRetrying = true;
+				}
+				else
+				{
+					status.Phase = SourceSearchPhase.Error;
 				}
 			}
 		}
@@ -240,6 +263,19 @@ internal sealed class SearchStatusIndicator
 					sourceName + " API error (" + errorCode + "), retrying in " + Math.Max(0, status.RetrySecondsLeft) + " seconds (" + status.RetryAttempt + "/" + status.RetryTotal + ")",
 					sourceName + " API错误(" + errorCode + "), " + Math.Max(0, status.RetrySecondsLeft) + " 秒后重试 (" + status.RetryAttempt + "/" + status.RetryTotal + ")",
 					sourceName + " API錯誤(" + errorCode + "), " + Math.Max(0, status.RetrySecondsLeft) + " 秒後重試 (" + status.RetryAttempt + "/" + status.RetryTotal + ")",
+					culture);
+			}
+		}
+		foreach (SourceSearchStatus status in statusesInDisplayOrder)
+		{
+			if (status.Phase == SourceSearchPhase.CoolingDown)
+			{
+				string sourceName = GetSourceDisplayName(status.Source, culture);
+				string errorCode = FormatErrorCode(status.ErrorCode, culture);
+				return UiText.Get(
+					sourceName + " temporarily limited (" + errorCode + "), retry after " + Math.Max(0, status.CooldownSecondsLeft) + " seconds",
+					sourceName + " 暂时受限(" + errorCode + ")，" + Math.Max(0, status.CooldownSecondsLeft) + " 秒后可重试",
+					sourceName + " 暫時受限(" + errorCode + ")，" + Math.Max(0, status.CooldownSecondsLeft) + " 秒後可重試",
 					culture);
 			}
 		}

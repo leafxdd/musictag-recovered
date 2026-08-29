@@ -8,7 +8,8 @@ internal enum SourceSearchPhase
 	Searching,
 	Completed,
 	Error,
-	Retrying
+	Retrying,
+	CoolingDown
 }
 
 internal sealed class SourceSearchStatus
@@ -28,4 +29,7 @@ internal sealed class SourceSearchStatus
 
 	// 重试倒计时剩余秒数(Phase=Retrying 时有值)。
 	public int RetrySecondsLeft { get; set; }
+
+	// 进程级 provider 冷却剩余秒数(Phase=CoolingDown 时有值)。
+	public int CooldownSecondsLeft { get; set; }
 }

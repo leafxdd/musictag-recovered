@@ -22,6 +22,8 @@ internal static class QqProviderCharacterization
 	{
 		private readonly string response;
 
+		public string LastRequestBody { get; private set; }
+
 		public StubQqProvider(string response, CancellationTokenSource cancellation = null)
 			: base(cancellation)
 		{
@@ -30,7 +32,21 @@ internal static class QqProviderCharacterization
 
 		protected override string PostString(string url, string body, HttpClient client = null, bool postJson = false)
 		{
+			LastRequestBody = body;
 			return response;
+		}
+
+		protected override bool UseSharedRequestCoordination => false;
+	}
+
+	private sealed class CoordinatedStubQqProvider : QqMusicTagProvider
+	{
+		public int RequestCount { get; private set; }
+
+		protected override string PostString(string url, string body, HttpClient client = null, bool postJson = false)
+		{
+			RequestCount++;
+			return OneSongResponse;
 		}
 	}
 
@@ -101,6 +117,23 @@ internal static class QqProviderCharacterization
 
 	public static IEnumerable<(string, Action)> All()
 	{
+		yield return ("QQ request coordinator enters cooldown after 2001", delegate
+		{
+			QqRequestCoordinator.ResetForTests();
+			try
+			{
+				int ignoredSeconds;
+				Check.Equal(QqRequestPermit.Granted, QqRequestCoordinator.WaitForPermit(CancellationToken.None, out ignoredSeconds), "initial permit");
+				int cooldownSeconds = QqRequestCoordinator.RecordRateLimited();
+				Check.True(cooldownSeconds >= 59, "cooldown seconds");
+				Check.Equal(QqRequestPermit.CoolingDown, QqRequestCoordinator.WaitForPermit(CancellationToken.None, out ignoredSeconds), "cooldown permit");
+			}
+			finally
+			{
+				QqRequestCoordinator.ResetForTests();
+			}
+		});
+
 		yield return ("QQ.SearchTracks parses one complete song (typical)", delegate
 		{
 			List<TrackSearchResult> tracks = SearchTracks(OneSongResponse);
@@ -115,6 +148,43 @@ internal static class QqProviderCharacterization
 			Check.Equal("2015", tracks[0].Year, "[0].Year");
 			Check.Equal(0, tracks[0].ResultOrder, "[0].ResultOrder");
 			Check.Equal(SearchSource.QQ, tracks[0].SearchSource, "[0].SearchSource");
+		});
+
+		yield return ("QQ search maps configured Cookie login fields into request context", delegate
+		{
+			string previousCookie = Settings.Default.QQMusic_Cookie;
+			try
+			{
+				Settings.Default.QQMusic_Cookie = "uin=123456; authst=login-token; tmeLoginType=2; unrelated=value";
+				StubQqProvider provider = new StubQqProvider("{\"req_0\":{\"code\":0,\"data\":{\"body\":{\"song\":{\"list\":[]}}}}}");
+				provider.SearchTracks("query", 10, 0, 0, new List<TrackSearchResult>(), new List<TrackSearchResult>());
+				Newtonsoft.Json.Linq.JObject request = Newtonsoft.Json.Linq.JObject.Parse(provider.LastRequestBody);
+				Check.Equal("123456", request["loginUin"]?.ToString(), "loginUin");
+				Check.Equal("123456", request["comm"]?["uin"]?.ToString(), "comm.uin");
+				Check.Equal("login-token", request["comm"]?["authst"]?.ToString(), "comm.authst");
+				Check.Equal("2", request["comm"]?["tmeLoginType"]?.ToString(), "comm.tmeLoginType");
+			}
+			finally
+			{
+				Settings.Default.QQMusic_Cookie = previousCookie;
+			}
+		});
+
+		yield return ("QQ coordinated search caches the same successful query", delegate
+		{
+			QqRequestCoordinator.ResetForTests();
+			try
+			{
+				CoordinatedStubQqProvider provider = new CoordinatedStubQqProvider();
+				string query = "cache-test-" + Guid.NewGuid().ToString("N");
+				provider.SearchTracks(query, 10, 0, 0, new List<TrackSearchResult>(), new List<TrackSearchResult>());
+				provider.SearchTracks(query, 10, 0, 0, new List<TrackSearchResult>(), new List<TrackSearchResult>());
+				Check.Equal(1, provider.RequestCount, "request count");
+			}
+			finally
+			{
+				QqRequestCoordinator.ResetForTests();
+			}
 		});
 
 		yield return ("QQ.SearchTracks filters song with incomplete album (guard)", delegate

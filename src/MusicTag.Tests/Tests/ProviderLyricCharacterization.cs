@@ -97,6 +97,8 @@ internal static class ProviderLyricCharacterization
 			}
 			return false;
 		}
+
+		protected override bool UseSharedRequestCoordination => false;
 	}
 
 	private sealed class StubKugou : KugouTagProvider
