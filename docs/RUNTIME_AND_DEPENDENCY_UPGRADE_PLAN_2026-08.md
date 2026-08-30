@@ -207,7 +207,7 @@ public string[] lexemics;
 
 文档：`README.md`、`AGENTS.md`、`CLAUDE.md`、`artifacts/release/RELEASE_NOTES.md`、本文与实施报告。
 
-**不修改**：`MusicTag.sln`、`app.manifest`、`MusicTag.exe.config`、`TagHistoryRepository.cs`、SQLite schema 与 `MusicTag.db`、任何 Win32 interop 声明、Provider 协议、标签写入策略、DPI 算法、设置键、`SearchSource` 序号。
+**不修改**：`MusicTag.sln`、`app.manifest`、`MusicTag.exe.config`、`TagHistoryRepository.cs`、SQLite schema、任何 Win32 interop 声明、Provider 协议、标签写入策略、DPI 算法、设置键、`SearchSource` 序号。`MusicTag.db`/`MusicTag.dat` 属于安装实例状态，不再作为源码或发布包输入。
 
 ## 5. 明确不做的
 
@@ -300,9 +300,9 @@ codegraph sync
 4. **net10 隔离探针不能只编译主项目。** 必须实际构建并运行 net10 测试宿主，覆盖完整 characterization、真实文件数据库、`Fkosoft.FontAwesome4` 启动绑定、TagLib/UtfUnknown、资源和对话框构造。主项目编译通过不能证明 BinaryFormatter、SQLite 或 WinForms 运行期兼容。
 5. **Newtonsoft 迁移必须做干净构建。** 从本地 `<Reference>` 改成 `PackageReference` 后应删除对应 `bin/obj` 再构建，并增加程序集身份断言，确认运行时加载的是 `13.0.4` 而不是残留 DLL。CVE 的风险结论成立，但实际影响仍受 HTTPS、响应大小上限和可达输入深度影响；建议保留显式深度限制测试，不要把条件性风险写成必然进程崩溃。
 6. **发布说明不能依赖被忽略的文件。** `artifacts/release/RELEASE_NOTES.md` 当前被 `.gitignore` 忽略，且未发现仓库内打包脚本消费它。应先确认真正的发布文案来源；若该文件是发布流程输入，就应明确由发布流程生成或纳入受控交付，不能把修改一个被忽略文件视为已完成的版本记录。
-7. **x64 自动门禁仍需补强。** 除 PE 架构外，建议检查官方 `SQLite.Interop.dll` SHA-256、包内重复原生 DLL、托管/原生版本配对，并增加真实 `MusicTag.db` 读写和回滚测试。现有内存数据库测试不能替代历史库工作流。
+7. **x64 自动门禁仍需补强。** 除 PE 架构外，建议检查官方 `SQLite.Interop.dll` SHA-256、包内重复原生 DLL、托管/原生版本配对，并增加首次运行生成的临时历史库读写和回滚测试。现有内存数据库测试不能替代历史库工作流。
 8. **SDK 固定要精确到版本和前滚策略。** 当前机器同时安装 .NET SDK 8 和 10；只固定主版本仍会产生环境漂移。增加 `global.json` 前需说明它对仍使用 net481 的 `develop` 分支的影响，并在 CI 与本地验证中使用同一 SDK 策略。
-9. **SQLite 风险表述应收敛。** 应用会从程序目录打开可被替换的 `MusicTag.db`，因此“实际暴露面接近零”属于有条件的威胁模型，不应作为绝对结论。暂缓 `System.Data.SQLite` 升级可以接受，但应记录这是明确的风险接受项，并单独安排托管件/原生 interop 成对升级评估。
+9. **SQLite 风险表述应收敛。** 应用会从程序目录打开首次运行生成、可被替换的 `MusicTag.db`，因此“实际暴露面接近零”属于有条件的威胁模型，不应作为绝对结论。暂缓 `System.Data.SQLite` 升级可以接受，但应记录这是明确的风险接受项，并单独安排托管件/原生 interop 成对升级评估。
 10. **生成文件不应作为手工修改目标。** 资源替换应修改 `.resx` 并让 SDK 重新生成 `Resources.cs`；不要直接编辑生成文件。67 条二进制资源还应增加资源枚举、卫星资源加载和关键对话框构造的明确断言。
 
 ### 11.3 建议采用的执行顺序

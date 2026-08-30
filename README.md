@@ -45,7 +45,7 @@
 src/MusicTag/bin/Release/net8.0-windows/MusicTag.exe
 ```
 
-构建时会自动复制必要运行文件，例如 `TagLibSharp.dll`、`UtfUnknown.dll`、`SQLite.Interop.dll`、`System.Data.SQLite.dll`、`Newtonsoft.Json.dll`、`MusicTag.db`、`MusicTag.dat`、多语言资源 DLL 和 FontAwesome 字体。当前 SQLite 组合固定为托管 Provider `1.0.113.0` 和同版本官方 x64 interop；测试会真实打开内存数据库并执行查询。构建日志会写入 `artifacts/` 目录。
+构建时会自动复制必要运行文件，例如 `TagLibSharp.dll`、`UtfUnknown.dll`、`SQLite.Interop.dll`、`System.Data.SQLite.dll`、`Newtonsoft.Json.dll`、多语言资源 DLL 和 FontAwesome 字体。`MusicTag.db` 与 `MusicTag.dat` 是每个安装实例在首次运行时生成的本地历史和文件列表状态，不随源码或发布包提供。当前 SQLite 组合固定为托管 Provider `1.0.113.0` 和同版本官方 x64 interop；测试会真实打开内存数据库并执行查询。构建日志会写入 `artifacts/` 目录。
 
 ## 运行方式
 

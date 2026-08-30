@@ -4,7 +4,7 @@
 
 - The buildable source lives in `src/MusicTag`.
 - The project targets `.NET Framework 4.8.1` and builds with Visual Studio Build Tools 2022 or newer.
-- Runtime dependencies are kept in `src/MusicTag/musictag` and copied to the output directory by the project file — managed `TagLibSharp`/`UtfUnknown` plus the original `SQLite.Interop.dll`, satellite resource DLLs, `MusicTag.db`/`MusicTag.dat`, and the FontAwesome font. The original native `MusicTag.dll`/`MediaInfo.dll` were removed once the managed migration replaced their last use (see the Stage A/B changelog entries below and `docs/NATIVE_DEPENDENCY_REMOVAL_PLAN.md`).
+- Runtime dependencies are kept in `src/MusicTag/musictag` and copied to the output directory by the project file — managed `TagLibSharp`/`UtfUnknown` plus the original `SQLite.Interop.dll`, satellite resource DLLs, and the FontAwesome font. `MusicTag.db` and `MusicTag.dat` are per-installation state generated on first launch and are ignored rather than distributed. The original native `MusicTag.dll`/`MediaInfo.dll` were removed once the managed migration replaced their last use (see the Stage A/B changelog entries below and `docs/NATIVE_DEPENDENCY_REMOVAL_PLAN.md`).
 - `tools/` is ignored and intentionally left as a local reverse-engineering toolbox.
 - `.gitattributes` normalizes source/project text files and marks original runtime assets as binary.
 - `src/MusicTag.Tests` is a zero-dependency characterization test project (a plain net481 console exe with hand-rolled `Check` assertions, no NuGet); `.\scripts\Verify-Build.ps1 -RunSmokeTests` builds and runs it before the smoke tests.

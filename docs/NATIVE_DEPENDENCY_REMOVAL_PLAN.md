@@ -19,7 +19,7 @@ CRC-16 校验,只有原版 EXE 放行标签读写;重编译的 EXE 必须给 DLL
 | `MediaInfo.dll` | `MusicTag.dll` 内部依赖(C# 不直接调) | 随 ① 一起去留 |
 | 卫星资源 DLL(en/zh-CHS/zh-CHT) | 预编译本地化(源码无分语言 resx) | 独立低优先,本规划不含 |
 | `SQLite.Interop.dll` / System.Data.SQLite | 标签历史库 | 否(标准开源件) |
-| `MusicTag.db` / `MusicTag.dat` | 数据/设置文件 | 否(数据,非代码依赖) |
+| `MusicTag.db` / `MusicTag.dat` | 首次运行生成的本地历史/设置状态 | 不随源码或发布包分发(由应用按需创建) |
 | user32/shell32/uxtheme P/Invoke | 标准 Win32 | 否(不是原版依赖) |
 
 ## 3. 关键事实(已查证)

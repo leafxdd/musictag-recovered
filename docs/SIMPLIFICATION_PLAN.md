@@ -360,7 +360,7 @@
 | `b2f9a11` | harness 骨架 + IVT + Verify-Build 集成 + 零依赖自检 | 4 自检（`TextUtilities` 纯确定性、locale 无关不变式：UnixEpoch→1970 UTC / UrlEncode 空格→%20 / CoalesceNonBlank / MD5("") 公认常量） |
 | `cd443c0` | NetEase 解析 golden master（注入点验证） | 典型 2 结果（Id/Title/Artist/Album/Year/Comment/ResultOrder/SearchSource）/ 空结果→0 / 同 id 去重→1 / HTTP-200 不可解析→`ParseFailed` |
 
-- **副产实证**：`Settings.Default` 在 console 测试宿主按 `musictag/MusicTag.config` 默认值工作（`ConnectorsArtists`=`/` / `CommentTagWrite163Key`=False / `TrackSearchResult` static cctor 读 `CombTagsInfo_SourceItemList` 均正常）；`Newtonsoft.Json`/`System.Data.SQLite`/`MusicTag.db` 等依赖经 ProjectReference 自动传递到测试 bin。
+- **副产实证**：`Settings.Default` 在 console 测试宿主按 `musictag/MusicTag.config` 默认值工作（`ConnectorsArtists`=`/` / `CommentTagWrite163Key`=False / `TrackSearchResult` static cctor 读 `CombTagsInfo_SourceItemList` 均正常）；`Newtonsoft.Json`/`System.Data.SQLite` 等依赖经 ProjectReference 自动传递到测试 bin。历史库文件由应用首次运行时生成，不作为测试或源码依赖提交。
 - **provider 覆盖完成（2026-06-29）**：4 provider 解析全部 characterize（22 测试：4 自检 + NetEase 4 + QQ 5 + Kuwo 5 + Kugou 4），各一个 commit（`9f2f0a4` QQ、`6af2ce7` Kuwo、`770a27e` Kugou）。注入点二分：NetEase/QQ 走 `PostString`（POST），Kuwo/Kugou 走 `GetResponseString`（GET）；均从 public `SearchTracks` 端到端驱动真实解析链，锁定字段映射 / 过滤 / 去重 / 排序 / `ParseFailed` 回填 + 各源特有行为：
   - QQ：空 album guard（`Album.Id>0 && Mid 非空 && Name 非空`）、限流 2001 → `Retrying` 上报（测试用 StatusReporter 回调首次上报即 cancel，避开真实指数退避）、`title`/`name` 双字段。
   - Kuwo：`TrackId` 去 `MUSIC_` 前缀、album-first / fallback 选取、Title&Artist 必须非空。
