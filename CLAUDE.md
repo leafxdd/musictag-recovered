@@ -8,7 +8,7 @@
 - `src/MusicTag/MusicTag.csproj` is the application.
 - `src/MusicTag.Tests/MusicTag.Tests.csproj` is the x64 characterization harness.
 - `scripts/Verify-Build.ps1` is the normal build and smoke-test entry point.
-- Runtime files under `src/MusicTag/musictag/` are required application assets.
+- Runtime binaries and resources under `src/MusicTag/musictag/` are required application assets. `MusicTag.db` and `MusicTag.dat` are installation-specific state generated on first launch and are intentionally not tracked or packaged.
 
 The existing `System.Data.SQLite.dll 1.0.113.0` remains paired with the official x64
 `SQLite.Interop.dll` of the same version. Do not change only one half of that pair. The

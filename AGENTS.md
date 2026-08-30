@@ -21,7 +21,7 @@ Open the repository through `MusicTag.sln`. It currently contains:
 
 Recovered namespaces under `src/MusicTag/` do not reliably describe logical ownership. WinForms UI, online providers, serialization, and interop types are scattered across legacy namespace/folder boundaries. Locate code by type or symbol, not by guessing a folder.
 
-Runtime assets in `src/MusicTag/musictag/` are required and copied by the project, including managed dependencies, SQLite interop/data files, satellite resources, and fonts. The managed `System.Data.SQLite.dll 1.0.113.0` is paired with the official x64 `SQLite.Interop.dll` of the same version; a bitness or version mismatch fails at runtime. Do not remove or replace these assets without verifying startup, resource loading, tag I/O, and packaging.
+Runtime assets in `src/MusicTag/musictag/` are required and copied by the project, including managed dependencies, the SQLite interop library, satellite resources, and fonts. `MusicTag.db` and `MusicTag.dat` are per-installation state generated on first launch; they are intentionally excluded from the project and ignored by Git. The managed `System.Data.SQLite.dll 1.0.113.0` is paired with the official x64 `SQLite.Interop.dll` of the same version; a bitness or version mismatch fails at runtime. Do not remove or replace these runtime assets without verifying startup, resource loading, tag I/O, and packaging.
 
 Maintenance records live in `docs/`; build and investigation output belongs in `artifacts/`. Some documentation describes the `develop`/net481 line and can be stale for `develop-net8`. When facts conflict, the active `.csproj`, source, verification script, and current Git history win.
 
