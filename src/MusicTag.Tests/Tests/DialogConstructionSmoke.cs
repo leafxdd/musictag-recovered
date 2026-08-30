@@ -60,6 +60,9 @@ internal static class DialogConstructionSmoke
 					ComboBox pictureFormat = (ComboBox)GetField(dialog, "pictureFormatLimitComboBox");
 					NumericUpDown jpegQuality = (NumericUpDown)GetField(dialog, "pictureEncodingQualityNumericUpDown");
 					NumericUpDown pngCompression = (NumericUpDown)GetField(dialog, "picturePngCompressionNumericUpDown");
+					CheckBox limitLyricDownloadRate = (CheckBox)GetField(dialog, "limitLyricDownloadRateCheckBox");
+					Check.True(limitLyricDownloadRate.AutoSize, "lyric rate-limit option uses autosize");
+					Check.Equal("cbLyricDlLimitRequestRate", limitLyricDownloadRate.Name, "lyric rate-limit option name");
 					Check.Equal(3, pictureFormat.Items.Count, "AUTO/JPG/PNG format options");
 					dialog.Show();
 					((TreeView)GetField(dialog, "optionsTreeView")).SelectedNode = ((TreeView)GetField(dialog, "optionsTreeView")).Nodes[2];

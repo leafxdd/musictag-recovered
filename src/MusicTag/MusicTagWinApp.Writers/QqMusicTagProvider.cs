@@ -158,6 +158,11 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 	// 测试 provider 覆盖此开关以跳过真实的进程级等待和缓存;生产 provider 始终启用。
 	protected virtual bool UseSharedRequestCoordination => true;
 
+	// QQ 搜索仍始终走进程级协调器;歌词下载的最小间隔和冷却可由用户设置关闭,
+	// 以保留旧版的并发下载行为。歌词结果缓存/并发去重不受此开关影响。
+	protected virtual bool UseLyricRequestCoordination =>
+		UseSharedRequestCoordination && Settings.Default.LyricDownload_LimitRequestRate;
+
 	private List<QqSongInfo> SearchSongs(string query, int maxResults)
 	{
 		if (!UseSharedRequestCoordination)
@@ -647,7 +652,7 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 		const int maxAttempts = 2;
 		for (int attempt = 0; attempt < maxAttempts; attempt++)
 		{
-			if (UseSharedRequestCoordination)
+			if (UseLyricRequestCoordination)
 			{
 				int cooldownSeconds;
 				QqRequestPermit permit = QqRequestCoordinator.WaitForPermit(cancellationSource.Token, out cooldownSeconds);
@@ -678,7 +683,7 @@ internal class QqMusicTagProvider : RemoteTagProviderBase, ITrackSearchProvider,
 				return null;
 			}
 			qrcRateLimited = IsRateLimited(qrcResponse);
-			if (qrcRateLimited && UseSharedRequestCoordination)
+			if (qrcRateLimited && UseLyricRequestCoordination)
 			{
 				int cooldownSeconds = QqRequestCoordinator.RecordRateLimited();
 				SetTransportError(RemoteErrorKind.RateLimited, "2001");

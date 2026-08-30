@@ -45,6 +45,12 @@
 2. Cookie 保存前执行一次短超时 API 探测；明确登录失效业务码（`1000`、`104400`、`104401`）阻止保存并提示重新复制。限流、断网和未知响应只提示暂时无法确认，仍允许保存。
 3. 搜索、歌词 QRC 和歌曲 ID 详情遇到上述失效码时停止 QQ 后续回退，并在搜索状态栏显示 Cookie 已过期；不把失效结果写入缓存。
 
+### 阶段 3.2：歌词节流可选化
+
+1. 新增 `LyricDownload_LimitRequestRate` 设置，默认值为 `False`，位于歌词下载清理选项中。
+2. 未勾选时，QQ 歌词恢复原有的并发请求与一次 2001 短重试路径；歌词结果缓存和同歌曲 in-flight 去重仍保留，以避免重复下载。
+3. 勾选时，QQ 歌词沿用进程级最小间隔和 2001 冷却；QQ 搜索请求不受该开关影响，始终保留已有的搜索限流防护。
+
 ### 阶段 4：Mobile/Session 协议评估
 
 1. 录制 `DoSearchForQQMusicMobile`、完整 `comm` 和 `GetSession` 的低频请求/响应 fixture。
@@ -65,9 +71,10 @@
 - 设置页保存非空 Cookie 时校验账号字段（`uin/Uin/p_uin/euin`）和鉴权字段（`authst/qm_keyst/qqmusic_key`）；`loginUin` 是请求体字段，不作为 Cookie 缺失项。
 - 成功 QQ 歌词按歌曲 ID、MID 和 Cookie 摘要缓存 30 分钟，并复用同一歌曲的并发 in-flight 加载；缓存只接受至少有原文或译文的解析结果，不缓存空结果、解析失败或限流结果。
 - 设置页保存非空 Cookie 时发送一次 5 秒超时探测；`1000/104400/104401` 显示 Cookie 过期并阻止保存，`2001`、网络错误和未知响应显示提示但保留设置。查询和 ID 详情遇到失效码时显示专用状态并停止 QQ 回退。
+- 设置页新增“限制 QQ 歌词下载速率”开关，默认关闭；关闭时保持旧版并发歌词下载，开启时启用 QQ 歌词请求闸门和冷却，搜索闸门仍始终启用。
 - 测试 provider 显式关闭真实协调器等待，避免 characterization 依赖墙钟时间；生产类型默认始终启用。
 
-当前 characterization 结果为 `978 passed, 0 failed`；本轮已完成测试项目构建和 characterization，完整 `Verify-Build.ps1 -RunSmokeTests` 仍需在提交前执行。上述缓存、探测解析和协调器测试使用录制响应，不代表真实 QQ 端已稳定放行。
+当前 characterization 结果为 `980 passed, 0 failed`；本轮已完成测试项目构建和 characterization，完整 `Verify-Build.ps1 -RunSmokeTests` 仍需在提交前执行。上述缓存、探测解析和协调器测试使用录制响应，不代表真实 QQ 端已稳定放行。
 
 ## 验证门槛
 

@@ -122,6 +122,43 @@ internal static class ProviderLyricCharacterization
 		protected override string GetResponseString(string url) => null;
 	}
 
+	private sealed class SwitchableCoordinatedQq : QqMusicTagProvider
+	{
+		private readonly Queue<string> qrcResponses;
+
+		public int QrcRequestCount { get; private set; }
+
+		public int LegacyRequestCount { get; private set; }
+
+		public int LyricRetryWaitCount { get; private set; }
+
+		public List<SourceSearchStatus> Statuses { get; } = new List<SourceSearchStatus>();
+
+		public SwitchableCoordinatedQq(IEnumerable<string> qrcResponses) : base(null)
+		{
+			this.qrcResponses = new Queue<string>(qrcResponses ?? Array.Empty<string>());
+			StatusReporter = Statuses.Add;
+		}
+
+		protected override string PostString(string url, string body, HttpClient client = null, bool postJson = false)
+		{
+			QrcRequestCount++;
+			return qrcResponses.Count > 0 ? qrcResponses.Dequeue() : "{\"req_0\":{\"code\":2001}}";
+		}
+
+		protected override string GetResponseString(string url)
+		{
+			LegacyRequestCount++;
+			return null;
+		}
+
+		protected override bool WaitForLyricRetryDelay(int waitMilliseconds)
+		{
+			LyricRetryWaitCount++;
+			return false;
+		}
+	}
+
 	private sealed class StubKugou : KugouTagProvider
 	{
 		private readonly string searchResponse;
@@ -469,6 +506,88 @@ internal static class ProviderLyricCharacterization
 			}
 			finally
 			{
+				QqMusicTagProvider.ClearCachesForTests();
+				QqRequestCoordinator.ResetForTests();
+			}
+		});
+
+		yield return ("QQ lyric rate-limit switch off bypasses shared cooldown and preserves retry", delegate
+		{
+			bool previousSetting = Settings.Default.LyricDownload_LimitRequestRate;
+			QqMusicTagProvider.ClearCachesForTests();
+			QqRequestCoordinator.ResetForTests();
+			try
+			{
+				Settings.Default.LyricDownload_LimitRequestRate = false;
+				// A disabled lyric gate must keep the legacy path even when QQ search has
+				// already put the shared coordinator into cooldown.
+				QqRequestCoordinator.RecordRateLimited();
+				using SwitchableCoordinatedQq provider = new SwitchableCoordinatedQq(new[]
+				{
+					"{\"req_0\":{\"code\":2001}}",
+					QqQrcResponse("[1000,500]Concurrent(1000,500)")
+				});
+				TrackSearchResult track = new TrackSearchResult
+				{
+					SourceTrackId = "901001",
+					QqMusicMid = "SWITCH_OFF_MID",
+					Title = "Concurrent",
+					OriginalTitle = "Concurrent",
+					Artist = "Artist",
+					Album = "Album"
+				};
+
+				LyricSearchResult lyric = provider.LoadLyricsForTrack(track);
+				Check.NotNull(lyric, "lyric result");
+				Check.True(lyric.Lyric.Contains("Concurrent", StringComparison.Ordinal), "retried lyric text");
+				Check.Equal(2, provider.QrcRequestCount, "QRC request count");
+				Check.Equal(0, provider.LegacyRequestCount, "legacy request count");
+				Check.Equal(1, provider.LyricRetryWaitCount, "retry wait count");
+				Check.True(provider.Statuses.Exists(status => status.Phase == SourceSearchPhase.Retrying), "retry status");
+				Check.True(!provider.Statuses.Exists(status => status.Phase == SourceSearchPhase.CoolingDown), "no cooldown status");
+			}
+			finally
+			{
+				Settings.Default.LyricDownload_LimitRequestRate = previousSetting;
+				QqMusicTagProvider.ClearCachesForTests();
+				QqRequestCoordinator.ResetForTests();
+			}
+		});
+
+		yield return ("QQ lyric rate-limit switch on uses the shared cooldown path", delegate
+		{
+			bool previousSetting = Settings.Default.LyricDownload_LimitRequestRate;
+			QqMusicTagProvider.ClearCachesForTests();
+			QqRequestCoordinator.ResetForTests();
+			try
+			{
+				Settings.Default.LyricDownload_LimitRequestRate = true;
+				using SwitchableCoordinatedQq provider = new SwitchableCoordinatedQq(new[]
+				{
+					"{\"req_0\":{\"code\":2001}}"
+				});
+				TrackSearchResult track = new TrackSearchResult
+				{
+					SourceTrackId = "901002",
+					QqMusicMid = "SWITCH_ON_MID",
+					Title = "Throttled",
+					OriginalTitle = "Throttled",
+					Artist = "Artist",
+					Album = "Album"
+				};
+
+				LyricSearchResult lyric = provider.LoadLyricsForTrack(track);
+				Check.Null(lyric, "lyric result");
+				Check.Equal(1, provider.QrcRequestCount, "QRC request count");
+				Check.Equal(0, provider.LegacyRequestCount, "legacy request count");
+				Check.Equal(0, provider.LyricRetryWaitCount, "retry wait count");
+				Check.NotNull(provider.LastTransportResult, "LastTransportResult");
+				Check.Equal(RemoteErrorKind.RateLimited, provider.LastTransportResult.Error, "transport error");
+				Check.True(provider.Statuses.Exists(status => status.Phase == SourceSearchPhase.CoolingDown), "cooldown status");
+			}
+			finally
+			{
+				Settings.Default.LyricDownload_LimitRequestRate = previousSetting;
 				QqMusicTagProvider.ClearCachesForTests();
 				QqRequestCoordinator.ResetForTests();
 			}

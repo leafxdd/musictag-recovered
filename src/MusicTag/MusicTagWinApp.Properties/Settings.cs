@@ -118,6 +118,23 @@ internal sealed class Settings : ApplicationSettingsBase
 	}
 
 	[SettingsProvider(typeof(XmlSettingsProvider))]
+	[UserScopedSetting]
+	[DebuggerNonUserCode]
+	[SettingsManageability(SettingsManageability.Roaming)]
+	[DefaultSettingValue("False")]
+	public bool LyricDownload_LimitRequestRate
+	{
+		get
+		{
+			return (bool)this["LyricDownload_LimitRequestRate"];
+		}
+		set
+		{
+			this["LyricDownload_LimitRequestRate"] = value;
+		}
+	}
+
+	[SettingsProvider(typeof(XmlSettingsProvider))]
 	[DebuggerNonUserCode]
 	[SettingsManageability(SettingsManageability.Roaming)]
 	[DefaultSettingValue("False")]

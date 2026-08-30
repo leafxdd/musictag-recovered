@@ -85,6 +85,8 @@ internal class OptionsDialog : Form
 
 	private CheckBox reformatTimestampCheckBox;
 
+	private CheckBox limitLyricDownloadRateCheckBox;
+
 	private CheckBox removeTimestampCheckBox;
 
 	private CheckBox removeBlankLyricLinesCheckBox;
@@ -432,6 +434,10 @@ internal class OptionsDialog : Form
 		simplifiedToTraditionalRadioButton.Text = GetDialogText("rbZhConvCHSToCHT", simplifiedToTraditionalRadioButton.Text);
 		lyricTranslationSeparatorLabel.Text = GetDialogText("lblConnectorsLyricAndTLyric", lyricTranslationSeparatorLabel.Text);
 		reformatTimestampCheckBox.Text = GetDialogText("cbLyricDlReformatTimetag", reformatTimestampCheckBox.Text);
+		limitLyricDownloadRateCheckBox.Text = GetDialogText("cbLyricDlLimitRequestRate", UiText.Get(
+			"Limit QQ lyric download rate (reduce API rate limiting)",
+			"限制 QQ 歌词下载速率（降低 API 限流概率）",
+			"限制 QQ 音樂歌詞下載速率（降低 API 限流機率）"));
 		removeTimestampCheckBox.Text = GetDialogText("cbLyricDlRemoveTimetag", removeTimestampCheckBox.Text);
 		removeBlankLyricLinesCheckBox.Text = GetDialogText("cbLyricDlDeletelinesofblanktext", removeBlankLyricLinesCheckBox.Text);
 		removeLyricHeaderTagsCheckBox.Text = GetDialogText("cbLyricDlDeleteheadtags", removeLyricHeaderTagsCheckBox.Text);
@@ -476,6 +482,10 @@ internal class OptionsDialog : Form
 		optionsToolTip.SetToolTip(lyricSourceLimitTrackBar, dialogResources.GetString("tbWebSearchLimitTip"));
 		optionsToolTip.SetToolTip(tagSourceLimitTrackBar, dialogResources.GetString("tbWebSearchLimitTip"));
 		optionsToolTip.SetToolTip(lyricTranslationSeparatorComboBox, dialogResources.GetString("cbConnectorsLyricAndTLyricTip"));
+		optionsToolTip.SetToolTip(limitLyricDownloadRateCheckBox, UiText.Get(
+			"Serialize QQ lyric requests to reduce API rate limiting; leave unchecked for concurrent downloads.",
+			"串行限制 QQ 歌词请求以降低 API 限流；取消勾选可并发下载。",
+			"串行限制 QQ 音樂歌詞請求以降低 API 限流；取消勾選可並行下載。"));
 		optionsToolTip.SetToolTip(browseLrcDirectoryButton, dialogResources.GetString("btnLrcSaveDirTip"));
 		optionsToolTip.SetToolTip(useLocalLrcDirectoryButton, dialogResources.GetString("btnLrcSaveLocalDirTip"));
 		DialogService.SetTextBoxCueBanner(lrcDirectoryTextBox, dialogResources.GetString("tbLrcSaveDirHint"));
@@ -535,6 +545,7 @@ internal class OptionsDialog : Form
 		lyricTranslationSeparatorComboBox.Items.AddRange(BuiltInLyricTranslationSeparators);
 		lyricTranslationSeparatorComboBox.Text = TextUtilities.CoalesceNonBlank(Settings.Default.ConnectorsLyricAndTLyric, " ");
 		reformatTimestampCheckBox.Checked = Settings.Default.LyricDownload_ReformatTimetag;
+		limitLyricDownloadRateCheckBox.Checked = Settings.Default.LyricDownload_LimitRequestRate;
 		removeTimestampCheckBox.Checked = Settings.Default.LyricDownload_RemoveTimetag;
 		removeBlankLyricLinesCheckBox.Checked = Settings.Default.LyricDownload_DeleteLinesOfBlankText;
 		removeLyricHeaderTagsCheckBox.Checked = Settings.Default.LyricDownload_DeleteHeadTag;
@@ -880,6 +891,7 @@ internal class OptionsDialog : Form
 		Settings.Default.LyricDownload_DownloadTrans_LyricFormat = ResolveTranslatedLyricFormatSetting(translatedLyricFormat2RadioButton.Checked, translatedLyricFormat3RadioButton.Checked, translatedLyricFormat4RadioButton.Checked);
 		Settings.Default.LyricDownload_DownloadTrans_ChineseConvMode = ResolveChineseConversionModeSetting(traditionalToSimplifiedRadioButton.Checked, simplifiedToTraditionalRadioButton.Checked);
 		Settings.Default.LyricDownload_ReformatTimetag = reformatTimestampCheckBox.Checked;
+		Settings.Default.LyricDownload_LimitRequestRate = limitLyricDownloadRateCheckBox.Checked;
 		Settings.Default.LyricDownload_RemoveTimetag = removeTimestampCheckBox.Checked;
 		Settings.Default.LyricDownload_DeleteLinesOfBlankText = removeBlankLyricLinesCheckBox.Checked;
 		Settings.Default.LyricDownload_DeleteHeadTag = removeLyricHeaderTagsCheckBox.Checked;
@@ -1214,6 +1226,7 @@ internal class OptionsDialog : Form
 		simplifiedToTraditionalRadioButton = new RadioButton();
 		lyricCleanupOptionsPanel = new FlowLayoutPanel();
 		reformatTimestampCheckBox = new CheckBox();
+		limitLyricDownloadRateCheckBox = new CheckBox();
 		removeTimestampCheckBox = new CheckBox();
 		removeBlankLyricLinesCheckBox = new CheckBox();
 		removeLyricHeaderTagsCheckBox = new CheckBox();
@@ -1562,12 +1575,13 @@ internal class OptionsDialog : Form
 		lyricCleanupOptionsPanel.Controls.Add(removeTimestampCheckBox);
 		lyricCleanupOptionsPanel.Controls.Add(removeBlankLyricLinesCheckBox);
 		lyricCleanupOptionsPanel.Controls.Add(removeLyricHeaderTagsCheckBox);
+		lyricCleanupOptionsPanel.Controls.Add(limitLyricDownloadRateCheckBox);
 		lyricCleanupOptionsPanel.FlowDirection = FlowDirection.TopDown;
 		lyricCleanupOptionsPanel.Location = new Point(6, 650);
 		lyricCleanupOptionsPanel.Margin = new Padding(0, 5, 0, 0);
 		lyricCleanupOptionsPanel.Name = "panelLyricDownload";
 		lyricCleanupOptionsPanel.Padding = new Padding(5);
-		lyricCleanupOptionsPanel.Size = new Size(350, 127);
+		lyricCleanupOptionsPanel.Size = new Size(350, 158);
 		lyricCleanupOptionsPanel.TabIndex = 5;
 		reformatTimestampCheckBox.AutoSize = true;
 		reformatTimestampCheckBox.Location = new Point(5, 10);
@@ -1601,6 +1615,14 @@ internal class OptionsDialog : Form
 		removeLyricHeaderTagsCheckBox.TabIndex = 3;
 		removeLyricHeaderTagsCheckBox.Text = "Delete head tags";
 		removeLyricHeaderTagsCheckBox.UseVisualStyleBackColor = true;
+		limitLyricDownloadRateCheckBox.AutoSize = true;
+		limitLyricDownloadRateCheckBox.Location = new Point(5, 131);
+		limitLyricDownloadRateCheckBox.Margin = new Padding(0, 10, 3, 3);
+		limitLyricDownloadRateCheckBox.Name = "cbLyricDlLimitRequestRate";
+		limitLyricDownloadRateCheckBox.Size = new Size(340, 18);
+		limitLyricDownloadRateCheckBox.TabIndex = 4;
+		limitLyricDownloadRateCheckBox.Text = "Limit QQ lyric download rate (reduce API rate limiting)";
+		limitLyricDownloadRateCheckBox.UseVisualStyleBackColor = true;
 		searchAndTagOptionsPanel.Controls.Add(webSearchCriteriaLabel);
 		searchAndTagOptionsPanel.Controls.Add(webSearchCriteriaPanel);
 		searchAndTagOptionsPanel.Controls.Add(pictureSizeLimitLabel);
