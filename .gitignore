@@ -45,3 +45,7 @@ docs/old/
 .repowise/
 AGENTS.md
 cctortest/
+
+# Runtime state is generated per installation and must never be committed.
+/src/MusicTag/musictag/MusicTag.db
+/src/MusicTag/musictag/MusicTag.dat
