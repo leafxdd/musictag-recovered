@@ -31,7 +31,7 @@ msbuild MusicTag.sln /restore /p:Configuration=Release
 src/MusicTag/bin/Release/net481/MusicTag.exe
 ```
 
-构建时会自动复制必要运行文件，例如 `TagLibSharp.dll`、`UtfUnknown.dll`、`SQLite.Interop.dll`、`System.Data.SQLite.dll`、`Newtonsoft.Json.dll`、`MusicTag.db`、`MusicTag.dat`、多语言资源 DLL 和 FontAwesome 字体。
+构建时会自动复制必要运行文件，例如 `TagLibSharp.dll`、`UtfUnknown.dll`、`SQLite.Interop.dll`、`System.Data.SQLite.dll`、`Newtonsoft.Json.dll`、多语言资源 DLL 和 FontAwesome 字体。`MusicTag.db` 与 `MusicTag.dat` 是每个安装实例在首次运行时生成的本地历史和文件列表状态，不随源码或发布包提供。
 
 ## 运行方式
 
