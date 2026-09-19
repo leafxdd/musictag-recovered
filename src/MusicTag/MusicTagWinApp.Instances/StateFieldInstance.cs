@@ -3530,8 +3530,7 @@ internal partial class StateFieldInstance : Form
 		fileListView.DefaultCellStyle.BackColor = Color.White;
 		fileListView.DefaultCellStyle.ForeColor = SystemColors.WindowText;
 		fileListView.DefaultCellStyle.Font = listFont;
-		fileListView.DefaultCellStyle.SelectionBackColor = SystemColors.Highlight;
-		fileListView.DefaultCellStyle.SelectionForeColor = SystemColors.HighlightText;
+		ApplyFileListSelectionColors();
 		fileListView.RowsDefaultCellStyle.BackColor = Color.White;
 		fileListView.AlternatingRowsDefaultCellStyle.BackColor = Color.White;
 		fileListView.ColumnHeadersDefaultCellStyle.BackColor = Color.White;
@@ -3542,6 +3541,23 @@ internal partial class StateFieldInstance : Form
 		fileListView.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.White;
 		fileListView.ColumnHeadersDefaultCellStyle.SelectionForeColor = SystemColors.ControlText;
 		fileListView.ColumnHeadersHeight = Math.Max(fileListView.ColumnHeadersHeight, ImageUtilities.ScaleByDpi(24f));
+	}
+
+	// 选中行的活动/非活动两套配色 —— 复刻原 ListView HideSelection=false 的语义:失焦后
+	// 选中仍然可见,但改用非活动色,免得焦点早已在标签面板、列表却还是一片高亮蓝。
+	// 与本仓库 EditableListView.DrawCustomSubItem 的 inactiveSelectedRowBackBrush 同一路子。
+	// 用 ContainsFocus 而非 Focused:就地重命名时焦点在 DGV 的子编辑控件上,那仍算活动。
+	private void ApplyFileListSelectionColors()
+	{
+		bool active = fileListView.ContainsFocus;
+		fileListView.DefaultCellStyle.SelectionBackColor = active ? SystemColors.Highlight : SystemColors.Control;
+		fileListView.DefaultCellStyle.SelectionForeColor = active ? SystemColors.HighlightText : SystemColors.ControlText;
+	}
+
+	private void FileList_FocusChanged(object sender, EventArgs e)
+	{
+		ApplyFileListSelectionColors();
+		fileListView.Invalidate();
 	}
 
 	// 依 cachedFileListItems(主表 = 显示顺序)的 IsHidden 重建可见行集合与下标反查,并把 RowCount 同步给 DGV。
