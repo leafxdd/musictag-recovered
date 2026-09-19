@@ -2783,6 +2783,15 @@ internal partial class StateFieldInstance : Form
 	// 在 CellMouseDown 认定,MouseUp 起 inlineRenameClickTimer,Tick 时再验一次选中态才真正进编辑。
 	private FileRow pendingInlineRenameRow;
 
+	// 键入即定位的前缀缓冲与上次按键时刻 —— 复刻原 ListView 报表视图自带的增量搜索
+	// (DGV 没有任何等价物)。超过 TypeAheadResetMilliseconds 未再按键即视为新一轮搜索,
+	// 因此不需要额外的计时器,下一次按键自己判超时即可。
+	private string typeAheadPrefix = "";
+
+	private long typeAheadLastKeyTicks;
+
+	private const int TypeAheadResetMilliseconds = 1000;
+
 	private FormPosSizeInfo MainFormPosSizeInfo { get; set; }
 
 	private ListViewItemNaturalComparer.ListViewSortSetting SortSetting { get; set; }
@@ -3558,6 +3567,153 @@ internal partial class StateFieldInstance : Form
 	{
 		ApplyFileListSelectionColors();
 		fileListView.Invalidate();
+	}
+
+	// 首列约定 = 文件名列:CellTexts 寻址、首列自绘图标、就地重命名、键入即定位都按它走。
+	private static int GetFileNameColumnIndex()
+	{
+		return configuredColumnHeaders.FindIndex(column => column.Name == "filename");
+	}
+
+	// 键入即定位:焦点在列表上直接敲字符,跳到首列文本以该前缀开头的下一项。
+	private void FileList_KeyPress(object sender, KeyPressEventArgs e)
+	{
+		if (char.IsControl(e.KeyChar) || fileListView.IsCurrentCellInEditMode || visibleRows.Count == 0)
+		{
+			return;
+		}
+		long nowTicks = Environment.TickCount64;
+		if (nowTicks - typeAheadLastKeyTicks > TypeAheadResetMilliseconds)
+		{
+			typeAheadPrefix = "";
+		}
+		// 空格在 ListView 里是"切换选中"而不是搜索的起始字符,只有接在已有前缀后面才算。
+		if (e.KeyChar == ' ' && typeAheadPrefix.Length == 0)
+		{
+			return;
+		}
+		typeAheadLastKeyTicks = nowTicks;
+		typeAheadPrefix += e.KeyChar;
+		// 连敲同一个字符 = 在以该字符开头的项之间轮转(ListView 的老习惯),而不是去搜 "aaa"。
+		string searchPrefix = typeAheadPrefix;
+		if (searchPrefix.Length > 1 && searchPrefix.All(character => character == searchPrefix[0]))
+		{
+			searchPrefix = searchPrefix.Substring(0, 1);
+		}
+		// 新搜索/轮转从下一行起找;继续补全前缀时从当前行起找,否则刚匹配上的行会被跳过。
+		int matchIndex = FindFileRowByPrefix(searchPrefix, searchPrefix.Length == 1 ? 1 : 0);
+		if (matchIndex >= 0)
+		{
+			SelectAndRevealFileRow(matchIndex);
+		}
+		e.Handled = true;
+	}
+
+	// 从"当前行 + startOffset"起环形查找首列文本以 prefix 开头的可见行;找不到返回 -1。
+	private int FindFileRowByPrefix(string prefix, int startOffset)
+	{
+		int columnIndex = GetFileNameColumnIndex();
+		if (columnIndex < 0)
+		{
+			return -1;
+		}
+		int rowCount = visibleRows.Count;
+		int currentIndex = fileListView.CurrentCell?.RowIndex ?? -1;
+		int fromIndex = (currentIndex < 0 || currentIndex >= rowCount) ? 0 : (currentIndex + startOffset) % rowCount;
+		for (int step = 0; step < rowCount; step++)
+		{
+			int index = (fromIndex + step) % rowCount;
+			string[] cellTexts = visibleRows[index].CellTexts;
+			if (columnIndex < cellTexts.Length
+				&& cellTexts[columnIndex].StartsWith(prefix, StringComparison.CurrentCultureIgnoreCase))
+			{
+				return index;
+			}
+		}
+		return -1;
+	}
+
+	// 定位到指定可见行。CurrentCell 必须落在可见列上,否则 DGV 抛异常 —— 首列可被用户
+	// 隐藏,故取首个可见列。实测:VirtualMode 下设 CurrentCell 不保证把该行滚进视口
+	// (键入即定位跳到屏外的行时,选中变了但视口纹丝不动),所以显式滚一次。
+	private void SelectAndRevealFileRow(int visibleIndex)
+	{
+		if (visibleIndex < 0 || visibleIndex >= fileListView.RowCount)
+		{
+			return;
+		}
+		DataGridViewColumn firstVisibleColumn = fileListView.Columns.GetFirstColumn(DataGridViewElementStates.Visible);
+		if (firstVisibleColumn == null)
+		{
+			return;
+		}
+		fileListView.CurrentCell = fileListView.Rows[visibleIndex].Cells[firstVisibleColumn.Index];
+		if (!fileListView.Rows[visibleIndex].Selected)
+		{
+			fileListView.ClearSelection();
+			fileListView.Rows[visibleIndex].Selected = true;
+		}
+		EnsureFileListRowVisible(visibleIndex);
+	}
+
+	// 把可见行滚入视口,最小滚动(复刻 ListView.EnsureVisible 的语义)。
+	private void EnsureFileListRowVisible(int visibleIndex)
+	{
+		if (visibleIndex < 0 || visibleIndex >= fileListView.RowCount)
+		{
+			return;
+		}
+		int firstDisplayed = fileListView.FirstDisplayedScrollingRowIndex;
+		if (firstDisplayed < 0)
+		{
+			return;
+		}
+		if (visibleIndex < firstDisplayed)
+		{
+			fileListView.FirstDisplayedScrollingRowIndex = visibleIndex;
+			return;
+		}
+		int displayedRowCount = fileListView.DisplayedRowCount(includePartialRow: false);
+		if (displayedRowCount > 0 && visibleIndex >= firstDisplayed + displayedRowCount)
+		{
+			fileListView.FirstDisplayedScrollingRowIndex = visibleIndex - displayedRowCount + 1;
+		}
+	}
+
+	// 过滤/排序重建行集合后把第一个选中行滚回视口:选中态是模型级的、能跨过滤排序存活,
+	// 不滚回来的话用户看到的是一屏与选中无关的行。只挂在过滤与排序两处,不进
+	// RestoreDgvSelectionFromModel —— 全选/反选/OnLoad 也走那里,在那些路径上滚动是错的。
+	private void ScrollFirstSelectedFileRowIntoView()
+	{
+		if (selectedFileCount <= 0)
+		{
+			return;
+		}
+		for (int index = 0; index < visibleRows.Count; index++)
+		{
+			if (visibleRows[index].Selected)
+			{
+				EnsureFileListRowVisible(index);
+				return;
+			}
+		}
+	}
+
+	// 键盘菜单键 / Shift+F10 弹文件右键菜单。原 ListView 时代也没有(旧代码只在 MouseUp
+	// 里认右键),属补齐而非恢复;菜单贴在当前行左下角,与鼠标路径弹的是同一个菜单。
+	private void ShowFileListItemContextMenuFromKeyboard()
+	{
+		Point location = new Point(fileListIconPadding, fileListView.ColumnHeadersHeight);
+		DataGridViewCell currentCell = fileListView.CurrentCell;
+		if (currentCell != null && currentCell.RowIndex >= 0)
+		{
+			Rectangle rowBounds = fileListView.GetRowDisplayRectangle(currentCell.RowIndex, cutOverflow: true);
+			if (!rowBounds.IsEmpty)
+			{
+				location = new Point(rowBounds.Left + fileListIconPadding, rowBounds.Bottom);
+			}
+		}
+		fileListItemContextMenu.Show(fileListView, location);
 	}
 
 	// 依 cachedFileListItems(主表 = 显示顺序)的 IsHidden 重建可见行集合与下标反查,并把 RowCount 同步给 DGV。
@@ -4585,6 +4741,7 @@ internal partial class StateFieldInstance : Form
 
 			RebuildVisibleRows();
 			RestoreDgvSelectionFromModel();
+			ScrollFirstSelectedFileRowIntoView();
 			lastFileListFilterText = activeFilterContext.filterText;
 			SubscribeTagFieldTextHandlers();
 			textHandlersResubscribed = true;
@@ -5148,6 +5305,7 @@ internal partial class StateFieldInstance : Form
 		cachedFileListItems.Sort((FileRow left, FileRow right) => comparer.Compare(left, right));
 		RebuildVisibleRows();
 		RestoreDgvSelectionFromModel();
+		ScrollFirstSelectedFileRowIntoView();
 	}
 
 	private void UpdateFileListSortGlyph(int? columnIndex, SortOrder sortOrder)
@@ -7344,7 +7502,7 @@ internal partial class StateFieldInstance : Form
 			// 只剩 renamedFilesRefreshTimer 这条"刷新选中项"的路。而回车提交会让 DGV 把当前单元格下移
 			// 一行,被刷新的就不再是刚改名的那行 —— 列表会一直显示旧文件名。这里直接改显示文本,
 			// 与选区无关。
-			int fileNameColumnIndex = configuredColumnHeaders.FindIndex(column => column.Name == "filename");
+			int fileNameColumnIndex = GetFileNameColumnIndex();
 			if (fileNameColumnIndex >= 0 && fileNameColumnIndex < row.CellTexts.Length)
 			{
 				row.CellTexts[fileNameColumnIndex] = editContext.RequestedFileName;
@@ -7380,6 +7538,14 @@ internal partial class StateFieldInstance : Form
 		if (keyData == Keys.F2 && fileListView.Focused)
 		{
 			TryBeginInlineRename();
+			return true;
+		}
+		// 键盘菜单键 / Shift+F10:系统会把它们交给 DefWindowProc 变成 WM_CONTEXTMENU,
+		// 这里先截下自己弹菜单,与鼠标右键走同一个 fileListItemContextMenu。
+		if ((keyData == Keys.Apps || keyData == (Keys.Shift | Keys.F10))
+			&& fileListView.Focused && SelectedFileCount > 0)
+		{
+			ShowFileListItemContextMenuFromKeyboard();
 			return true;
 		}
 		if (!fileListView.Focused)

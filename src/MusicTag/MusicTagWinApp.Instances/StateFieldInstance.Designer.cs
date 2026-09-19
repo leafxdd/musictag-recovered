@@ -1511,6 +1511,7 @@ internal partial class StateFieldInstance
 		fileListView.MouseUp += FileList_MouseUp;
 		fileListView.Enter += FileList_FocusChanged;
 		fileListView.Leave += FileList_FocusChanged;
+		fileListView.KeyPress += FileList_KeyPress;
 		fileListView.CellBeginEdit += FileList_CellBeginEdit;
 		fileListView.CellEndEdit += FileList_CellEndEdit;
 		fileListView.CellValidating += FileList_CellValidating;
