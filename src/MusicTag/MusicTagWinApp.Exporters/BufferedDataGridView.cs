@@ -42,6 +42,38 @@ internal sealed class BufferedDataGridView : DataGridView
 		suppressLeftDragSelection = false;
 		base.OnMouseUp(e);
 	}
+
+	protected override bool ProcessDataGridViewKey(KeyEventArgs e)
+	{
+		if (e.KeyCode == Keys.Enter && TryCommitEditWithoutMovingCurrentCell())
+		{
+			return true;
+		}
+		return base.ProcessDataGridViewKey(e);
+	}
+
+	protected override bool ProcessDialogKey(Keys keyData)
+	{
+		if ((keyData & Keys.KeyCode) == Keys.Enter && TryCommitEditWithoutMovingCurrentCell())
+		{
+			return true;
+		}
+		return base.ProcessDialogKey(keyData);
+	}
+
+	// 回车提交就地重命名后,DGV 默认会把当前单元格下移一行;原 ListView 的 LabelEdit
+	// 提交后选中留在原地。编辑态下的回车改成"只提交,不移动"。
+	// 两个入口按编辑控件是否吃下该键只会命中其一,另一个因 IsCurrentCellInEditMode
+	// 已为 false 自动落空,不会重复提交。非编辑态的回车完全不受影响。
+	private bool TryCommitEditWithoutMovingCurrentCell()
+	{
+		if (!IsCurrentCellInEditMode)
+		{
+			return false;
+		}
+		EndEdit();
+		return true;
+	}
 }
 
 // 首列单元格:只改"编辑框的位置",绘制仍全部由宿主的 CellPainting 接管。
