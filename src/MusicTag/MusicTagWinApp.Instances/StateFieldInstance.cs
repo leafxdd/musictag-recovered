@@ -2709,6 +2709,8 @@ internal partial class StateFieldInstance : Form
 
 	private System.Windows.Forms.Timer renamedFilesRefreshTimer;
 
+	private System.Windows.Forms.Timer inlineRenameClickTimer;
+
 	private System.Windows.Forms.Timer comboBoxSelectionResetTimer;
 
 	private ToolStripDropDownButton chineseConversionToolStripDropDownButton;
@@ -2776,6 +2778,10 @@ internal partial class StateFieldInstance : Form
 	private FileRow renamingRow;
 
 	private string renameEditedValue;
+
+	// "已选中的行再单击一次 -> 进入重命名"的候选行(复刻原 ListView LabelEdit 的延时触发)。
+	// 在 CellMouseDown 认定,MouseUp 起 inlineRenameClickTimer,Tick 时再验一次选中态才真正进编辑。
+	private FileRow pendingInlineRenameRow;
 
 	private FormPosSizeInfo MainFormPosSizeInfo { get; set; }
 
@@ -3475,6 +3481,11 @@ internal partial class StateFieldInstance : Form
 				Tag = columnInfo
 			};
 			column.DefaultCellStyle.Alignment = MapColumnAlignment(columnInfo.textAlign);
+			if (fileListView.Columns.Count == 0)
+			{
+				// 首列是唯一自绘图标、也是唯一可就地重命名的列:换用会避开图标的编辑框定位。
+				column.CellTemplate = new IndentedEditTextBoxCell();
+			}
 			fileListView.Columns.Add(column);
 		}
 		// DisplayIndex 必须是 0..N-1 的排列;按存储的 displayIndex 升序依次赋值,既忠实顺序又避免 DGV 重排冲突。
@@ -3487,6 +3498,8 @@ internal partial class StateFieldInstance : Form
 		fileTypeImageList.ImageSize = new Size(ImageUtilities.ScaleByDpi(20f), ImageUtilities.ScaleByDpi(20f));
 		fileListIconSize = fileTypeImageList.ImageSize.Width;
 		fileListIconPadding = ImageUtilities.ScaleByDpi(2f);
+		// 与 FileList_CellPainting 里 textLeft 的算式保持一致(左边距 + 图标 + 右边距)。
+		fileListView.FirstColumnEditIndent = fileListIconSize + 2 * fileListIconPadding;
 		fileListView.RowTemplate.Height = Math.Max(ImageUtilities.ScaleByDpi(22f), fileTypeImageList.ImageSize.Height + fileListIconPadding);
 	}
 
@@ -3684,6 +3697,30 @@ internal partial class StateFieldInstance : Form
 		string text = e.FormattedValue as string ?? fileRow.CellTexts[0];
 		TextRenderer.DrawText(e.Graphics, text, e.CellStyle.Font, textBounds, foreColor, flags);
 		e.Handled = true;
+	}
+
+	// 当前行的焦点描边 —— 复刻原 ListView 的焦点框。DGV 只在"当前单元格"上画焦点框,
+	// 而首列自绘后 e.Handled=true 连那一格也不画了,迁移后等于整行没有任何描边。
+	private void FileList_RowPostPaint(object sender, DataGridViewRowPostPaintEventArgs e)
+	{
+		DataGridViewCell currentCell = fileListView.CurrentCell;
+		if (currentCell == null || currentCell.RowIndex != e.RowIndex)
+		{
+			return;
+		}
+		if (e.RowIndex < 0 || e.RowIndex >= visibleRows.Count || !visibleRows[e.RowIndex].Selected)
+		{
+			return;
+		}
+		// 描边只画到最后一列的右缘为止(RowBounds 会一直铺到控件右边),与原 ListView 的整行焦点框一致。
+		int contentWidth = fileListView.Columns.GetColumnsWidth(DataGridViewElementStates.Visible) - fileListView.HorizontalScrollingOffset;
+		int width = Math.Min(e.RowBounds.Width, contentWidth) - 1;
+		int height = e.RowBounds.Height - 1;
+		if (width <= 0 || height <= 0)
+		{
+			return;
+		}
+		ControlPaint.DrawFocusRectangle(e.Graphics, new Rectangle(e.RowBounds.X, e.RowBounds.Y, width, height), fileListView.DefaultCellStyle.SelectionForeColor, fileListView.DefaultCellStyle.SelectionBackColor);
 	}
 
 	private SelectedListViewItemInfo[] CollectSelectedListViewItemInfos()
@@ -5116,12 +5153,93 @@ internal partial class StateFieldInstance : Form
 	{
 		if (e.Button == MouseButtons.Right && e.RowIndex >= 0 && e.RowIndex < visibleRows.Count)
 		{
+			CancelPendingInlineRename();
 			if (!visibleRows[e.RowIndex].Selected)
 			{
 				fileListView.ClearSelection();
 				fileListView.Rows[e.RowIndex].Selected = true;
 			}
 			fileListItemContextMenu.Show(fileListView, fileListView.PointToClient(Cursor.Position));
+			return;
+		}
+		// 每次单元格按下都重算重命名候选 —— 赋 null 即等于取消上一次的候选,
+		// 不依赖 MouseDown/CellMouseDown 的触发先后。
+		CancelPendingInlineRename();
+		if (e.Button != MouseButtons.Left || e.RowIndex < 0 || e.RowIndex >= visibleRows.Count)
+		{
+			return;
+		}
+		// 只有"无修饰键的首次单击 + 命中首列 + 该行本来就是唯一选中项"才算候选;
+		// 双击的第二次按下 Clicks==2,直接排除。
+		if (e.Clicks == 1 && e.ColumnIndex == 0 && ModifierKeys == Keys.None
+			&& selectedFileCount == 1 && visibleRows[e.RowIndex].Selected)
+		{
+			pendingInlineRenameRow = visibleRows[e.RowIndex];
+		}
+	}
+
+	// 行区域之外的空白:复刻原 ListView 的"点空白取消选中"(DGV 默认什么都不做)。
+	private void FileList_MouseDown(object sender, MouseEventArgs e)
+	{
+		if (fileListView.HitTest(e.X, e.Y).Type != DataGridViewHitTestType.None)
+		{
+			return;
+		}
+		// 最后一列右侧仍属于该行的横带:原 ListView 的 FullRowSelect 在这里不清空选中。
+		if (fileListView.HitTest(0, e.Y).RowIndex >= 0)
+		{
+			return;
+		}
+		CancelPendingInlineRename();
+		// 空白区不是单元格,DGV 不会因此结束编辑,编辑框会一直挂在那里。原 ListView 的
+		// LabelEdit 在别处点一下就提交并退出,这里对齐:先提交改名,再清选区。
+		if (fileListView.IsCurrentCellInEditMode)
+		{
+			fileListView.EndEdit();
+		}
+		if (e.Button == MouseButtons.Left && fileListView.SelectedRows.Count > 0)
+		{
+			fileListView.ClearSelection();
+		}
+	}
+
+	// 抬起才起延时计时器:按下即计时会让"按住拖一下"也变成重命名。
+	private void FileList_MouseUp(object sender, MouseEventArgs e)
+	{
+		if (e.Button != MouseButtons.Left || pendingInlineRenameRow == null)
+		{
+			return;
+		}
+		if (selectedFileCount != 1 || GetSingleSelectedFileRow() != pendingInlineRenameRow)
+		{
+			CancelPendingInlineRename();
+			return;
+		}
+		inlineRenameClickTimer.Stop();
+		inlineRenameClickTimer.Interval = Math.Max(1, SystemInformation.DoubleClickTime);
+		inlineRenameClickTimer.Start();
+	}
+
+	private void InlineRenameClickTimer_Tick(object sender, EventArgs e)
+	{
+		inlineRenameClickTimer.Stop();
+		FileRow candidateRow = pendingInlineRenameRow;
+		pendingInlineRenameRow = null;
+		// 延时期间选区/焦点可能已经变了(方向键、全选、点到别处),重命名前再验一次。
+		if (candidateRow == null || renamingRow != null || !fileListView.Focused
+			|| selectedFileCount != 1 || GetSingleSelectedFileRow() != candidateRow)
+		{
+			return;
+		}
+		TryBeginInlineRename();
+	}
+
+	private void CancelPendingInlineRename()
+	{
+		pendingInlineRenameRow = null;
+		if (inlineRenameClickTimer.Enabled)
+		{
+			inlineRenameClickTimer.Stop();
 		}
 	}
 
@@ -7066,20 +7184,36 @@ internal partial class StateFieldInstance : Form
 
 	private void BeginRenameSelectedFile_Click(object sender, EventArgs e)
 	{
-		if (SelectedFileCount <= 0)
+		TryBeginInlineRename();
+	}
+
+	// 就地重命名的唯一入口(菜单 / 右键菜单 / F2 / 选中后再单击 共用)。返回是否真的进了编辑态。
+	private bool TryBeginInlineRename()
+	{
+		CancelPendingInlineRename();
+		if (renamingRow != null || SelectedFileCount <= 0)
 		{
-			return;
+			return false;
 		}
 		FileRow row = SelectedFileRows.First();
 		if (!visibleRowIndex.TryGetValue(row, out int visIndex) || !fileListView.Columns[0].Visible)
 		{
-			return;
+			return false;
 		}
 		renamingRow = row;
 		renameEditedValue = null;
 		fileListView.Columns[0].ReadOnly = false;
 		fileListView.CurrentCell = fileListView.Rows[visIndex].Cells[0];
-		fileListView.BeginEdit(selectAll: true);
+		// 行为修正:BeginEdit 失败时原实现会把 renamingRow 与首列的可写状态一直留着,
+		// 之后任意一次 CellBeginEdit 都会被放行。失败就地回滚。
+		if (!fileListView.BeginEdit(selectAll: true))
+		{
+			renamingRow = null;
+			renameEditedValue = null;
+			fileListView.Columns[0].ReadOnly = true;
+			return false;
+		}
+		return true;
 	}
 
 	private void RevealSelectedFileInExplorer_Click(object sender, EventArgs e)
@@ -7190,6 +7324,15 @@ internal partial class StateFieldInstance : Form
 			editContext.NewPath = Path.Combine(fileInfo.DirectoryName, editContext.RequestedFileName);
 			PathFileUtilities.MoveFileAllowingCaseOnlyRename(editContext.OriginalPath, editContext.NewPath);
 			row.FilePath = editContext.NewPath;
+			// 行为修正:原 ListView 的 LabelEdit 提交后由控件自己把 item 文本换成新名字,迁到 DGV 后
+			// 只剩 renamedFilesRefreshTimer 这条"刷新选中项"的路。而回车提交会让 DGV 把当前单元格下移
+			// 一行,被刷新的就不再是刚改名的那行 —— 列表会一直显示旧文件名。这里直接改显示文本,
+			// 与选区无关。
+			int fileNameColumnIndex = configuredColumnHeaders.FindIndex(column => column.Name == "filename");
+			if (fileNameColumnIndex >= 0 && fileNameColumnIndex < row.CellTexts.Length)
+			{
+				row.CellTexts[fileNameColumnIndex] = editContext.RequestedFileName;
+			}
 			InvalidateFileRow(row);
 			FileSettings.UpdateForAnyFile(editContext.OriginalPath, editContext.NewPath);
 			TagHistoryRepository.ClearUndoState();
@@ -7216,6 +7359,13 @@ internal partial class StateFieldInstance : Form
 
 	protected override bool ProcessCmdKey(ref Message message, Keys keyData)
 	{
+		// F2 就地重命名 —— 原 ListView 由 LabelEdit=true 免费提供,DGV 的 EditProgrammatically
+		// 不响应 F2,迁移后丢失。编辑态下焦点在编辑控件上,fileListView.Focused 为 false,不会重入。
+		if (keyData == Keys.F2 && fileListView.Focused)
+		{
+			TryBeginInlineRename();
+			return true;
+		}
 		if (!fileListView.Focused)
 		{
 			switch (keyData)

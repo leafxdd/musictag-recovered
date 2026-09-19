@@ -1,3 +1,4 @@
+using System.Drawing;
 using System.Windows.Forms;
 
 namespace MusicTagWinApp.Exporters;
@@ -9,6 +10,11 @@ namespace MusicTagWinApp.Exporters;
 internal sealed class BufferedDataGridView : DataGridView
 {
 	private bool suppressLeftDragSelection;
+
+	// 首列("图标 + 文字"由宿主 CellPainting 自绘)的图标占位宽度。就地重命名时
+	// IndentedEditTextBoxCell 按此把编辑框整体右移,让图标继续露在编辑框左侧 ——
+	// 复刻原 ListView LabelEdit 的外观(编辑框只盖住文件名,不盖图标)。0 = 不缩进。
+	public int FirstColumnEditIndent { get; set; }
 
 	public BufferedDataGridView()
 	{
@@ -35,5 +41,39 @@ internal sealed class BufferedDataGridView : DataGridView
 	{
 		suppressLeftDragSelection = false;
 		base.OnMouseUp(e);
+	}
+}
+
+// 首列单元格:只改"编辑框的位置",绘制仍全部由宿主的 CellPainting 接管。
+// 把编辑面板与编辑框一起按 FirstColumnEditIndent 右移,避开自绘的文件类型图标;
+// 再上下各让出一条焦点描边的厚度,避开宿主 RowPostPaint 画的整行虚线框。
+internal sealed class IndentedEditTextBoxCell : DataGridViewTextBoxCell
+{
+	// 与 ControlPaint.DrawFocusRectangle 的线宽一致(恒 1px,不随 DPI 变)。
+	private const int FocusRectangleThickness = 1;
+
+	public override void PositionEditingControl(bool setLocation, bool setSize, Rectangle cellBounds, Rectangle cellClip, DataGridViewCellStyle cellStyle, bool singleVerticalBorderAdded, bool singleHorizontalBorderAdded, bool isFirstDisplayedColumn, bool isFirstDisplayedRow)
+	{
+		Rectangle adjustedBounds = cellBounds;
+		int indent = (DataGridView as BufferedDataGridView)?.FirstColumnEditIndent ?? 0;
+		// 列被拖到只剩图标宽度时不再缩进,否则编辑框会窄到不可用。
+		if (indent > 0 && adjustedBounds.Width > indent + 16)
+		{
+			adjustedBounds.X += indent;
+			adjustedBounds.Width -= indent;
+		}
+		// 编辑面板是子控件,会盖住它底下的一切 —— 不让出这两条线,重命名时整行虚线框就断一截。
+		if (adjustedBounds.Height > 2 * FocusRectangleThickness + 8)
+		{
+			adjustedBounds.Y += FocusRectangleThickness;
+			adjustedBounds.Height -= 2 * FocusRectangleThickness;
+		}
+		if (adjustedBounds != cellBounds)
+		{
+			Rectangle clippedBounds = Rectangle.Intersect(cellClip, adjustedBounds);
+			cellBounds = adjustedBounds;
+			cellClip = clippedBounds.IsEmpty ? adjustedBounds : clippedBounds;
+		}
+		base.PositionEditingControl(setLocation, setSize, cellBounds, cellClip, cellStyle, singleVerticalBorderAdded, singleHorizontalBorderAdded, isFirstDisplayedColumn, isFirstDisplayedRow);
 	}
 }

@@ -193,6 +193,7 @@ internal partial class StateFieldInstance
 		fileListStatusTimer = new System.Windows.Forms.Timer(components);
 		filterInputTimer = new System.Windows.Forms.Timer(components);
 		renamedFilesRefreshTimer = new System.Windows.Forms.Timer(components);
+		inlineRenameClickTimer = new System.Windows.Forms.Timer(components);
 		comboBoxSelectionResetTimer = new System.Windows.Forms.Timer(components);
 		notifyIcon = new NotifyIcon(components);
 		notifyContextMenu = new ContextMenuStrip(components);
@@ -1056,6 +1057,9 @@ internal partial class StateFieldInstance
 		filterInputTimer.Tick += FilterInputTimer_Tick;
 		renamedFilesRefreshTimer.Interval = 500;
 		renamedFilesRefreshTimer.Tick += RefreshRenamedFilesTimer_Tick;
+		// 实际间隔在 FileList_MouseUp 里按 SystemInformation.DoubleClickTime 重置。
+		inlineRenameClickTimer.Interval = 500;
+		inlineRenameClickTimer.Tick += InlineRenameClickTimer_Tick;
 		comboBoxSelectionResetTimer.Interval = 10;
 		comboBoxSelectionResetTimer.Tick += ResetComboBoxSelectionTimer_Tick;
 		notifyIcon.ContextMenuStrip = notifyContextMenu;
@@ -1499,9 +1503,12 @@ internal partial class StateFieldInstance
 		fileListView.CellValueNeeded += FileList_CellValueNeeded;
 		fileListView.CellFormatting += FileList_CellFormatting;
 		fileListView.CellPainting += FileList_CellPainting;
+		fileListView.RowPostPaint += FileList_RowPostPaint;
 		fileListView.SelectionChanged += FileList_SelectionChanged;
 		fileListView.ColumnHeaderMouseClick += FileList_ColumnHeaderMouseClick;
 		fileListView.CellMouseDown += FileList_CellMouseDown;
+		fileListView.MouseDown += FileList_MouseDown;
+		fileListView.MouseUp += FileList_MouseUp;
 		fileListView.CellBeginEdit += FileList_CellBeginEdit;
 		fileListView.CellEndEdit += FileList_CellEndEdit;
 		fileListView.CellValidating += FileList_CellValidating;
