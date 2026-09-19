@@ -84,6 +84,14 @@ internal sealed class IndentedEditTextBoxCell : DataGridViewTextBoxCell
 	// 与 ControlPaint.DrawFocusRectangle 的线宽一致(恒 1px,不随 DPI 变)。
 	private const int FocusRectangleThickness = 1;
 
+	// 上下让出的高度不对称。宿主把描边框的高度取成 RowBounds.Height - 1,底边那条线因此落在
+	// 行底网格线的**上面一格**;而这里拿到的 cellBounds 是连网格线一起的整行高度。所以底部要
+	// 让出两格(网格线 + 描边线),顶部只让描边线一格。
+	// 2026-09-19 实测(截图逐扫描线统计颜色跳变):行高 33px 时描边上下边分别在 y=156 / y=187,
+	// 上下对称各让 1 格时编辑面板占到 187,底边被盖住;让 2 格后 187 复现。
+	private const int TopEditInset = FocusRectangleThickness;
+	private const int BottomEditInset = FocusRectangleThickness + 1;
+
 	public override void PositionEditingControl(bool setLocation, bool setSize, Rectangle cellBounds, Rectangle cellClip, DataGridViewCellStyle cellStyle, bool singleVerticalBorderAdded, bool singleHorizontalBorderAdded, bool isFirstDisplayedColumn, bool isFirstDisplayedRow)
 	{
 		Rectangle adjustedBounds = cellBounds;
@@ -95,10 +103,10 @@ internal sealed class IndentedEditTextBoxCell : DataGridViewTextBoxCell
 			adjustedBounds.Width -= indent;
 		}
 		// 编辑面板是子控件,会盖住它底下的一切 —— 不让出这两条线,重命名时整行虚线框就断一截。
-		if (adjustedBounds.Height > 2 * FocusRectangleThickness + 8)
+		if (adjustedBounds.Height > TopEditInset + BottomEditInset + 8)
 		{
-			adjustedBounds.Y += FocusRectangleThickness;
-			adjustedBounds.Height -= 2 * FocusRectangleThickness;
+			adjustedBounds.Y += TopEditInset;
+			adjustedBounds.Height -= TopEditInset + BottomEditInset;
 		}
 		if (adjustedBounds != cellBounds)
 		{
