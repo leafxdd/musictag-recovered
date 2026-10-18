@@ -4,13 +4,14 @@
 
 This repository restores and maintains the MusicTag Windows WinForms desktop app from recovered/decompiled sources. Preserve observable behavior by default and make changes in small, reviewable batches.
 
-Always inspect `git branch --show-current`, the project files, and `scripts/Verify-Build.ps1` before assuming a framework or workflow. As of the 2026-08-03 x64 migration, the active checkout is `develop-net8`:
+Always inspect `git branch --show-current`, the project files, and `scripts/Verify-Build.ps1` before assuming a framework or workflow. The branches are:
 
-- `develop-net8` targets `net8.0-windows` x64 and contains the Per-Monitor V2 DPI work plus the ID3 write-policy options.
-- `develop` remains the separate .NET Framework 4.8.1 development line. Do not casually merge framework-specific fixes between the two branches.
-- `main` is a curated orphan release snapshot, not the normal development branch. Never push ordinary development history to it.
+- `develop-net8`: the active development and release line, targeting `net8.0-windows` x64.
+- `develop`: the separate .NET Framework 4.8.1 line. Do not casually merge framework-specific fixes between the two branches.
+- `main`: a curated orphan release snapshot (still the net481 v1.0.11 snapshot), not a development branch. Never push ordinary development history to it.
+- Local `master` and other local-only branches are historical. Never commit to `master`.
 
-The root `AGENTS.md` and `CLAUDE.md` are the committed repository guidance. `.claude/`, `.mcp.json`, `.repowise/`, `cctortest/`, and `.serena/` remain local tooling or guidance and must not be staged. Preserve unrelated untracked or modified user files.
+`AGENTS.md` is the single source of repository guidance. `CLAUDE.md` only imports it (`@AGENTS.md`) for Claude Code and keeps a lean GitNexus stats block, so change rules here rather than there. `.claude/`, `.mcp.json`, `.repowise/`, `cctortest/`, and `.serena/` are local tooling and must not be staged. Preserve unrelated untracked or modified user files.
 
 ## Project Structure and Source of Truth
 
@@ -18,6 +19,8 @@ Open the repository through `MusicTag.sln`. It currently contains:
 
 - `src/MusicTag/MusicTag.csproj`: the WinForms application.
 - `src/MusicTag.Tests/MusicTag.Tests.csproj`: an x64 console characterization-test harness with hand-written assertions and no third-party test framework.
+
+The solution configuration is still named `Any CPU`, but both projects hard-target x64 and the verification script rejects non-AMD64 app hosts or native interop output.
 
 Recovered namespaces under `src/MusicTag/` do not reliably describe logical ownership. WinForms UI, online providers, serialization, and interop types are scattered across legacy namespace/folder boundaries. Locate code by type or symbol, not by guessing a folder.
 
@@ -35,6 +38,8 @@ codegraph node <symbol-or-file>
 ```
 
 Verify any index-derived conclusion against current source when the tool reports stale or approximate data. Use `rg` after CodeGraph for exact strings, resource keys, event subscriptions, generated names, or cases CodeGraph cannot answer. Run `codegraph sync` after code changes.
+
+GitNexus covers execution flows, pre-edit `impact`, and pre-commit `detect_changes`; its rules are in the generated block at the end of this file. WinForms event handlers wired in the Designer and delegates such as `Task.Run(context.Method)` usually report `risk: UNKNOWN`; confirm their entry points with `rg` (for example `+= HandlerName` and `PerformClick()`).
 
 ## Build and Validation
 
@@ -100,7 +105,14 @@ Use readable PascalCase for types/methods/properties and follow the surrounding 
 
 ## Current High-Risk Areas
 
-`StateFieldInstance` is the main large form and coordinates file lists, tag editing, batch work, history/undo, and much of the DPI layout. Treat it as a hotspot: use CodeGraph for callers and keep diffs narrowly scoped.
+`StateFieldInstance` is the main large form and coordinates file lists, tag editing, batch work, history/undo, and much of the DPI layout. Treat it as a hotspot: use CodeGraph for callers and keep diffs narrowly scoped. `LoadTagEditorState` and `LoadSingleSelectedFile` sit on every selection path and report CRITICAL impact.
+
+The file list is a VirtualMode `DataGridView` (`BufferedDataGridView`) whose `FileRow` objects are the single data source; the field and Designer names `fileListView`/`listView1` are leftovers from the old `ListView`. Unsaved tag-editor edits are cached per row (`FileRow.PendingEdit`, logic in `StateFieldInstance.PendingEdits.cs`):
+
+- The editor binds to a row only after `LoadSingleSelectedFile` has loaded the file and overlaid its cache. Any path that reloads or clears the editor must unbind first (`LoadTagEditorState`, the filter, and the selection-mode paths call `ResetEditorPendingEditBinding`); otherwise programmatic `ComboBox.Text` writes are recorded into the wrong row's cache.
+- `ComboBox.Text` assignment selects a case-insensitively matching dropdown item and adopts its casing. Restore user text through `SetComboBoxTextExact`.
+- Only tag-editor saves pass an `EditorSaveContext` to `StartCommonSaveTags`: rows saved successfully drop their cache, failed or unprocessed rows keep it. Batch operations reusing `StartCommonSaveTags` must not touch caches.
+- Multi-selection editing is original behavior and its drafts are not cached, but the multi view computes common values cache-first and multi saves apply each row's cache before the multi-view values, so a stale file value never overwrites a cache.
 
 Online search flows through provider capability interfaces/factories and shared transport/status models. Preserve these invariants:
 
@@ -109,20 +121,20 @@ Online search flows through provider capability interfaces/factories and shared 
 - Result limits, `SearchSource` ordinals, optional status/reporting parameters, and batch-dialog call signatures are persisted or shared contracts.
 - Characterization fixtures use recorded data and must exercise the intended parsing/search path, not merely produce a passing result.
 
-All four lyric sources now decode a word-level format, and these are current high-risk parsing paths. Decoders are deliberately provider-local; `LyricTextProcessor.FormatTimestamp` is the only shared point. Do not unify them without a separate design decision.
+All four lyric sources decode a word-level format, and these are high-risk parsing paths. Decoders are deliberately provider-local; `LyricTextProcessor.FormatTimestamp` is the only shared point. Do not unify them without a separate design decision.
 
 - `QqMusicTagProvider` requests `music.musichallSong.PlayLyricInfo` QRC lyrics first (one short retry on throttling code 2001) and falls back to the legacy Base64 LRC endpoint when QRC is unavailable or malformed.
 - `QqQrcDecoder` uses the QQ-compatible 3DES/zlib decoder adapted from `jitwxs/163MusicLyrics`; the Apache-2.0 attribution is recorded in `docs/THIRD_PARTY_NOTICES.md` and `docs/licenses/Apache-2.0-jitwxs-163MusicLyrics.txt`. Decryption is locked by a real-ciphertext golden vector; do not regenerate that vector with the self-encrypting fixture.
 - QRC line timestamps use `[start,duration]`; word timestamps use `(start,duration)`. The ordinary-LRC conversion keeps the line start and removes word markers; a malformed line start falls back to the first parseable word start, and LRC-style metadata tags between timed lines are stripped. Full per-word timing is still not retained.
 - `NetEaseMusicTagProvider` reads the plaintext `api/song/lyric/v1` endpoint. `NetEaseYrcDecoder` converts YRC to line LRC and drops JSON credit records; the provider honors boolean `nolyric`/`uncollected` flags. YTLRC translations align per line with unmatched lines dropped; plain tlyric alignment stays strict.
 - `KugouTagProvider` prefers `lyrics.kugou.com/search` + `download?fmt=krc` over the legacy `m3ws` endpoint. `KugouKrcDecoder` strips the four-byte `krc1` magic, XORs with a fixed 16-byte key and inflates. KRC word timestamps are **relative to the line start**, unlike the absolute times in QRC/YRC. `contenttype` is 0 for KRC and 1 for plain LRC; the value 2 that public implementations describe has never been observed live.
-- KRC frequently carries no `[language:]` translation while the legacy `landata` does — 64 of 93 translated songs measured. A KRC success with an empty translation therefore still fetches `landata` and aligns it by line order. That is sound because the two channels describe the same lyric: line counts matched in all 93 songs, and the text sequence was verified identical on spot-checked songs. An optional translation failure must never downgrade the high-precision lyric or surface a transport error; clear it explicitly, because `GetResponseStringResult` records every result.
+- KRC frequently carries no `[language:]` translation while the legacy `landata` does — 64 of 93 translated songs measured (about 69%). A KRC success with an empty translation therefore still fetches `landata` and aligns it by line order. That is sound because the two channels describe the same lyric: line counts matched in all 93 songs, and the text sequence was verified identical on spot-checked songs. An optional translation failure must never downgrade the high-precision lyric or surface a transport error; clear it explicitly, because `GetResponseStringResult` records every result.
 - `KuwoTagProvider` prefers `newlyric.kuwo.cn`, whose **entire query string** is XOR-`yeelion`'d then Base64'd. Plaintext probes of that endpoint fail and prove nothing about capability. `KuwoLrcxDecoder` inflates, un-Base64s, XORs again and decodes **GB18030**, so the code-page provider registered at the top of `Program.Main` is a hard dependency. LRCX encodes translations as duplicate timestamps: at one timestamp the **first** entry is the previous line's translation and the second is the current original. `KuwoLegacyLyricAssembler` keeps the old `songinfoandlrc` heuristics for the fallback only; LRCX must not reuse them.
 - Kuwo's legacy `songinfoandlrc` serves roughly 32% of songs against 97% for LRCX and adds no coverage over it, so treat that fallback as cheap defence rather than a safety net, and do not expect to reproduce it by hand.
 - `KugouKrcDecoder` and `KuwoLrcxDecoder` both keep `ti/ar/al/by/offset` and drop provider-private tags. `[kuwo:xxx]` is the word-timing obfuscation parameter and must never reach the LRC. Metadata is written to the main lyric only, never repeated in the translation.
 - With `LyricDownload_ReformatTimetag` disabled, three-digit milliseconds are emitted without rounding. With it enabled, the existing two-digit output intentionally rounds to 10 ms. Do not change global `FormatTimestamp` behavior without a separate compatibility decision.
 
-Lyric conversion changes must add recorded characterization cases covering word-marker handling, malformed timestamps, formatting settings, translated-line alignment, and no-lyric flags. Assert on exact output where the shape matters: the two new decoders were able to drift into opposite metadata behavior precisely because every existing assertion used `Contains`. Negative conclusions drawn from probing a live endpoint are weak evidence — reproduce the provider's exact request headers and check open-source implementations before recording one. Background and open items live in `docs/QRC_PRECISION_REVIEW_2026-07.md`, `docs/LYRIC_FETCH_REPAIR_REPORT_2026-07.md`, and `docs/KUWO_KUGOU_HIGH_PRECISION_LYRIC_IMPLEMENTATION_REPORT_2026-08.md`.
+Lyric conversion changes must add recorded characterization cases covering word-marker handling, malformed timestamps, formatting settings, translated-line alignment, and no-lyric flags. Assert on exact output where the shape matters: the KRC and LRCX decoders once drifted into opposite metadata behavior precisely because every existing assertion used `Contains`. Negative conclusions drawn from probing a live endpoint are weak evidence — reproduce the provider's exact request headers and check open-source implementations before recording one. Background and open items live in `docs/QRC_PRECISION_REVIEW_2026-07.md`, `docs/LYRIC_FETCH_REPAIR_REPORT_2026-07.md`, and `docs/KUWO_KUGOU_HIGH_PRECISION_LYRIC_IMPLEMENTATION_REPORT_2026-08.md`.
 
 Tag writes converge through `ConfigDescriptorState.SaveWithId3v2Version`, which calls the write body, `ApplyTagWritePolicy`, version selection, and `tagFile.Save()` under a shared lock. Keep new save paths inside this funnel. The current settings are:
 
@@ -149,29 +161,30 @@ Set `MUSICTAG_DPI_TRACE=1` to write `dpi-trace.log` beside the executable. The l
 
 ## Commits, Releases, and Packaging
 
-Use concise Conventional Commit prefixes such as `fix:`, `feat:`, `refactor:`, and `chore:`. Keep each commit to one behavior or cleanup unit. Do not assume the obsolete direct-to-`master` workflow from older notes; verify the active branch and only commit or push when the current task authorizes it.
+Use concise Conventional Commit prefixes such as `fix:`, `feat:`, `refactor:`, `docs:`, and `chore:`. Keep each commit to one behavior or cleanup unit and describe any intentional behavior change explicitly in the message. Verify the active branch and only commit or push when the current task authorizes it. Stage explicit paths only; never stage local tooling, screenshots, or unrelated generated or user files.
 
-The public repository is `github.com/leafxdd/musictag-recovered`. Public `main` is maintained through a specialized clean orphan-snapshot release flow and intentionally differs from development branches. Perform that flow only when explicitly requested.
+Run GitNexus `detect_changes` on the staged scope before committing and confirm the reported files match the intended ones. Large insertions shift line ranges, so untouched symbols below an edit can be reported as changed; confirm the real scope from the `git diff -U0` hunk positions. The `impact` risk of symbols you actually edited is still real.
 
-Never package a previously run `bin` directory: it can contain logs, cover caches, backup settings, or credentials/cookies. Release packaging requires a clean rebuild and an explicit scan for `.pdb`, `temp/`, logs, caches, backup files, and populated user configuration.
+The public repository is `github.com/leafxdd/musictag-recovered`. .NET 8 releases target a `develop-net8` commit directly: bump `AssemblyFileVersion` in `src/MusicTag/Properties/AssemblyInfo.cs` as its own commit, make a clean rebuild with `.\scripts\Verify-Build.ps1 -Configurations Release` (smoke tests run the app and dirty `bin`), zip the contents of `bin/Release/net8.0-windows` except `MusicTag.pdb` flat at the zip root, and create the release with the full 40-character commit SHA as `--target` (GitHub rejects short SHAs). The orphan-snapshot flow that rewrites public `main` is a separate process; run it only when explicitly requested.
+
+Never package a previously run `bin` directory: it can contain logs, cover caches, backup settings, or credentials/cookies. Release packaging requires a clean rebuild and an explicit scan for `.pdb`, `temp/`, logs, caches, backup files, and populated user configuration; the packaged `MusicTag.config` must match the template in `src/MusicTag/musictag/`.
 
 PR or handoff notes should state the user-visible change, exact validation commands run, and any untested manual-risk areas. Include screenshots only for visible UI changes.
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **musictag-recovered** (4569 symbols, 13898 relationships, 393 execution flows).
+This project is indexed by GitNexus as **musictag-recovered** (4667 symbols, 14261 relationships, 401 execution flows).
 
 > Index stale? Run `node .gitnexus/run.cjs analyze --index-only` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? Bootstrap with `npx`, `bunx`, or `pnpm dlx` — e.g. `bunx gitnexus@latest analyze` (npm 11 npx crash; #1939).
 
 ## Always Do
 
-- **MUST run impact analysis before editing.** Use `impact({target: "symbolName", direction: "upstream"})` (MCP) or `node .gitnexus/run.cjs impact "symbolName" --direction upstream --repo .` (CLI fallback); report callers, processes, and risk. Never substitute grep for graph analysis.
+- **MUST run impact before editing.** Use `impact({target: "symbolName", direction: "upstream"})` or `node .gitnexus/run.cjs impact "symbolName" --direction upstream --repo .`; report callers, processes, and risk. Never substitute grep for graph analysis.
 - **MUST analyze graph changes before committing.** Use `detect_changes({scope: "all"})` (MCP) or `node .gitnexus/run.cjs detect-changes --scope all --repo .` (CLI fallback). `partial: true` or `truncated: true` is not a clean check — a zero means unseen, not unaffected; re-run it. For regression review: `detect_changes({scope: "compare", base_ref: "main"})` or `node .gitnexus/run.cjs detect-changes --scope compare --base-ref "main" --repo .`.
-- **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
+- MUST warn on HIGH/CRITICAL `risk` pre-edit; never use `riskSharedAxes` to waive a HIGH/CRITICAL `risk` warning. Compare File/symbol: MCP File omits axes; Graph-RAG expands File.
 - **MUST treat `risk: UNKNOWN` as unresolved, not as low.** An empty caller set is not evidence the symbol is unused — it can also mean the callers are not resolvable by the index (plain-object property access, dynamic dispatch, cross-language calls). `impact` pairs `UNKNOWN` with a `riskNote` saying so. Confirm with a text search before treating the symbol as safe to change or delete; do not proceed on the strength of a zero.
-- When exploring unfamiliar code, use `query({search_query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
-- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `context({name: "symbolName"})`.
+- **MUST use `query({search_query: "concept"})` for concepts/flows, `context({name: "symbolName"})` for a named symbol, or `impact` for blast radius, on read-only callers, dependencies, imports, or execution flow.** Graph first; text search only for empty/`UNKNOWN`/literals.
 - For security review, `explain({target: "fileOrSymbol"})` lists taint findings (source→sink flows; needs `analyze --pdg`).
 
 ## Never Do
