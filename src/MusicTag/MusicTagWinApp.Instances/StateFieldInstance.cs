@@ -46,7 +46,9 @@ internal partial class StateFieldInstance : Form
 		SelectAll,
 		UnselectAll,
 		Invert,
-		RefreshOnly
+		RefreshOnly,
+		// 只选中有未保存修改的文件(状态栏"● N 个文件未保存"点击)。
+		PendingEdits
 	}
 
 	private class SelectedListViewItemInfo
@@ -86,6 +88,10 @@ internal partial class StateFieldInstance : Form
 		// 选中态(模型真源)。DGV VirtualMode 的行选区会随过滤/排序重建而失效,
 		// 故选中态以此字段为准,过滤/排序后据它恢复 DGV 行选区。
 		public bool Selected;
+
+		// 未保存的标签修改(无则为 null)。挂在行对象上:过滤/排序/刷新原地复用行,改名只改 FilePath,
+		// 缓存都不会和文件失联。
+		public PendingTagEdit PendingEdit;
 	}
 
 	private class ListViewItemNaturalComparer : IComparer
@@ -351,7 +357,8 @@ internal partial class StateFieldInstance : Form
 					CommentFullLength = commentFullLength,
 					LoadFailed = loadFailed,
 					IconKey = iconKey,
-					IconImage = iconImage
+					IconImage = iconImage,
+					PendingEdit = Owner.TakeCarriedOverPendingEdit(filePath)
 				});
 				if (anyFileMode)
 				{
@@ -831,6 +838,7 @@ internal partial class StateFieldInstance : Form
 		{
 			pictureData.PictureType = menuContext.coverType;
 			menuContext.owner.coverPictureTypeLabel.Text = menuContext.coverType;
+			menuContext.owner.MarkEditorCoversModified();
 		}
 	}
 
@@ -1112,9 +1120,53 @@ internal partial class StateFieldInstance : Form
 
 		public Func<ConfigDescriptorState, bool, bool> convertChineseTextAction;
 
+		// 逐文件的保存结果(下标同 itemsToSave):编辑区保存据此清除或保留未保存缓存。
+		public bool[] itemSaved;
+
+		// 多选编辑区保存:各文件自己的未保存缓存快照(下标同 itemsToSave,无缓存为 null),先于多选框的值套用。
+		public PendingTagEdit[] pendingEdits;
+
 		internal void UpdateProgress()
 		{
 			progressDialog.UpdateStatisticsProgress(Resources.Msg_Savetag + currentFile?.Name, processedCount, itemsToSave.Length, savedCount, failedCount, skippedCount, itemsToSave.Length);
+		}
+
+		// 先套用这个文件自己的未保存缓存,后面的多选框值再覆盖(<keep> 即保留缓存值)。多选框没动封面时才套用
+		// 缓存里的封面:原封面记入撤销快照,缓存封面按保存设置压缩。返回是否套用了封面、压缩是否失败。
+		private (bool CoversApplied, bool CompressFailed) ApplyPendingEditBeforeSave(PendingTagEdit pendingEdit, ConfigDescriptorState tagState, ConfigDescriptorState originalTagSnapshot)
+		{
+			if (pendingEdit == null)
+			{
+				return (false, false);
+			}
+			foreach (KeyValuePair<string, string> field in pendingEdit.Fields)
+			{
+				var (shouldAssign, resolvedValue) = ResolveTagFieldTemplateValue(field.Value, () => (tagState[field.Key] != null) ? tagState[field.Key].ToString() : "");
+				if (shouldAssign)
+				{
+					tagState[field.Key] = resolvedValue;
+				}
+			}
+			if (pendingEdit.Covers == null || tagValues.ContainsKey("allpicturedata"))
+			{
+				return (false, false);
+			}
+			CompressPictures(pendingEdit.Covers, useRestoreLimits: false);
+			if (pendingEdit.Covers.Exists(HasPictureProcessingFailure))
+			{
+				return (false, true);
+			}
+			tagState.LoadAllPictures();
+			List<ConfigDescriptorState.PictureData> originalPictures = tagState["allpicturedata"] as List<ConfigDescriptorState.PictureData>;
+			foreach (ConfigDescriptorState.PictureData picture in originalPictures)
+			{
+				using (ConfigDescriptorState.LoadPictureImage(picture))
+				{
+				}
+			}
+			originalTagSnapshot["allpicturedata"] = originalPictures;
+			tagState["allpicturedata"] = pendingEdit.Covers;
+			return (true, false);
 		}
 
 		internal void SaveTags()
@@ -1183,6 +1235,14 @@ internal partial class StateFieldInstance : Form
 							}
 							else
 							{
+								var pendingEditResult = ApplyPendingEditBeforeSave(pendingEdits?[processedCount], failureReporter.tagState, originalTagSnapshot);
+								if (pendingEditResult.CompressFailed)
+								{
+									action(Resources.Msg_CompressPictureFail);
+									failedCount++;
+									processedCount++;
+									continue;
+								}
 								foreach (KeyValuePair<string, object> tagValueEntry in tagValues)
 								{
 									if (tagValueEntry.Value is string text)
@@ -1208,7 +1268,8 @@ internal partial class StateFieldInstance : Form
 									}
 									failureReporter.tagState[tagValueEntry.Key] = tagValueEntry.Value;
 								}
-								if (!compressedInputPictures && shouldRefreshPictureResolution)
+								// 已套用缓存里的封面时它们刚按同一设置压缩过,原封面也已记入撤销快照。
+								if (!compressedInputPictures && shouldRefreshPictureResolution && !pendingEditResult.CoversApplied)
 								{
 									failureReporter.tagState.LoadAllPictures();
 									List<ConfigDescriptorState.PictureData> currentPictures = failureReporter.tagState["allpicturedata"] as List<ConfigDescriptorState.PictureData>;
@@ -1256,6 +1317,10 @@ internal partial class StateFieldInstance : Form
 									action(undoError);
 								}
 								savedCount++;
+								if (itemSaved != null)
+								{
+									itemSaved[processedCount] = true;
+								}
 							}
 							else
 							{
@@ -2944,6 +3009,7 @@ internal partial class StateFieldInstance : Form
 		InitializeTagEditorControls();
 		InitializeFileListColumnsAndIcons();
 		InitializeFileListFilterMenu();
+		InitializePendingEditsIndicator();
 		ApplyLanguageResources();
 		InitializeSourceMenus();
 		ApplyTagPanelLayout();
@@ -3268,6 +3334,7 @@ internal partial class StateFieldInstance : Form
 			{
 				label.Text = displayName;
 			}
+			CaptureEditorFieldEdit(fieldName, comboBox.Text);
 		};
 
 		tagFieldTextHandlers.Add(fieldName, (label, textChangedHandler));
@@ -3453,6 +3520,7 @@ internal partial class StateFieldInstance : Form
 			menuItem.Text = Resources.ResourceManager.GetString(menuItem.Tag as string);
 		}
 		filterTypeDropDownButton.Text = Resources.ResourceManager.GetString(filterTypeDropDownButton.Tag as string);
+		UpdatePendingEditsStatus();
 	}
 
 	// 存储/默认列宽的刻度语义是"存盘时的启动屏像素",基准记录在 FileListColumnWidthsDpi
@@ -3846,8 +3914,13 @@ internal partial class StateFieldInstance : Form
 	// 首列自绘"图标 + 文字"(DGV 无内建图文同格);其余列/表头不接管,走默认绘制。
 	private void FileList_CellPainting(object sender, DataGridViewCellPaintingEventArgs e)
 	{
-		if (e.ColumnIndex != 0 || e.RowIndex < 0 || e.RowIndex >= visibleRows.Count)
+		if (e.RowIndex < 0 || e.RowIndex >= visibleRows.Count)
 		{
+			return;
+		}
+		if (e.ColumnIndex != 0)
+		{
+			PaintPendingEditMarkerInFirstColumn(e);
 			return;
 		}
 		FileRow fileRow = visibleRows[e.RowIndex];
@@ -3867,6 +3940,7 @@ internal partial class StateFieldInstance : Form
 		Color foreColor = isSelected ? e.CellStyle.SelectionForeColor : e.CellStyle.ForeColor;
 		TextFormatFlags flags = TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix;
 		string text = e.FormattedValue as string ?? fileRow.CellTexts[0];
+		(text, foreColor) = DecoratePendingEditCellText(fileRow, text, foreColor, isSelected);
 		TextRenderer.DrawText(e.Graphics, text, e.CellStyle.Font, textBounds, foreColor, flags);
 		e.Handled = true;
 	}
@@ -4036,12 +4110,17 @@ internal partial class StateFieldInstance : Form
 		RebuildVisibleRows();
 		OnFileSelectionSettled();
 		LoadTagEditorState(null);
+		UpdatePendingEditsStatus();
 	}
 
 	private void ChangeDirectoryButton_Click(object sender, EventArgs e)
 	{
 		FolderSelectionDialog folderDialog = new FolderSelectionDialog();
 		if (folderDialog.ShowDialog(allowMultiSelect: true) != DialogResult.OK)
+		{
+			return;
+		}
+		if (!ConfirmDiscardPendingEdits(cachedFileListItems))
 		{
 			return;
 		}
@@ -4065,6 +4144,10 @@ internal partial class StateFieldInstance : Form
 
 		if (FileSettings.IsAnyFileMode())
 		{
+			if (!ConfirmDiscardPendingEdits(cachedFileListItems))
+			{
+				return;
+			}
 			ClearLoadedFileList();
 			UpdateFileListStatusSummary(selectedItemsOnly: false);
 		}
@@ -4143,6 +4226,7 @@ internal partial class StateFieldInstance : Form
 			if (!continueAddingFiles)
 			{
 				progressDialog.CloseAfterCompletion();
+				FinishPendingEditCarryOver();
 			}
 		}
 		if (continueAddingFiles)
@@ -4167,6 +4251,10 @@ internal partial class StateFieldInstance : Form
 	{
 		try
 		{
+			if (!ConfirmDiscardPendingEdits(cachedFileListItems))
+			{
+				return;
+			}
 			ClearLoadedFileList();
 			ProgressDialog progressDialog = new ProgressDialog(taskbarProgress);
 			FileSettings.DisableForDir();
@@ -4281,6 +4369,7 @@ internal partial class StateFieldInstance : Form
 		finally
 		{
 			progressDialog.CloseAfterCompletion();
+			FinishPendingEditCarryOver();
 		}
 	}
 
@@ -4475,6 +4564,7 @@ internal partial class StateFieldInstance : Form
 			RefreshListViewItemFromFile(row, tagFile);
 			AddSelectedFilterValues(row);
 			LoadTagEditorState(tagFile);
+			RestorePendingEditToEditor(row);
 			UpdateFileListStatusSummary(selectedItemsOnly: true);
 		}
 	}
@@ -4692,6 +4782,7 @@ internal partial class StateFieldInstance : Form
 		try
 		{
 			UnsubscribeTagFieldTextHandlers();
+			ResetEditorPendingEditBinding();
 			tagComboBoxes.ForEachItem(activeFilterContext.ResetFilterComboState);
 			if (activeFilterContext.filterText.Any())
 			{
@@ -4799,6 +4890,7 @@ internal partial class StateFieldInstance : Form
 			owner = this,
 			selectedTag = selectedTag
 		};
+		ResetEditorPendingEditBinding();
 		multiSelectionCoverList = null;
 		compressCoverResolution = false;
 		if (tagEditorState.selectedTag != null && tagEditorState.selectedTag.IsLoadedSuccessfully())
@@ -4818,6 +4910,7 @@ internal partial class StateFieldInstance : Form
 			return;
 		}
 		tagComboBoxes.ForEachItem(tagEditorState.LoadMultiFileTagField);
+		ApplyPendingEditsToMultiSelectionView();
 		multiSelectionCoverList = new List<ConfigDescriptorState.PictureData>();
 		RefreshCoverPreview();
 	}
@@ -5010,10 +5103,15 @@ internal partial class StateFieldInstance : Form
 		lyricDownloadContext.cancellationSource = new CancellationTokenSource();
 		lyricDownloadContext.progressDialog.SetCancelAction(lyricDownloadContext.Cancel);
 		ComboBox lyricTextComboBox = lyricsComboBox;
+		FileRow editorRowAtStart = editorBoundRow;
 		try
 		{
 			string result = await Task.Run((Func<string>)lyricDownloadContext.DownloadLyricText, lyricDownloadContext.cancellationSource.Token);
-			lyricTextComboBox.Text = result;
+			// 取消后对话框先关、下载稍后才返回:期间编辑区若已换成别的文件,结果不能写进(并缓存到)那个文件。
+			if (editorBoundRow == editorRowAtStart)
+			{
+				lyricTextComboBox.Text = result;
+			}
 		}
 		catch (System.Exception ex)
 		{
@@ -5034,6 +5132,7 @@ internal partial class StateFieldInstance : Form
 		{
 		fileListView.Focus();
 		UnsubscribeTagFieldTextHandlers();
+		ResetEditorPendingEditBinding();
 		tagComboBoxes.ForEachItem(ClearTagFieldSelectionState);
 
 		foreach (FileRow fileRow in visibleRows)
@@ -5048,6 +5147,9 @@ internal partial class StateFieldInstance : Form
 					break;
 				case FileSelectionMode.Invert:
 					SetFileRowSelected(fileRow, !fileRow.Selected);
+					break;
+				case FileSelectionMode.PendingEdits:
+					SetFileRowSelected(fileRow, fileRow.PendingEdit != null);
 					break;
 			}
 
@@ -5190,6 +5292,10 @@ internal partial class StateFieldInstance : Form
 
 	private void RemoveSelectedItemsFromList_Click(object sender, EventArgs e)
 	{
+		if (!ConfirmDiscardPendingEdits(SelectedFileRows))
+		{
+			return;
+		}
 		(long selectedDurationMs, long selectedFileSizeBytes) = GetCachedDurationAndFileSize(selectedFilesStatusLabel.Tag);
 		(long allDurationMs, long allFileSizeBytes) = GetCachedDurationAndFileSize(totalFilesStatusLabel.Tag);
 		bool anyFileMode = FileSettings.IsAnyFileMode();
@@ -5208,6 +5314,11 @@ internal partial class StateFieldInstance : Form
 			}
 		}
 		cachedFileListItems.RemoveAll(itemState => selectedItemSet.Contains(itemState));
+		if (editorBoundRow != null && selectedItemSet.Contains(editorBoundRow))
+		{
+			UnbindEditorFromRow();
+		}
+		UpdatePendingEditsStatus();
 		RebuildVisibleRows();
 		selectedFilesStatusLabel.Tag = (Math.Max(0L, selectedDurationMs), Math.Max(0L, selectedFileSizeBytes));
 		totalFilesStatusLabel.Tag = (Math.Max(0L, allDurationMs), Math.Max(0L, allFileSizeBytes));
@@ -5232,6 +5343,10 @@ internal partial class StateFieldInstance : Form
 		{
 			if (!FileSettings.IsAnyFileMode())
 			{
+				if (!ConfirmDiscardPendingEdits(cachedFileListItems))
+				{
+					return;
+				}
 				ClearLoadedFileList();
 			}
 
@@ -5517,12 +5632,14 @@ internal partial class StateFieldInstance : Form
 				{
 					coverList.Add(pictureInfo);
 					currentCoverIndex = coverList.Count - 1;
+					MarkEditorCoversModified();
 					RefreshCoverPreview();
 					return;
 				}
 				coverList.Clear();
 				coverList.Add(pictureInfo);
 				currentCoverIndex = coverList.Count - 1;
+				MarkEditorCoversModified();
 				RefreshCoverPreview();
 			}
 		}
@@ -5687,10 +5804,11 @@ internal partial class StateFieldInstance : Form
 		releaseYearContext.trackResult = searchResult;
 		releaseYearContext.cancellationSource = new CancellationTokenSource();
 		releaseYearContext.progressDialog.SetCancelAction(releaseYearContext.Cancel);
+		FileRow editorRowAtStart = editorBoundRow;
 		try
 		{
 			string result = await Task.Run((Func<string>)releaseYearContext.FetchReleaseYear, releaseYearContext.cancellationSource.Token);
-			if (!string.IsNullOrWhiteSpace(result))
+			if (!string.IsNullOrWhiteSpace(result) && editorBoundRow == editorRowAtStart)
 			{
 				yearComboBox.Text = result;
 			}
@@ -5719,6 +5837,7 @@ internal partial class StateFieldInstance : Form
 		{
 			coverList.RemoveAt(currentCoverIndex);
 			currentCoverIndex = 0;
+			MarkEditorCoversModified();
 		}
 		else if (multiSelectionCoverList != null)
 		{
@@ -5754,6 +5873,10 @@ internal partial class StateFieldInstance : Form
 
 	private void RefreshSelectedFiles_Click(object sender, EventArgs e)
 	{
+		if (!DiscardSelectedPendingEditsForReload())
+		{
+			return;
+		}
 		RefreshSelectedItems(showErrorMessageBox: true, showProgressDialog: true, refreshStatusAllInfo: true);
 	}
 
@@ -5771,6 +5894,7 @@ internal partial class StateFieldInstance : Form
 
 	private void RefreshConfiguredFileList_Click(object sender, EventArgs e)
 	{
+		CarryOverPendingEditsForReload();
 		ClearLoadedFileList();
 		UpdateWindowTitle();
 		ProgressDialog progressDialog = new ProgressDialog(taskbarProgress);
@@ -5926,6 +6050,10 @@ internal partial class StateFieldInstance : Form
 		{
 			return;
 		}
+		if (SelectedFileCount > 1 && !ValidateSelectedPendingNumberedFields())
+		{
+			return;
+		}
 		if (SelectedFileCount > 1 && !DialogService.ConfirmYesNo(string.Format(Resources.Msg_ConfirmSaveTags, SelectedFileCount) + "\n" + BuildSelectedFilePreview()))
 		{
 			return;
@@ -5950,6 +6078,12 @@ internal partial class StateFieldInstance : Form
 			{
 				valueMap.Add("allpicturedata", selectedTagState["allpicturedata"] as List<ConfigDescriptorState.PictureData>);
 			}
+			else
+			{
+				// 行为修正:文件没能读出标签时编辑区是空的,原先保存会把没填的字段全部清空;
+				// 现在空字段按 <keep> 处理(被占用的文件稍后重试保存时不会误清原有标签)。
+				ApplyUnloadedFileSaveValues(valueMap);
+			}
 		}
 		else if (selectedItems.Length > 1)
 		{
@@ -5970,8 +6104,9 @@ internal partial class StateFieldInstance : Form
 			return;
 		}
 
+		EditorSaveContext editorSave = CreateEditorSaveContext(selectedItems);
 		ProgressDialog progressDialog = new ProgressDialog(taskbarProgress);
-		StartCommonSaveTags(selectedItems, progressDialog, valueMap, canCancelReadOnly == true, compressCoverResolution);
+		StartCommonSaveTags(selectedItems, progressDialog, valueMap, canCancelReadOnly == true, compressCoverResolution, editorSave);
 		progressDialog.ShowDialogIfNotDisposed();
 	}
 
@@ -6116,7 +6251,9 @@ internal partial class StateFieldInstance : Form
 		}
 	}
 
-	private async void StartCommonSaveTags(SelectedListViewItemInfo[] itemInfos, ProgressDialog progressDialog, Dictionary<string, object> valueMap, bool canCancelFileReadonly, bool needUpdatePictureResolution = false)
+	// editorSave 只由编辑区保存(SaveTags_Click)传入:据逐文件结果清除或保留未保存缓存。
+	// 简繁/歌词等批量操作也走这里,它们不碰缓存。
+	private async void StartCommonSaveTags(SelectedListViewItemInfo[] itemInfos, ProgressDialog progressDialog, Dictionary<string, object> valueMap, bool canCancelFileReadonly, bool needUpdatePictureResolution = false, EditorSaveContext editorSave = null)
 	{
 		SaveTagsTaskContext saveTagsContext = new SaveTagsTaskContext();
 		saveTagsContext.progressDialog = progressDialog;
@@ -6134,12 +6271,21 @@ internal partial class StateFieldInstance : Form
 		saveTagsContext.currentFile = null;
 		saveTagsContext.progressDialog.ProgressUpdate += saveTagsContext.UpdateProgress;
 		saveTagsContext.messageLog = new Page();
+		saveTagsContext.itemSaved = new bool[itemInfos.Length];
+		if (editorSave != null && itemInfos.Length > 1)
+		{
+			saveTagsContext.pendingEdits = SnapshotPendingEditsForSave(editorSave.Rows);
+		}
 		try
 		{
 			await Task.Run((Action)saveTagsContext.SaveTags, saveTagsContext.cancellationSource.Token);
 			(string, bool) value = BuildBatchResultMessage(saveTagsContext.itemsToSave.Length, Resources.Msg_SaveCompleted, saveTagsContext.savedCount, saveTagsContext.failedCount, saveTagsContext.skippedCount, saveTagsContext.processedCount, saveTagsContext.messageLog.ToString(), includeSkippedBranch: true);
 			saveTagsContext.progressDialog.CloseAfterCompletion();
 			GC.Collect();
+			if (editorSave != null)
+			{
+				value = ApplyEditorSaveOutcome(editorSave, saveTagsContext.itemSaved, value);
+			}
 			RefreshSelectedItems(showErrorMessageBox: false, showProgressDialog: true, refreshStatusAllInfo: true, previousMessage: value);
 		}
 		catch (System.Exception ex)
@@ -7295,6 +7441,11 @@ internal partial class StateFieldInstance : Form
 	protected override void OnClosing(CancelEventArgs e)
 	{
 		base.OnClosing(e);
+		if (!skipSavingSettingsOnClose && !ConfirmExitWithPendingEdits())
+		{
+			e.Cancel = true;
+			return;
+		}
 		CloseKnownMessageBoxes();
 		if (skipSavingSettingsOnClose)
 		{

@@ -86,6 +86,7 @@ internal static class Program
 		tests.AddRange(X64RuntimeCharacterization.All());
 		tests.AddRange(TrackLinkInputCharacterization.All());
 		tests.AddRange(ChineseTextConverterCharacterization.All());
+		tests.AddRange(PendingTagEditCharacterization.All());
 			tests.AddRange(DialogConstructionSmoke.All());
 			tests.AddRange(OptionsDialogInitialVisibilityCharacterization.All());
 			tests.AddRange(UndoTempCleanupCharacterization.All());
