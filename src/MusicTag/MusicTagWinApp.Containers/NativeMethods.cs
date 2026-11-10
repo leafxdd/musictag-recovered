@@ -76,6 +76,25 @@ internal static class NativeMethods
 		public string Data;
 	}
 
+	// uxtheme 的 RECT / SIZE:四个 / 两个 32 位整数,与指针宽度无关。
+	public struct ThemeRect
+	{
+		public int Left;
+
+		public int Top;
+
+		public int Right;
+
+		public int Bottom;
+	}
+
+	public struct ThemeSize
+	{
+		public int Width;
+
+		public int Height;
+	}
+
 	public const int ShowWindowHide = 0;
 
 	public const int ShowWindowNormal = 1;
@@ -156,6 +175,18 @@ internal static class NativeMethods
 
 	[DllImport("uxtheme.dll", CharSet = CharSet.Auto, EntryPoint = "SetWindowTheme", ExactSpelling = true)]
 	public static extern int SetWindowTheme(IntPtr windowHandle, string subAppName, string subIdList);
+
+	[DllImport("uxtheme.dll", CharSet = CharSet.Unicode, EntryPoint = "OpenThemeData", ExactSpelling = true)]
+	public static extern IntPtr OpenThemeData(IntPtr windowHandle, string classList);
+
+	[DllImport("uxtheme.dll", EntryPoint = "CloseThemeData", ExactSpelling = true)]
+	public static extern int CloseThemeData(IntPtr themeHandle);
+
+	[DllImport("uxtheme.dll", EntryPoint = "GetThemePartSize", ExactSpelling = true)]
+	public static extern int GetThemePartSize(IntPtr themeHandle, IntPtr deviceContext, int partId, int stateId, IntPtr bounds, int sizeType, out ThemeSize size);
+
+	[DllImport("uxtheme.dll", EntryPoint = "DrawThemeBackground", ExactSpelling = true)]
+	public static extern int DrawThemeBackground(IntPtr themeHandle, IntPtr deviceContext, int partId, int stateId, ref ThemeRect bounds, ref ThemeRect clipBounds);
 
 	[DllImport("user32.dll", EntryPoint = "EnumThreadWindows")]
 	public static extern int EnumThreadWindows(int threadId, EnumThreadWindowsCallback callback, IntPtr lParam);

@@ -1,5 +1,9 @@
+using System;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Windows.Forms;
+using System.Windows.Forms.VisualStyles;
+using MusicTagWinApp.Containers;
 
 namespace MusicTagWinApp.Exporters;
 
@@ -73,6 +77,203 @@ internal sealed class BufferedDataGridView : DataGridView
 		}
 		EndEdit();
 		return true;
+	}
+
+	// uxtheme HEADER 类的 HP_HEADERSORTARROW 图元及其状态、TS_TRUE 尺寸类型(vssym32.h)。
+	private const int HeaderSortArrowPart = 4;
+
+	private const int HeaderSortArrowSortedUp = 1;
+
+	private const int HeaderSortArrowSortedDown = 2;
+
+	private const int ThemeSizeTrue = 1;
+
+	// 排序箭头画在列头顶部居中,用的是原生 Header 控件(迁移前 ListView 的列头)同一个主题图元,
+	// 升序 = SORTEDUP,与旧版 HDF_SORTUP 的取法一致。主题句柄按本控件窗口打开:Per-Monitor V2 下
+	// 尺寸跟随本窗口所在屏的 DPI;public 的 VisualStyleRenderer 不带窗口句柄,只给系统 DPI 的尺寸,
+	// 拖到异 DPI 屏会画大或画小。拿不到主题(经典样式等)时退回自绘的线条箭头。
+	public void PaintHeaderSortArrow(Graphics graphics, Rectangle cellBounds, Rectangle clipBounds, SortOrder sortOrder)
+	{
+		if (sortOrder == SortOrder.None)
+		{
+			return;
+		}
+		Rectangle clip = Rectangle.Intersect(cellBounds, clipBounds);
+		if (clip.IsEmpty)
+		{
+			return;
+		}
+		if (!TryPaintThemedHeaderSortArrow(graphics, cellBounds, clip, sortOrder))
+		{
+			PaintFallbackHeaderSortArrow(graphics, cellBounds, clip, sortOrder);
+		}
+	}
+
+	private bool TryPaintThemedHeaderSortArrow(Graphics graphics, Rectangle cellBounds, Rectangle clip, SortOrder sortOrder)
+	{
+		if (!Application.RenderWithVisualStyles || !IsHandleCreated)
+		{
+			return false;
+		}
+		// GetHdc 不带 GDI+ 的变换;DGV 的绘制 Graphics 没有变换,万一有就交给自绘路径。
+		using (Matrix transform = graphics.Transform)
+		{
+			if (!transform.IsIdentity)
+			{
+				return false;
+			}
+		}
+		IntPtr theme = NativeMethods.OpenThemeData(Handle, "HEADER");
+		if (theme == IntPtr.Zero)
+		{
+			return false;
+		}
+		try
+		{
+			int stateId = sortOrder == SortOrder.Ascending ? HeaderSortArrowSortedUp : HeaderSortArrowSortedDown;
+			IntPtr deviceContext = graphics.GetHdc();
+			try
+			{
+				if (NativeMethods.GetThemePartSize(theme, deviceContext, HeaderSortArrowPart, stateId, IntPtr.Zero, ThemeSizeTrue, out NativeMethods.ThemeSize size) < 0 || size.Width <= 0 || size.Height <= 0)
+				{
+					return false;
+				}
+				int left = cellBounds.Left + (cellBounds.Width - size.Width) / 2;
+				NativeMethods.ThemeRect bounds = new NativeMethods.ThemeRect { Left = left, Top = cellBounds.Top, Right = left + size.Width, Bottom = cellBounds.Top + size.Height };
+				// GetHdc 也不带 GDI+ 的剪裁,剪裁框显式传给 DrawThemeBackground。
+				NativeMethods.ThemeRect clipBounds = new NativeMethods.ThemeRect { Left = clip.Left, Top = clip.Top, Right = clip.Right, Bottom = clip.Bottom };
+				return NativeMethods.DrawThemeBackground(theme, deviceContext, HeaderSortArrowPart, stateId, ref bounds, ref clipBounds) >= 0;
+			}
+			finally
+			{
+				graphics.ReleaseHdc(deviceContext);
+			}
+		}
+		finally
+		{
+			NativeMethods.CloseThemeData(theme);
+		}
+	}
+
+	private void PaintFallbackHeaderSortArrow(Graphics graphics, Rectangle cellBounds, Rectangle clip, SortOrder sortOrder)
+	{
+		int halfWidth = LogicalToDeviceUnits(4);
+		int height = LogicalToDeviceUnits(4);
+		int centerX = cellBounds.Left + cellBounds.Width / 2;
+		int top = cellBounds.Top + LogicalToDeviceUnits(1);
+		Point[] points = sortOrder == SortOrder.Ascending
+			? new[] { new Point(centerX - halfWidth, top + height), new Point(centerX, top), new Point(centerX + halfWidth, top + height) }
+			: new[] { new Point(centerX - halfWidth, top), new Point(centerX, top + height), new Point(centerX + halfWidth, top) };
+		GraphicsState state = graphics.Save();
+		try
+		{
+			graphics.SetClip(clip, CombineMode.Intersect);
+			graphics.SmoothingMode = SmoothingMode.AntiAlias;
+			using Pen pen = new Pen(SystemColors.GrayText, LogicalToDeviceUnits(1));
+			graphics.DrawLines(pen, points);
+		}
+		finally
+		{
+			graphics.Restore(state);
+		}
+	}
+}
+
+// 文件列表的列头单元格:背景按系统主题绘制,可排序列的悬停/按下态由 DGV 负责(需
+// EnableHeadersVisualStyles = true)。在此之上补两处,让它和原 ListView 的原生列头一致:
+// 1) .NET 8 画完主题背景后会在右缘无条件描一条 WindowFrame 色的分隔线
+//    (ControlPaint.EnforceHeaderCellDividerContrast,无开关),比原生列头的浅灰分隔线深得多。
+//    这里按 DGV 同样的状态规则(按下 > 悬停 > 常态),只把右缘那 1px 用主题重画回去。
+// 2) 排序箭头不用 SortGlyphDirection(DGV 自画的立体三角,在标题右侧),改由 SortArrow 记录,
+//    按原生列头的样式画在顶部居中。
+internal sealed class NativeStyleColumnHeaderCell : DataGridViewColumnHeaderCell
+{
+	private static VisualStyleRenderer headerItemRenderer;
+
+	private bool mouseOver;
+
+	private SortOrder sortArrow;
+
+	public SortOrder SortArrow
+	{
+		get
+		{
+			return sortArrow;
+		}
+		set
+		{
+			if (sortArrow == value)
+			{
+				return;
+			}
+			sortArrow = value;
+			if (DataGridView != null && ColumnIndex >= 0)
+			{
+				DataGridView.InvalidateCell(ColumnIndex, -1);
+			}
+		}
+	}
+
+	public override object Clone()
+	{
+		NativeStyleColumnHeaderCell clone = (NativeStyleColumnHeaderCell)base.Clone();
+		clone.sortArrow = sortArrow;
+		return clone;
+	}
+
+	protected override void OnMouseEnter(int rowIndex)
+	{
+		mouseOver = true;
+		base.OnMouseEnter(rowIndex);
+	}
+
+	protected override void OnMouseLeave(int rowIndex)
+	{
+		mouseOver = false;
+		base.OnMouseLeave(rowIndex);
+	}
+
+	protected override void Paint(Graphics graphics, Rectangle clipBounds, Rectangle cellBounds, int rowIndex, DataGridViewElementStates dataGridViewElementState, object value, object formattedValue, string errorText, DataGridViewCellStyle cellStyle, DataGridViewAdvancedBorderStyle advancedBorderStyle, DataGridViewPaintParts paintParts)
+	{
+		base.Paint(graphics, clipBounds, cellBounds, rowIndex, dataGridViewElementState, value, formattedValue, errorText, cellStyle, advancedBorderStyle, paintParts);
+		if (DataGridView is not BufferedDataGridView grid)
+		{
+			return;
+		}
+		// 与基类取主题背景的范围一致:单元格减去边框。
+		Rectangle borderWidths = BorderWidths(advancedBorderStyle);
+		Rectangle backgroundBounds = new Rectangle(cellBounds.X + borderWidths.X, cellBounds.Y + borderWidths.Y, cellBounds.Width - borderWidths.X - borderWidths.Width, cellBounds.Height - borderWidths.Y - borderWidths.Height);
+		if (backgroundBounds.Width <= 0 || backgroundBounds.Height <= 0)
+		{
+			return;
+		}
+		if ((paintParts & DataGridViewPaintParts.Background) != 0 && grid.EnableHeadersVisualStyles && Application.RenderWithVisualStyles)
+		{
+			RestoreThemeDivider(graphics, clipBounds, backgroundBounds);
+		}
+		if (sortArrow != SortOrder.None && (paintParts & DataGridViewPaintParts.ContentForeground) != 0)
+		{
+			grid.PaintHeaderSortArrow(graphics, backgroundBounds, clipBounds, sortArrow);
+		}
+	}
+
+	private void RestoreThemeDivider(Graphics graphics, Rectangle clipBounds, Rectangle backgroundBounds)
+	{
+		VisualStyleElement element = ButtonState != ButtonState.Normal ? VisualStyleElement.Header.Item.Pressed : (mouseOver ? VisualStyleElement.Header.Item.Hot : VisualStyleElement.Header.Item.Normal);
+		if (!VisualStyleRenderer.IsElementDefined(element))
+		{
+			return;
+		}
+		// 对比度线从单元格上沿外一格画到下沿(含),重画范围与之对齐。
+		Rectangle divider = new Rectangle(backgroundBounds.Right - 1, backgroundBounds.Top - 1, 1, backgroundBounds.Height + 2);
+		divider.Intersect(clipBounds);
+		if (divider.IsEmpty)
+		{
+			return;
+		}
+		headerItemRenderer ??= new VisualStyleRenderer(element);
+		headerItemRenderer.SetParameters(element);
+		headerItemRenderer.DrawBackground(graphics, backgroundBounds, divider);
 	}
 }
 

@@ -39,6 +39,17 @@ internal static class NativeInteropLayoutCharacterization
 			Check.Equal(12, OffsetOf<NativeMethods.HeaderHitTestInfo>(nameof(NativeMethods.HeaderHitTestInfo.ItemIndex)), "HDHITTESTINFO iItem offset");
 		});
 
+		yield return ("uxtheme RECT and SIZE layouts are architecture independent", delegate
+		{
+			Check.Equal(16, Marshal.SizeOf<NativeMethods.ThemeRect>(), "RECT size");
+			Check.Equal(12, OffsetOf<NativeMethods.ThemeRect>(nameof(NativeMethods.ThemeRect.Bottom)), "RECT bottom offset");
+			Check.Equal(8, Marshal.SizeOf<NativeMethods.ThemeSize>(), "SIZE size");
+			Check.Equal(4, OffsetOf<NativeMethods.ThemeSize>(nameof(NativeMethods.ThemeSize.Height)), "SIZE cy offset");
+			DllImportAttribute import = typeof(NativeMethods).GetMethod(nameof(NativeMethods.OpenThemeData))?.GetCustomAttribute<DllImportAttribute>();
+			Check.NotNull(import, "OpenThemeData DllImport");
+			Check.Equal(CharSet.Unicode, import.CharSet, "OpenThemeData CharSet");
+		});
+
 		yield return ("SHGetFileInfo import and callback use x64-safe signatures", delegate
 		{
 			MethodInfo getShellFileInfo = typeof(NativeMethods).GetMethod(nameof(NativeMethods.GetShellFileInfo));

@@ -3548,6 +3548,8 @@ internal partial class StateFieldInstance : Form
 		{
 			DataGridViewTextBoxColumn column = new DataGridViewTextBoxColumn
 			{
+				// 必须先于 HeaderText 赋值:标题文字存在列头单元格里,后换单元格会把它丢掉。
+				HeaderCell = new NativeStyleColumnHeaderCell(),
 				Name = columnInfo.Name,
 				HeaderText = columnInfo.Name,
 				Width = ScaleStoredColumnWidthToCurrentDpi(columnInfo.width),
@@ -3602,8 +3604,14 @@ internal partial class StateFieldInstance : Form
 		fileListView.CellBorderStyle = DataGridViewCellBorderStyle.None;
 		fileListView.AdvancedCellBorderStyle.All = DataGridViewAdvancedCellBorderStyle.None;
 		fileListView.AdvancedColumnHeadersBorderStyle.All = DataGridViewAdvancedCellBorderStyle.None;
-		fileListView.AdvancedColumnHeadersBorderStyle.Right = DataGridViewAdvancedCellBorderStyle.Single;
-		fileListView.EnableHeadersVisualStyles = false;
+		// 主题列头自带浅灰分隔线(与原生列头相同);再画右边框会叠出一条深灰线。只在无主题时补右边框作分隔。
+		if (!Application.RenderWithVisualStyles)
+		{
+			fileListView.AdvancedColumnHeadersBorderStyle.Right = DataGridViewAdvancedCellBorderStyle.Single;
+		}
+		// 列头按系统主题绘制:可排序列自带悬停/按下态,接近原 ListView 的原生列头。主题生效时
+		// 下面的列头底色/前景色被忽略(DGV 用主题色),只在经典样式等无主题场景下兜底。
+		fileListView.EnableHeadersVisualStyles = true;
 		fileListView.DefaultCellStyle.BackColor = Color.White;
 		fileListView.DefaultCellStyle.ForeColor = SystemColors.WindowText;
 		fileListView.DefaultCellStyle.Font = listFont;
@@ -5429,8 +5437,15 @@ internal partial class StateFieldInstance : Form
 		{
 			return;
 		}
+		DataGridViewColumnHeaderCell headerCell = fileListView.Columns[columnIndex.Value].HeaderCell;
+		// 列头是 NativeStyleColumnHeaderCell 时,箭头按原生列头的样式画在顶部居中。
+		if (headerCell is NativeStyleColumnHeaderCell nativeStyleHeaderCell)
+		{
+			nativeStyleHeaderCell.SortArrow = sortOrder;
+			return;
+		}
 		// 建列已统一为 Programmatic,可直接设排序三角(NotSortable 列设 SortGlyphDirection 会抛异常)。
-		fileListView.Columns[columnIndex.Value].HeaderCell.SortGlyphDirection = sortOrder;
+		headerCell.SortGlyphDirection = sortOrder;
 	}
 
 	private void ExitApplication_Click(object sender, EventArgs e)
