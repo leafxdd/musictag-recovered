@@ -107,7 +107,15 @@ Use readable PascalCase for types/methods/properties and follow the surrounding 
 
 `StateFieldInstance` is the main large form and coordinates file lists, tag editing, batch work, history/undo, and much of the DPI layout. Treat it as a hotspot: use CodeGraph for callers and keep diffs narrowly scoped. `LoadTagEditorState` and `LoadSingleSelectedFile` sit on every selection path and report CRITICAL impact.
 
-The file list is a VirtualMode `DataGridView` (`BufferedDataGridView`) whose `FileRow` objects are the single data source; the field and Designer names `fileListView`/`listView1` are leftovers from the old `ListView`. Unsaved tag-editor edits are cached per row (`FileRow.PendingEdit`, logic in `StateFieldInstance.PendingEdits.cs`):
+The file list is a virtual-mode native `ListView` (`FileListView`, derived from `HeaderAwareListView`) whose `FileRow` objects are the single data source; the Designer name `listView1` is historical. It was a `DataGridView` from 2026-06 to 2026-11 and went back to `ListView` once measurements showed the lag was confined to horizontal scrolling. Keep these rules:
+
+- Rows come from `RetrieveVirtualItem` over `visibleRows`, and each row caches its display item in `FileRow.ListItem`. Any change to displayed content must go through `InvalidateFileRow`; column rebuilds clear every cache.
+- Only shown columns exist in the control. `fileListColumnLogicalIndexes` maps a list column to the logical column (`configuredColumnHeaders` / `FileRow.CellTexts` index), and list column 0 is the item column that carries the icon and in-place rename, which is enabled only when it is the filename column.
+- Selection is modeled on `FileRow.Selected`. Native notifications are coalesced into one posted diff (`SyncFileListSelectionFromView`), and programmatic changes restore the control through `RestoreFileListSelectionFromModel` under `suppressFileListSelectionEvents`.
+- Marquee, label edit, incremental search, focus rectangle and inactive selection are system-provided; do not re-emulate them. `SearchForVirtualItem` must always prefix-match, because comctl32 sends `LVFI_SUBSTRING` and WinForms reports `IsPrefixSearch = false`.
+- The list uses Microsoft YaHei UI (`fileListItemFont`) because Tahoma has no CJK glyphs and GDI fallback roughly triples ListView paint cost; the form keeps `fileListFont` (Tahoma). Horizontal scrolling through many wide columns repaints the whole view on every step and remains the known weakness.
+
+Unsaved tag-editor edits are cached per row (`FileRow.PendingEdit`, logic in `StateFieldInstance.PendingEdits.cs`):
 
 - The editor binds to a row only after `LoadSingleSelectedFile` has loaded the file and overlaid its cache. Any path that reloads or clears the editor must unbind first (`LoadTagEditorState`, the filter, and the selection-mode paths call `ResetEditorPendingEditBinding`); otherwise programmatic `ComboBox.Text` writes are recorded into the wrong row's cache.
 - `ComboBox.Text` assignment selects a case-insensitively matching dropdown item and adopts its casing. Restore user text through `SetComboBoxTextExact`.
