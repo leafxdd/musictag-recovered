@@ -58,13 +58,13 @@ internal partial class StateFieldInstance : Form
 		public string FilePath;
 	}
 
-	// 文件列表的一行数据 —— DataGridView VirtualMode 下的唯一数据真源(取代原先"用 ListViewItem 当数据容器")。
+	// 文件列表的一行数据 —— 虚拟 ListView 的唯一数据真源(控件只按需取可见行,自己不存数据)。
 	private sealed class FileRow
 	{
 		public string FilePath;
 
 		// 按 configuredColumnHeaders 的逻辑列序存各列显示文本(lyrics/comment 已按 20 字截断),
-		// CellValueNeeded 据此向 DGV 供值,过滤/排序也消费它。
+		// RetrieveVirtualItem 据此向 ListView 供值,过滤/排序也消费它。
 		public string[] CellTexts;
 
 		// 时长(毫秒),状态栏汇总用;无有效值为 null。
@@ -73,25 +73,29 @@ internal partial class StateFieldInstance : Form
 		// 备注(comment)完整长度,过滤长备注分组用。
 		public int CommentFullLength;
 
-		// 加载失败 —— CellFormatting 据此标红。
+		// 加载失败 —— 整行标红。
 		public bool LoadFailed;
 
-		// 文件类型图标键(扩展名),第一列 CellPainting 据此取图标。
+		// 文件类型图标键(扩展名),也是它在 fileTypeImageList 里的键。
 		public string IconKey;
 
-		// 文件类型图标对象缓存,避免滚动重绘时反复查 ImageList。
+		// 文件类型图标(后台线程生成),首次显示时登记进 fileTypeImageList。
 		public Image IconImage;
 
 		// 过滤隐藏位:true 表示当前过滤条件下不进 visibleRows(不显示)。
 		public bool IsHidden;
 
-		// 选中态(模型真源)。DGV VirtualMode 的行选区会随过滤/排序重建而失效,
-		// 故选中态以此字段为准,过滤/排序后据它恢复 DGV 行选区。
+		// 选中态(模型真源)。虚拟 ListView 的选区按行号记,过滤/排序重建行集合后即失效,
+		// 故选中态以此字段为准,过滤/排序后据它恢复控件选区。
 		public bool Selected;
 
 		// 未保存的标签修改(无则为 null)。挂在行对象上:过滤/排序/刷新原地复用行,改名只改 FilePath,
 		// 缓存都不会和文件失联。
 		public PendingTagEdit PendingEdit;
+
+		// 供 RetrieveVirtualItem 复用的显示条目(系统每画一格都会来取,不能每次现建)。
+		// 行的显示内容一变就清空(InvalidateFileRow),列集合重建时全部清空。
+		public ListViewItem ListItem;
 	}
 
 	private class ListViewItemNaturalComparer : IComparer
@@ -2343,8 +2347,12 @@ internal partial class StateFieldInstance : Form
 
 	private readonly object fileTypeIconCacheLock = new object();
 
-	// 文件列表字体 —— 由字段持有,避免 ApplyFileListVisualStyle 每次 new 出的 Font 句柄无人释放。
+	// 窗体字体(主窗体与各条带沿用 Tahoma;文件列表另用 fileListItemFont)—— 由字段持有,避免每次 new 出的 Font 句柄无人释放。
 	private readonly Font fileListFont = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+
+	// 文件列表专用字体:微软雅黑 UI 自带中文字形。Tahoma 没有中文字形,原生 ListView 每画一格中文都要走
+	// GDI 字体回退,整屏重画实测约 100ms → 38ms(cctortest/listview-spike,144 DPI、18 列压进一屏)。
+	private readonly Font fileListItemFont = new Font("Microsoft YaHei UI", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 
 	private readonly Dictionary<string, ComboBox> tagComboBoxes;
 
@@ -2656,7 +2664,7 @@ internal partial class StateFieldInstance : Form
 
 	private ToolStripSeparator fileSummaryStatusSeparator;
 
-	private BufferedDataGridView fileListView;
+	private FileListView fileListView;
 
 	private ToolStripMenuItem characterSetMenuItem;
 
@@ -2774,8 +2782,6 @@ internal partial class StateFieldInstance : Form
 
 	private System.Windows.Forms.Timer renamedFilesRefreshTimer;
 
-	private System.Windows.Forms.Timer inlineRenameClickTimer;
-
 	private System.Windows.Forms.Timer comboBoxSelectionResetTimer;
 
 	private ToolStripDropDownButton chineseConversionToolStripDropDownButton;
@@ -2820,7 +2826,7 @@ internal partial class StateFieldInstance : Form
 
 	private List<FileRow> cachedFileListItems { get; }
 
-	// DataGridView VirtualMode 的 RowCount 数据源:cachedFileListItems 中未被过滤隐藏的子集(保持主表顺序)。
+	// 虚拟 ListView 的数据源(VirtualListSize = 其行数):cachedFileListItems 中未被过滤隐藏的子集(保持主表顺序)。
 	private List<FileRow> visibleRows = new List<FileRow>();
 
 	// visibleRows 的 行 → 下标 反查(InvalidateRow / 恢复选区 用),随 visibleRows 重建。
@@ -2836,26 +2842,18 @@ internal partial class StateFieldInstance : Form
 
 	private int fileListIconPadding;
 
-	// 抑制 DGV SelectionChanged 处理(过滤/排序/全选反选等程序化改选区时置 true,避免重入)。
+	// 抑制选区通知处理(过滤/排序/全选反选等程序化改选区时置 true,避免重入)。
 	private bool suppressFileListSelectionEvents;
 
-	// 就地重命名状态:正在编辑的行 + CellValuePushed 捕获的新文件名(VirtualMode 下编辑值不入模型,需自存)。
+	// 用户改选区的同步已排进消息队列:系统对 Shift 点选、框选、点空白清空会连发多条通知,合并成一次处理。
+	private bool fileListSelectionSyncPosted;
+
+	// 正在就地重命名的行(BeforeLabelEdit 记下、AfterLabelEdit 取用;编辑期间行号可能失效,故记行对象)。
 	private FileRow renamingRow;
 
-	private string renameEditedValue;
-
-	// "已选中的行再单击一次 -> 进入重命名"的候选行(复刻原 ListView LabelEdit 的延时触发)。
-	// 在 CellMouseDown 认定,MouseUp 起 inlineRenameClickTimer,Tick 时再验一次选中态才真正进编辑。
-	private FileRow pendingInlineRenameRow;
-
-	// 键入即定位的前缀缓冲与上次按键时刻 —— 复刻原 ListView 报表视图自带的增量搜索
-	// (DGV 没有任何等价物)。超过 TypeAheadResetMilliseconds 未再按键即视为新一轮搜索,
-	// 因此不需要额外的计时器,下一次按键自己判超时即可。
-	private string typeAheadPrefix = "";
-
-	private long typeAheadLastKeyTicks;
-
-	private const int TypeAheadResetMilliseconds = 1000;
+	// ListView 只建显示中的列:fileListColumnLogicalIndexes[列表列号] = 逻辑列号
+	// (configuredColumnHeaders / FileRow.CellTexts 的下标)。隐藏列不进 ListView。
+	private int[] fileListColumnLogicalIndexes = Array.Empty<int>();
 
 	private FormPosSizeInfo MainFormPosSizeInfo { get; set; }
 
@@ -2989,7 +2987,7 @@ internal partial class StateFieldInstance : Form
 		// 静态 ScaleByDpi 基线(桌面 DC = 恒主屏)先与句柄屏钉齐,后续 Initialize* 生成的静态
 		// 刻度资产(图标/最小宽/过滤条控件宽)才与 Designer/框架布局(句柄屏自洽)同刻度。
 		// startupDpi 供列宽持久化归一(见 SaveCurrentFileListColumnWidths);customAssetsDpi
-		// 台账有初值后,首次跨屏 WM_DPICHANGED 才能按 previous→target 比率补缩 DGV 列宽。
+		// 台账有初值后,首次跨屏 WM_DPICHANGED 才能按 previous→target 比率补缩 文件列表列宽。
 		ImageUtilities.RefreshDpiScaleCache(this);
 		startupDpi = DeviceDpi;
 		customAssetsDpi = DeviceDpi;
@@ -3507,9 +3505,9 @@ internal partial class StateFieldInstance : Form
 		{
 			tagField.Value.Item1.Text = Resources.ResourceManager.GetString(tagField.Key);
 		}
-		foreach (DataGridViewColumn columnHeader in fileListView.Columns)
+		foreach (ColumnHeader columnHeader in fileListView.Columns)
 		{
-			columnHeader.HeaderText = Resources.ResourceManager.GetString(columnHeader.Name);
+			columnHeader.Text = Resources.ResourceManager.GetString(columnHeader.Name);
 		}
 		foreach (Button button in tagEncodingButtons)
 		{
@@ -3543,106 +3541,71 @@ internal partial class StateFieldInstance : Form
 
 	private void InitializeFileListColumnsAndIcons()
 	{
-		fileListView.Columns.Clear();
-		foreach (CustomColumnsDialog.ColumnHeaderInfo columnInfo in configuredColumnHeaders)
-		{
-			DataGridViewTextBoxColumn column = new DataGridViewTextBoxColumn
-			{
-				// 必须先于 HeaderText 赋值:标题文字存在列头单元格里,后换单元格会把它丢掉。
-				HeaderCell = new NativeStyleColumnHeaderCell(),
-				Name = columnInfo.Name,
-				HeaderText = columnInfo.Name,
-				Width = ScaleStoredColumnWidthToCurrentDpi(columnInfo.width),
-				Visible = columnInfo.isShow,
-				SortMode = DataGridViewColumnSortMode.Programmatic,
-				ReadOnly = true,
-				Resizable = DataGridViewTriState.True,
-				Tag = columnInfo
-			};
-			column.DefaultCellStyle.Alignment = MapColumnAlignment(columnInfo.textAlign);
-			if (fileListView.Columns.Count == 0)
-			{
-				// 首列是唯一自绘图标、也是唯一可就地重命名的列:换用会避开图标的编辑框定位。
-				column.CellTemplate = new IndentedEditTextBoxCell();
-			}
-			fileListView.Columns.Add(column);
-		}
-		// DisplayIndex 必须是 0..N-1 的排列;按存储的 displayIndex 升序依次赋值,既忠实顺序又避免 DGV 重排冲突。
-		int order = 0;
-		foreach (CustomColumnsDialog.ColumnHeaderInfo columnInfo in configuredColumnHeaders.OrderBy(c => c.displayIndex))
-		{
-			fileListView.Columns[columnInfo.Name].DisplayIndex = order++;
-		}
 		fileTypeImageList.ColorDepth = ColorDepth.Depth32Bit;
 		fileTypeImageList.ImageSize = new Size(ImageUtilities.ScaleByDpi(20f), ImageUtilities.ScaleByDpi(20f));
 		fileListIconSize = fileTypeImageList.ImageSize.Width;
 		fileListIconPadding = ImageUtilities.ScaleByDpi(2f);
-		// 与 FileList_CellPainting 里 textLeft 的算式保持一致(左边距 + 图标 + 右边距)。
-		fileListView.FirstColumnEditIndent = fileListIconSize + 2 * fileListIconPadding;
-		fileListView.RowTemplate.Height = Math.Max(ImageUtilities.ScaleByDpi(22f), fileTypeImageList.ImageSize.Height + fileListIconPadding);
+		fileListView.SmallImageList = fileTypeImageList;
+		RebuildFileListColumns(useDialogWidths: false);
 	}
 
-	internal static DataGridViewContentAlignment MapColumnAlignment(HorizontalAlignment textAlign)
+	// ListView 只建显示中的列,按逻辑列序建 —— 第 0 列是条目列(图标、就地重命名都落在它上面),
+	// 文件名列显示时就是它;再按存储的 displayIndex 排出显示顺序。useDialogWidths:取自定义列对话框
+	// 给出的 tempWidth(打开对话框时的当前宽度,或"重置"后的默认宽度),否则取存储宽度。
+	private void RebuildFileListColumns(bool useDialogWidths)
 	{
-		switch (textAlign)
+		fileListView.BeginUpdate();
+		try
 		{
-			case HorizontalAlignment.Center:
-				return DataGridViewContentAlignment.MiddleCenter;
-			case HorizontalAlignment.Right:
-				return DataGridViewContentAlignment.MiddleRight;
-			default:
-				return DataGridViewContentAlignment.MiddleLeft;
+			fileListView.Columns.Clear();
+			fileListView.ForgetSortArrows();
+			List<int> logicalIndexes = new List<int>();
+			for (int logicalIndex = 0; logicalIndex < configuredColumnHeaders.Count; logicalIndex++)
+			{
+				CustomColumnsDialog.ColumnHeaderInfo columnInfo = configuredColumnHeaders[logicalIndex];
+				if (!columnInfo.isShow)
+				{
+					continue;
+				}
+				fileListView.Columns.Add(new ColumnHeader
+				{
+					Name = columnInfo.Name,
+					Text = Resources.ResourceManager.GetString(columnInfo.Name) ?? columnInfo.Name,
+					Width = ScaleStoredColumnWidthToCurrentDpi(useDialogWidths ? columnInfo.tempWidth : columnInfo.width),
+					// 条目列只能左对齐(系统限制)。
+					TextAlign = logicalIndexes.Count == 0 ? HorizontalAlignment.Left : columnInfo.textAlign,
+					Tag = columnInfo
+				});
+				logicalIndexes.Add(logicalIndex);
+			}
+			fileListColumnLogicalIndexes = logicalIndexes.ToArray();
+			// DisplayIndex 必须是 0..N-1 的排列;按存储的 displayIndex 升序依次赋值,既忠实顺序又避免中途重排冲突。
+			int order = 0;
+			foreach (ColumnHeader column in fileListView.Columns.Cast<ColumnHeader>().OrderBy(column => ((CustomColumnsDialog.ColumnHeaderInfo)column.Tag).displayIndex).ToList())
+			{
+				column.DisplayIndex = order++;
+			}
+			foreach (FileRow fileRow in cachedFileListItems)
+			{
+				fileRow.ListItem = null;
+			}
+		}
+		finally
+		{
+			fileListView.EndUpdate();
+		}
+		if (SortSetting != null)
+		{
+			UpdateFileListSortGlyph(SortSetting.Column, SortSetting.SortOrder);
 		}
 	}
 
+	// 选中色、失焦后的灰色选中(HideSelection = false)、焦点框都由系统绘制,这里只管字体与底色。
 	private void ApplyFileListVisualStyle()
 	{
-		Font listFont = fileListFont;
-		fileListView.Font = listFont;
-		fileListView.BackgroundColor = Color.White;
-		fileListView.GridColor = SystemColors.ControlLight;
-		fileListView.CellBorderStyle = DataGridViewCellBorderStyle.None;
-		fileListView.AdvancedCellBorderStyle.All = DataGridViewAdvancedCellBorderStyle.None;
-		fileListView.AdvancedColumnHeadersBorderStyle.All = DataGridViewAdvancedCellBorderStyle.None;
-		// 主题列头自带浅灰分隔线(与原生列头相同);再画右边框会叠出一条深灰线。只在无主题时补右边框作分隔。
-		if (!Application.RenderWithVisualStyles)
-		{
-			fileListView.AdvancedColumnHeadersBorderStyle.Right = DataGridViewAdvancedCellBorderStyle.Single;
-		}
-		// 列头按系统主题绘制:可排序列自带悬停/按下态,接近原 ListView 的原生列头。主题生效时
-		// 下面的列头底色/前景色被忽略(DGV 用主题色),只在经典样式等无主题场景下兜底。
-		fileListView.EnableHeadersVisualStyles = true;
-		fileListView.DefaultCellStyle.BackColor = Color.White;
-		fileListView.DefaultCellStyle.ForeColor = SystemColors.WindowText;
-		fileListView.DefaultCellStyle.Font = listFont;
-		ApplyFileListSelectionColors();
-		fileListView.RowsDefaultCellStyle.BackColor = Color.White;
-		fileListView.AlternatingRowsDefaultCellStyle.BackColor = Color.White;
-		fileListView.ColumnHeadersDefaultCellStyle.BackColor = Color.White;
-		fileListView.ColumnHeadersDefaultCellStyle.ForeColor = SystemColors.ControlText;
-		fileListView.ColumnHeadersDefaultCellStyle.Font = listFont;
-		fileListView.ColumnHeadersDefaultCellStyle.Padding = Padding.Empty;
-		fileListView.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
-		fileListView.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.White;
-		fileListView.ColumnHeadersDefaultCellStyle.SelectionForeColor = SystemColors.ControlText;
-		fileListView.ColumnHeadersHeight = Math.Max(fileListView.ColumnHeadersHeight, ImageUtilities.ScaleByDpi(24f));
-	}
-
-	// 选中行的活动/非活动两套配色 —— 复刻原 ListView HideSelection=false 的语义:失焦后
-	// 选中仍然可见,但改用非活动色,免得焦点早已在标签面板、列表却还是一片高亮蓝。
-	// 与本仓库 EditableListView.DrawCustomSubItem 的 inactiveSelectedRowBackBrush 同一路子。
-	// 用 ContainsFocus 而非 Focused:就地重命名时焦点在 DGV 的子编辑控件上,那仍算活动。
-	private void ApplyFileListSelectionColors()
-	{
-		bool active = fileListView.ContainsFocus;
-		fileListView.DefaultCellStyle.SelectionBackColor = active ? SystemColors.Highlight : SystemColors.Control;
-		fileListView.DefaultCellStyle.SelectionForeColor = active ? SystemColors.HighlightText : SystemColors.ControlText;
-	}
-
-	private void FileList_FocusChanged(object sender, EventArgs e)
-	{
-		ApplyFileListSelectionColors();
-		fileListView.Invalidate();
+		fileListView.Font = fileListItemFont;
+		fileListView.BackColor = Color.White;
+		fileListView.ForeColor = SystemColors.WindowText;
 	}
 
 	// 首列约定 = 文件名列:CellTexts 寻址、首列自绘图标、就地重命名、键入即定位都按它走。
@@ -3651,114 +3614,47 @@ internal partial class StateFieldInstance : Form
 		return configuredColumnHeaders.FindIndex(column => column.Name == "filename");
 	}
 
-	// 键入即定位:焦点在列表上直接敲字符,跳到首列文本以该前缀开头的下一项。
-	private void FileList_KeyPress(object sender, KeyPressEventArgs e)
-	{
-		if (char.IsControl(e.KeyChar) || fileListView.IsCurrentCellInEditMode || visibleRows.Count == 0)
-		{
-			return;
-		}
-		long nowTicks = Environment.TickCount64;
-		if (nowTicks - typeAheadLastKeyTicks > TypeAheadResetMilliseconds)
-		{
-			typeAheadPrefix = "";
-		}
-		// 空格在 ListView 里是"切换选中"而不是搜索的起始字符,只有接在已有前缀后面才算。
-		if (e.KeyChar == ' ' && typeAheadPrefix.Length == 0)
-		{
-			return;
-		}
-		typeAheadLastKeyTicks = nowTicks;
-		typeAheadPrefix += e.KeyChar;
-		// 连敲同一个字符 = 在以该字符开头的项之间轮转(ListView 的老习惯),而不是去搜 "aaa"。
-		string searchPrefix = typeAheadPrefix;
-		if (searchPrefix.Length > 1 && searchPrefix.All(character => character == searchPrefix[0]))
-		{
-			searchPrefix = searchPrefix.Substring(0, 1);
-		}
-		// 新搜索/轮转从下一行起找;继续补全前缀时从当前行起找,否则刚匹配上的行会被跳过。
-		int matchIndex = FindFileRowByPrefix(searchPrefix, searchPrefix.Length == 1 ? 1 : 0);
-		if (matchIndex >= 0)
-		{
-			SelectAndRevealFileRow(matchIndex);
-		}
-		e.Handled = true;
-	}
-
-	// 从"当前行 + startOffset"起环形查找首列文本以 prefix 开头的可见行;找不到返回 -1。
-	private int FindFileRowByPrefix(string prefix, int startOffset)
+	// 键入即定位:系统的增量搜索(累积前缀、超时重开、连敲同一字符轮转都由系统处理)向这里要匹配行。
+	// 按文件名列文本前缀匹配、不区分大小写,从 StartIndex 起环形查找;找不到保持 -1。
+	// 一律按前缀匹配,不看 e.IsPrefixSearch:系统增量搜索发的是 LVFI_SUBSTRING(Vista 起的前缀匹配位),
+	// WinForms 只认旧的 LVFI_PARTIAL,那里会是 false(实测);本程序也没有要整串精确匹配的查找。
+	private void FileList_SearchForVirtualItem(object sender, SearchForVirtualItemEventArgs e)
 	{
 		int columnIndex = GetFileNameColumnIndex();
-		if (columnIndex < 0)
-		{
-			return -1;
-		}
 		int rowCount = visibleRows.Count;
-		int currentIndex = fileListView.CurrentCell?.RowIndex ?? -1;
-		int fromIndex = (currentIndex < 0 || currentIndex >= rowCount) ? 0 : (currentIndex + startOffset) % rowCount;
+		if (!e.IsTextSearch || string.IsNullOrEmpty(e.Text) || columnIndex < 0 || rowCount == 0)
+		{
+			return;
+		}
+		int startIndex = (e.StartIndex < 0 || e.StartIndex >= rowCount) ? 0 : e.StartIndex;
 		for (int step = 0; step < rowCount; step++)
 		{
-			int index = (fromIndex + step) % rowCount;
+			int index = (startIndex + step) % rowCount;
 			string[] cellTexts = visibleRows[index].CellTexts;
-			if (columnIndex < cellTexts.Length
-				&& cellTexts[columnIndex].StartsWith(prefix, StringComparison.CurrentCultureIgnoreCase))
+			if (columnIndex >= cellTexts.Length)
 			{
-				return index;
+				continue;
+			}
+			if (cellTexts[columnIndex].StartsWith(e.Text, StringComparison.CurrentCultureIgnoreCase))
+			{
+				e.Index = index;
+				return;
 			}
 		}
-		return -1;
 	}
 
-	// 定位到指定可见行。CurrentCell 必须落在可见列上,否则 DGV 抛异常 —— 首列可被用户
-	// 隐藏,故取首个可见列。实测:VirtualMode 下设 CurrentCell 不保证把该行滚进视口
-	// (键入即定位跳到屏外的行时,选中变了但视口纹丝不动),所以显式滚一次。
-	private void SelectAndRevealFileRow(int visibleIndex)
-	{
-		if (visibleIndex < 0 || visibleIndex >= fileListView.RowCount)
-		{
-			return;
-		}
-		DataGridViewColumn firstVisibleColumn = fileListView.Columns.GetFirstColumn(DataGridViewElementStates.Visible);
-		if (firstVisibleColumn == null)
-		{
-			return;
-		}
-		fileListView.CurrentCell = fileListView.Rows[visibleIndex].Cells[firstVisibleColumn.Index];
-		if (!fileListView.Rows[visibleIndex].Selected)
-		{
-			fileListView.ClearSelection();
-			fileListView.Rows[visibleIndex].Selected = true;
-		}
-		EnsureFileListRowVisible(visibleIndex);
-	}
-
-	// 把可见行滚入视口,最小滚动(复刻 ListView.EnsureVisible 的语义)。
+	// 把可见行滚入视口(最小滚动)。
 	private void EnsureFileListRowVisible(int visibleIndex)
 	{
-		if (visibleIndex < 0 || visibleIndex >= fileListView.RowCount)
+		if (fileListView.IsHandleCreated && visibleIndex >= 0 && visibleIndex < fileListView.VirtualListSize)
 		{
-			return;
-		}
-		int firstDisplayed = fileListView.FirstDisplayedScrollingRowIndex;
-		if (firstDisplayed < 0)
-		{
-			return;
-		}
-		if (visibleIndex < firstDisplayed)
-		{
-			fileListView.FirstDisplayedScrollingRowIndex = visibleIndex;
-			return;
-		}
-		int displayedRowCount = fileListView.DisplayedRowCount(includePartialRow: false);
-		if (displayedRowCount > 0 && visibleIndex >= firstDisplayed + displayedRowCount)
-		{
-			fileListView.FirstDisplayedScrollingRowIndex = visibleIndex - displayedRowCount + 1;
+			fileListView.EnsureVisible(visibleIndex);
 		}
 	}
 
 	// 过滤/排序重建行集合后把第一个选中行滚回视口:选中态是模型级的、能跨过滤排序存活,
 	// 不滚回来的话用户看到的是一屏与选中无关的行。只挂在过滤与排序两处,不进
-	// RestoreDgvSelectionFromModel —— 全选/反选/OnLoad 也走那里,在那些路径上滚动是错的。
+	// RestoreFileListSelectionFromModel —— 全选/反选/OnLoad 也走那里,在那些路径上滚动是错的。
 	private void ScrollFirstSelectedFileRowIntoView()
 	{
 		if (selectedFileCount <= 0)
@@ -3776,23 +3672,24 @@ internal partial class StateFieldInstance : Form
 	}
 
 	// 键盘菜单键 / Shift+F10 弹文件右键菜单。原 ListView 时代也没有(旧代码只在 MouseUp
-	// 里认右键),属补齐而非恢复;菜单贴在当前行左下角,与鼠标路径弹的是同一个菜单。
+	// 里认右键),属补齐而非恢复;菜单贴在焦点行左下角,与鼠标路径弹的是同一个菜单。
 	private void ShowFileListItemContextMenuFromKeyboard()
 	{
-		Point location = new Point(fileListIconPadding, fileListView.ColumnHeadersHeight);
-		DataGridViewCell currentCell = fileListView.CurrentCell;
-		if (currentCell != null && currentCell.RowIndex >= 0)
+		Point location = new Point(fileListIconPadding, fileListIconPadding);
+		ListViewItem focusedItem = fileListView.FocusedItem;
+		if (focusedItem != null)
 		{
-			Rectangle rowBounds = fileListView.GetRowDisplayRectangle(currentCell.RowIndex, cutOverflow: true);
-			if (!rowBounds.IsEmpty)
+			Rectangle itemBounds = fileListView.GetItemRect(focusedItem.Index, ItemBoundsPortion.Entire);
+			if (fileListView.ClientRectangle.IntersectsWith(itemBounds))
 			{
-				location = new Point(rowBounds.Left + fileListIconPadding, rowBounds.Bottom);
+				location = new Point(Math.Max(0, itemBounds.Left) + fileListIconPadding, itemBounds.Bottom);
 			}
 		}
 		fileListItemContextMenu.Show(fileListView, location);
 	}
 
-	// 依 cachedFileListItems(主表 = 显示顺序)的 IsHidden 重建可见行集合与下标反查,并把 RowCount 同步给 DGV。
+	// 依 cachedFileListItems(主表 = 显示顺序)的 IsHidden 重建可见行集合与下标反查,把行数同步给虚拟 ListView,
+	// 并按模型恢复控件选区(虚拟 ListView 的选区按行号记,行集合一变就对不上)。
 	private void RebuildVisibleRows()
 	{
 		visibleRows = cachedFileListItems.Where((FileRow r) => !r.IsHidden).ToList();
@@ -3815,12 +3712,13 @@ internal partial class StateFieldInstance : Form
 		suppressFileListSelectionEvents = true;
 		try
 		{
-			fileListView.RowCount = visibleRows.Count;
+			fileListView.VirtualListSize = visibleRows.Count;
 		}
 		finally
 		{
 			suppressFileListSelectionEvents = previous;
 		}
+		RestoreFileListSelectionFromModel();
 		fileListView.Invalidate();
 	}
 
@@ -3868,21 +3766,35 @@ internal partial class StateFieldInstance : Form
 		return selectedFileCount == 1 ? singleSelectedVisibleRow : null;
 	}
 
-	// 据 FileRow.Selected 把 DGV 行选区恢复成与模型一致(VirtualMode 行选区随 RowCount 重建而失效)。
-	private void RestoreDgvSelectionFromModel()
+	// 据 FileRow.Selected 把控件选区恢复成与模型一致(虚拟 ListView 的选区按行号记,随行集合重建而失效)。
+	// 已一致时不动;否则清空(一条消息)后只补选选中的行。比对只按行号读控件选区,不向 RetrieveVirtualItem 取条目。
+	private void RestoreFileListSelectionFromModel()
 	{
+		if (!fileListView.IsHandleCreated)
+		{
+			return;
+		}
 		bool previous = suppressFileListSelectionEvents;
 		suppressFileListSelectionEvents = true;
 		try
 		{
+			List<int> modelSelection = new List<int>();
 			for (int i = 0; i < visibleRows.Count; i++)
 			{
-				DataGridViewRow row = fileListView.Rows[i];
-				bool selected = visibleRows[i].Selected;
-				if (row.Selected != selected)
+				if (visibleRows[i].Selected)
 				{
-					row.Selected = selected;
+					modelSelection.Add(i);
 				}
+			}
+			ListView.SelectedIndexCollection viewSelection = fileListView.SelectedIndices;
+			if (viewSelection.Count == modelSelection.Count && viewSelection.Cast<int>().SequenceEqual(modelSelection))
+			{
+				return;
+			}
+			viewSelection.Clear();
+			foreach (int index in modelSelection)
+			{
+				viewSelection.Add(index);
 			}
 		}
 		finally
@@ -3891,90 +3803,104 @@ internal partial class StateFieldInstance : Form
 		}
 	}
 
-	// 该 FileRow 若在可见集合内则只重绘其行(不可见则跳过)。
+	// 该行显示内容变了:丢掉复用的显示条目;在可见集合内则只重绘其行(不可见的下次显示时重建)。
 	private void InvalidateFileRow(FileRow fileRow)
 	{
-		if (visibleRowIndex.TryGetValue(fileRow, out int visibleIndex) && visibleIndex < fileListView.RowCount)
+		fileRow.ListItem = null;
+		if (fileListView.IsHandleCreated && visibleRowIndex.TryGetValue(fileRow, out int visibleIndex) && visibleIndex < fileListView.VirtualListSize)
 		{
-			fileListView.InvalidateRow(visibleIndex);
+			fileListView.RedrawItems(visibleIndex, visibleIndex, invalidateOnly: true);
 		}
 	}
 
-	private void FileList_CellValueNeeded(object sender, DataGridViewCellValueEventArgs e)
+	private void FileList_RetrieveVirtualItem(object sender, RetrieveVirtualItemEventArgs e)
 	{
-		if (e.RowIndex < 0 || e.RowIndex >= visibleRows.Count)
+		if (e.ItemIndex < 0 || e.ItemIndex >= visibleRows.Count)
 		{
+			// 行数与控件不同步的过渡态(不应发生):系统要求必须返回条目,给一行空白。
+			e.Item = new ListViewItem(new string[Math.Max(1, fileListColumnLogicalIndexes.Length)]);
 			return;
 		}
-		string[] cellTexts = visibleRows[e.RowIndex].CellTexts;
-		e.Value = (e.ColumnIndex >= 0 && e.ColumnIndex < cellTexts.Length) ? cellTexts[e.ColumnIndex] : "";
+		FileRow fileRow = visibleRows[e.ItemIndex];
+		e.Item = fileRow.ListItem ??= BuildFileListItem(fileRow);
 	}
 
-	private void FileList_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
+	// 一行的显示条目:各显示列文本、文件类型图标(仅当条目列是文件名列)、加载失败整行标红、
+	// 未保存修改在文件名(文件名列隐藏时为显示顺序第一列)前加 * 并用强调色。选中行由系统用高亮色画,
+	// WinForms 不会把自定义前景色套到选中行上,与 DGV 时代"选中时不显示强调色"一致。
+	private ListViewItem BuildFileListItem(FileRow fileRow)
 	{
-		if (e.RowIndex < 0 || e.RowIndex >= visibleRows.Count)
+		int[] logicalIndexes = fileListColumnLogicalIndexes;
+		string[] texts = new string[Math.Max(1, logicalIndexes.Length)];
+		for (int listColumn = 0; listColumn < logicalIndexes.Length; listColumn++)
 		{
-			return;
+			int logicalIndex = logicalIndexes[listColumn];
+			texts[listColumn] = logicalIndex < fileRow.CellTexts.Length ? fileRow.CellTexts[logicalIndex] : "";
 		}
-		e.CellStyle.ForeColor = visibleRows[e.RowIndex].LoadFailed ? Color.Red : fileListView.DefaultCellStyle.ForeColor;
+		Color rowColor = fileRow.LoadFailed ? Color.Red : SystemColors.WindowText;
+		int markerColumn = -1;
+		Color markerColor = rowColor;
+		if (fileRow.PendingEdit != null && logicalIndexes.Length > 0)
+		{
+			markerColumn = GetPendingEditMarkerListColumn();
+			(texts[markerColumn], markerColor) = DecoratePendingEditCellText(fileRow, texts[markerColumn], rowColor, isSelected: false);
+		}
+		ListViewItem item = new ListViewItem(texts, IsFileNameTheItemColumn() ? GetFileTypeImageIndex(fileRow) : -1);
+		if (markerColumn >= 0 && markerColor != rowColor)
+		{
+			// 只有标记那一格换色才逐格取色;其余行整行一色,省掉逐格的绘制通知。
+			item.UseItemStyleForSubItems = false;
+			foreach (ListViewItem.ListViewSubItem subItem in item.SubItems)
+			{
+				subItem.ForeColor = rowColor;
+			}
+			item.SubItems[markerColumn].ForeColor = markerColor;
+		}
+		else if (fileRow.LoadFailed)
+		{
+			item.ForeColor = rowColor;
+		}
+		return item;
 	}
 
-	// 首列自绘"图标 + 文字"(DGV 无内建图文同格);其余列/表头不接管,走默认绘制。
-	private void FileList_CellPainting(object sender, DataGridViewCellPaintingEventArgs e)
+	// 未保存标记画在哪一列:文件名列显示时就是它;被隐藏时用显示顺序第一的列(与 DGV 时代一致)。
+	private int GetPendingEditMarkerListColumn()
 	{
-		if (e.RowIndex < 0 || e.RowIndex >= visibleRows.Count)
+		int fileNameListColumn = Array.IndexOf(fileListColumnLogicalIndexes, GetFileNameColumnIndex());
+		if (fileNameListColumn >= 0)
 		{
-			return;
+			return fileNameListColumn;
 		}
-		if (e.ColumnIndex != 0)
+		foreach (ColumnHeader column in fileListView.Columns)
 		{
-			PaintPendingEditMarkerInFirstColumn(e);
-			return;
+			if (column.DisplayIndex == 0)
+			{
+				return column.Index;
+			}
 		}
-		FileRow fileRow = visibleRows[e.RowIndex];
-		if (fileRow.IconImage == null)
-		{
-			return;
-		}
-		bool isSelected = (e.State & DataGridViewElementStates.Selected) != 0;
-		e.PaintBackground(e.CellBounds, isSelected);
-		int iconSize = fileListIconSize;
-		int padding = fileListIconPadding;
-		int iconX = e.CellBounds.Left + padding;
-		int iconY = e.CellBounds.Top + (e.CellBounds.Height - iconSize) / 2;
-		e.Graphics.DrawImage(fileRow.IconImage, iconX, iconY, iconSize, iconSize);
-		int textLeft = iconX + iconSize + padding;
-		Rectangle textBounds = new Rectangle(textLeft, e.CellBounds.Top, Math.Max(0, e.CellBounds.Right - textLeft), e.CellBounds.Height);
-		Color foreColor = isSelected ? e.CellStyle.SelectionForeColor : e.CellStyle.ForeColor;
-		TextFormatFlags flags = TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix;
-		string text = e.FormattedValue as string ?? fileRow.CellTexts[0];
-		(text, foreColor) = DecoratePendingEditCellText(fileRow, text, foreColor, isSelected);
-		TextRenderer.DrawText(e.Graphics, text, e.CellStyle.Font, textBounds, foreColor, flags);
-		e.Handled = true;
+		return 0;
 	}
 
-	// 当前行的焦点描边 —— 复刻原 ListView 的焦点框。DGV 只在"当前单元格"上画焦点框,
-	// 而首列自绘后 e.Handled=true 连那一格也不画了,迁移后等于整行没有任何描边。
-	private void FileList_RowPostPaint(object sender, DataGridViewRowPostPaintEventArgs e)
+	// 只有文件名列是条目列(第 0 列)时才显示文件类型图标、才能就地重命名:系统只在条目列画图标、只编辑条目列。
+	private bool IsFileNameTheItemColumn()
 	{
-		DataGridViewCell currentCell = fileListView.CurrentCell;
-		if (currentCell == null || currentCell.RowIndex != e.RowIndex)
+		return fileListColumnLogicalIndexes.Length > 0 && fileListColumnLogicalIndexes[0] == GetFileNameColumnIndex();
+	}
+
+	// 文件类型图标在 fileTypeImageList 里的位置:图标由后台线程按扩展名生成,首次显示时登记进 ImageList。
+	private int GetFileTypeImageIndex(FileRow fileRow)
+	{
+		if (fileRow.IconImage == null || string.IsNullOrEmpty(fileRow.IconKey))
 		{
-			return;
+			return -1;
 		}
-		if (e.RowIndex < 0 || e.RowIndex >= visibleRows.Count || !visibleRows[e.RowIndex].Selected)
+		int imageIndex = fileTypeImageList.Images.IndexOfKey(fileRow.IconKey);
+		if (imageIndex < 0)
 		{
-			return;
+			fileTypeImageList.Images.Add(fileRow.IconKey, fileRow.IconImage);
+			imageIndex = fileTypeImageList.Images.Count - 1;
 		}
-		// 描边只画到最后一列的右缘为止(RowBounds 会一直铺到控件右边),与原 ListView 的整行焦点框一致。
-		int contentWidth = fileListView.Columns.GetColumnsWidth(DataGridViewElementStates.Visible) - fileListView.HorizontalScrollingOffset;
-		int width = Math.Min(e.RowBounds.Width, contentWidth) - 1;
-		int height = e.RowBounds.Height - 1;
-		if (width <= 0 || height <= 0)
-		{
-			return;
-		}
-		ControlPaint.DrawFocusRectangle(e.Graphics, new Rectangle(e.RowBounds.X, e.RowBounds.Y, width, height), fileListView.DefaultCellStyle.SelectionForeColor, fileListView.DefaultCellStyle.SelectionBackColor);
+		return imageIndex;
 	}
 
 	private SelectedListViewItemInfo[] CollectSelectedListViewItemInfos()
@@ -4464,20 +4390,42 @@ internal partial class StateFieldInstance : Form
 		}
 	}
 
-	// DGV 选区变化(用户驱动):与模型(FileRow.Selected)做差分,复刻原 ListView 的 per-item 增量语义,
-	// 再按最终选中数走 1/0/多 三分支(多次中间态被 DGV 合并为一次事件;最终 count==1/0 时按原逻辑重算
-	// 而非增量,故合并无损)。
-	private void FileList_SelectionChanged(object sender, EventArgs e)
+	private void FileList_ItemSelectionChanged(object sender, ListViewItemSelectionChangedEventArgs e)
 	{
-		if (suppressFileListSelectionEvents)
+		QueueFileListSelectionSync();
+	}
+
+	private void FileList_VirtualItemsSelectionRangeChanged(object sender, ListViewVirtualItemsSelectionRangeChangedEventArgs e)
+	{
+		QueueFileListSelectionSync();
+	}
+
+	// 系统对单击、Shift 点选、框选、点空白清空会按条目/范围连发多条通知;排进消息队列合并成一次同步
+	// (排队的消息先于后续输入处理)。程序化改选区(恢复模型选区等)期间的通知直接丢弃。
+	private void QueueFileListSelectionSync()
+	{
+		if (suppressFileListSelectionEvents || fileListSelectionSyncPosted || !IsHandleCreated)
+		{
+			return;
+		}
+		fileListSelectionSyncPosted = true;
+		BeginInvoke(new Action(SyncFileListSelectionFromView));
+	}
+
+	// 用户改选区后:控件选区与模型(FileRow.Selected)做差分,复刻原 ListView 的 per-item 增量语义,
+	// 再按最终选中数走 1/0/多 三分支(多条通知已合并为一次;最终 count==1/0 时按原逻辑重算而非增量,
+	// 故合并无损)。
+	private void SyncFileListSelectionFromView()
+	{
+		fileListSelectionSyncPosted = false;
+		if (suppressFileListSelectionEvents || !fileListView.IsHandleCreated)
 		{
 			return;
 		}
 
 		HashSet<FileRow> currentSelectedRows = new HashSet<FileRow>();
-		foreach (DataGridViewRow selectedRow in fileListView.SelectedRows)
+		foreach (int rowIndex in fileListView.SelectedIndices)
 		{
-			int rowIndex = selectedRow.Index;
 			if (rowIndex >= 0 && rowIndex < visibleRows.Count)
 			{
 				currentSelectedRows.Add(visibleRows[rowIndex]);
@@ -4839,7 +4787,7 @@ internal partial class StateFieldInstance : Form
 			}
 
 			RebuildVisibleRows();
-			RestoreDgvSelectionFromModel();
+			RestoreFileListSelectionFromModel();
 			ScrollFirstSelectedFileRowIntoView();
 			lastFileListFilterText = activeFilterContext.filterText;
 			SubscribeTagFieldTextHandlers();
@@ -5168,7 +5116,7 @@ internal partial class StateFieldInstance : Form
 
 			AddSelectedFilterValues(fileRow);
 		}
-		RestoreDgvSelectionFromModel();
+		RestoreFileListSelectionFromModel();
 
 		SubscribeTagFieldTextHandlers();
 		textHandlersResubscribed = true;
@@ -5261,7 +5209,7 @@ internal partial class StateFieldInstance : Form
 		else if (visibleRows.Count == 1)
 		{
 			SetFileRowSelected(visibleRows[0], selected: true);
-			RestoreDgvSelectionFromModel();
+			RestoreFileListSelectionFromModel();
 			OnFileSelectionSettled();
 		}
 	}
@@ -5289,7 +5237,7 @@ internal partial class StateFieldInstance : Form
 		if (unselectedItemCount == 1)
 		{
 			SetFileRowSelected(singleUnselectedItem, selected: true);
-			RestoreDgvSelectionFromModel();
+			RestoreFileListSelectionFromModel();
 			OnFileSelectionSettled();
 		}
 		else
@@ -5381,24 +5329,21 @@ internal partial class StateFieldInstance : Form
 	{
 	}
 
-	private void FileList_ColumnHeaderMouseClick(object sender, DataGridViewCellMouseEventArgs e)
+	private void FileList_HeaderRightClick(object sender, ColumnClickEventArgs e)
 	{
-		if (e.ColumnIndex < 0)
+		customizeColumnsContextMenuItem.Text = Resources.customcolumns;
+		fileListHeaderContextMenu.Show(fileListView, fileListView.PointToClient(Cursor.Position));
+	}
+
+	private void FileList_ColumnClick(object sender, ColumnClickEventArgs e)
+	{
+		if (e.Column < 0 || e.Column >= fileListColumnLogicalIndexes.Length)
 		{
 			return;
 		}
-		if (e.Button == MouseButtons.Right)
-		{
-			customizeColumnsContextMenuItem.Text = Resources.customcolumns;
-			fileListHeaderContextMenu.Show(fileListView, fileListView.PointToClient(Cursor.Position));
-			return;
-		}
-		if (e.Button != MouseButtons.Left)
-		{
-			return;
-		}
-		// ColumnIndex 是建列顺序(逻辑列序),与 FileRow.CellTexts / SortSetting.Column 同序。
-		if (e.ColumnIndex == SortSetting.Column && SortSetting.SortOrder != SortOrder.None && SortSetting.SortOrder != SortOrder.Descending)
+		// 列表列号换成逻辑列序,与 FileRow.CellTexts / SortSetting.Column 同序。
+		int columnIndex = fileListColumnLogicalIndexes[e.Column];
+		if (columnIndex == SortSetting.Column && SortSetting.SortOrder != SortOrder.None && SortSetting.SortOrder != SortOrder.Descending)
 		{
 			SortSetting.SortOrder = SortOrder.Descending;
 		}
@@ -5406,13 +5351,13 @@ internal partial class StateFieldInstance : Form
 		{
 			SortSetting.SortOrder = SortOrder.Ascending;
 		}
-		UpdateFileListSortGlyph(e.ColumnIndex, SortSetting.SortOrder);
+		UpdateFileListSortGlyph(columnIndex, SortSetting.SortOrder);
 		int? previousColumn = SortSetting.Column;
-		if (previousColumn.HasValue && SortSetting.Column != e.ColumnIndex)
+		if (previousColumn.HasValue && SortSetting.Column != columnIndex)
 		{
 			UpdateFileListSortGlyph(SortSetting.Column, SortOrder.None);
 		}
-		SortSetting.Column = e.ColumnIndex;
+		SortSetting.Column = columnIndex;
 		ApplyFileListSort();
 	}
 
@@ -5427,25 +5372,23 @@ internal partial class StateFieldInstance : Form
 		ListViewItemNaturalComparer comparer = new ListViewItemNaturalComparer(SortSetting);
 		cachedFileListItems.Sort((FileRow left, FileRow right) => comparer.Compare(left, right));
 		RebuildVisibleRows();
-		RestoreDgvSelectionFromModel();
+		RestoreFileListSelectionFromModel();
 		ScrollFirstSelectedFileRowIntoView();
 	}
 
 	private void UpdateFileListSortGlyph(int? columnIndex, SortOrder sortOrder)
 	{
-		if (!columnIndex.HasValue || columnIndex.Value < 0 || columnIndex.Value >= fileListView.Columns.Count)
+		if (!columnIndex.HasValue)
 		{
 			return;
 		}
-		DataGridViewColumnHeaderCell headerCell = fileListView.Columns[columnIndex.Value].HeaderCell;
-		// 列头是 NativeStyleColumnHeaderCell 时,箭头按原生列头的样式画在顶部居中。
-		if (headerCell is NativeStyleColumnHeaderCell nativeStyleHeaderCell)
+		// 逻辑列序换成列表列号;隐藏列不在 ListView 里,箭头等它重新显示时由 RebuildFileListColumns 补上。
+		int listColumn = Array.IndexOf(fileListColumnLogicalIndexes, columnIndex.Value);
+		if (listColumn < 0)
 		{
-			nativeStyleHeaderCell.SortArrow = sortOrder;
 			return;
 		}
-		// 建列已统一为 Programmatic,可直接设排序三角(NotSortable 列设 SortGlyphDirection 会抛异常)。
-		headerCell.SortGlyphDirection = sortOrder;
+		fileListView.SetColumnSortArrow(fileListView.Columns[listColumn], sortOrder);
 	}
 
 	private void ExitApplication_Click(object sender, EventArgs e)
@@ -5453,98 +5396,14 @@ internal partial class StateFieldInstance : Form
 		Close();
 	}
 
-	private void FileList_CellMouseDown(object sender, DataGridViewCellMouseEventArgs e)
-	{
-		if (e.Button == MouseButtons.Right && e.RowIndex >= 0 && e.RowIndex < visibleRows.Count)
-		{
-			CancelPendingInlineRename();
-			if (!visibleRows[e.RowIndex].Selected)
-			{
-				fileListView.ClearSelection();
-				fileListView.Rows[e.RowIndex].Selected = true;
-			}
-			fileListItemContextMenu.Show(fileListView, fileListView.PointToClient(Cursor.Position));
-			return;
-		}
-		// 每次单元格按下都重算重命名候选 —— 赋 null 即等于取消上一次的候选,
-		// 不依赖 MouseDown/CellMouseDown 的触发先后。
-		CancelPendingInlineRename();
-		if (e.Button != MouseButtons.Left || e.RowIndex < 0 || e.RowIndex >= visibleRows.Count)
-		{
-			return;
-		}
-		// 只有"无修饰键的首次单击 + 命中首列 + 该行本来就是唯一选中项"才算候选;
-		// 双击的第二次按下 Clicks==2,直接排除。
-		if (e.Clicks == 1 && e.ColumnIndex == 0 && ModifierKeys == Keys.None
-			&& selectedFileCount == 1 && visibleRows[e.RowIndex].Selected)
-		{
-			pendingInlineRenameRow = visibleRows[e.RowIndex];
-		}
-	}
-
-	// 行区域之外的空白:复刻原 ListView 的"点空白取消选中"(DGV 默认什么都不做)。
-	private void FileList_MouseDown(object sender, MouseEventArgs e)
-	{
-		if (fileListView.HitTest(e.X, e.Y).Type != DataGridViewHitTestType.None)
-		{
-			return;
-		}
-		// 最后一列右侧仍属于该行的横带:原 ListView 的 FullRowSelect 在这里不清空选中。
-		if (fileListView.HitTest(0, e.Y).RowIndex >= 0)
-		{
-			return;
-		}
-		CancelPendingInlineRename();
-		// 空白区不是单元格,DGV 不会因此结束编辑,编辑框会一直挂在那里。原 ListView 的
-		// LabelEdit 在别处点一下就提交并退出,这里对齐:先提交改名,再清选区。
-		if (fileListView.IsCurrentCellInEditMode)
-		{
-			fileListView.EndEdit();
-		}
-		if (e.Button == MouseButtons.Left && fileListView.SelectedRows.Count > 0)
-		{
-			fileListView.ClearSelection();
-		}
-	}
-
-	// 抬起才起延时计时器:按下即计时会让"按住拖一下"也变成重命名。
+	// 右键点在行上:系统在按下时已把该行设为选中(本来没选中时),抬起再弹文件菜单;点在空白处不弹。
 	private void FileList_MouseUp(object sender, MouseEventArgs e)
 	{
-		if (e.Button != MouseButtons.Left || pendingInlineRenameRow == null)
+		if (e.Button != MouseButtons.Right || fileListView.HitTest(e.Location).Item == null)
 		{
 			return;
 		}
-		if (selectedFileCount != 1 || GetSingleSelectedFileRow() != pendingInlineRenameRow)
-		{
-			CancelPendingInlineRename();
-			return;
-		}
-		inlineRenameClickTimer.Stop();
-		inlineRenameClickTimer.Interval = Math.Max(1, SystemInformation.DoubleClickTime);
-		inlineRenameClickTimer.Start();
-	}
-
-	private void InlineRenameClickTimer_Tick(object sender, EventArgs e)
-	{
-		inlineRenameClickTimer.Stop();
-		FileRow candidateRow = pendingInlineRenameRow;
-		pendingInlineRenameRow = null;
-		// 延时期间选区/焦点可能已经变了(方向键、全选、点到别处),重命名前再验一次。
-		if (candidateRow == null || renamingRow != null || !fileListView.Focused
-			|| selectedFileCount != 1 || GetSingleSelectedFileRow() != candidateRow)
-		{
-			return;
-		}
-		TryBeginInlineRename();
-	}
-
-	private void CancelPendingInlineRename()
-	{
-		pendingInlineRenameRow = null;
-		if (inlineRenameClickTimer.Enabled)
-		{
-			inlineRenameClickTimer.Stop();
-		}
+		fileListItemContextMenu.Show(fileListView, e.Location);
 	}
 
 	private void CoverPicture_MouseUp(object sender, MouseEventArgs e)
@@ -5919,7 +5778,8 @@ internal partial class StateFieldInstance : Form
 
 	private void SaveCurrentFileListColumnWidths()
 	{
-		foreach (DataGridViewColumn columnHeader in fileListView.Columns)
+		// 只有显示中的列在 ListView 里;隐藏列的存储宽度保持不变。
+		foreach (ColumnHeader columnHeader in fileListView.Columns)
 		{
 			CustomColumnsDialog.ColumnHeaderInfo columnHeaderInfo = columnHeader.Tag as CustomColumnsDialog.ColumnHeaderInfo;
 			if (columnHeader.Width > 0)
@@ -5978,21 +5838,7 @@ internal partial class StateFieldInstance : Form
 			}
 		}
 
-		foreach (DataGridViewColumn columnHeader in fileListView.Columns)
-		{
-			CustomColumnsDialog.ColumnHeaderInfo columnHeaderInfo = columnHeader.Tag as CustomColumnsDialog.ColumnHeaderInfo;
-			columnHeader.Visible = columnHeaderInfo.isShow;
-			if (columnHeaderInfo.isShow)
-			{
-				columnHeader.Width = ScaleStoredColumnWidthToCurrentDpi(columnHeaderInfo.tempWidth);
-			}
-		}
-		// DisplayIndex 必须是 0..N-1 排列;按目标 displayIndex 升序顺次赋值,避免 DGV 中途重排冲突。
-		int columnDisplayOrder = 0;
-		foreach (DataGridViewColumn columnHeader in fileListView.Columns.Cast<DataGridViewColumn>().OrderBy((DataGridViewColumn c) => ((CustomColumnsDialog.ColumnHeaderInfo)c.Tag).displayIndex).ToList())
-		{
-			columnHeader.DisplayIndex = columnDisplayOrder++;
-		}
+		RebuildFileListColumns(useDialogWidths: true);
 		CustomColumnsDialog.SaveColumnHeaderSettings();
 		DialogService.TrySaveApplicationSettings();
 		fileListView.Refresh();
@@ -7064,7 +6910,7 @@ internal partial class StateFieldInstance : Form
 	}
 
 	// 自定义资产的当前刻度台账:同一 DPI 的重复 WM_DPICHANGED 幂等跳过(避免无谓重建位图);
-	// 也是 DGV 列宽按 previous→target 比率补缩的"上一刻度"来源。构造期初始化为启动屏 DPI。
+	// 也是 文件列表列宽按 previous→target 比率补缩的"上一刻度"来源。构造期初始化为启动屏 DPI。
 	private int customAssetsDpi;
 
 	// 启动屏刻度:列宽持久化的历史语义是"启动屏像素"(net481/SystemAware 时代窗口恒为主屏
@@ -7183,7 +7029,7 @@ internal partial class StateFieldInstance : Form
 		try
 		{
 			int columnWidthSum = 0;
-			foreach (DataGridViewColumn column in fileListView.Columns)
+			foreach (ColumnHeader column in fileListView.Columns)
 			{
 				columnWidthSum += column.Width;
 			}
@@ -7256,7 +7102,7 @@ internal partial class StateFieldInstance : Form
 	// net8(实测标定,见 dpi-trace 插桩):框架接管 WM_DPICHANGED 的整树 bounds 缩放(窗口、
 	// 子控件 bounds、SplitterDistance、ToolStrip ImageScalingSize),但四类对象不被接管或被
 	// 错误接管,在 OnDpiChanged(框架缩放完成之后触发)统一纠正:
-	// ① 不接管——DGV 列宽(colSum 跨屏恒定)按 previous→target 比率补缩(列宽用户可拖,无
+	// ① 不接管——文件列表列宽(colSum 跨屏恒定)按 previous→target 比率补缩(列宽用户可拖,无
 	//    设计基准值,只能相对缩;台账 customAssetsDpi 保证幂等);Panel1MinSize 绝对值重设。
 	// ② 错误接管——显式字体的 pt 值被框架按 DPI 比率缩(实测 Tahoma 9→6):pt 本是 DPI 无关
 	//    单位,恒 9pt 才物理尺寸恒定;且启动时框架并不缩 Font(9pt 原样),跨屏才缩,不对称。
@@ -7276,11 +7122,11 @@ internal partial class StateFieldInstance : Form
 			customAssetsDpi = targetDpi;
 			if (previousDpi > 0)
 			{
-				foreach (DataGridViewColumn column in fileListView.Columns)
+				foreach (ColumnHeader column in fileListView.Columns)
 				{
-					// 下限贴 MinimumWidth(默认 5):更高的人为下限会把窄列(如 11px 的序号列)在
-					// 缩小方向顶起,放大方向再 ×1.5,往返一圈列宽净膨胀。
-					column.Width = Math.Max(column.MinimumWidth, (int)Math.Round((float)column.Width * targetDpi / previousDpi));
+					// 下限 5px(DataGridView 时代 MinimumWidth 的默认值):更高的人为下限会把窄列(如 11px 的
+					// 序号列)在缩小方向顶起,放大方向再 ×1.5,往返一圈列宽净膨胀。ListView 不自己随 DPI 缩列宽。
+					column.Width = Math.Max(5, (int)Math.Round((float)column.Width * targetDpi / previousDpi));
 				}
 			}
 			RefreshTagEditorButtonImages();
@@ -7316,7 +7162,6 @@ internal partial class StateFieldInstance : Form
 		ApplyFileListVisualStyle();
 
 		mainSplitContainer.Panel1MinSize = ImageUtilities.ScaleByDpi(320f, this);
-		fileListView.ColumnHeadersHeight = ImageUtilities.ScaleByDpi(24f, this);
 		ApplyToolbarItemSizesForDpi();
 		filterTypeDropDownButton.Width = ImageUtilities.ScaleByDpi(100f, this);
 		selectedFilesStatusLabel.Width = ImageUtilities.ScaleByDpi(190f, this);
@@ -7527,33 +7372,21 @@ internal partial class StateFieldInstance : Form
 		TryBeginInlineRename();
 	}
 
-	// 就地重命名的唯一入口(菜单 / 右键菜单 / F2 / 选中后再单击 共用)。返回是否真的进了编辑态。
+	// 就地重命名的程序化入口(菜单 / 右键菜单 / F2)。鼠标"选中后再单击"由系统 LabelEdit 自己发起,
+	// 两条路都经 BeforeLabelEdit / AfterLabelEdit。返回是否真的进了编辑态。
 	private bool TryBeginInlineRename()
 	{
-		CancelPendingInlineRename();
 		if (renamingRow != null || SelectedFileCount <= 0)
 		{
 			return false;
 		}
 		FileRow row = SelectedFileRows.First();
-		if (!visibleRowIndex.TryGetValue(row, out int visIndex) || !fileListView.Columns[0].Visible)
+		if (!visibleRowIndex.TryGetValue(row, out int visibleIndex) || !IsFileNameTheItemColumn())
 		{
 			return false;
 		}
-		renamingRow = row;
-		renameEditedValue = null;
-		fileListView.Columns[0].ReadOnly = false;
-		fileListView.CurrentCell = fileListView.Rows[visIndex].Cells[0];
-		// 行为修正:BeginEdit 失败时原实现会把 renamingRow 与首列的可写状态一直留着,
-		// 之后任意一次 CellBeginEdit 都会被放行。失败就地回滚。
-		if (!fileListView.BeginEdit(selectAll: true))
-		{
-			renamingRow = null;
-			renameEditedValue = null;
-			fileListView.Columns[0].ReadOnly = true;
-			return false;
-		}
-		return true;
+		EnsureFileListRowVisible(visibleIndex);
+		return fileListView.BeginLabelEdit(visibleIndex);
 	}
 
 	private void RevealSelectedFileInExplorer_Click(object sender, EventArgs e)
@@ -7564,62 +7397,30 @@ internal partial class StateFieldInstance : Form
 		}
 	}
 
-	private void FileList_CellBeginEdit(object sender, DataGridViewCellCancelEventArgs e)
+	private void FileList_BeforeLabelEdit(object sender, LabelEditEventArgs e)
 	{
-		// 仅允许程序化发起的重命名(EditMode=EditProgrammatically + 仅首列临时可写),其余一律拦下。
-		if (renamingRow == null)
+		if (renamingRow != null || e.Item < 0 || e.Item >= visibleRows.Count || !IsFileNameTheItemColumn())
 		{
-			e.Cancel = true;
-		}
-	}
-
-	private void FileList_EditingControlShowing(object sender, DataGridViewEditingControlShowingEventArgs e)
-	{
-		if (renamingRow != null && e.Control is TextBox textBox)
-		{
-			int selectionLength = Path.GetFileNameWithoutExtension(textBox.Text).Length;
-			BeginInvoke((Action)delegate
-			{
-				try
-				{
-					textBox.Select(0, selectionLength);
-				}
-				catch
-				{
-				}
-			});
-		}
-	}
-
-	private void FileList_CellValuePushed(object sender, DataGridViewCellValueEventArgs e)
-	{
-		// VirtualMode 提交编辑时回灌新值 —— 这里只暂存,真正的改名/落盘在 CellEndEdit 做。
-		if (renamingRow != null && e.ColumnIndex == 0)
-		{
-			renameEditedValue = e.Value as string;
-		}
-	}
-
-	private void FileList_CellValidating(object sender, DataGridViewCellValidatingEventArgs e)
-	{
-	}
-
-	private void FileList_CellEndEdit(object sender, DataGridViewCellEventArgs e)
-	{
-		if (renamingRow == null)
-		{
+			e.CancelEdit = true;
 			return;
 		}
+		renamingRow = visibleRows[e.Item];
+		// 编辑框的初值是显示文本,有未保存修改时带着 * 前缀:换回真实文件名,并只选中扩展名之前的部分。
+		string fileName = renamingRow.CellTexts[GetFileNameColumnIndex()];
+		fileListView.SetLabelEditText(fileName, Path.GetFileNameWithoutExtension(fileName).Length);
+	}
+
+	private void FileList_AfterLabelEdit(object sender, LabelEditEventArgs e)
+	{
 		FileRow row = renamingRow;
-		string requestedFileName = renameEditedValue;
 		renamingRow = null;
-		renameEditedValue = null;
-		fileListView.Columns[0].ReadOnly = true;
-		if (requestedFileName == null)
+		// 虚拟模式下控件不存文本:一律不收控件这边的改动,显示回到模型(改名成功时 PerformInPlaceRename 已写回新名字)。
+		e.CancelEdit = true;
+		if (row == null || e.Label == null)
 		{
 			return;
 		}
-		PerformInPlaceRename(row, requestedFileName);
+		PerformInPlaceRename(row, e.Label);
 	}
 
 	// 从 PerformInPlaceRename 提取:就地改名的非法文件名谓词(含路径分量 -> GetFileName 不等自身,或含非法字符)。
@@ -7664,10 +7465,8 @@ internal partial class StateFieldInstance : Form
 			editContext.NewPath = Path.Combine(fileInfo.DirectoryName, editContext.RequestedFileName);
 			PathFileUtilities.MoveFileAllowingCaseOnlyRename(editContext.OriginalPath, editContext.NewPath);
 			row.FilePath = editContext.NewPath;
-			// 行为修正:原 ListView 的 LabelEdit 提交后由控件自己把 item 文本换成新名字,迁到 DGV 后
-			// 只剩 renamedFilesRefreshTimer 这条"刷新选中项"的路。而回车提交会让 DGV 把当前单元格下移
-			// 一行,被刷新的就不再是刚改名的那行 —— 列表会一直显示旧文件名。这里直接改显示文本,
-			// 与选区无关。
+			// 虚拟 ListView 不存文本,显示只来自模型:直接改模型里的文件名再重绘该行,
+			// 不依赖 renamedFilesRefreshTimer 那条"刷新选中项"的路(与选区无关)。
 			int fileNameColumnIndex = GetFileNameColumnIndex();
 			if (fileNameColumnIndex >= 0 && fileNameColumnIndex < row.CellTexts.Length)
 			{
@@ -7699,8 +7498,8 @@ internal partial class StateFieldInstance : Form
 
 	protected override bool ProcessCmdKey(ref Message message, Keys keyData)
 	{
-		// F2 就地重命名 —— 原 ListView 由 LabelEdit=true 免费提供,DGV 的 EditProgrammatically
-		// 不响应 F2,迁移后丢失。编辑态下焦点在编辑控件上,fileListView.Focused 为 false,不会重入。
+		// F2 就地重命名,与菜单共用 TryBeginInlineRename。编辑态下焦点在编辑框上,
+		// fileListView.Focused 为 false,不会重入。
 		if (keyData == Keys.F2 && fileListView.Focused)
 		{
 			TryBeginInlineRename();
@@ -7870,6 +7669,7 @@ internal partial class StateFieldInstance : Form
 				fileTypeIconCache.Clear();
 			}
 			fileListFont.Dispose();
+			fileListItemFont.Dispose();
 		}
 		base.Dispose(disposing);
 	}

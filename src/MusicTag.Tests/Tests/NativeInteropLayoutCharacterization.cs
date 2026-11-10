@@ -39,15 +39,11 @@ internal static class NativeInteropLayoutCharacterization
 			Check.Equal(12, OffsetOf<NativeMethods.HeaderHitTestInfo>(nameof(NativeMethods.HeaderHitTestInfo.ItemIndex)), "HDHITTESTINFO iItem offset");
 		});
 
-		yield return ("uxtheme RECT and SIZE layouts are architecture independent", delegate
+		yield return ("HDITEMW layout follows pointer width", delegate
 		{
-			Check.Equal(16, Marshal.SizeOf<NativeMethods.ThemeRect>(), "RECT size");
-			Check.Equal(12, OffsetOf<NativeMethods.ThemeRect>(nameof(NativeMethods.ThemeRect.Bottom)), "RECT bottom offset");
-			Check.Equal(8, Marshal.SizeOf<NativeMethods.ThemeSize>(), "SIZE size");
-			Check.Equal(4, OffsetOf<NativeMethods.ThemeSize>(nameof(NativeMethods.ThemeSize.Height)), "SIZE cy offset");
-			DllImportAttribute import = typeof(NativeMethods).GetMethod(nameof(NativeMethods.OpenThemeData))?.GetCustomAttribute<DllImportAttribute>();
-			Check.NotNull(import, "OpenThemeData DllImport");
-			Check.Equal(CharSet.Unicode, import.CharSet, "OpenThemeData CharSet");
+			Check.Equal(IntPtr.Size == 8 ? 72 : 48, Marshal.SizeOf<NativeMethods.HeaderItem>(), "HDITEMW size");
+			Check.Equal(IntPtr.Size == 8 ? 28 : 20, OffsetOf<NativeMethods.HeaderItem>(nameof(NativeMethods.HeaderItem.Format)), "HDITEMW fmt offset");
+			Check.Equal(IntPtr.Size == 8 ? 64 : 44, OffsetOf<NativeMethods.HeaderItem>(nameof(NativeMethods.HeaderItem.State)), "HDITEMW state offset");
 		});
 
 		yield return ("SHGetFileInfo import and callback use x64-safe signatures", delegate

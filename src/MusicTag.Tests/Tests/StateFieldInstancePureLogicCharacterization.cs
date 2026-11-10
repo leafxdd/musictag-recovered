@@ -150,23 +150,6 @@ internal static class StateFieldInstancePureLogicCharacterization
 			Check.True(ReferenceEquals(agg, StateFieldInstance.UnwrapAsyncOperationException(agg)), "empty agg kept");
 		});
 
-		// ===== MapColumnAlignment:HorizontalAlignment -> DataGridViewContentAlignment(Center/Right/default-Left)=====
-
-		yield return ("MapColumnAlignment: Center -> MiddleCenter", delegate
-		{
-			Check.Equal(DataGridViewContentAlignment.MiddleCenter, StateFieldInstance.MapColumnAlignment(HorizontalAlignment.Center), "center");
-		});
-
-		yield return ("MapColumnAlignment: Right -> MiddleRight", delegate
-		{
-			Check.Equal(DataGridViewContentAlignment.MiddleRight, StateFieldInstance.MapColumnAlignment(HorizontalAlignment.Right), "right");
-		});
-
-		yield return ("MapColumnAlignment: Left -> MiddleLeft (default)", delegate
-		{
-			Check.Equal(DataGridViewContentAlignment.MiddleLeft, StateFieldInstance.MapColumnAlignment(HorizontalAlignment.Left), "left/default");
-		});
-
 		// ===== FormatCountDurationSize:$"{count} ({FormatDurationHms(dur)} | {FormatFileSize(size)})" =====
 		// size<1000 走 FormatFileSize 的 "XByte" 分支(无 :N culture 依赖);时分秒固定 00:00:00 模式。
 
@@ -501,12 +484,6 @@ internal static class StateFieldInstancePureLogicCharacterization
 			(long, long) r = StateFieldInstance.GetCachedDurationAndFileSize(boxed);
 			Check.Equal(-5L, r.Item1, "negative dur returned verbatim (no clamp)");
 			Check.Equal(long.MaxValue, r.Item2, "max size returned verbatim");
-		});
-
-		// MapColumnAlignment:default 是 catch-all,未定义枚举值也归 MiddleLeft(不抛)。
-		yield return ("MapColumnAlignment: undefined enum value -> MiddleLeft (default catch-all, no throw)", delegate
-		{
-			Check.Equal(DataGridViewContentAlignment.MiddleLeft, StateFieldInstance.MapColumnAlignment((HorizontalAlignment)999), "undefined enum -> default MiddleLeft");
 		});
 
 		// FormatCountDurationSize:size>=1000 走 FormatFileSize 的 KB 半边(结构断言避 :N culture);hours min-width 不截断。

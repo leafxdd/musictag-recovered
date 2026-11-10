@@ -76,23 +76,33 @@ internal static class NativeMethods
 		public string Data;
 	}
 
-	// uxtheme 的 RECT / SIZE:四个 / 两个 32 位整数,与指针宽度无关。
-	public struct ThemeRect
+	// HDITEMW(commctrl.h)。只用 mask + fmt 读写排序箭头位,但必须按完整布局声明:fmt 在 x64 的
+	// 偏移是 28(两个指针之后),拿别的结构(如 LVCOLUMN)凑会读写到错位的字段。
+	public struct HeaderItem
 	{
-		public int Left;
+		public uint Mask;
 
-		public int Top;
-
-		public int Right;
-
-		public int Bottom;
-	}
-
-	public struct ThemeSize
-	{
 		public int Width;
 
-		public int Height;
+		public IntPtr Text;
+
+		public IntPtr Bitmap;
+
+		public int TextMax;
+
+		public int Format;
+
+		public IntPtr LParam;
+
+		public int ImageIndex;
+
+		public int Order;
+
+		public uint FilterType;
+
+		public IntPtr Filter;
+
+		public uint State;
 	}
 
 	public const int ShowWindowHide = 0;
@@ -138,6 +148,9 @@ internal static class NativeMethods
 	public static extern IntPtr SendHeaderHitTestMessage(IntPtr windowHandle, int message, IntPtr wParam, ref HeaderHitTestInfo hitTestInfo);
 
 	[DllImport("user32.dll", EntryPoint = "SendMessage")]
+	public static extern IntPtr SendHeaderItemMessage(IntPtr windowHandle, int message, IntPtr wParam, ref HeaderItem headerItem);
+
+	[DllImport("user32.dll", EntryPoint = "SendMessage")]
 	public static extern IntPtr SendListViewColumnMessage(IntPtr windowHandle, int message, IntPtr wParam, ref ListViewColumnInfo columnInfo);
 
 	[DllImport("user32.dll", EntryPoint = "SendMessage")]
@@ -175,18 +188,6 @@ internal static class NativeMethods
 
 	[DllImport("uxtheme.dll", CharSet = CharSet.Auto, EntryPoint = "SetWindowTheme", ExactSpelling = true)]
 	public static extern int SetWindowTheme(IntPtr windowHandle, string subAppName, string subIdList);
-
-	[DllImport("uxtheme.dll", CharSet = CharSet.Unicode, EntryPoint = "OpenThemeData", ExactSpelling = true)]
-	public static extern IntPtr OpenThemeData(IntPtr windowHandle, string classList);
-
-	[DllImport("uxtheme.dll", EntryPoint = "CloseThemeData", ExactSpelling = true)]
-	public static extern int CloseThemeData(IntPtr themeHandle);
-
-	[DllImport("uxtheme.dll", EntryPoint = "GetThemePartSize", ExactSpelling = true)]
-	public static extern int GetThemePartSize(IntPtr themeHandle, IntPtr deviceContext, int partId, int stateId, IntPtr bounds, int sizeType, out ThemeSize size);
-
-	[DllImport("uxtheme.dll", EntryPoint = "DrawThemeBackground", ExactSpelling = true)]
-	public static extern int DrawThemeBackground(IntPtr themeHandle, IntPtr deviceContext, int partId, int stateId, ref ThemeRect bounds, ref ThemeRect clipBounds);
 
 	[DllImport("user32.dll", EntryPoint = "EnumThreadWindows")]
 	public static extern int EnumThreadWindows(int threadId, EnumThreadWindowsCallback callback, IntPtr lParam);

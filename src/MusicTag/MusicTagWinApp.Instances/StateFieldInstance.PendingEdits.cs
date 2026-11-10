@@ -637,27 +637,6 @@ internal partial class StateFieldInstance
 		return ("*" + text, (isSelected || fileRow.LoadFailed) ? foreColor : PendingEditAccentColor);
 	}
 
-	// 文件名列被隐藏时,把 * 标记画在第一个显示的列上。
-	private void PaintPendingEditMarkerInFirstColumn(DataGridViewCellPaintingEventArgs e)
-	{
-		FileRow fileRow = visibleRows[e.RowIndex];
-		if (fileRow.PendingEdit == null || fileListView.Columns[0].Visible)
-		{
-			return;
-		}
-		DataGridViewColumn firstColumn = fileListView.Columns.GetFirstColumn(DataGridViewElementStates.Visible);
-		if (firstColumn == null || firstColumn.Index != e.ColumnIndex)
-		{
-			return;
-		}
-		bool isSelected = (e.State & DataGridViewElementStates.Selected) != 0;
-		e.PaintBackground(e.CellBounds, isSelected);
-		(string text, Color foreColor) = DecoratePendingEditCellText(fileRow, e.FormattedValue as string ?? "", isSelected ? e.CellStyle.SelectionForeColor : e.CellStyle.ForeColor, isSelected);
-		Rectangle textBounds = new Rectangle(e.CellBounds.Left + fileListIconPadding, e.CellBounds.Top, Math.Max(0, e.CellBounds.Width - fileListIconPadding), e.CellBounds.Height);
-		TextRenderer.DrawText(e.Graphics, text, e.CellStyle.Font, textBounds, foreColor, TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
-		e.Handled = true;
-	}
-
 	// 单选编辑区的封面有未保存修改时,在封面预览左上角标"(已修改)",与字段标签的提示一致。
 	private void CoverPicture_PaintPendingEditBadge(object sender, PaintEventArgs e)
 	{
