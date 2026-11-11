@@ -113,7 +113,9 @@ The file list is a virtual-mode native `ListView` (`FileListView`, derived from 
 - Only shown columns exist in the control. `fileListColumnLogicalIndexes` maps a list column to the logical column (`configuredColumnHeaders` / `FileRow.CellTexts` index), and list column 0 is the item column that carries the icon and in-place rename, which is enabled only when it is the filename column.
 - Selection is modeled on `FileRow.Selected`. Native notifications are coalesced into one posted diff (`SyncFileListSelectionFromView`), and programmatic changes restore the control through `RestoreFileListSelectionFromModel` under `suppressFileListSelectionEvents`.
 - Marquee, label edit, incremental search, focus rectangle and inactive selection are system-provided; do not re-emulate them. `SearchForVirtualItem` must always prefix-match, because comctl32 sends `LVFI_SUBSTRING` and WinForms reports `IsPrefixSearch = false`.
-- The list uses Microsoft YaHei UI (`fileListItemFont`) because Tahoma has no CJK glyphs and GDI fallback roughly triples ListView paint cost; the form keeps `fileListFont` (Tahoma). Horizontal scrolling through many wide columns repaints the whole view on every step and remains the known weakness.
+- Horizontal scrolling through many wide columns repaints the whole view on every step and remains the known weakness.
+
+All UI fonts use `UiFonts.FamilyName` (Microsoft YaHei UI), including the application default font set in `Program.Main` and mirrored by the test harness; sizes are unchanged (8.25pt default, 9pt for explicit fonts). Tahoma and Microsoft Sans Serif have no CJK glyphs, so GDI substituted SimSun for every Chinese run, which roughly tripled ListView paint cost. Do not reintroduce per-control font families. `DonateDialog`, `TagSearchCandidatePanel` and `SourceOrderControl` use `AutoScaleMode.Font` with `AutoScaleDimensions` (7, 14), so their natural size follows font metrics and grew by about 9% with the switch.
 
 Unsaved tag-editor edits are cached per row (`FileRow.PendingEdit`, logic in `StateFieldInstance.PendingEdits.cs`):
 
