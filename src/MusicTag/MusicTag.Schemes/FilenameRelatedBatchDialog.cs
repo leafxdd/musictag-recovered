@@ -1871,7 +1871,7 @@ internal class FilenameRelatedBatchDialog : Form
 		base.AutoScaleMode = AutoScaleMode.Dpi;
 		base.ClientSize = new Size(504, 521);
 		base.Controls.Add(tabControl);
-		Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+		Font = new Font(UiFonts.FamilyName, 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 		base.MaximizeBox = false;
 		base.MinimizeBox = false;
 		MinimumSize = new Size(299, 296);

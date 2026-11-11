@@ -18,6 +18,7 @@ using MusicTagWinApp.Properties;
 using MusicTagWinApp.Roles;
 using MusicTagWinApp.Web;
 using MusicTagWinApp.Win32.Taskbar;
+using MusicTagWinApp.Common;
 
 namespace MusicTagWinApp.Exporters;
 
@@ -700,7 +701,7 @@ internal class LyricSearchDialog : Form
 		AutoScaleMode = AutoScaleMode.Dpi;
 		base.ClientSize = new Size(684, 661);
 		base.Controls.Add(mainPanel);
-		Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+		Font = new Font(UiFonts.FamilyName, 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 		MinimumSize = new Size(350, 500);
 		base.Name = "FormLyricSearch";
 		base.ShowIcon = false;

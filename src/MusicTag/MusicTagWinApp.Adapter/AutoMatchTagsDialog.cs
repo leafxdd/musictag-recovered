@@ -2004,7 +2004,7 @@ internal class AutoMatchTagsDialog : Form
 		base.AutoScaleMode = AutoScaleMode.Dpi;
 		base.ClientSize = new Size(484, 581);
 		base.Controls.Add(mainPanel);
-		Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+		Font = new Font(UiFonts.FamilyName, 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 		base.MinimumSize = new Size(300, 300);
 		base.Name = "FormAutoMatchTags";
 		base.ShowIcon = false;

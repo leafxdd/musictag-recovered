@@ -549,7 +549,7 @@ internal class CustomColumnsDialog : Form
 		ClientSize = new Size(304, 561);
 		Controls.Add(buttonPanel);
 		Controls.Add(columnListView);
-		Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+		Font = new Font(UiFonts.FamilyName, 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 		FormBorderStyle = FormBorderStyle.FixedDialog;
 		MaximizeBox = false;
 		MaximumSize = new Size(320, 600);

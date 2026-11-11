@@ -146,7 +146,7 @@ internal class SimpleProgressDialog : Form
 		Controls.Add(progressImage);
 		Controls.Add(cancelButton);
 		Controls.Add(messageLabel);
-		Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+		Font = new Font(UiFonts.FamilyName, 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 		FormBorderStyle = FormBorderStyle.None;
 		Name = "FormProgress2";
 		ShowIcon = false;

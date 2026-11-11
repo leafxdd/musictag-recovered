@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Drawing;
 using System.Windows.Forms;
 using MusicTagWinApp.Properties;
+using MusicTagWinApp.Common;
 
 namespace MusicTag.Candidates;
 
@@ -100,7 +101,7 @@ internal class LyricTimeOffsetDialog : Form
 		Controls.Add(okButton);
 		Controls.Add(unitLabel);
 		Controls.Add(offsetNumericUpDown);
-		Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+		Font = new Font(UiFonts.FamilyName, 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 		FormBorderStyle = FormBorderStyle.FixedDialog;
 		MaximizeBox = false;
 		MinimizeBox = false;

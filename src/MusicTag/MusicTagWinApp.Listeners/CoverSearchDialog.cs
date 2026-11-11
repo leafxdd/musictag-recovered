@@ -21,6 +21,7 @@ using MusicTagWinApp.Properties;
 using MusicTagWinApp.Stubs;
 using MusicTagWinApp.Web;
 using MusicTagWinApp.Win32.Taskbar;
+using MusicTagWinApp.Common;
 
 namespace MusicTagWinApp.Listeners;
 
@@ -853,7 +854,7 @@ internal class CoverSearchDialog : Form
 		mainLayoutPanel.WrapContents = false;
 		mainLayoutPanel.SizeChanged += OnSearchDialogLayoutChanged;
 
-		candidateListView.Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+		candidateListView.Font = new Font(UiFonts.FamilyName, 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 		candidateListView.FullRowSelect = true;
 		candidateListView.HideSelection = false;
 		candidateListView.LargeImageList = candidateImageList;
@@ -938,7 +939,7 @@ internal class CoverSearchDialog : Form
 		AutoScaleMode = AutoScaleMode.Dpi;
 		ClientSize = new Size(534, 661);
 		Controls.Add(mainLayoutPanel);
-		Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+		Font = new Font(UiFonts.FamilyName, 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 		MinimumSize = new Size(300, 300);
 		Name = "FormPictureSearch";
 		ShowIcon = false;

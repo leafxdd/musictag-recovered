@@ -6,6 +6,7 @@ using MusicTag.States;
 using MusicTagWinApp.Instances;
 using MusicTagWinApp.Listeners;
 using MusicTagWinApp.Properties;
+using MusicTagWinApp.Common;
 
 namespace MusicTag.Composer;
 
@@ -282,7 +283,7 @@ internal class TagHistorySelectionDialog : Form
 		AutoScaleMode = AutoScaleMode.Dpi;
 		ClientSize = new Size(680, 303);
 		Controls.Add(mainPanel);
-		Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+		Font = new Font(UiFonts.FamilyName, 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 		MinimumSize = new Size(300, 300);
 		Name = "FormTagsHistory";
 		ShowIcon = false;

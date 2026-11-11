@@ -18,6 +18,7 @@ using MusicTagWinApp.Roles;
 using MusicTagWinApp.Stubs;
 using MusicTagWinApp.Web;
 using MusicTagWinApp.Writers;
+using MusicTagWinApp.Common;
 
 namespace MusicTag.Importers;
 
@@ -2258,7 +2259,7 @@ internal class OptionsDialog : Form
 		cancelButton.Click += CancelOptionsDialog;
 		CancelButton = cancelButton;
 		AcceptButton = okButton;
-		coverSourceOrderControl.Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+		coverSourceOrderControl.Font = new Font(UiFonts.FamilyName, 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 		coverSourceOrderControl.Location = new Point(6, 0);
 		coverSourceOrderControl.Margin = new Padding(0);
 		coverSourceOrderControl.Name = "panelTagSrcPicture";
@@ -2266,7 +2267,7 @@ internal class OptionsDialog : Form
 		coverSourceOrderControl.SetSources(null);
 		coverSourceOrderControl.TabIndex = 0;
 		coverSourceOrderControl.Title = null;
-		lyricSourceOrderControl.Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+		lyricSourceOrderControl.Font = new Font(UiFonts.FamilyName, 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 		lyricSourceOrderControl.Location = new Point(6, 130);
 		lyricSourceOrderControl.Margin = new Padding(0, 10, 0, 0);
 		lyricSourceOrderControl.Name = "panelTagSrcLyric";
@@ -2274,7 +2275,7 @@ internal class OptionsDialog : Form
 		lyricSourceOrderControl.SetSources(null);
 		lyricSourceOrderControl.TabIndex = 1;
 		lyricSourceOrderControl.Title = null;
-		tagSourceOrderControl.Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+		tagSourceOrderControl.Font = new Font(UiFonts.FamilyName, 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 		tagSourceOrderControl.Location = new Point(6, 260);
 		tagSourceOrderControl.Margin = new Padding(0, 10, 0, 0);
 		tagSourceOrderControl.Name = "panelTagSrcComb";
@@ -2286,7 +2287,7 @@ internal class OptionsDialog : Form
 		base.AutoScaleMode = AutoScaleMode.Dpi;
 		ClientSize = new Size(1584, 1161);
 		base.Controls.Add(rootLayoutPanel);
-		Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+		Font = new Font(UiFonts.FamilyName, 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 		// 内容区可滚动,小屏/高缩放时允许窗口缩到工作区内;常规屏幕仍在 OnShown 使用 720x660 设计尺寸。
 		MinimumSize = new Size(520, 420);
 		base.Name = "FormOptions";

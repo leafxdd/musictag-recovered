@@ -227,7 +227,7 @@ internal class DirectoryManagerDialog : Form
 		mainPanel.Controls.Add(buttonPanel);
 		mainPanel.Dock = DockStyle.Fill;
 		mainPanel.FlowDirection = FlowDirection.TopDown;
-		mainPanel.Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+		mainPanel.Font = new Font(UiFonts.FamilyName, 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 		mainPanel.Location = new Point(0, 0);
 		mainPanel.Name = "flowLayoutPanel1";
 		mainPanel.Size = new Size(484, 620);
@@ -236,7 +236,7 @@ internal class DirectoryManagerDialog : Form
 		mainPanel.SizeChanged += LayoutPanelSizeChanged;
 		directoryListView.CheckBoxes = true;
 		directoryListView.Columns.AddRange(new ColumnHeader[1] { directoryColumn });
-		directoryListView.Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+		directoryListView.Font = new Font(UiFonts.FamilyName, 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 		directoryListView.FullRowSelect = true;
 		directoryListView.GridLines = true;
 		directoryListView.HeaderStyle = ColumnHeaderStyle.None;
@@ -288,7 +288,7 @@ internal class DirectoryManagerDialog : Form
 		AutoScaleMode = AutoScaleMode.Dpi;
 		ClientSize = new Size(484, 620);
 		Controls.Add(mainPanel);
-		Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+		Font = new Font(UiFonts.FamilyName, 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 		MinimumSize = new Size(300, 500);
 		Name = "FormManageDirs";
 		ShowIcon = false;

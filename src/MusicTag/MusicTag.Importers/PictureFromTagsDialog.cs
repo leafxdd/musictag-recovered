@@ -12,6 +12,7 @@ using MusicTagWinApp.Exporters;
 using MusicTagWinApp.Instances;
 using MusicTagWinApp.Properties;
 using MusicTagWinApp.Win32.Taskbar;
+using MusicTagWinApp.Common;
 
 namespace MusicTag.Importers;
 
@@ -555,7 +556,7 @@ internal class PictureFromTagsDialog : Form
 		pictureContextMenu.SuspendLayout();
 		SuspendLayout();
 
-		pictureListView.Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+		pictureListView.Font = new Font(UiFonts.FamilyName, 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 		pictureListView.FullRowSelect = true;
 		pictureListView.HideSelection = false;
 		pictureListView.LargeImageList = pictureImageList;
@@ -653,7 +654,7 @@ internal class PictureFromTagsDialog : Form
 		AutoScaleMode = AutoScaleMode.Dpi;
 		ClientSize = new Size(534, 661);
 		Controls.Add(mainLayoutPanel);
-		Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+		Font = new Font(UiFonts.FamilyName, 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 		MinimumSize = new Size(300, 300);
 		Name = "FormPictureFromTags";
 		ShowIcon = false;

@@ -1524,7 +1524,7 @@ internal partial class StateFieldInstance
 		filterTypeDropDownButton.Margin = new Padding(0, 3, 0, 3);
 		filterTypeDropDownButton.Name = "filterToolStripDropDownButton";
 		filterTypeDropDownButton.Size = new Size(100, 21);
-		fileSummaryStatusStrip.Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+		fileSummaryStatusStrip.Font = new Font(UiFonts.FamilyName, 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 		fileSummaryStatusStrip.Items.AddRange(new ToolStripItem[3] { selectedFilesStatusLabel, fileSummaryStatusSeparator, totalFilesStatusLabel });
 		fileSummaryStatusStrip.Location = new Point(0, 833);
 		fileSummaryStatusStrip.Name = "statusStrip1";
@@ -1549,7 +1549,7 @@ internal partial class StateFieldInstance
 		Controls.Add(mainSplitContainer);
 		base.Controls.Add(mainToolStrip);
 		base.Controls.Add(mainMenuStrip);
-		Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+		Font = new Font(UiFonts.FamilyName, 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 		IsMdiContainer = true;
 		base.MainMenuStrip = mainMenuStrip;
 		base.Name = "FormMain";

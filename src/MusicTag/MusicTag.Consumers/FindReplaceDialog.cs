@@ -6,6 +6,7 @@ using System.Windows.Forms;
 using MusicTag.Serialization;
 using MusicTagWinApp.Instances;
 using MusicTagWinApp.Properties;
+using MusicTagWinApp.Common;
 
 namespace MusicTag.Consumers;
 
@@ -364,7 +365,7 @@ internal class FindReplaceDialog : Form
 		AutoScaleMode = AutoScaleMode.Dpi;
 		ClientSize = new Size(684, 261);
 		Controls.Add(mainLayoutPanel);
-		Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+		Font = new Font(UiFonts.FamilyName, 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 		MaximizeBox = false;
 		MinimizeBox = false;
 		Name = "FormFindReplace";

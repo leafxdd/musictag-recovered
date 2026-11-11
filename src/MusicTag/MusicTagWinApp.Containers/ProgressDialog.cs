@@ -6,6 +6,7 @@ using System.Windows.Forms;
 using MusicTagWinApp.Instances;
 using MusicTagWinApp.Properties;
 using MusicTagWinApp.Win32.Taskbar;
+using MusicTagWinApp.Common;
 
 namespace MusicTagWinApp.Containers;
 
@@ -222,7 +223,7 @@ internal class ProgressDialog : Form
 		Controls.Add(progressBar);
 		Controls.Add(progressLabel);
 		Controls.Add(messageLabel);
-		Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+		Font = new Font(UiFonts.FamilyName, 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 		FormBorderStyle = FormBorderStyle.None;
 		Name = "FormProgress";
 		ShowIcon = false;

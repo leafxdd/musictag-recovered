@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Drawing;
 using System.Windows.Forms;
 using MusicTagWinApp.Instances;
+using MusicTagWinApp.Common;
 
 namespace MusicTag.Consumers;
 
@@ -230,7 +231,7 @@ internal class TagSearchCandidatePanel : UserControl
 		contentPanel.Controls.Add(genreLabel);
 		contentPanel.Controls.Add(lyricPictureBox);
 		contentPanel.FlowDirection = FlowDirection.TopDown;
-		contentPanel.Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+		contentPanel.Font = new Font(UiFonts.FamilyName, 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 		contentPanel.Location = new Point(0, 0);
 		contentPanel.Margin = new Padding(0);
 		contentPanel.Name = "flowLayoutPanel1";
@@ -261,7 +262,7 @@ internal class TagSearchCandidatePanel : UserControl
 		AutoScaleDimensions = new SizeF(7f, 14f);
 		AutoScaleMode = AutoScaleMode.Font;
 		Controls.Add(contentPanel);
-		Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+		Font = new Font(UiFonts.FamilyName, 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 		Margin = new Padding(0);
 		Name = "ControlCombTagsSourcePanel";
 		Size = new Size(80, 128);
@@ -279,7 +280,7 @@ internal class TagSearchCandidatePanel : UserControl
 	{
 		if (bold)
 		{
-			label.Font = new Font("Tahoma", 9f, FontStyle.Bold, GraphicsUnit.Point, 0);
+			label.Font = new Font(UiFonts.FamilyName, 9f, FontStyle.Bold, GraphicsUnit.Point, 0);
 		}
 
 		label.Location = new Point(0, top);

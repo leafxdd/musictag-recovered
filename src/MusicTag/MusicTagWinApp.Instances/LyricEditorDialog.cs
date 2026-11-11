@@ -538,7 +538,7 @@ internal class LyricEditorDialog : Form
 		mainLayoutPanel.TabIndex = 0;
 		mainLayoutPanel.SizeChanged += MainLayout_SizeChanged;
 
-		lyricTextBox.Font = new Font("Tahoma", 12f);
+		lyricTextBox.Font = new Font(UiFonts.FamilyName, 12f);
 		lyricTextBox.HideSelection = false;
 		lyricTextBox.Location = new Point(0, 0);
 		lyricTextBox.Margin = new Padding(0);
@@ -713,7 +713,7 @@ internal class LyricEditorDialog : Form
 		ClientSize = new Size(784, 561);
 		Controls.Add(downloadProgressPanel);
 		Controls.Add(mainLayoutPanel);
-		Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+		Font = new Font(UiFonts.FamilyName, 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 		MinimumSize = new Size(640, 480);
 		Name = "FormLyric";
 		ShowIcon = false;

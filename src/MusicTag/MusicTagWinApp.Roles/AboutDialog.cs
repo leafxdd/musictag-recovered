@@ -6,6 +6,7 @@ using MusicTag.Services;
 using MusicTagWinApp.Adapter;
 using MusicTagWinApp.Instances;
 using MusicTagWinApp.Properties;
+using MusicTagWinApp.Common;
 
 namespace MusicTagWinApp.Roles;
 
@@ -172,7 +173,7 @@ internal class AboutDialog : Form
 		base.AutoScaleMode = AutoScaleMode.Dpi;
 		base.ClientSize = new Size(406, 256);
 		base.Controls.Add(mainPanel);
-		Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+		Font = new Font(UiFonts.FamilyName, 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 		base.FormBorderStyle = FormBorderStyle.FixedDialog;
 		base.MaximizeBox = false;
 		base.MinimizeBox = false;

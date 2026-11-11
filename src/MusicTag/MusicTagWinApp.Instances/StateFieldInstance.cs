@@ -2347,12 +2347,8 @@ internal partial class StateFieldInstance : Form
 
 	private readonly object fileTypeIconCacheLock = new object();
 
-	// 窗体字体(主窗体与各条带沿用 Tahoma;文件列表另用 fileListItemFont)—— 由字段持有,避免每次 new 出的 Font 句柄无人释放。
-	private readonly Font fileListFont = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
-
-	// 文件列表专用字体:微软雅黑 UI 自带中文字形。Tahoma 没有中文字形,原生 ListView 每画一格中文都要走
-	// GDI 字体回退,整屏重画实测约 100ms → 38ms(cctortest/listview-spike,144 DPI、18 列压进一屏)。
-	private readonly Font fileListItemFont = new Font("Microsoft YaHei UI", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+	// 主窗体与文件列表的字体(界面字体见 UiFonts)—— 由字段持有,避免每次 new 出的 Font 句柄无人释放。
+	private readonly Font fileListFont = new Font(UiFonts.FamilyName, 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 
 	private readonly Dictionary<string, ComboBox> tagComboBoxes;
 
@@ -3603,7 +3599,7 @@ internal partial class StateFieldInstance : Form
 	// 选中色、失焦后的灰色选中(HideSelection = false)、焦点框都由系统绘制,这里只管字体与底色。
 	private void ApplyFileListVisualStyle()
 	{
-		fileListView.Font = fileListItemFont;
+		fileListView.Font = fileListFont;
 		fileListView.BackColor = Color.White;
 		fileListView.ForeColor = SystemColors.WindowText;
 	}
@@ -7148,7 +7144,7 @@ internal partial class StateFieldInstance : Form
 		// 绝对值,已达标时写同值(setter no-op),不会自成 ping-pong 源。──
 		Font = fileListFont;
 		// ToolStrip 族(状态条/菜单条/工具栏)不吃 Form.Font 继承(ToolStripManager.DefaultFont
-		// 体系)——各自钉 pt;保留各自字形(汇总条 Tahoma、其余系统菜单字体)。
+		// 体系)——各自钉 pt;保留各自字形(汇总条为界面字体、其余系统菜单字体)。
 		bool fontsChanged = PinToolStripFontSize(fileSummaryStatusStrip);
 		fontsChanged |= PinToolStripFontSize(fileFilterStatusStrip);
 		fontsChanged |= PinToolStripFontSize(mainMenuStrip);
@@ -7669,7 +7665,6 @@ internal partial class StateFieldInstance : Form
 				fileTypeIconCache.Clear();
 			}
 			fileListFont.Dispose();
-			fileListItemFont.Dispose();
 		}
 		base.Dispose(disposing);
 	}

@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
+using MusicTagWinApp.Common;
 using MusicTagWinApp.Containers;
 using MusicTagWinApp.Instances;
 using MusicTagWinApp.Properties;
@@ -34,9 +35,10 @@ internal static class Program
 		// 且手写 Main 使 csproj 的 ApplicationHighDpiMode 属性不生效)。必须先于任何句柄创建。
 		Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
 		// net8 迁移:core WinForms 默认字体是 Segoe UI 9pt(netfx = Microsoft Sans Serif 8.25pt),
-		// 全部布局常量按旧字体调校;不复位则 AutoSize 控件普遍变高变宽(实测:设置窗口 OnShown
-		// 高度自适应失控拉长)。官方迁移开关,必须先于首个窗口创建。
-		Application.SetDefaultFont(new System.Drawing.Font(new System.Drawing.FontFamily("Microsoft Sans Serif"), 8.25f));
+		// 全部布局常量按旧字号调校;不复位则 AutoSize 控件普遍变高变宽(实测:设置窗口 OnShown
+		// 高度自适应失控拉长)。字号沿用 8.25pt,字体族换成界面字体(UiFonts:带中文字形,不走替补)。
+		// 官方迁移开关,必须先于首个窗口创建。
+		Application.SetDefaultFont(new System.Drawing.Font(new System.Drawing.FontFamily(UiFonts.FamilyName), 8.25f));
 		if (TryFindExistingInstance(out IntPtr existingWindowHandle))
 		{
 			if (existingWindowHandle != IntPtr.Zero)

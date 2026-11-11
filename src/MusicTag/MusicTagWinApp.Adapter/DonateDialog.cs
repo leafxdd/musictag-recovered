@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Drawing;
 using System.Windows.Forms;
 using MusicTagWinApp.Properties;
+using MusicTagWinApp.Common;
 
 namespace MusicTagWinApp.Adapter;
 
@@ -63,7 +64,7 @@ internal class DonateDialog : Form
 		base.AutoScaleMode = AutoScaleMode.Font;
 		base.ClientSize = new Size(644, 641);
 		base.Controls.Add(donationImageBox);
-		Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+		Font = new Font(UiFonts.FamilyName, 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 		base.FormBorderStyle = FormBorderStyle.FixedSingle;
 		base.MaximizeBox = false;
 		base.MinimizeBox = false;

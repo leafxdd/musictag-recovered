@@ -9,6 +9,7 @@ using MusicTagWinApp.Exporters;
 using MusicTagWinApp.Instances;
 using MusicTagWinApp.Properties;
 using Newtonsoft.Json;
+using MusicTagWinApp.Common;
 
 namespace MusicTag.Importers;
 
@@ -222,7 +223,7 @@ internal class CombinedTagOverwriteOptionsDialog : Form
 		mainPanel.Controls.Add(buttonPanel);
 		mainPanel.Dock = DockStyle.Fill;
 		mainPanel.FlowDirection = FlowDirection.TopDown;
-		mainPanel.Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+		mainPanel.Font = new Font(UiFonts.FamilyName, 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 		mainPanel.Location = new Point(0, 0);
 		mainPanel.Margin = new Padding(0);
 		mainPanel.Name = "flowLayoutPanel1";
@@ -231,7 +232,7 @@ internal class CombinedTagOverwriteOptionsDialog : Form
 		mainPanel.WrapContents = false;
 		optionListView.CheckBoxes = true;
 		optionListView.Columns.AddRange(new ColumnHeader[1] { itemColumn });
-		optionListView.Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+		optionListView.Font = new Font(UiFonts.FamilyName, 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 		optionListView.FullRowSelect = true;
 		optionListView.GridLines = true;
 		optionListView.HideSelection = false;
@@ -279,7 +280,7 @@ internal class CombinedTagOverwriteOptionsDialog : Form
 		AutoScaleMode = AutoScaleMode.Dpi;
 		ClientSize = new Size(284, 411);
 		Controls.Add(mainPanel);
-		Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+		Font = new Font(UiFonts.FamilyName, 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 		FormBorderStyle = FormBorderStyle.FixedDialog;
 		MaximizeBox = false;
 		MinimizeBox = false;

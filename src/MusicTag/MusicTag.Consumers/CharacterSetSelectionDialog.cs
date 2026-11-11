@@ -8,6 +8,7 @@ using MusicTag.States;
 using MusicTagWinApp.Exporters;
 using MusicTagWinApp.Instances;
 using MusicTagWinApp.Properties;
+using MusicTagWinApp.Common;
 
 namespace MusicTag.Consumers;
 
@@ -192,7 +193,7 @@ internal class CharacterSetSelectionDialog : Form
 		mainPanel.Controls.Add(buttonPanel);
 		mainPanel.Dock = DockStyle.Fill;
 		mainPanel.FlowDirection = FlowDirection.TopDown;
-		mainPanel.Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+		mainPanel.Font = new Font(UiFonts.FamilyName, 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 		mainPanel.Location = new Point(0, 0);
 		mainPanel.Name = "flowLayoutPanel1";
 		mainPanel.Size = new Size(484, 620);
@@ -200,7 +201,7 @@ internal class CharacterSetSelectionDialog : Form
 		mainPanel.WrapContents = false;
 		mainPanel.SizeChanged += MainPanel_SizeChanged;
 		encodingListView.Columns.AddRange(new ColumnHeader[2] { encodingColumn, previewColumn });
-		encodingListView.Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+		encodingListView.Font = new Font(UiFonts.FamilyName, 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 		encodingListView.FullRowSelect = true;
 		encodingListView.GridLines = true;
 		encodingListView.HeaderStyle = ColumnHeaderStyle.Nonclickable;

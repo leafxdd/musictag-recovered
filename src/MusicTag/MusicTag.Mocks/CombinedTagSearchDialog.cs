@@ -30,6 +30,7 @@ using MusicTagWinApp.Web;
 using MusicTagWinApp.Win32.Taskbar;
 using MusicTagWinApp.Writers;
 using wyDay.Controls;
+using MusicTagWinApp.Common;
 
 namespace MusicTag.Mocks;
 
@@ -1676,7 +1677,7 @@ internal class CombinedTagSearchDialog : Form
 		base.AutoScaleMode = AutoScaleMode.Dpi;
 		base.ClientSize = new Size(844, 661);
 		base.Controls.Add(mainPanel);
-		Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+		Font = new Font(UiFonts.FamilyName, 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 		MinimumSize = new Size(300, 300);
 		base.Name = "FormCombTagsSearch";
 		base.ShowIcon = false;

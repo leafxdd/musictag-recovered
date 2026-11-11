@@ -13,8 +13,8 @@ internal static class Program
 		// net8:注册 ANSI 代码页编码提供程序(gb2312/GBK/Big5/Shift_JIS 等在 .NET Core+ 非内置),
 		// 与主程序 Program.Main 首行一致;必须先于任何触发 TagTextEncoding 静态构造器的用例。
 		System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
-		// net8:与主程序一致复位默认字体(netfx 基准),对话框构造冒烟的布局路径才与 app 相同。
-		System.Windows.Forms.Application.SetDefaultFont(new System.Drawing.Font(new System.Drawing.FontFamily("Microsoft Sans Serif"), 8.25f));
+		// net8:与主程序一致复位默认字体(8.25pt + 界面字体),对话框构造冒烟的布局路径才与 app 相同。
+		System.Windows.Forms.Application.SetDefaultFont(new System.Drawing.Font(new System.Drawing.FontFamily(MusicTagWinApp.Common.UiFonts.FamilyName), 8.25f));
 		Console.WriteLine("MusicTag characterization tests");
 		Console.WriteLine();
 		List<(string, Action)> tests = new List<(string, Action)>();

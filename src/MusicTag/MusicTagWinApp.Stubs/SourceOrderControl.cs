@@ -6,6 +6,7 @@ using System.Windows.Forms;
 using MusicTag.Consumers;
 using MusicTagWinApp.Instances;
 using MusicTagWinApp.Web;
+using MusicTagWinApp.Common;
 
 namespace MusicTagWinApp.Stubs;
 
@@ -301,7 +302,7 @@ internal class SourceOrderControl : UserControl
 		AutoScaleDimensions = new SizeF(7f, 14f);
 		AutoScaleMode = AutoScaleMode.Font;
 		Controls.Add(sourceGroupBox);
-		Font = new Font("Tahoma", 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
+		Font = new Font(UiFonts.FamilyName, 9f, FontStyle.Regular, GraphicsUnit.Point, 0);
 		Margin = new Padding(0);
 		Name = "ControlTagSources";
 		Size = new Size(365, 230);
