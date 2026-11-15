@@ -67,6 +67,11 @@ internal partial class StateFieldInstance
 
 	private ToolStripStatusLabel pendingEditsStatusLabel;
 
+	// 「放弃未保存的修改」:「编辑」菜单(撤销下方)与文件右键菜单(读取标签下方)各一项。
+	private ToolStripMenuItem discardPendingEditsMenuItem;
+
+	private ToolStripMenuItem discardPendingEditsContextMenuItem;
+
 	// 纯核:按"编辑区文本 vs 文件里的值"更新某个字段的缓存,返回更新后的缓存(全部撤回时为 null)。
 	internal static PendingTagEdit UpdatePendingField(PendingTagEdit pending, string fieldName, string text, string fileValue)
 	{
@@ -200,6 +205,79 @@ internal partial class StateFieldInstance
 		fileSummaryStatusStrip.Items.Add(pendingEditsStatusSeparator);
 		fileSummaryStatusStrip.Items.Add(pendingEditsStatusLabel);
 		coverPictureBox.Paint += CoverPicture_PaintPendingEditBadge;
+		InitializeDiscardPendingEditsCommands();
+	}
+
+	// 两项菜单都在代码里建(与上面的状态栏标识一样,不进 Designer)。可用状态与文字在菜单打开时
+	// 现算:缓存随编辑区每次输入变化,打开时再判断最准,也自然跟上界面语言切换。不设快捷键。
+	private void InitializeDiscardPendingEditsCommands()
+	{
+		discardPendingEditsMenuItem = new ToolStripMenuItem
+		{
+			Name = "discardPendingEditsMenuItem",
+			Enabled = false
+		};
+		discardPendingEditsMenuItem.Click += DiscardSelectedPendingEdits_Click;
+		editMenuItem.DropDownItems.Insert(editMenuItem.DropDownItems.IndexOf(undoMenuItem) + 1, discardPendingEditsMenuItem);
+		editMenuItem.DropDownOpening += delegate
+		{
+			RefreshDiscardPendingEditsCommand(discardPendingEditsMenuItem);
+		};
+
+		discardPendingEditsContextMenuItem = new ToolStripMenuItem
+		{
+			Name = "discardPendingEditsContextMenuItem",
+			Enabled = false
+		};
+		discardPendingEditsContextMenuItem.Click += DiscardSelectedPendingEdits_Click;
+		fileListItemContextMenu.Items.Insert(fileListItemContextMenu.Items.IndexOf(readTagsContextMenuItem) + 1, discardPendingEditsContextMenuItem);
+		fileListItemContextMenu.Opening += delegate
+		{
+			RefreshDiscardPendingEditsCommand(discardPendingEditsContextMenuItem);
+		};
+	}
+
+	private void RefreshDiscardPendingEditsCommand(ToolStripMenuItem menuItem)
+	{
+		menuItem.Text = UiText.Get("Discard unsaved changes", "放弃未保存的修改", "放棄未儲存的修改");
+		menuItem.Enabled = SelectedFileRows.Any(row => row.PendingEdit != null);
+	}
+
+	// 放弃选中文件里带 * 的未保存修改:确认后清掉缓存,编辑区按文件里的内容重新显示。
+	// 与「读取标签」的区别:只动有缓存的文件,不重读其余选中文件,也不弹进度窗口。
+	private void DiscardSelectedPendingEdits_Click(object sender, EventArgs e)
+	{
+		List<FileRow> rows = SelectedFileRows.Where(row => row.PendingEdit != null).ToList();
+		if (rows.Count == 0)
+		{
+			return;
+		}
+		if (!DialogService.ConfirmYesNo(string.Format(UiText.Get(
+			"Discard the unsaved tag changes of {0} selected file(s)?\nThe tag editor will show the tags as they are in the file.",
+			"放弃选中的 {0} 个文件尚未保存的标签修改吗?\n编辑区将恢复为文件里的内容。",
+			"放棄選取的 {0} 個檔案尚未儲存的標籤修改嗎?\n編輯區將恢復為檔案裡的內容。"), rows.Count)))
+		{
+			return;
+		}
+		// 先解绑,重新加载编辑区时触发的 TextChanged 不会再记进缓存。
+		UnbindEditorFromRow();
+		foreach (FileRow row in rows)
+		{
+			row.PendingEdit = null;
+			InvalidateFileRow(row);
+		}
+		UpdatePendingEditsStatus();
+		FileRow singleRow = (SelectedFileCount == 1) ? GetSingleSelectedFileRow() : null;
+		if (singleRow != null)
+		{
+			// 单选:与切换选中同一路径,从文件重新读出并显示(封面也回到文件里的)。
+			LoadSingleSelectedFile(singleRow);
+		}
+		else
+		{
+			// 多选:公共值按文件里的值重算(多选视图里没保存的改动也一并放弃)。
+			LoadTagEditorState(null);
+		}
 	}
 
 	private int CountPendingEditRows()
