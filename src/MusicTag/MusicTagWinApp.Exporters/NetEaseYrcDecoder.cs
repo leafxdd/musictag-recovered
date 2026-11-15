@@ -36,10 +36,12 @@ internal static class NetEaseYrcDecoder
 			}
 
 			// The v1 endpoint can prepend JSON credit records such as lyricist,
-			// composer, producer, and instrument performers. Ordinary LRC has no
-			// safe generic representation for these roles. Timestamping them at
-			// their shared t=0 value also makes LyricTextProcessor treat later
-			// records as translations, so omit them from the line lyric entirely.
+			// composer, producer, and instrument performers. In YRC they all share
+			// t=0 and do not line up with the word timeline; timestamping them at
+			// t=0 also makes LyricTextProcessor treat later records as
+			// translations, so omit them from the line lyric entirely. The plain
+			// lrc field carries the same records with increasing times, and
+			// NetEaseCreditRecords converts those into ordinary lines instead.
 			if (line.StartsWith("{", StringComparison.Ordinal))
 			{
 				continue;

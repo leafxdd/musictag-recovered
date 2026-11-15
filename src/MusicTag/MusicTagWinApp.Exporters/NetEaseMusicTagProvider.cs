@@ -674,7 +674,8 @@ internal class NetEaseMusicTagProvider : RemoteTagProviderBase, ITrackSearchProv
 			return ("", "");
 		}
 
-		string lyricText = GetLyricField(responseJson["lrc"]);
+		// 普通歌词开头的作词/作曲等 JSON 署名记录转成普通歌词行(见 NetEaseCreditRecords)。
+		string lyricText = NetEaseCreditRecords.ConvertToLyricLines(GetLyricField(responseJson["lrc"]));
 		string translatedLyricText = GetLyricField(responseJson["tlyric"]);
 		string yrcText = GetLyricField(responseJson["yrc"]);
 		if (string.IsNullOrWhiteSpace(yrcText))

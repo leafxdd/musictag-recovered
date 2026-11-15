@@ -14,6 +14,7 @@ namespace MusicTag.Tests;
 //   NetEase.FormatPublishYear:epoch ms(>0)-> "yyyy"(UTC/InvariantCulture);null/<=0/溢出 -> null。
 //   NetEase.ParseCoverDocId:正则 /(\d+)\.\w+$ 提 albumPicDocId;无数字尾段/无扩展名 -> 0。
 //   NetEase.ExtractLyricTexts:lrc/tlyric 回退、YRC/ytlrc 优先、部分 YTLRC 丢孤立行、字面 "null" 与缺失归一为 ""。
+//   NetEaseCreditRecords:lrc 开头的 JSON 署名记录转成带时间戳的文字行(位数随歌词),YRC 里的仍丢弃。
 //   QQ QRC conversion:valid line timestamps stay authoritative; malformed line timestamps fall back to the first valid word timestamp.
 //   QqSongInfo.GetGenreName(已 public):genre id -> 英文流派名 switch,未知/null -> ""。
 //   QQ.IsRateLimited:req_0.code 必须是 Integer 且 ==2001(字符串 "2001" -> false);空导航 -> false。
@@ -121,6 +122,99 @@ internal static class ProviderDecodersCharacterization
 			var (lyric, translated) = NetEaseMusicTagProvider.ExtractLyricTexts("{\"nolyric\":\"true\",\"lrc\":{\"lyric\":\"[00:01.00]Line\"}}");
 			Check.Equal("[00:01.00]Line", lyric, "string flag ignored");
 			Check.Equal("", translated, "no translation");
+		});
+
+		// ===== NetEase JSON credit records in the ordinary lrc field =====
+
+		yield return ("ExtractLyricTexts: lrc JSON credit records become timed lines (recorded song 2071874845)", delegate
+		{
+			// 2026-11-13 录自 api/song/lyric/v1?id=2071874845(平民艺术家,无 yrc)的 lrc 开头 7 行,原样未改。
+			string lrc = string.Join("\n",
+				"{\"t\":0,\"c\":[{\"tx\":\"作词: \"},{\"tx\":\"卫某人\",\"li\":\"http://p1.music.126.net/whys7HuvBrb_bOGW5XlAuQ==/109951169447667774.jpg\",\"or\":\"orpheus://nm/artist/home?id=28864131&type=artist\"},{\"tx\":\"/\"},{\"tx\":\"刘炫廷\",\"li\":\"http://p1.music.126.net/9-1bOplg6kBqamxvB-sOqw==/109951173738345784.jpg\",\"or\":\"orpheus://nm/artist/home?id=12157298&type=artist\"},{\"tx\":\"/\"},{\"tx\":\"多喝芬达\",\"li\":\"http://p1.music.126.net/02bksIPlvUluiRRxI5VFpA==/109951166676031360.jpg\",\"or\":\"orpheus://nm/artist/home?id=13285419&type=artist\"}]}",
+				"{\"t\":1000,\"c\":[{\"tx\":\"作曲: \"},{\"tx\":\"卫某人\",\"li\":\"http://p1.music.126.net/whys7HuvBrb_bOGW5XlAuQ==/109951169447667774.jpg\",\"or\":\"orpheus://nm/artist/home?id=28864131&type=artist\"},{\"tx\":\"/\"},{\"tx\":\"刘炫廷\",\"li\":\"http://p1.music.126.net/9-1bOplg6kBqamxvB-sOqw==/109951173738345784.jpg\",\"or\":\"orpheus://nm/artist/home?id=12157298&type=artist\"}]}",
+				"{\"t\":2000,\"c\":[{\"tx\":\"编曲: \"},{\"tx\":\"Pieper beats\"},{\"tx\":\"/\"},{\"tx\":\"卫某人\",\"li\":\"http://p1.music.126.net/whys7HuvBrb_bOGW5XlAuQ==/109951169447667774.jpg\",\"or\":\"orpheus://nm/artist/home?id=28864131&type=artist\"},{\"tx\":\"/\"},{\"tx\":\"Dokodemo Door\",\"li\":\"http://p1.music.126.net/yt2wRVrLRptAiOLkTqpCxg==/109951167796212748.jpg\",\"or\":\"orpheus://nm/artist/home?id=53721241&type=artist\"}]}",
+				"{\"t\":3000,\"c\":[{\"tx\":\"制作人: \"},{\"tx\":\"卫某人\",\"li\":\"http://p1.music.126.net/whys7HuvBrb_bOGW5XlAuQ==/109951169447667774.jpg\",\"or\":\"orpheus://nm/artist/home?id=28864131&type=artist\"}]}",
+				"[00:10.50]出品：Dokodemo Door Music  任意门音乐",
+				"[00:11.99]",
+				"[00:12.31]");
+			string response = new JObject { ["lrc"] = new JObject { ["lyric"] = lrc }, ["tlyric"] = new JObject { ["lyric"] = "" } }.ToString();
+			var (lyric, translated) = NetEaseMusicTagProvider.ExtractLyricTexts(response);
+			Check.Equal("[00:00.00]作词: 卫某人/刘炫廷/多喝芬达\n[00:01.00]作曲: 卫某人/刘炫廷\n[00:02.00]编曲: Pieper beats/卫某人/Dokodemo Door\n[00:03.00]制作人: 卫某人\n[00:10.50]出品：Dokodemo Door Music  任意门音乐\n[00:11.99]\n[00:12.31]", lyric, "credits as two-digit timed lines");
+			Check.Equal("", translated, "no translation");
+		});
+
+		yield return ("NetEaseCreditRecords: three-digit lyric gets three-digit credit times", delegate
+		{
+			string lrc = "{\"t\":0,\"c\":[{\"tx\":\"作词: \"},{\"tx\":\"米津玄師\"}]}\n{\"t\":212,\"c\":[{\"tx\":\"作曲: \"},{\"tx\":\"米津玄師\"}]}\n[00:00.851]夢ならば";
+			Check.Equal("[00:00.000]作词: 米津玄師\n[00:00.212]作曲: 米津玄師\n[00:00.851]夢ならば", NetEaseCreditRecords.ConvertToLyricLines(lrc), "three-digit credits");
+		});
+
+		yield return ("NetEaseCreditRecords: two-digit lyric rounds credit times to 10 ms", delegate
+		{
+			string lrc = "{\"t\":4167,\"c\":[{\"tx\":\"人声录音: \"},{\"tx\":\"乙\"}]}\n[00:04.63]词";
+			Check.Equal("[00:04.17]人声录音: 乙\n[00:04.63]词", NetEaseCreditRecords.ConvertToLyricLines(lrc), "rounded credit time");
+		});
+
+		yield return ("NetEaseCreditRecords: lyric without credit records is returned unchanged", delegate
+		{
+			string lrc = "[00:01.00]{A}\r\n{intro}\r\n[00:02.00]B\r\n";
+			Check.Equal(lrc, NetEaseCreditRecords.ConvertToLyricLines(lrc), "non-record braces and CRLF kept");
+			Check.Equal("", NetEaseCreditRecords.ConvertToLyricLines(null), "null -> empty");
+		});
+
+		yield return ("NetEaseCreditRecords: malformed records kept, textless records dropped, separators preserved", delegate
+		{
+			string lrc = "{\"t\":0,\"c\":[{\"tx\":\" \"},{\"li\":\"x\"}]}\r\n{\"t\":5,\"c\":\"bad\"}\r\n{not json\r\n{\"t\":10,\"c\":[{\"tx\":\"作词: 甲\"}]}\r\n[00:01.00]A";
+			Check.Equal("{\"t\":5,\"c\":\"bad\"}\r\n{not json\r\n[00:00.01]作词: 甲\r\n[00:01.00]A", NetEaseCreditRecords.ConvertToLyricLines(lrc), "only recognized records rewritten");
+		});
+
+		yield return ("NetEaseCreditRecords: untimed lyric or unusable t gives plain credit text", delegate
+		{
+			Check.Equal("作词: 甲\n第一句", NetEaseCreditRecords.ConvertToLyricLines("{\"t\":0,\"c\":[{\"tx\":\"作词: \"},{\"tx\":\"甲\"}]}\n第一句"), "untimed lyric");
+			Check.Equal("作曲: 乙\n编曲: 丙\n[00:01.00]A", NetEaseCreditRecords.ConvertToLyricLines("{\"t\":-1,\"c\":[{\"tx\":\"作曲: 乙\"}]}\n{\"t\":\"0\",\"c\":[{\"tx\":\"编曲: 丙\"}]}\n[00:01.00]A"), "negative or string t");
+		});
+
+		yield return ("ExtractLyricTexts: legacy lrc pair fallback also converts credit records", delegate
+		{
+			bool previousSetting = Settings.Default.LyricDownload_ReformatTimetag;
+			try
+			{
+				Settings.Default.LyricDownload_ReformatTimetag = false;
+				string response = new JObject
+				{
+					["lrc"] = new JObject { ["lyric"] = "{\"t\":0,\"c\":[{\"tx\":\"作词: \"},{\"tx\":\"甲\"}]}\n[00:01.00]普通" },
+					["tlyric"] = new JObject { ["lyric"] = "[00:03.00]孤立" },
+					["yrc"] = new JObject { ["lyric"] = "[1000,1000](1000,500,0)原" }
+				}.ToString();
+				var (lyric, translated) = NetEaseMusicTagProvider.ExtractLyricTexts(response);
+				Check.Equal("[00:00.00]作词: 甲\n[00:01.00]普通", lyric, "legacy lrc with converted credits");
+				Check.Equal("[00:03.00]孤立", translated, "legacy tlyric untouched");
+			}
+			finally
+			{
+				Settings.Default.LyricDownload_ReformatTimetag = previousSetting;
+			}
+		});
+
+		yield return ("ExtractLyricTexts: usable YRC still omits credits even when lrc has them", delegate
+		{
+			bool previousSetting = Settings.Default.LyricDownload_ReformatTimetag;
+			try
+			{
+				Settings.Default.LyricDownload_ReformatTimetag = false;
+				string response = new JObject
+				{
+					["lrc"] = new JObject { ["lyric"] = "{\"t\":0,\"c\":[{\"tx\":\"作词: \"},{\"tx\":\"甲\"}]}\n[00:01.00]普通" },
+					["yrc"] = new JObject { ["lyric"] = "{\"t\":0,\"c\":[{\"tx\":\"作词: \"},{\"tx\":\"甲\"}]}\n[1000,500](1000,200,0)A" }
+				}.ToString();
+				var (lyric, translated) = NetEaseMusicTagProvider.ExtractLyricTexts(response);
+				Check.Equal("[00:01.000]A", lyric, "YRC lyric without credits");
+				Check.Equal("", translated, "no translation");
+			}
+			finally
+			{
+				Settings.Default.LyricDownload_ReformatTimetag = previousSetting;
+			}
 		});
 
 		yield return ("NetEaseYrcDecoder: strips three-part word markers and keeps millisecond line starts", delegate
